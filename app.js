@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.4.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -48,7 +48,7 @@ const I = {
 };
 const VIEWS = [
   { id: 'home', label: 'ภาพรวม' }, { id: 'board', label: 'บอร์ดงาน' }, { id: 'list', label: 'รายการงาน' },
-  { id: 'team', label: 'ทีมงาน' }, { id: 'report', label: 'รายงาน' }, { id: 'settings', label: 'ตั้งค่า' }
+  { id: 'team', label: 'ทีมงาน' }, { id: 'report', label: 'สรุปรายงาน' }, { id: 'settings', label: 'ตั้งค่า' }
 ];
 
 /* ============ state ============ */
@@ -902,7 +902,7 @@ function viewReport() {
     (kpi + people + groups + jobs + sign || '<p class="rnone">เลือกหัวข้อที่จะพิมพ์อย่างน้อย 1 หัวข้อ</p>') +
     '<footer class="rfoot">' + esc(s.company) + ' · ' + esc(s.appName) + '</footer></article>';
 
-  return topbar('รายงาน', 'เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF', '<button class="btn primary" data-act="print">' + I.print + '<span>พิมพ์รายงาน</span></button>') + controls + paper;
+  return topbar('สรุปรายงาน', 'เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF', '<button class="btn primary" data-act="print">' + I.print + '<span>พิมพ์รายงาน</span></button>') + controls + paper;
 }
 function setPageOrient(o) {
   let el = document.getElementById('pageStyle');
