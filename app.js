@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.0.6';
+const APP_VERSION = '2.0.7';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1098,7 +1098,7 @@ function renderMsgPanel() {
   const helpForm = M.help ? '<div class="mp-help"><div class="mp-help-h"><span class="hc-ic">' + MSG_IC.sos + '</span><b>ขอความช่วยเหลือ</b><button class="icon-btn sm" data-act="helpoff" aria-label="ยกเลิก">✕</button></div>' +
       '<div class="seg"><button data-helpto="team" aria-pressed="' + (M.helpTo === 'team') + '">' + MSG_IC.team + 'ทั้งทีม</button>' + (!isAdmin() ? '<button data-helpto="admin" aria-pressed="' + (M.helpTo === 'admin') + '">' + MSG_IC.shield + ADMIN_LABEL + '</button>' : '') + '</div>' +
       '<div class="mp-topics">' + HELP_TOPICS.map(t => '<button class="chip sm" data-helptopic="' + esc(t) + '">' + esc(t) + '</button>').join('') + '</div>' +
-      '<select id="helpJob" class="sel"><option value="">ไม่ระบุงาน</option>' + myJobs.map(j => '<option value="' + esc(j.id) + '"' + (M.jobId === j.id ? ' selected' : '') + '>' + esc(j.code + (j.title ? ' · ' + j.title : '')) + '</option>').join('') + '</select></div>' : '';
+      (myJobs.length ? '<label class="mp-jobsel"><span>' + STI.layers + 'แนบงานที่ต้องการให้ช่วย <small>(ไม่บังคับ)</small></span><select id="helpJob" class="sel"><option value="">— ไม่แนบงาน —</option>' + myJobs.map(j => '<option value="' + esc(j.id) + '"' + (M.jobId === j.id ? ' selected' : '') + '>' + esc(j.code + (j.title ? ' · ' + j.title : '')) + '</option>').join('') + '</select></label>' : '') + '</div>' : '';
   p.innerHTML = '<div class="mp-head"><span class="mp-hic">' + MSG_IC.chat + '</span><div><b>ข้อความ</b><small>' + (helps.length ? helps.length + ' คำขอความช่วยเหลือรออยู่' : 'คุยกับทีมและ' + ADMIN_LABEL) + '</small></div>' +
       ('Notification' in window && Notification.permission === 'default' ? '<button class="icon-btn" data-act="notifyperm" title="เปิดแจ้งเตือนบนเครื่องนี้">' + MSG_IC.bell + '</button>' : '') +
       '<button class="icon-btn" data-act="msgclose" aria-label="ปิด">✕</button></div>' +
