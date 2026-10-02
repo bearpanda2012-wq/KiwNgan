@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.4.2';
+const APP_VERSION = '1.4.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1327,7 +1327,17 @@ document.addEventListener('visibilitychange', () => {
 
 /* ============ PWA ============ */
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|usercontent/.test(location.hostname)) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    // look for a new version whenever the app comes back to the foreground
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => {}));
+  // a new version took over: reload once so the page runs the new code (not while typing in the editor)
+  let reloaded = !navigator.serviceWorker.controller; // first visit: nothing old to replace
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded) return; reloaded = true;
+    if (S.edit || S.draftDirty) { toast('มีเวอร์ชันใหม่ รีเฟรชหน้าเว็บหลังบันทึกงาน'); return; }
+    location.reload();
+  });
 }
 
 /* ============ boot ============ */
