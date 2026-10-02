@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -58,20 +58,21 @@ function doPost(e) {
 
 const PUBLIC = {
   ping: () => ({ version: VERSION, app: 'KiwNgan', brand: publicBrand_() }),
-  roster: () => ({ users: readAll_('Users').filter(u => u.active).map(publicUser_), brand: publicBrand_() }),
-  login: p => withLock_(() => login_(p.userId, p.pin))
+  // แอดมินไม่แสดงในรายชื่อหน้าเข้าสู่ระบบ (เข้าทางลิงก์ "ผู้ดูแลระบบ" ด้วยชื่อ + PIN)
+  roster: () => ({ users: readAll_('Users').filter(u => u.active && u.role !== 'admin').map(publicUser_), brand: publicBrand_() }),
+  login: p => withLock_(() => login_(p.userId, p.pin, p.name))
 };
 
 const ACTIONS = {
   me: (p, u) => ({ user: publicUser_(u) }),
   logout: (p, u) => { logout_(u.token); return {}; },
   bootstrap: (p, u) => bootstrap_(u),
-  saveJob: (p, u) => withLock_(() => saveJob_(p.job, u)),
+  saveJob: (p, u) => withLock_(() => { const r = saveJob_(p.job, u); return { job: maskJob_(r.job, u) }; }),
   deleteJob: (p, u) => withLock_(() => deleteJob_(p.id, u)),
-  startTimer: (p, u) => withLock_(() => startTimer_(p.jobId, u)),
-  stopTimer: (p, u) => withLock_(() => stopTimer_(p.logId, u)),
+  startTimer: (p, u) => withLock_(() => { const r = startTimer_(p.jobId, u); return { log: maskLog_(r.log, u), job: maskJob_(r.job, u), closed: r.closed.map(l => maskLog_(l, u)) }; }),
+  stopTimer: (p, u) => withLock_(() => { const r = stopTimer_(p.logId, u); return Object.assign(r, { log: maskLog_(r.log, u) }); }),
   deleteLog: (p, u) => withLock_(() => deleteLog_(p.logId, u)),
-  activity: (p) => activityFor_(p.jobId),
+  activity: (p, u) => activityFor_(p.jobId).map(a => maskAct_(a, u)),
   changePin: (p, u) => withLock_(() => changePin_(u, p.oldPin, p.newPin)),
   // admin
   saveSettings: (p, u) => withLock_(() => { admin_(u); return saveSettings_(p.settings, u); }),
@@ -99,9 +100,10 @@ function validPin_(pin) { return /^\d{4,6}$/.test(String(pin || '')); }
 function randomPin_() { return String(Math.floor(1000 + Math.random() * 9000)); }
 function publicUser_(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active }; }
 
-function login_(userId, pin) {
-  const u = readAll_('Users').find(x => x.id === userId);
-  if (!u || !u.active) throw new Error('ไม่พบผู้ใช้นี้ หรือบัญชีถูกปิดใช้งาน');
+function login_(userId, pin, name) {
+  const users = readAll_('Users');
+  const u = userId ? users.find(x => x.id === userId) : users.find(x => x.name === String(name || '').trim());
+  if (!u || !u.active) throw new Error(name ? 'ชื่อหรือ PIN ไม่ถูกต้อง' : 'ไม่พบผู้ใช้นี้ หรือบัญชีถูกปิดใช้งาน');
   const cache = CacheService.getScriptCache();
   const fk = 'fail_' + u.id;
   const fails = Number(cache.get(fk) || 0);
@@ -152,6 +154,23 @@ function dropSessionsOf_(uid) {
 function admin_(u) { if (u.role !== 'admin') throw new Error('เฉพาะแอดมินเท่านั้น'); }
 const isAdmin_ = u => u.role === 'admin';
 const ownsJob_ = (u, j) => isAdmin_(u) || j.assignee === u.name || j.createdBy === u.name;
+
+/* ซ่อนชื่อแอดมินจากผู้ใช้งานทั่วไป */
+const ADMIN_LABEL = 'ผู้ดูแลระบบ';
+let ADMIN_NAMES_ = null;
+function adminNames_() {
+  if (!ADMIN_NAMES_) ADMIN_NAMES_ = readAll_('Users').filter(x => x.role === 'admin').map(x => x.name);
+  return ADMIN_NAMES_;
+}
+function maskName_(n, viewer) { return !isAdmin_(viewer) && n && adminNames_().indexOf(n) >= 0 ? ADMIN_LABEL : n; }
+function maskJob_(j, viewer) {
+  if (isAdmin_(viewer) || !j) return j;
+  const o = Object.assign({}, j);
+  ['assignee', 'createdBy', 'updatedBy'].forEach(k => { o[k] = maskName_(o[k], viewer); });
+  return o;
+}
+function maskLog_(l, viewer) { return isAdmin_(viewer) || !l ? l : Object.assign({}, l, { member: maskName_(l.member, viewer) }); }
+function maskAct_(a, viewer) { return isAdmin_(viewer) ? a : Object.assign({}, a, { who: maskName_(a.who, viewer) }); }
 
 /* ======================= Sheet helpers ======================= */
 
@@ -369,8 +388,10 @@ function bootstrap_(u) {
   const cutoff = Utilities.formatDate(new Date(Date.now() - 120 * 864e5), tz_(), 'yyyy-MM-dd');
   const logs = readAll_('TimeLogs').filter(l => !l.end || l.start >= cutoff);
   return {
-    settings: settings_(), users: readAll_('Users').map(publicUser_),
-    jobs: readAll_('Jobs'), logs: logs, me: publicUser_(u), serverTime: nowIso_(), version: VERSION
+    settings: settings_(),
+    users: readAll_('Users').filter(x => isAdmin_(u) || x.role !== 'admin').map(publicUser_),
+    jobs: readAll_('Jobs').map(j => maskJob_(j, u)), logs: logs.map(l => maskLog_(l, u)),
+    me: publicUser_(u), serverTime: nowIso_(), version: VERSION
   };
 }
 

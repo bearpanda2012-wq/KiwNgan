@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -69,6 +69,7 @@ const P = {
   del: (u, j) => !!u && (u.role === 'admin' || j.createdBy === u.name)
 };
 const isAdmin = () => P.admin(S.user);
+const ADMIN_LABEL = 'ผู้ดูแลระบบ';
 const canEdit = j => P.owns(S.user, j);
 
 /* ============ utils ============ */
@@ -185,7 +186,7 @@ function seedDemo() {
   const R = mulberry32(20261002), pick = a => a[Math.floor(R() * a.length)];
   const s = defaultSettings();
   s.company = 'บริษัทตัวอย่าง จำกัด';
-  const users = [{ id: 'u1', name: 'ต้น', full: 'ธนพล', role: 'admin', color: '#0B6B70', active: true, pin: '1234' }, { id: 'u2', name: 'ฝน', full: 'ปภาวรินทร์', role: 'user', color: '#2D5FC4', active: true, pin: '1234' }, { id: 'u3', name: 'บอส', full: 'ณัฐวุฒิ', role: 'user', color: '#B05A2A', active: true, pin: '1234' }];
+  const users = [{ id: 'u0', name: 'แอดมิน', full: '', role: 'admin', color: '#2B2F36', active: true, pin: '1234' }, { id: 'u1', name: 'ต้น', full: 'ธนพล', role: 'user', color: '#0B6B70', active: true, pin: '1234' }, { id: 'u2', name: 'ฝน', full: 'ปภาวรินทร์', role: 'user', color: '#2D5FC4', active: true, pin: '1234' }, { id: 'u3', name: 'บอส', full: 'ณัฐวุฒิ', role: 'user', color: '#B05A2A', active: true, pin: '1234' }];
   s.sales = ['เอ', 'บี', 'ซี', 'ดี'];
   const titles = ['ฉากกั้นห้อง ลายใบไม้', 'ฟาซาด อาคารสำนักงาน', 'แผงระแนงลายคลื่น', 'ป้ายโลโก้ร้านกาแฟ', 'ผนังโชว์รูมรถยนต์', 'ฝ้าเพดานลายเรขาคณิต', 'ประตูบานเลื่อนลายไทย', 'ผนังคลินิกทันตกรรม', 'ล็อบบี้โรงแรม', 'รั้วบ้านลายฉลุ', 'ผนังห้องประชุม', 'ช่องลมลายดอกพิกุล'];
   const groupsW = ['งาน 2D', 'งาน 2D', 'งาน 2D', 'งาน 3D', 'งาน 3D', 'งาน โครงการ', 'งาน โครงการ', 'งาน 2.5D', 'งาน ตัวอย่าง'];
@@ -203,7 +204,7 @@ function seedDemo() {
     const code = (R() < .45 ? 'R' : '') + yy + '-' + mm + String(seq++).padStart(3, '0') + pick(['', '', 'S', 'N', 'C', '-1']) + (rev ? '_re1' : '');
     const j = {
       id: 'j' + k, code: code, title: pick(titles), group: group, taskType: taskType, qty: qty, level: 1 + Math.floor(R() * 3),
-      assignee: pick(users).name, sale: pick(s.sales), priority: R() < .15 ? 'urgent' : 'normal', revision: rev,
+      assignee: pick(users.filter(u => u.role !== 'admin')).name, sale: pick(s.sales), priority: R() < .15 ? 'urgent' : 'normal', revision: rev,
       status: 'queue', received: received, due: '', startedAt: '', finishedAt: '', minutes: 0, note: rev ? 'งานแก้ไขตามคอมเมนต์ลูกค้า' : '',
       createdAt: received + 'T08:30:00', updatedAt: received + 'T08:30:00', updatedBy: ''
     };
@@ -259,15 +260,23 @@ const Demo = {
   admin(u) { if (u.role !== 'admin') throw new Error('เฉพาะแอดมินเท่านั้น'); },
   act(d, jobId, who, action, detail) { d.activity.push({ ts: nowLocal(), jobId: jobId, who: who, action: action, detail: detail || '' }); if (d.activity.length > 600) d.activity.splice(0, 100); },
   async ping() { const s = this.db().settings; return { brand: { company: s.company, appName: s.appName, accent: s.accent, logo: s.logo } }; },
-  async roster() { const d = this.db(); return { users: d.users.filter(u => u.active).map(this.pub), brand: (await this.ping()).brand }; },
+  async roster() { const d = this.db(); return { users: d.users.filter(u => u.active && u.role !== 'admin').map(this.pub), brand: (await this.ping()).brand }; },
+  mask(d, viewer, o, keys) {
+    if (!o || P.admin(viewer)) return o;
+    const admins = d.users.filter(u => u.role === 'admin').map(u => u.name), r = Object.assign({}, o);
+    keys.forEach(k => { if (admins.indexOf(r[k]) >= 0) r[k] = ADMIN_LABEL; });
+    return r;
+  },
+  mj(d, v, j) { return this.mask(d, v, j, ['assignee', 'createdBy', 'updatedBy']); },
+  ml(d, v, l) { return this.mask(d, v, l, ['member']); },
   async login(p) {
-    const d = this.db(), u = d.users.find(x => x.id === p.userId);
-    if (!u || !u.active) throw new Error('ไม่พบผู้ใช้นี้');
+    const d = this.db(), u = p.userId ? d.users.find(x => x.id === p.userId) : d.users.find(x => x.name === String(p.name || '').trim());
+    if (!u || !u.active) throw new Error(p.name ? 'ชื่อหรือ PIN ไม่ถูกต้อง' : 'ไม่พบผู้ใช้นี้');
     if (String(p.pin) !== String(u.pin)) throw new Error('PIN ไม่ถูกต้อง (โหมดทดลองใช้ 1234)');
     return { token: u.id, user: this.pub(u) };
   },
   async logout() { return {}; },
-  async bootstrap() { const d = this.db(), u = this.me(d); return { settings: d.settings, users: d.users.map(this.pub), jobs: d.jobs, logs: d.logs, me: this.pub(u) }; },
+  async bootstrap() { const d = this.db(), u = this.me(d); return { settings: d.settings, users: d.users.filter(x => P.admin(u) || x.role !== 'admin').map(this.pub), jobs: d.jobs.map(j => this.mj(d, u, j)), logs: d.logs.map(l => this.ml(d, u, l)), me: this.pub(u) }; },
   async saveJob(p) {
     const d = this.db(), u = this.me(d), job = Object.assign({}, p.job);
     delete job.baseUpdatedAt; delete job.minutes; delete job.createdBy; delete job.createdAt;
@@ -289,7 +298,7 @@ const Demo = {
     if (cur.status !== 'done') cur.finishedAt = '';
     if ((cur.status === 'doing' || cur.status === 'review') && !cur.startedAt) cur.startedAt = now;
     this.act(d, cur.id, u.name, !before ? 'create' : (before.status !== cur.status ? 'status' : 'edit'), !before ? cur.code : (before.status !== cur.status ? before.status + '→' + cur.status : ''));
-    this.save(d); return { job: clone(cur) };
+    this.save(d); return { job: this.mj(d, u, clone(cur)) };
   },
   async deleteJob(p) {
     const d = this.db(), u = this.me(d), j = d.jobs.find(x => x.id === p.id);
@@ -307,14 +316,14 @@ const Demo = {
     d.logs.push(log);
     if (j.status === 'queue' || j.status === 'hold') { this.act(d, j.id, u.name, 'status', j.status + '→doing'); j.status = 'doing'; if (!j.startedAt) j.startedAt = log.start; }
     this.act(d, p.jobId, u.name, 'timer', 'เริ่มจับเวลา');
-    this.save(d); return { log: clone(log), job: clone(j), closed: closed };
+    this.save(d); return { log: this.ml(d, u, clone(log)), job: this.mj(d, u, clone(j)), closed: closed.map(l => this.ml(d, u, l)) };
   },
   stopIn(d, l, u) { l.end = nowLocal(); l.minutes = Math.max(0, Math.round((parseLocal(l.end) - parseLocal(l.start)) / 60000)); this.recalc(d, l.jobId); this.act(d, l.jobId, u.name, 'timer', 'หยุดจับเวลา ' + l.minutes + ' นาที'); },
   async stopTimer(p) {
     const d = this.db(), u = this.me(d), l = d.logs.find(x => x.id === p.logId);
     if (!l) throw new Error('ไม่พบรายการจับเวลา');
     if (!P.admin(u) && l.member !== u.name) throw new Error('หยุดได้เฉพาะการจับเวลาของตัวเอง');
-    if (!l.end) this.stopIn(d, l, u); this.save(d); return { log: clone(l), jobId: l.jobId, minutes: this.recalc(d, l.jobId) };
+    if (!l.end) this.stopIn(d, l, u); this.save(d); return { log: this.ml(d, u, clone(l)), jobId: l.jobId, minutes: this.recalc(d, l.jobId) };
   },
   async deleteLog(p) {
     const d = this.db(), u = this.me(d), l = d.logs.find(x => x.id === p.logId);
@@ -323,7 +332,7 @@ const Demo = {
     d.logs = d.logs.filter(x => x.id !== p.logId); const m = this.recalc(d, l.jobId); this.save(d); return { logId: p.logId, jobId: l.jobId, minutes: m };
   },
   async saveSettings(p) { const d = this.db(); this.admin(this.me(d)); delete p.settings.members; d.settings = p.settings; this.save(d); return { settings: p.settings }; },
-  async activity(p) { return this.db().activity.filter(a => a.jobId === p.jobId).slice(-50).reverse(); },
+  async activity(p) { const d = this.db(), u = this.me(d); return d.activity.filter(a => a.jobId === p.jobId).slice(-50).reverse().map(a => this.mask(d, u, a, ['who'])); },
   async changePin(p) {
     const d = this.db(), u = this.me(d);
     if (!/^\d{4,6}$/.test(String(p.newPin || ''))) throw new Error('PIN ใหม่ต้องเป็นตัวเลข 4–6 หลัก');
@@ -412,28 +421,37 @@ function renderLogin() {
   const dots = '<div class="pin-dots" aria-hidden="true">' + [0, 1, 2, 3, 4, 5].map(i => '<i class="' + (i < L.pin.length ? 'on' : '') + (i >= 4 ? ' opt' : '') + '"></i>').join('') + '</div>';
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'].map(k => k === 'clear' ? '<button type="button" class="key fn" data-pin="clear">ล้าง</button>'
     : k === 'back' ? '<button type="button" class="key fn" data-pin="back" aria-label="ลบ">⌫</button>' : '<button type="button" class="key" data-pin="' + k + '">' + k + '</button>').join('');
+  const pinForm = extra => '<form id="pinForm" class="pin-form">' + (extra || '') + '<input id="pinIn" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password" value="' + esc(L.pin) + '" aria-label="PIN">' + dots +
+    '<div class="keypad">' + keys + '</div><button class="btn primary" type="submit"' + (L.pin.length < 4 ? ' disabled' : '') + '>' + (L.submitting ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ') + '</button></form>';
   const c = S.conn || { url: '' };
+  let body;
+  if (L.busy) body = '<div class="loading" style="min-height:160px"><span class="spinner"></span>กำลังโหลด…</div>';
+  else if (L.adminMode) body = '<button type="button" class="back-who" data-act="adminoff">‹ กลับ</button><h2 class="login-h">ผู้ดูแลระบบ</h2>' +
+    pinForm('<div class="f"><label for="adminName">ชื่อผู้ดูแล</label><input id="adminName" value="' + esc(L.adminName || '') + '" autocomplete="username"></div>');
+  else if (!sel) body = '<h2 class="login-h">เข้าสู่ระบบ</h2><p class="sub">เลือกชื่อของคุณ</p>' +
+    ((L.roster || []).length ? '<div class="who-grid">' + L.roster.map(u => '<button type="button" class="who" data-who="' + esc(u.id) + '"><span class="av lg" style="--c:' + esc(u.color) + '">' + esc(initial(u.name)) + '</span><b>' + esc(u.name) + '</b><small>' + esc(u.full || 'ผู้ใช้งาน') + '</small></button>').join('') + '</div>'
+      : '<div class="empty" style="padding:20px 0"><b>ยังไม่มีผู้ใช้งาน</b>ผู้ดูแลระบบเพิ่มทีมงานได้ในหน้าตั้งค่า</div>');
+  else body = '<button type="button" class="back-who" data-who="">‹ เปลี่ยนชื่อ</button><div class="pin-head"><span class="av lg" style="--c:' + esc(sel.color) + '">' + esc(initial(sel.name)) + '</span><div><b>' + esc(sel.name) + '</b><small>ใส่ PIN 4–6 หลัก</small></div></div>' + pinForm();
+
+  const showConn = L.showConn;
   $('#view').innerHTML = '<div class="login"><div class="login-card">' +
     '<div class="login-brand">' + brandMark(b) + '<div><b>' + esc(b.appName || 'KiwNgan คิวงาน') + '</b><small>' + esc(b.company || '') + '</small></div></div>' +
-    (mode() === 'demo' ? '<div class="banner"><span><b>โหมดทดลอง</b> ทุกคนใช้ PIN 1234 · ต้น = แอดมิน, ฝน และ บอส = ผู้ใช้งาน</span></div>' : '') +
-    (L.busy ? '<div class="loading" style="min-height:160px"><span class="spinner"></span>กำลังโหลดรายชื่อ…</div>' :
-      (!sel ? '<h2 class="login-h">เข้าสู่ระบบ</h2><p class="sub">เลือกชื่อของคุณ</p><div class="who-grid">' +
-        (L.roster || []).map(u => '<button type="button" class="who" data-who="' + esc(u.id) + '"><span class="av lg" style="--c:' + esc(u.color) + '">' + esc(initial(u.name)) + '</span><b>' + esc(u.name) + '</b><small>' + (u.role === 'admin' ? 'แอดมิน' : esc(u.full || 'ผู้ใช้งาน')) + '</small></button>').join('') + '</div>'
-      : '<button type="button" class="back-who" data-who="">‹ เปลี่ยนชื่อ</button><div class="pin-head"><span class="av lg" style="--c:' + esc(sel.color) + '">' + esc(initial(sel.name)) + '</span><div><b>' + esc(sel.name) + '</b><small>ใส่ PIN 4–6 หลัก</small></div></div>' +
-        '<form id="pinForm" class="pin-form"><input id="pinIn" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password" value="' + esc(L.pin) + '" aria-label="PIN">' + dots +
-        '<div class="keypad">' + keys + '</div><button class="btn primary" type="submit"' + (L.pin.length < 4 ? ' disabled' : '') + '>' + (L.submitting ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ') + '</button></form>')) +
-    (L.err ? '<div class="err" role="alert">' + esc(L.err) + '</div>' : '') +
+    (mode() === 'demo' ? '<div class="banner"><span><b>โหมดทดลอง</b> ทุกคนใช้ PIN 1234 · ผู้ดูแลระบบเข้าที่ลิงก์ด้านล่าง ชื่อ "แอดมิน"</span></div>' : '') +
+    body + (L.err ? '<div class="err" role="alert">' + esc(L.err) + '</div>' : '') +
     '<div class="login-foot">' +
-      (L.showConn ? '<div class="f"><label for="cUrl">URL ฐานข้อมูล (Apps Script /exec)</label><input id="cUrl" value="' + esc(c.url) + '" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" autocomplete="off"></div><div class="top-actions"><button class="btn primary sm" data-act="connect">เชื่อมต่อ</button>' + (mode() === 'sheet' ? '<button class="btn sm" data-act="disconnect">ใช้โหมดทดลอง</button>' : '') + '</div>'
-        : '<button type="button" class="btn ghost sm" data-act="showconn">' + (mode() === 'sheet' ? 'ตั้งค่าการเชื่อมต่อ' : 'เชื่อมต่อ Google Sheet ของทีม') + '</button>') +
+      (showConn ? '<div class="f"><label for="cUrl">URL ฐานข้อมูล (Apps Script /exec)</label><input id="cUrl" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" autocomplete="off"></div><div class="top-actions"><button class="btn primary sm" data-act="connect">เชื่อมต่อ</button>' + (mode() === 'sheet' ? '<button class="btn sm" data-act="disconnect">ใช้โหมดทดลอง</button>' : '') + '</div>'
+        : '<div class="top-actions" style="justify-content:space-between">' + (!L.adminMode ? '<button type="button" class="btn ghost sm" data-act="adminon">ผู้ดูแลระบบ</button>' : '<span></span>') +
+          (mode() === 'demo' ? '<button type="button" class="btn ghost sm" data-act="showconn">เชื่อมต่อ Google Sheet ของทีม</button>' : '') + '</div>') +
     '</div></div></div>';
-  const inp = $('#pinIn'); if (inp && !('ontouchstart' in window)) inp.focus();
+  const focus = L.adminMode && !L.adminName ? $('#adminName') : $('#pinIn');
+  if (focus && (!('ontouchstart' in window) || focus.id === 'adminName')) focus.focus();
 }
 async function doLogin() {
   const L = S.login; if (L.pin.length < 4 || L.submitting) return;
   L.submitting = true; L.err = ''; renderLogin();
   try {
-    const r = await api().login({ userId: L.userId, pin: L.pin });
+    if (L.adminMode) { const n = $('#adminName'); L.adminName = n ? n.value.trim() : L.adminName; if (!L.adminName) { L.submitting = false; L.err = 'ใส่ชื่อผู้ดูแล'; return renderLogin(); } }
+    const r = await api().login(L.adminMode ? { name: L.adminName, pin: L.pin } : { userId: L.userId, pin: L.pin });
     LS.set(tokenKey(), r.token); L.submitting = false; L.pin = '';
     S.loaded = false; await load(false);
     if (S.user) toast('สวัสดี ' + S.user.name);
@@ -441,7 +459,7 @@ async function doLogin() {
 }
 async function logout() {
   try { await api().logout({}); } catch (e) {}
-  LS.del(tokenKey()); S.jobs = []; S.logs = []; S.users = []; S.login.userId = ''; showLogin();
+  LS.del(tokenKey()); S.jobs = []; S.logs = []; S.users = []; S.login.userId = ''; S.login.adminMode = false; showLogin();
 }
 
 async function mutate(fn, okMsg) {
@@ -508,7 +526,7 @@ function renderShell() {
   $('#nav').innerHTML = navHtml(true);
   $('#tabbar').innerHTML = navHtml(true);
   const connCls = mode() === 'demo' ? '' : (S.sync === 'err' ? 'err' : 'ok');
-  const connTxt = mode() === 'demo' ? 'โหมดทดลอง (เก็บในเครื่องนี้)' : (S.sync === 'err' ? 'เชื่อมต่อไม่ได้' : S.sync === 'busy' ? 'กำลังซิงก์…' : 'เชื่อมต่อ Google Sheet');
+  const connTxt = mode() === 'demo' ? 'โหมดทดลอง (เก็บในเครื่องนี้)' : (S.sync === 'err' ? 'เชื่อมต่อไม่ได้' : S.sync === 'busy' ? 'กำลังซิงก์…' : (isAdmin() ? 'เชื่อมต่อ Google Sheet' : 'ซิงก์ข้อมูลแล้ว'));
   $('#railFoot').innerHTML = '<button class="me-chip" data-go="settings" data-sec="me">' + av(S.me) + '<span><small>' + (isAdmin() ? 'แอดมิน' : 'ผู้ใช้งาน') + '</small><b>' + esc(S.me) + '</b></span></button>' +
     '<div class="conn ' + connCls + '"><i></i>' + connTxt + '</div>';
   renderTimerbar();
@@ -538,7 +556,7 @@ function render() {
 }
 
 function banner() {
-  if (mode() === 'demo') return '<div class="banner"><span><b>โหมดทดลอง</b> ข้อมูลตัวอย่างเก็บในเบราว์เซอร์นี้เท่านั้น ลองออกจากระบบแล้วเข้าเป็น ฝน (ผู้ใช้งาน) เพื่อดูสิทธิ์ที่ต่างกัน</span><button class="btn sm" data-go="settings" data-sec="conn">เชื่อมต่อ Google Sheet</button></div>';
+  if (mode() === 'demo') return '<div class="banner"><span><b>โหมดทดลอง</b> ข้อมูลตัวอย่างเก็บในเบราว์เซอร์นี้เท่านั้น ลองเข้าเป็นผู้ใช้งาน (ต้น ฝน บอส) หรือผู้ดูแลระบบ เพื่อดูสิทธิ์ที่ต่างกัน</span>' + (isAdmin() ? '<button class="btn sm" data-go="settings" data-sec="conn">เชื่อมต่อ Google Sheet</button>' : '') + '</div>';
   if (S.sync === 'err') return '<div class="banner err"><span><b>ซิงก์ไม่สำเร็จ</b> ' + esc(S.syncErr) + '</span><button class="btn sm" data-act="refresh">' + I.refresh + 'ลองอีกครั้ง</button></div>';
   return '';
 }
@@ -765,7 +783,7 @@ function viewSettings() {
   const admin = isAdmin();
   if (admin && !S.draft) { S.draft = clone(S.settings); S.draftDirty = false; }
   const d = S.draft || S.settings, c = S.conn || { url: '' };
-  const nav = [['me', 'บัญชีของฉัน'], ['conn', 'ฐานข้อมูล']].concat(admin ? [['users', 'ผู้ใช้งานและสิทธิ์'], ['brand', 'แบรนด์'], ['lists', 'รายการตัวเลือก'], ['sla', 'ระยะเวลามาตรฐาน']] : []).concat([['about', 'เกี่ยวกับ']]);
+  const nav = [['me', 'บัญชีของฉัน']].concat(admin ? [['conn', 'ฐานข้อมูล'], ['users', 'ผู้ใช้งานและสิทธิ์'], ['brand', 'แบรนด์'], ['lists', 'รายการตัวเลือก'], ['sla', 'ระยะเวลามาตรฐาน']] : []).concat([['about', 'เกี่ยวกับ']]);
   let h = topbar('ตั้งค่า', admin ? 'คุณเป็นแอดมิน จัดการผู้ใช้ การตั้งค่า และแบรนด์ได้' : 'บัญชีของคุณและการเชื่อมต่อ') +
     '<div class="settings"><nav class="snav">' + nav.map(n => '<a href="#s-' + n[0] + '">' + n[1] + '</a>').join('') + '</nav><div class="sbody">';
 
@@ -777,7 +795,7 @@ function viewSettings() {
     '<div class="f"><label for="pNew2">ยืนยัน PIN ใหม่</label><input id="pNew2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div></div>' +
     '<div><button class="btn" data-act="changepin">เปลี่ยน PIN</button></div></section>';
 
-  h += '<section class="panel sec" id="s-conn"><div class="panel-h"><h2>ฐานข้อมูล</h2>' + (mode() === 'sheet' ? '<span class="pill s-done">Google Sheet</span>' : '<span class="pill s-hold">โหมดทดลอง</span>') + '</div>' +
+  if (admin) h += '<section class="panel sec" id="s-conn"><div class="panel-h"><h2>ฐานข้อมูล</h2>' + (mode() === 'sheet' ? '<span class="pill s-done">Google Sheet</span>' : '<span class="pill s-hold">โหมดทดลอง</span>') + '</div>' +
     (mode() === 'sheet'
       ? '<p class="help">ข้อมูลของทีมเก็บใน Google Sheet ผ่าน Apps Script ด้านล่าง</p><div class="code-box">' + esc(c.url) + '</div><div class="top-actions"><button class="btn sm" data-act="copylink">คัดลอกลิงก์เข้าใช้งานให้ทีม</button><button class="btn sm" data-act="disconnect">ออกจากฐานข้อมูลนี้</button></div>'
       : '<p class="help">ตอนนี้ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น ติดตั้ง Apps Script ตามคู่มือแล้ววาง URL ที่ลงท้าย /exec เพื่อใช้ร่วมกันทั้งทีม</p>' +
@@ -826,7 +844,7 @@ function viewSettings() {
       '<label class="toggle" style="max-width:420px"><input type="checkbox" data-d="skipWeekends"' + (d.skipWeekends !== false ? ' checked' : '') + '> ไม่นับวันเสาร์-อาทิตย์</label></section>';
   }
 
-  h += '<section class="panel sec" id="s-about"><div class="panel-h"><h2>เกี่ยวกับ</h2></div><p class="help">KiwNgan คิวงาน เวอร์ชัน ' + APP_VERSION + ' · ข้อมูลทั้งหมดอยู่ใน Google Sheet ของทีมเอง' + (S.lastSync ? ' · ซิงก์ล่าสุด ' + new Date(S.lastSync).toLocaleTimeString('th-TH') : '') + '</p></section>';
+  h += '<section class="panel sec" id="s-about"><div class="panel-h"><h2>เกี่ยวกับ</h2></div><p class="help">KiwNgan คิวงาน เวอร์ชัน ' + APP_VERSION + (admin ? ' · ข้อมูลทั้งหมดอยู่ใน Google Sheet ของทีมเอง' : '') + (S.lastSync ? ' · ซิงก์ล่าสุด ' + new Date(S.lastSync).toLocaleTimeString('th-TH') : '') + '</p></section>';
   if (admin) h += '<div class="savebar"' + (S.draftDirty ? '' : ' hidden') + ' id="savebar"><span>มีการแก้ไขที่ยังไม่บันทึก</span><button class="btn" data-act="discard">ยกเลิก</button><button class="btn primary" data-act="savesettings">บันทึกการตั้งค่า</button></div>';
   return h + '</div></div>';
 }
@@ -963,7 +981,7 @@ document.addEventListener('click', async e => {
   if (d.fstatus) { S.f.status = d.fstatus; if (d.fstatus !== 'done') S.f.month = ''; return render(); }
   // login screen
   if (d.who !== undefined) { S.login.userId = d.who; S.login.pin = ''; S.login.err = ''; return renderLogin(); }
-  if (d.pin) { const L = S.login; if (d.pin === 'clear') L.pin = ''; else if (d.pin === 'back') L.pin = L.pin.slice(0, -1); else if (L.pin.length < 6) L.pin += d.pin; L.err = ''; return renderLogin(); }
+  if (d.pin) { const L = S.login; const an = $('#adminName'); if (an) L.adminName = an.value; if (d.pin === 'clear') L.pin = ''; else if (d.pin === 'back') L.pin = L.pin.slice(0, -1); else if (L.pin.length < 6) L.pin += d.pin; L.err = ''; return renderLogin(); }
   // user admin
   if (d.saveuser) return saveUserRow(d.saveuser);
   if (d.resetpin) { try { const r = await mutate(() => api().resetPin({ userId: d.resetpin })); S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
@@ -997,6 +1015,8 @@ document.addEventListener('click', async e => {
     case 'disconnect': S.conn = null; LS.del('conn'); S.loaded = false; S.login.showConn = false; toast('กลับสู่โหมดทดลองแล้ว'); return load(false);
     case 'resetdemo': LS.del('demo'); LS.del(tokenKey()); toast('รีเซ็ตข้อมูลตัวอย่างแล้ว'); return showLogin();
     case 'showconn': S.login.showConn = true; return renderLogin();
+    case 'adminon': Object.assign(S.login, { adminMode: true, userId: '', pin: '', err: '' }); return renderLogin();
+    case 'adminoff': Object.assign(S.login, { adminMode: false, pin: '', err: '' }); return renderLogin();
     case 'logout': return logout();
     case 'changepin': return changePin();
     case 'adduser': return addUser();
