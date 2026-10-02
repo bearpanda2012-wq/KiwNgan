@@ -1683,3 +1683,19 @@ body.auth .msg-fab{display:none}
 @media (max-width:640px){.team-pulse small{margin-left:0}}
 
 .chip[data-fstatus="fix"] svg{color:var(--fix)}
+
+/* finished-jobs chart: everyone / one person (leads & admins) */
+.hp-chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 2px}
+.hp-chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px 0 5px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13px;font-weight:600;color:var(--ink);transition:background .15s,border-color .15s,transform .15s}
+.hp-chip:first-child{padding-left:11px}
+.hp-chip svg{width:16px;height:16px;color:var(--accent)}
+.hp-chip .av{width:24px;height:24px;font-size:11px}
+.hp-chip b{font-family:var(--f-display);color:var(--muted);font-size:12px;min-width:16px;text-align:center;padding:1px 6px;border-radius:999px;background:var(--surface-2)}
+.hp-chip:hover{transform:translateY(-1px);border-color:color-mix(in oklab,var(--pc,var(--accent)) 45%,var(--line))}
+.hp-chip.on{background:color-mix(in oklab,var(--pc,var(--accent)) 14%,var(--surface));border-color:var(--pc,var(--accent));box-shadow:0 0 0 2px color-mix(in oklab,var(--pc,var(--accent)) 25%,transparent)}
+.hp-chip.on b{background:var(--pc,var(--accent));color:#fff}
+.bar .stack.by-p{gap:1px}
+.bar .stack.by-p i{border-radius:2px;animation:growUp .5s cubic-bezier(.2,.8,.2,1) both}
+.bar .stack.by-p i:last-child{border-radius:3px 3px 2px 2px}
+.bar.has-late::before{content:'';position:absolute;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--urgent);box-shadow:0 0 0 2px var(--surface);bottom:calc(var(--h,0%) + 4px);z-index:1}
+.legend .lg-late{background:var(--urgent);border-radius:50%}

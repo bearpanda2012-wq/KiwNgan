@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.6.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1888,22 +1888,37 @@ function viewHome() {
   const keyOf = d => { if (!weekly) return d; const x = parseLocal(d); return addDays(d, -((x.getDay() + 6) % 7)); };
   const keys = []; days.forEach(d => { const k = keyOf(d); if (keys.indexOf(k) < 0) keys.push(k); });
   const per = {}; keys.forEach(k => per[k] = { ok: 0, late: 0 });
-  const done30 = pool.filter(j => j.status === 'done' && finDate(j) >= hr.from && finDate(j) <= hr.to);
-  done30.forEach(j => { const k = keyOf(finDate(j)); if (per[k]) per[k][onTime(j) ? 'ok' : 'late']++; });
+  const doneAll = pool.filter(j => j.status === 'done' && finDate(j) >= hr.from && finDate(j) <= hr.to);
+  /* หัวหน้างาน/แอดมิน: เลือกดูทุกคนหรือทีละคน — "ทุกคน" แท่งกราฟแยกสีตามคน */
+  let hp = lead ? (S.hp != null ? S.hp : LS.get('homePerson', '')) : '';
+  const pplCount = {}; doneAll.forEach(j => { const k = j.assignee || ''; pplCount[k] = (pplCount[k] || 0) + 1; });
+  const ppl = []; members().forEach(x => { if (ppl.indexOf(x.name) < 0 && (pplCount[x.name] || x.role !== 'admin')) ppl.push(x.name); }); Object.keys(pplCount).forEach(n => { if (ppl.indexOf(n) < 0) ppl.push(n); });
+  if (hp && ppl.indexOf(hp === '__none' ? '' : hp) < 0) hp = '';
+  const done30 = hp ? doneAll.filter(j => (j.assignee || '') === (hp === '__none' ? '' : hp)) : doneAll;
+  const byPerson = lead && !hp && LS.get('chartType', 'bar') === 'bar' && ppl.length > 1;
+  const pColor = n => n ? ((memberBy(n) || {}).color || '#5B6B7A') : '#9AA5B0';
+  done30.forEach(j => { const k = keyOf(finDate(j)); if (per[k]) { per[k][onTime(j) ? 'ok' : 'late']++; const w = j.assignee || ''; (per[k].who = per[k].who || {})[w] = (per[k].who[w] || 0) + 1; } });
   let max = Math.max(2, ...keys.map(d => per[d].ok + per[d].late)); if (max % 2) max++;
   const every = Math.max(1, Math.ceil(keys.length / 7));
   const bars = keys.map((d, i) => {
     const p = per[d], n = p.ok + p.late, wd = parseLocal(d).getDay();
     const lab = (i % every === 0 || i === keys.length - 1) ? '<em>' + (weekly || span > 31 ? fd(d < hr.from ? hr.from : d) : parseLocal(d).getDate()) + '</em>' : '';
     const tipD = weekly ? 'สัปดาห์ ' + fd(d < hr.from ? hr.from : d) + ' – ' + fd(addDays(d, 6) > hr.to ? hr.to : addDays(d, 6)) : fd(d);
-    return '<div class="bar' + (!weekly && d === t ? ' today' : '') + (!weekly && (wd === 0 || wd === 6) ? ' wk' : '') + '"' + (n ? ' data-tip="' + tipD + ' · เสร็จ ' + n + (p.late ? ' (ช้า ' + p.late + ')' : '') + '"' : '') + '><div class="stack" style="height:' + (n / max * 100) + '%">' +
-      (p.ok ? '<i style="flex:' + p.ok + '"></i>' : '') + (p.late ? '<i class="late" style="flex:' + p.late + '"></i>' : '') + '</div>' + lab + '</div>';
+    const who = p.who ? ppl.filter(x => p.who[x]).map(x => (x || 'ยังไม่มอบหมาย') + ' ' + p.who[x]).join(', ') : '';
+    const segs = byPerson ? ppl.filter(x => p.who && p.who[x]).map(x => '<i class="pp-seg" style="flex:' + p.who[x] + ';background:' + esc(pColor(x)) + '"></i>').join('')
+      : (p.ok ? '<i style="flex:' + p.ok + '"></i>' : '') + (p.late ? '<i class="late" style="flex:' + p.late + '"></i>' : '');
+    return '<div class="bar' + (!weekly && d === t ? ' today' : '') + (!weekly && (wd === 0 || wd === 6) ? ' wk' : '') + (byPerson && p.late ? ' has-late' : '') + '"' + (byPerson && p.late ? ' style="--h:' + (n / max * 100) + '%"' : '') + (n ? ' data-tip="' + esc(tipD + ' · เสร็จ ' + n + (p.late ? ' (ช้า ' + p.late + ')' : '') + (lead && !hp && who ? ' — ' + who : '')) + '"' : '') + '><div class="stack' + (byPerson ? ' by-p' : '') + '" style="height:' + (n / max * 100) + '%">' +
+      segs + '</div>' + lab + '</div>';
   }).join('');
   const ctype = LS.get('chartType', 'bar');
   const ctTabs = '<div class="ct-tabs" role="tablist" aria-label="รูปแบบกราฟ">' + CHART_TYPES.map(c => '<button data-ctype="' + c[0] + '" aria-pressed="' + (ctype === c[0]) + '" title="' + c[1] + '">' + c[2] + '<span>' + c[1] + '</span></button>').join('') + '</div>';
   const rangeTxt = hr.from === hr.to ? fdY(hr.from) : fdY(hr.from) + ' – ' + fdY(hr.to);
   const hrCtl = ctTabs + '<div class="hr-ctl"><div class="hr-chips">' + H_PRESETS.map(x => '<button class="chip sm" data-hpreset="' + x[0] + '" aria-pressed="' + (hr.preset === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
     '<div class="hr-dates"><label>' + STI.calendar + '<input type="date" id="hFrom" value="' + hr.from + '" max="' + t + '" aria-label="ตั้งแต่วันที่"></label><span>–</span><label><input type="date" id="hTo" value="' + hr.to + '" max="' + t + '" aria-label="ถึงวันที่"></label></div></div>';
+  const hpChips = lead && ppl.length > 1 ? '<div class="hp-chips" role="group" aria-label="เลือกคน"><button class="hp-chip' + (hp ? '' : ' on') + '" data-hperson="">' + I.team + 'ทุกคน <b>' + doneAll.length + '</b></button>' +
+    ppl.map(n => { const v = n || '__none'; return '<button class="hp-chip' + (hp === v ? ' on' : '') + '" data-hperson="' + esc(v) + '" style="--pc:' + esc(pColor(n)) + '">' + av(n) + esc(n || 'ยังไม่มอบหมาย') + ' <b>' + (pplCount[n] || 0) + '</b></button>'; }).join('') + '</div>' : '';
+  const legendH = byPerson ? '<div class="legend">' + ppl.filter(n => pplCount[n]).map(n => '<span><i style="background:' + esc(pColor(n)) + '"></i>' + esc(n || 'ยังไม่มอบหมาย') + '</span>').join('') + '<span><i class="lg-late"></i>มีงานช้า</span></div>'
+    : '<div class="legend"><span><i style="background:var(--accent)"></i>ตรงเวลา</span><span><i style="background:var(--urgent)"></i>ช้ากว่ากำหนด</span></div>';
   const ok30 = done30.filter(onTime).length;
   const withMin = done30.filter(j => j.minutes > 0);
   const avgMin = withMin.length ? withMin.reduce((s, j) => s + j.minutes, 0) / withMin.length : 0;
@@ -1939,8 +1954,8 @@ function viewHome() {
       '<section class="panel"><div class="panel-h"><div><h2>ต้องจัดการก่อน</h2><div class="sub">เลยกำหนด → ด่วน → ส่งภายในพรุ่งนี้</div></div><button class="btn ghost sm" data-filter-go="open">ดูทั้งหมด</button></div>' +
       (att.length ? '<div class="alist">' + att.map(aItem).join('') + '</div>' : '<div class="empty"><b>ไม่มีงานเร่งด่วน</b>คิวงานอยู่ในกำหนดทั้งหมด</div>') + '</section>' +
     '</div>' +
-    '<section class="panel"><div class="panel-h"><div><h2>' + (lead ? 'งานที่เสร็จ' : 'งานที่คุณทำเสร็จ') + '</h2><div class="sub">' + rangeTxt + ' · ' + span + ' วัน' + (weekly ? ' (รวมเป็นรายสัปดาห์)' : '') + ' · นับตามวันที่ปิดงาน</div></div><div class="legend"><span><i style="background:var(--accent)"></i>ตรงเวลา</span><span><i style="background:var(--urgent)"></i>ช้ากว่ากำหนด</span></div></div>' +
-      hrCtl + '<div class="minis"><div class="mini"><span>งานเสร็จ</span><b>' + done30.length + '</b></div><div class="mini"><span>ตรงเวลา</span><b>' + (done30.length ? Math.round(ok30 / done30.length * 100) + '%' : '–') + '</b></div>' +
+    '<section class="panel"><div class="panel-h"><div><h2>' + (lead ? 'งานที่เสร็จ' + (hp ? ' · ' + esc(hp === '__none' ? 'ยังไม่มอบหมาย' : hp) : ' · ทุกคน') : 'งานที่คุณทำเสร็จ') + '</h2><div class="sub">' + rangeTxt + ' · ' + span + ' วัน' + (weekly ? ' (รวมเป็นรายสัปดาห์)' : '') + ' · นับตามวันที่ปิดงาน</div></div>' + legendH + '</div>' +
+      hrCtl + hpChips + '<div class="minis"><div class="mini"><span>งานเสร็จ</span><b>' + done30.length + '</b></div><div class="mini"><span>ตรงเวลา</span><b>' + (done30.length ? Math.round(ok30 / done30.length * 100) + '%' : '–') + '</b></div>' +
       '<div class="mini"><span>เวลาทำเฉลี่ย/งาน</span><b>' + (avgMin ? fdur(avgMin) : '–') + '</b></div><div class="mini"><span>รับงาน → เสร็จ เฉลี่ย</span><b>' + (leads.length ? avgLead.toFixed(1) + ' วัน' : '–') + '</b></div></div>' +
       chartBlock(keys, per, max, every, weekly, span, hr, done30, bars) + '</section>' +
     (lead ? '<div class="grid2 even">' +
@@ -2525,6 +2540,7 @@ document.addEventListener('click', async e => {
   if (d.insttab) { INST.tab = d.insttab; renderLogin(); drawQr(); return; }
   if (d.quick) { S.f.quick = d.quick; return render(); }
   if (d.ctype) { LS.set('chartType', d.ctype); S.animIn = true; return render(); }
+  if (d.hperson !== undefined) { S.hp = d.hperson; LS.set('homePerson', d.hperson); return render(); }
   if (d.hpreset) { homeRange(); S.hr.preset = d.hpreset; homeRange(); saveHomeRange(); return render(); }
   if (d.saveuser) return saveUserRow(d.saveuser);
   if (d.rmphoto) return setPhoto(d.rmphoto, null);
