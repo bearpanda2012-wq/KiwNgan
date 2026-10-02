@@ -4,7 +4,7 @@
   --bg:#ECEFF2; --surface:#FFFFFF; --surface-2:#F4F6F8; --surface-3:#E7EBEF; --ink:#131B23; --muted:#5A6672; --line:#D6DCE3;
   --accent:var(--brand); --accent-ink:#FFFFFF; --accent-soft:color-mix(in oklab, var(--brand) 13%, white);
   --late:#C0392B; --late-soft:#FBE7E4; --urgent:#B86E0A; --urgent-soft:#FDF0DC;
-  --queue:#66717D; --queue-soft:#E9EDF1; --doing:#2D5FC4; --doing-soft:#E3EBFB; --review:#7A4BB5; --review-soft:#EFE7F9;
+  --queue:#66717D; --queue-soft:#E9EDF1; --doing:#2D5FC4; --doing-soft:#E3EBFB; --review:#7A4BB5; --review-soft:#EFE7F9; --fix:#C2417A; --fix-soft:#FBE7EF;
   --hold:#8A6A3B; --hold-soft:#F3ECE0; --done:#2B7F4A; --done-soft:#E1F2E7;
   --shadow:0 1px 2px rgba(19,27,35,.06),0 8px 28px rgba(19,27,35,.08);
   --f-display:"Bai Jamjuree","Anuphan",system-ui,sans-serif;
@@ -17,14 +17,14 @@
   --bg:#0E1317; --surface:#151C22; --surface-2:#1B242B; --surface-3:#222D35; --ink:#E4EAEF; --muted:#94A1AD; --line:#29333C;
   --accent:color-mix(in oklab, var(--brand) 60%, white); --accent-ink:#071A1B; --accent-soft:color-mix(in oklab, var(--brand) 30%, #151C22);
   --late:#F06A5B; --late-soft:#3A1E1B; --urgent:#F0A43C; --urgent-soft:#3A2A12;
-  --queue:#9AA5B0; --queue-soft:#222B33; --doing:#7AA2F5; --doing-soft:#1C2A45; --review:#B996EA; --review-soft:#2C2240;
+  --queue:#9AA5B0; --queue-soft:#222B33; --doing:#7AA2F5; --doing-soft:#1C2A45; --review:#B996EA; --review-soft:#2C2240; --fix:#F28DB7; --fix-soft:#3A1F2D;
   --hold:#D2B07A; --hold-soft:#33291B; --done:#5CC488; --done-soft:#17321F; --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 28px rgba(0,0,0,.3);
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0E1317; --surface:#151C22; --surface-2:#1B242B; --surface-3:#222D35; --ink:#E4EAEF; --muted:#94A1AD; --line:#29333C;
   --accent:color-mix(in oklab, var(--brand) 60%, white); --accent-ink:#071A1B; --accent-soft:color-mix(in oklab, var(--brand) 30%, #151C22);
   --late:#F06A5B; --late-soft:#3A1E1B; --urgent:#F0A43C; --urgent-soft:#3A2A12;
-  --queue:#9AA5B0; --queue-soft:#222B33; --doing:#7AA2F5; --doing-soft:#1C2A45; --review:#B996EA; --review-soft:#2C2240;
+  --queue:#9AA5B0; --queue-soft:#222B33; --doing:#7AA2F5; --doing-soft:#1C2A45; --review:#B996EA; --review-soft:#2C2240; --fix:#F28DB7; --fix-soft:#3A1F2D;
   --hold:#D2B07A; --hold-soft:#33291B; --done:#5CC488; --done-soft:#17321F; --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 28px rgba(0,0,0,.3);
   color-scheme:dark}
 
@@ -151,6 +151,7 @@ button.kpi:hover{background:var(--surface-2)}
 .s-queue{--s:var(--queue);--s-soft:var(--queue-soft)}
 .s-doing{--s:var(--doing);--s-soft:var(--doing-soft)}
 .s-review{--s:var(--review);--s-soft:var(--review-soft)}
+.s-fix{--s:var(--fix);--s-soft:var(--fix-soft)}
 .s-hold{--s:var(--hold);--s-soft:var(--hold-soft)}
 .s-done{--s:var(--done);--s-soft:var(--done-soft)}
 .s-late{--s:var(--late);--s-soft:var(--late-soft)}
@@ -939,7 +940,7 @@ button.kpi:hover .kpi-ic{transform:scale(1.12) rotate(-8deg)}
 /* =====================================================================
    v1.8 delivery-app style board (status icons, tracker, flow, quick chips)
    ===================================================================== */
-.ic-queue{--ic:var(--queue)}.ic-doing{--ic:var(--doing)}.ic-review{--ic:var(--review)}.ic-done{--ic:var(--done)}.ic-hold{--ic:var(--hold)}
+.ic-queue{--ic:var(--queue)}.ic-doing{--ic:var(--doing)}.ic-review{--ic:var(--review)}.ic-fix{--ic:var(--fix)}.ic-done{--ic:var(--done)}.ic-hold{--ic:var(--hold)}
 .pill svg,.tag svg,.tg svg,.due svg{width:13px;height:13px;flex:none}
 .pill::before{display:none}
 .pill{gap:4px}
@@ -963,6 +964,7 @@ button.kpi:hover .kpi-ic{transform:scale(1.12) rotate(-8deg)}
 .flow-ic svg{width:22px;height:22px}
 .flow-ic.ic-doing svg,.col-ic.ic-doing svg{animation:spinSlow 5s linear infinite}
 .flow-ic.ic-review svg,.col-ic.ic-review svg{animation:sweep 3s ease-in-out infinite}
+.flow-ic.ic-fix svg,.col-ic.ic-fix svg,.ce-art.ic-fix>svg,.sb-fix i{animation:wiggle 2.2s ease-in-out infinite;transform-origin:30% 70%}
 .flow-ic.ic-queue svg,.col-ic.ic-queue svg{animation:bob 2.6s ease-in-out infinite}
 .flow-ic.ic-done svg,.col-ic.ic-done svg{animation:pulseBig 2.4s ease-in-out infinite}
 @keyframes sweep{0%,100%{transform:translate(-2px,0) rotate(-8deg)}50%{transform:translate(2px,-1px) rotate(8deg)}}
@@ -982,7 +984,7 @@ button.kpi:hover .kpi-ic{transform:scale(1.12) rotate(-8deg)}
 .qchip b{min-width:20px;padding:0 6px;border-radius:999px;background:color-mix(in oklab,var(--q) 14%,var(--surface));color:var(--q);font-size:12px;text-align:center}
 .qchip[aria-pressed="true"]{background:var(--q);border-color:var(--q);color:#fff;box-shadow:0 8px 18px -10px var(--q)}
 .qchip[aria-pressed="true"] .qi,.qchip[aria-pressed="true"] b{background:rgba(255,255,255,.22);color:#fff}
-.q-doing{--q:var(--doing)}.q-review{--q:var(--review)}.q-urgent{--q:var(--urgent)}.q-late{--q:var(--late)}
+.q-doing{--q:var(--doing)}.q-review{--q:var(--review)}.q-fix{--q:var(--fix)}.q-urgent{--q:var(--urgent)}.q-late{--q:var(--late)}
 .q-urgent .qi svg,.q-late .qi svg{animation:flicker 1.4s ease-in-out infinite}
 
 /* column header with a big round icon */
@@ -1034,7 +1036,7 @@ button.kpi:hover .kpi-ic{transform:scale(1.12) rotate(-8deg)}
 @media (prefers-reduced-motion:reduce){ .trk-rider{transition:none} }
 .flow-step small{white-space:nowrap}
 @media (max-width:640px){
-  .flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:8px;overflow:visible}
+  .flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:8px;overflow:visible}
   .flow-arrow{display:none}
   .flow-step{min-width:0;flex-direction:column;gap:4px;text-align:center;padding:8px 2px}
   .flow-step small{font-size:11px}
@@ -1117,7 +1119,7 @@ button.kpi:hover .kpi-ic{transform:scale(1.12) rotate(-8deg)}
 .st-badge svg{width:15px;height:15px}
 .st-badge.lg{width:38px;height:38px;border-radius:12px}.st-badge.lg svg{width:21px;height:21px}
 .st-badge.xl{width:56px;height:56px;border-radius:17px}.st-badge.xl svg{width:30px;height:30px}
-.sb-queue{--sc:var(--queue)}.sb-doing{--sc:var(--doing)}.sb-review{--sc:var(--review)}.sb-hold{--sc:var(--hold)}.sb-done{--sc:var(--done)}.sb-late{--sc:var(--late)}
+.sb-queue{--sc:var(--queue)}.sb-doing{--sc:var(--doing)}.sb-review{--sc:var(--review)}.sb-fix{--sc:var(--fix)}.sb-hold{--sc:var(--hold)}.sb-done{--sc:var(--done)}.sb-late{--sc:var(--late)}
 .sb-queue i{animation:bob 2.6s ease-in-out infinite}
 .sb-doing i{animation:spinSlow 3.5s linear infinite}
 .sb-doing::after{content:"";position:absolute;inset:-3px;border-radius:inherit;border:2px solid var(--sc);opacity:0;animation:ringOut 1.8s ease-out infinite}
@@ -1679,3 +1681,5 @@ body.auth .msg-fab{display:none}
 .team-pulse .tp-dot{width:4px;height:4px;border-radius:50%;background:var(--line)}
 .team-pulse small{margin-left:auto;padding:3px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600}
 @media (max-width:640px){.team-pulse small{margin-left:0}}
+
+.chip[data-fstatus="fix"] svg{color:var(--fix)}

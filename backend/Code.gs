@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -34,7 +34,7 @@ const SHEETS = {
   Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7']
 };
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
-const STATUSES = ['queue', 'doing', 'review', 'hold', 'done'];
+const STATUSES = ['queue', 'doing', 'review', 'fix', 'hold', 'done'];
 const COLORS = ['#0B6B70', '#2D5FC4', '#B05A2A', '#7A4BB5', '#2B7F4A', '#B8435F', '#5B6B7A', '#A07A12'];
 
 /* ======================= HTTP ======================= */
@@ -465,7 +465,7 @@ function saveJob_(job, u) {
   const merged = Object.assign({}, before || { minutes: 0 }, data, { updatedAt: now, updatedBy: u.name });
   if (merged.status === 'done' && !merged.finishedAt) merged.finishedAt = now.slice(0, 16);
   if (merged.status !== 'done') merged.finishedAt = '';
-  if ((merged.status === 'doing' || merged.status === 'review') && !merged.startedAt) merged.startedAt = now.slice(0, 16);
+  if ((merged.status === 'doing' || merged.status === 'review' || merged.status === 'fix') && !merged.startedAt) merged.startedAt = now.slice(0, 16);
   writeRow_('Jobs', merged, row);
 
   if (!before) log_(merged.id, u.name, 'create', merged.code);

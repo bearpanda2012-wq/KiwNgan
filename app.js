@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.5.5';
+const APP_VERSION = '2.6.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -18,11 +18,17 @@ const LS = {
 const ST = {
   queue: { label: 'รอคิว', cls: 's-queue' },
   doing: { label: 'กำลังทำ', cls: 's-doing' },
-  review: { label: 'รอตรวจ/แก้', cls: 's-review' },
+  review: { label: 'รอตรวจ', cls: 's-review' },
+  fix: { label: 'แก้ไข', cls: 's-fix' },
   hold: { label: 'พักไว้', cls: 's-hold' },
   done: { label: 'เสร็จแล้ว', cls: 's-done' }
 };
-const FLOW = ['queue', 'doing', 'review', 'done'];
+const FLOW = ['queue', 'doing', 'review', 'done'];          // ขั้นหลัก (แถบความคืบหน้า)
+const COLS = ['queue', 'doing', 'review', 'fix', 'done'];   // คอลัมน์บนบอร์ด
+/* ขั้นถัดไปเมื่อกดลูกศร: ตรวจผ่าน → เสร็จ, แก้เสร็จ → ส่งตรวจอีกครั้ง */
+const NEXT = { queue: 'doing', doing: 'review', review: 'done', fix: 'review', hold: 'doing' };
+const flowIdx = st => st === 'hold' ? 0 : st === 'fix' ? 1 : Math.max(0, FLOW.indexOf(st));
+const WORKING = st => st === 'doing' || st === 'review' || st === 'fix';
 const TH_M = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 const TH_MF = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
 const TH_D = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
@@ -94,6 +100,7 @@ function countUp(root) {
 const STI = {
   queue: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4.5V3h6v1.5M8.5 10h7M8.5 14h7M8.5 18h4"/></svg>',
   doing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v2.6M12 18.9v2.6M4.6 4.6l1.9 1.9M17.5 17.5l1.9 1.9M2.5 12h2.6M18.9 12h2.6M4.6 19.4l1.9-1.9M17.5 6.5l1.9-1.9"/></svg>',
+  fix: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3.5 17.3a1.8 1.8 0 0 0 2.5 2.6l5.8-5.8a4 4 0 0 0 5.2-5.4l-2.5 2.5-2.3-.4-.4-2.3z"/></svg>',
   review: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5M8 10.5l1.8 1.8 3.2-3.3"/></svg>',
   hold: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></svg>',
   done: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8l2.3 1.7 2.8-.2.9 2.7 2.3 1.6-.9 2.7.9 2.7-2.3 1.6-.9 2.7-2.8-.2L12 21.2l-2.3-1.7-2.8.2-.9-2.7-2.3-1.6.9-2.7-.9-2.7 2.3-1.6.9-2.7 2.8.2z"/><path d="M8.7 12.2l2.2 2.2 4.4-4.5"/></svg>',
@@ -109,7 +116,7 @@ const STI = {
   key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/></svg>',
   calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>'
 };
-const ST_EMPTY = { queue: 'ไม่มีงานรอคิว เยี่ยมเลย!', doing: 'ยังไม่มีงานที่กำลังทำ', review: 'ไม่มีงานรอตรวจ', done: 'ยังไม่มีงานเสร็จใน 14 วัน' };
+const ST_EMPTY = { queue: 'ไม่มีงานรอคิว เยี่ยมเลย!', doing: 'ยังไม่มีงานที่กำลังทำ', review: 'ไม่มีงานรอตรวจ', fix: 'ไม่มีงานที่ต้องแก้', done: 'ยังไม่มีงานเสร็จใน 14 วัน' };
 const KPI_IC = {
   open: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5" stroke-linecap="round"/></svg>',
   late: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>',
@@ -332,6 +339,7 @@ function seedDemo() {
   open.forEach((j, i) => {
     if (i % 4 === 0) setSt(j, 'doing', { startedAt: j.received + 'T09:10' });
     else if (i % 7 === 1) setSt(j, 'review', { startedAt: j.received + 'T10:00', minutes: 95, note: j.note || 'ส่งให้ sale ตรวจแบบแล้ว รอคอนเฟิร์ม' });
+    else if (i % 7 === 3) setSt(j, 'fix', { startedAt: j.received + 'T09:30', minutes: 70, note: j.note || 'sale ตรวจแล้ว ให้ขยายลายขอบอีก 5 มม.' });
   });
   // two overdue jobs and one on hold
   const o1 = jobs[N - 18], o2 = jobs[N - 15], h1 = jobs[N - 12];
@@ -422,7 +430,7 @@ const Demo = {
     Object.assign(cur, job, { updatedAt: now, updatedBy: u.name });
     if (cur.status === 'done' && !cur.finishedAt) cur.finishedAt = now;
     if (cur.status !== 'done') cur.finishedAt = '';
-    if ((cur.status === 'doing' || cur.status === 'review') && !cur.startedAt) cur.startedAt = now;
+    if (WORKING(cur.status) && !cur.startedAt) cur.startedAt = now;
     this.act(d, cur.id, u.name, !before ? 'create' : (before.status !== cur.status ? 'status' : 'edit'), !before ? cur.code : (before.status !== cur.status ? before.status + '→' + cur.status : ''));
     this.save(d); return { job: this.mj(d, u, clone(cur)) };
   },
@@ -704,7 +712,7 @@ async function moveJob(id, status) {
   const prev = clone(j);
   j.status = status;
   if (status === 'done') j.finishedAt = nowLocal(); else j.finishedAt = '';
-  if ((status === 'doing' || status === 'review') && !j.startedAt) j.startedAt = nowLocal();
+  if (WORKING(status) && !j.startedAt) j.startedAt = nowLocal();
   render();
   try {
     const run = runningOf(id);
@@ -933,9 +941,9 @@ function stBadge(j, size) {
 /* job detail (view mode inside the side sheet) */
 function renderDetail(E, j, live, ro, timer) {
   const jj = live || j, imgs = imgsOf(jj.id), di = dueInfo(jj), st = isLate(jj) ? 'late' : jj.status;
-  const idx = jj.status === 'hold' ? 0 : FLOW.indexOf(jj.status);
+  const idx = flowIdx(jj.status);
   const steps = '<div class="dt-steps">' + FLOW.map((f, i) => '<div class="dt-step ' + ST[f].cls + (i < idx ? ' past' : i === idx ? ' now' : '') + '"><span class="dt-dot">' + STI[f] + '</span><small>' + ST[f].label + '</small></div>' + (i < FLOW.length - 1 ? '<span class="dt-line' + (i < idx ? ' on' : '') + '"></span>' : '')).join('') + '</div>';
-  const nextSt = jj.status === 'hold' ? 'doing' : FLOW[FLOW.indexOf(jj.status) + 1];
+  const nextSt = NEXT[jj.status];
   const gallery = '<section class="dt-sec"><div class="dt-h"><b>' + DECO.palette.replace('palette', '') + 'รูปงาน</b><span class="sub">' + imgs.length + '/' + IMG_MAX + '</span></div>' +
     '<div class="gal">' + imgs.map(m => '<button type="button" class="gal-it" data-lbopen="' + esc(m.id) + '" data-lbjob="' + esc(jj.id) + '">' + thumbImg(m) + '</button>').join('') +
       Array.from({ length: S.uploading || 0 }).map(() => '<span class="gal-it up"><span class="spin-dot dark"></span><small>กำลังอัปโหลด</small></span>').join('') +
@@ -959,7 +967,8 @@ function renderDetail(E, j, live, ro, timer) {
     '<section class="dt-sec"><div class="dt-h"><b>' + DECO.clock + 'ประวัติ</b></div><div class="hist" id="hist">' + (E.hist ? histHtml(E.hist) : '<span>กำลังโหลด…</span>') + '</div></section>';
   $('#sheetFoot').innerHTML = '<button class="btn" data-act="close" type="button">ปิด</button>' +
     '<button class="btn" type="button" data-act="askhelp" data-job="' + esc(jj.id) + '">' + MSG_IC.sos + 'ขอช่วย</button>' +
-    (!ro && nextSt ? '<button class="btn" type="button" data-move="' + esc(jj.id) + '" data-to="' + nextSt + '">' + (STI[nextSt] || '') + 'เลื่อนเป็น ' + ST[nextSt].label + '</button>' : '') +
+    (!ro && jj.status === 'review' ? '<button class="btn" type="button" data-move="' + esc(jj.id) + '" data-to="fix">' + STI.fix + 'ส่งกลับไปแก้ไข</button>' : '') +
+    (!ro && nextSt ? '<button class="btn" type="button" data-move="' + esc(jj.id) + '" data-to="' + nextSt + '">' + (STI[nextSt] || '') + (jj.status === 'review' ? 'ตรวจผ่าน → เสร็จแล้ว' : jj.status === 'fix' ? 'แก้เสร็จ → ส่งตรวจ' : 'เลื่อนเป็น ' + ST[nextSt].label) + '</button>' : '') +
     (!ro ? '<button class="btn primary" data-act="editmode" type="button">' + I.settings + 'แก้ไขข้อมูล</button>' : '');
   paintAllThumbs($('#sheetBody'));
 }
@@ -1854,11 +1863,11 @@ function viewHome() {
   const m = t.slice(0, 7), doneM = pool.filter(j => j.status === 'done' && finDate(j).slice(0, 7) === m);
   const okM = doneM.filter(onTime).length;
   const pct = doneM.length ? Math.round(okM / doneM.length * 100) : null;
-  const doingJ = open.filter(j => j.status === 'doing'), doing = doingJ.length, queue = open.filter(j => j.status === 'queue' || j.status === 'hold').length, review = open.filter(j => j.status === 'review').length;
+  const doingJ = open.filter(j => j.status === 'doing'), doing = doingJ.length, queue = open.filter(j => j.status === 'queue' || j.status === 'hold').length, review = open.filter(j => j.status === 'review').length, fixN = open.filter(j => j.status === 'fix').length;
   const timing = doingJ.filter(j => runningOf(j.id)).length;
 
   const kp = [
-    { k: 'var(--accent)', l: 'งานที่ยังไม่เสร็จ', n: open.length, s: 'กำลังทำ ' + doing + ' · รอตรวจ ' + review + ' · รอคิว ' + queue, f: 'open' },
+    { k: 'var(--accent)', l: 'งานที่ยังไม่เสร็จ', n: open.length, s: 'ทำ ' + doing + ' · ตรวจ ' + review + (fixN ? ' · แก้ ' + fixN : '') + ' · คิว ' + queue, f: 'open' },
     { k: 'var(--doing)', l: 'กำลังทำ', n: doing, s: doing ? (timing ? 'จับเวลาอยู่ ' + timing + ' งาน' : doingJ.slice(0, 2).map(j => j.code).join(', ') + (doing > 2 ? ' …' : '')) : 'ยังไม่มีงานที่กำลังทำ', f: 'doing', live: timing },
     { k: 'var(--late)', l: 'เลยกำหนดส่ง', n: late.length, s: late.length ? 'ต้องเร่งปิดงาน' : 'ไม่มีงานค้างเกินกำหนด', f: 'late' },
     { k: 'var(--urgent)', l: 'งานด่วนคงค้าง', n: urgent.length, s: 'ติดธงงานด่วน', f: 'urgent' },
@@ -1911,7 +1920,7 @@ function viewHome() {
   const topLoad = Math.max(1, ...loads.map(x => x.js.length));
   const loadH = loads.map(x => {
     const c = st => x.js.filter(j => j.status === st).length;
-    const seg = ['doing', 'review', 'queue', 'hold'].map(st => c(st) ? '<i style="width:' + (c(st) / topLoad * 100) + '%;background:var(--' + st + ')" title="' + ST[st].label + ' ' + c(st) + '"></i>' : '').join('');
+    const seg = ['doing', 'fix', 'review', 'queue', 'hold'].map(st => c(st) ? '<i style="width:' + (c(st) / topLoad * 100) + '%;background:var(--' + st + ')" title="' + ST[st].label + ' ' + c(st) + '"></i>' : '').join('');
     return '<div class="hb"><span>' + av(x.n) + esc(x.n || 'ยังไม่มอบหมาย') + '</span><div class="track">' + seg + '</div><b>' + x.js.length + '</b></div>';
   }).join('') || '<div class="sub">ยังไม่มีรายชื่อทีมงาน</div>';
 
@@ -1935,7 +1944,7 @@ function viewHome() {
       '<div class="mini"><span>เวลาทำเฉลี่ย/งาน</span><b>' + (avgMin ? fdur(avgMin) : '–') + '</b></div><div class="mini"><span>รับงาน → เสร็จ เฉลี่ย</span><b>' + (leads.length ? avgLead.toFixed(1) + ' วัน' : '–') + '</b></div></div>' +
       chartBlock(keys, per, max, every, weekly, span, hr, done30, bars) + '</section>' +
     (lead ? '<div class="grid2 even">' +
-      '<section class="panel"><div class="panel-h"><div><h2>ภาระงานรายคน</h2><div class="sub">งานที่ยังไม่เสร็จ แยกตามสถานะ</div></div><div class="legend"><span><i style="background:var(--doing)"></i>กำลังทำ</span><span><i style="background:var(--review)"></i>รอตรวจ</span><span><i style="background:var(--queue)"></i>รอคิว</span></div></div><div class="hbars">' + loadH + '</div></section>' +
+      '<section class="panel"><div class="panel-h"><div><h2>ภาระงานรายคน</h2><div class="sub">งานที่ยังไม่เสร็จ แยกตามสถานะ</div></div><div class="legend"><span><i style="background:var(--doing)"></i>กำลังทำ</span><span><i style="background:var(--fix)"></i>แก้ไข</span><span><i style="background:var(--review)"></i>รอตรวจ</span><span><i style="background:var(--queue)"></i>รอคิว</span></div></div><div class="hbars">' + loadH + '</div></section>' +
       grpPanel + '</div>' : grpPanel);
 }
 const H_PRESETS = [['7d', '7 วัน'], ['30d', '30 วัน'], ['month', 'เดือนนี้'], ['lastmonth', 'เดือนก่อน'], ['90d', '90 วัน'], ['year', 'ปีนี้']];
@@ -2037,15 +2046,15 @@ function matchBase(j, anyMember) {
 }
 function tracker(j) {
   // delivery-style progress: รอคิว → ทำ → ตรวจ → เสร็จ
-  const idx = j.status === 'hold' ? 0 : Math.max(0, FLOW.indexOf(j.status)), pct = idx / (FLOW.length - 1) * 100;
+  const idx = flowIdx(j.status), pct = idx / (FLOW.length - 1) * 100;
   const st = j.status === 'hold' ? 'hold' : j.status;
   return '<div class="trk ' + (ST[st] || ST.queue).cls + (j.status === 'done' ? ' fin' : '') + '" style="--p:' + pct + '%" title="' + esc((ST[st] || ST.queue).label) + '">' +
     '<span class="trk-line"><i></i></span>' + FLOW.map((f, i) => '<span class="trk-dot' + (i <= idx ? ' on' : '') + '" style="left:' + (i / (FLOW.length - 1) * 100) + '%"></span>').join('') +
-    '<span class="trk-rider' + (j.status === 'doing' ? ' go' : '') + '">' + (STI[st] || STI.queue) + '</span></div>';
+    '<span class="trk-rider' + (j.status === 'doing' || j.status === 'fix' ? ' go' : '') + '">' + (STI[st] || STI.queue) + '</span></div>';
 }
 function card(j) {
   const di = dueInfo(j), run = runningOf(j.id), late = isLate(j);
-  const nextSt = j.status === 'hold' ? 'doing' : FLOW[FLOW.indexOf(j.status) + 1];
+  const nextSt = NEXT[j.status];
   const mins = totalMinutes(j);
   const mine = canEdit(j);
   const dueIc = di.cls === 'late' ? STI.fire : di.cls === 'soon' ? STI.hourglass : j.status === 'done' ? STI.done : STI.calendar;
@@ -2063,7 +2072,7 @@ function viewBoard() {
   const q = S.f.quick || 'all', t = today();
   const quickOk = j => q === 'mine' ? j.assignee === S.me : q === 'urgent' ? j.priority === 'urgent' && isOpen(j) : q === 'late' ? isLate(j) : q === 'today' ? isOpen(j) && j.due && j.due <= addDays(t, 1) : true;
   const base0 = listPool().filter(listMatch), base = base0.filter(quickOk);
-  const cols = FLOW.slice();
+  const cols = COLS.slice();
   const hold = base.filter(j => j.status === 'hold');
   const cutoff = addDays(today(), -14);
   const colHtml = cols.map(st => {
@@ -2074,11 +2083,11 @@ function viewBoard() {
       js = all.slice(0, 25);
       more = '<div class="col-more">แสดงงานที่เสร็จใน 14 วัน · <button class="btn ghost sm" data-filter-go="done">ดูทั้งหมด</button></div>';
     } else js.sort(sortOpen);
-    return '<section class="col ' + ST[st].cls + '" data-col="' + st + '"><div class="col-h"><span class="col-ic ic-' + st + '">' + STI[st] + '</span><div class="col-t"><b>' + ST[st].label + '</b><small>' + (st === 'done' ? '14 วันล่าสุด' : st === 'queue' ? 'รวมงานพักไว้' : st === 'doing' ? 'อยู่ระหว่างทำ' : 'รอตรวจ / แก้ไข') + '</small></div><span class="n">' + js.length + '</span></div>' +
+    return '<section class="col ' + ST[st].cls + '" data-col="' + st + '"><div class="col-h"><span class="col-ic ic-' + st + '">' + STI[st] + '</span><div class="col-t"><b>' + ST[st].label + '</b><small>' + (st === 'done' ? '14 วันล่าสุด' : st === 'queue' ? 'รวมงานพักไว้' : st === 'doing' ? 'อยู่ระหว่างทำ' : st === 'fix' ? 'ตรวจแล้วต้องแก้' : 'รอคนตรวจ') + '</small></div><span class="n">' + js.length + '</span></div>' +
       '<div class="col-list">' + (js.length ? js.map(card).join('') : '<div class="col-empty"><span class="ce-art ic-' + st + '">' + STI[st] + '<i></i><i></i><i></i></span><b>' + ST_EMPTY[st] + '</b><small>ลากการ์ดมาวางที่นี่ได้</small></div>') + '</div>' + more + '</section>';
   }).join('');
   const cnt = st => base0.filter(j => st === 'queue' ? (j.status === 'queue' || j.status === 'hold') : st === 'done' ? j.status === 'done' && finDate(j) >= cutoff : j.status === st).length;
-  const flow = '<div class="flow">' + FLOW.map((st, i) => '<div class="flow-step ' + ST[st].cls + '"><span class="flow-ic ic-' + st + '">' + STI[st] + '</span><div><b>' + cnt(st) + '</b><small>' + ST[st].label + '</small></div></div>' + (i < FLOW.length - 1 ? '<span class="flow-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '')).join('') + '</div>';
+  const flow = '<div class="flow">' + COLS.map((st, i) => '<div class="flow-step ' + ST[st].cls + '"><span class="flow-ic ic-' + st + '">' + STI[st] + '</span><div><b>' + cnt(st) + '</b><small>' + ST[st].label + '</small></div></div>' + (i < COLS.length - 1 ? '<span class="flow-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '')).join('') + '</div>';
   const qn = k => base0.filter(j => (k === 'mine' ? j.assignee === S.me : k === 'urgent' ? j.priority === 'urgent' && isOpen(j) : k === 'late' ? isLate(j) : k === 'today' ? isOpen(j) && j.due && j.due <= addDays(t, 1) : true) && (k === 'all' || isOpen(j) || k === 'mine')).length;
   const quick = '<div class="qchips">' + [['all', 'ทั้งหมด', STI.all, ''], ['mine', 'งานของฉัน', STI.user, 'doing'], ['today', 'ส่งวันนี้/พรุ่งนี้', STI.hourglass, 'review'], ['urgent', 'งานด่วน', STI.fire, 'urgent'], ['late', 'เลยกำหนด', STI.clock, 'late']]
     .filter(x => x[0] !== 'mine' || (S.me && isLead()))
@@ -2107,8 +2116,8 @@ function listRows() {
 function viewList() {
   const pool = listPool(), base = pool.filter(listMatch);
   const n = k => base.filter(j => k === 'open' ? isOpen(j) : k === 'late' ? isLate(j) : k === 'urgent' ? isOpen(j) && j.priority === 'urgent' : k === 'all' ? true : k === 'done' ? j.status === 'done' && (!S.f.month || S.f.status !== 'done' || finDate(j).slice(0, 7) === S.f.month) : j.status === k).length;
-  const chips = [['open', 'ยังไม่เสร็จ'], ['late', 'เลยกำหนด'], ['urgent', 'ด่วน'], ['doing', 'กำลังทำ'], ['review', 'รอตรวจ/แก้'], ['hold', 'พักไว้'], ['done', 'เสร็จแล้ว'], ['all', 'ทั้งหมด']]
-    .map(x => '<button class="chip" data-fstatus="' + x[0] + '" aria-pressed="' + (S.f.status === x[0]) + '">' + ({ open: STI.layers, late: STI.fire, urgent: STI.fire, doing: STI.doing, review: STI.review, hold: STI.hold, done: STI.done, all: STI.all }[x[0]] || '') + x[1] + ' <b>' + n(x[0]) + '</b></button>').join('');
+  const chips = [['open', 'ยังไม่เสร็จ'], ['late', 'เลยกำหนด'], ['urgent', 'ด่วน'], ['doing', 'กำลังทำ'], ['review', 'รอตรวจ'], ['fix', 'แก้ไข'], ['hold', 'พักไว้'], ['done', 'เสร็จแล้ว'], ['all', 'ทั้งหมด']]
+    .map(x => '<button class="chip" data-fstatus="' + x[0] + '" aria-pressed="' + (S.f.status === x[0]) + '">' + ({ open: STI.layers, late: STI.fire, urgent: STI.fire, doing: STI.doing, review: STI.review, fix: STI.fix, hold: STI.hold, done: STI.done, all: STI.all }[x[0]] || '') + x[1] + ' <b>' + n(x[0]) + '</b></button>').join('');
   const months = {}; pool.forEach(j => { if (finDate(j)) months[finDate(j).slice(0, 7)] = 1; }); if (S.f.month) months[S.f.month] = 1;
   const monthSel = S.f.status === 'done' ? '<select class="sel" id="fMonth" aria-label="เดือนที่เสร็จ"><option value="">ทุกเดือน</option>' + Object.keys(months).sort().reverse().map(m => '<option value="' + m + '"' + (S.f.month === m ? ' selected' : '') + '>' + monthLabel(m) + '</option>').join('') + '</select>' : '';
   const rows = listRows();
@@ -2401,7 +2410,7 @@ function opts(list, val, ph, labelFn) {
 function histHtml(h) {
   if (!h || !h.length) return '<span>ยังไม่มีประวัติ</span>';
   const act = { create: 'สร้างงาน', status: 'เปลี่ยนสถานะ', edit: 'แก้ไข', timer: 'จับเวลา', delete: 'ลบ' };
-  const stl = s => String(s).replace(/(queue|doing|review|hold|done)/g, m => ST[m].label);
+  const stl = s => String(s).replace(/\b(queue|doing|review|fix|hold|done)\b/g, m => ST[m].label);
   return h.slice(0, 12).map(a => '<div><b>' + esc(a.who || 'ระบบ') + '</b> ' + esc(act[a.action] || a.action) + (a.detail && a.action !== 'create' ? ' · ' + esc(stl(a.detail)) : '') + ' <span class="muted">· ' + esc(fdt(String(a.ts).slice(0, 16))) + '</span></div>').join('');
 }
 function renderEditor() {
@@ -2426,7 +2435,7 @@ function renderEditor() {
   }
 
   if (E.mode === 'view' && live) return renderDetail(E, j, live, ro, timer);
-  const statusSeg = '<div class="seg status">' + ['queue', 'doing', 'review', 'hold', 'done'].map(st => '<button type="button" class="' + ST[st].cls + '" data-est="' + st + '" aria-pressed="' + (j.status === st) + '">' + ST[st].label + '</button>').join('') + '</div>';
+  const statusSeg = '<div class="seg status">' + ['queue', 'doing', 'review', 'fix', 'hold', 'done'].map(st => '<button type="button" class="' + ST[st].cls + '" data-est="' + st + '" aria-pressed="' + (j.status === st) + '">' + ST[st].label + '</button>').join('') + '</div>';
   const levels = (s.levels && s.levels.length ? s.levels : defaultSettings().levels);
 
   $('#sheetBody').innerHTML =
