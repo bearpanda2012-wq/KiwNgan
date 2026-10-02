@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.6.2';
+const APP_VERSION = '1.6.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -434,17 +434,39 @@ async function installApp() {
   }
   INST.help = !INST.help; renderLogin();
 }
+const appUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');
+function loadQr(cb) {
+  if (window.qrcode) return cb();
+  const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js'; // qrcode-generator (MIT), served with the app
+  sc.onload = cb; sc.onerror = () => { const el = $('#instQr'); if (el) el.innerHTML = '<small>สร้าง QR ไม่ได้ ใช้ปุ่มคัดลอกลิงก์แทน</small>'; };
+  document.head.appendChild(sc);
+}
+function drawQr() {
+  const el = $('#instQr'); if (!el || el.dataset.done) return;
+  loadQr(() => {
+    const box = $('#instQr'); if (!box || !window.qrcode) return;
+    const q = window.qrcode(0, 'M'); q.addData(appUrl()); q.make();
+    box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); box.dataset.done = '1';
+  });
+}
 function installBlock() {
   if (INST.installed) return '';
-  const steps = IS_IOS
-    ? ['เปิดหน้านี้ใน <b>Safari</b>', 'แตะปุ่ม <b>แชร์</b> <span class="k">⬆︎</span> ด้านล่างจอ', 'เลือก <b>เพิ่มไปยังหน้าจอโฮม</b> แล้วแตะ <b>เพิ่ม</b>']
-    : IS_ANDROID
-      ? ['เปิดหน้านี้ใน <b>Chrome</b>', 'แตะเมนู <span class="k">⋮</span> มุมขวาบน', 'เลือก <b>ติดตั้งแอป</b> หรือ <b>เพิ่มลงในหน้าจอหลัก</b>']
-      : ['เปิดหน้านี้ใน <b>Chrome</b> หรือ <b>Edge</b>', 'กดไอคอนติดตั้ง <span class="k">⊕</span> ท้ายช่องที่อยู่เว็บ หรือเมนู <span class="k">⋮</span>', 'เลือก <b>ติดตั้ง KiwNgan</b>'];
+  const tab = INST.tab || (IS_IOS || IS_ANDROID ? 'mobile' : 'desktop');
+  const ol = a => '<ol class="lg-steps">' + a.map(x => '<li>' + x + '</li>').join('') + '</ol>';
+  const mobile = '<div class="inst-grid">' +
+      (!(IS_IOS || IS_ANDROID) ? '<div class="inst-qr"><div id="instQr" class="qr-box"><span class="spinner"></span></div><small>สแกนด้วยกล้องมือถือ<br>เพื่อเปิดแอปบนมือถือ</small></div>' : '') +
+      '<div class="inst-os"><b class="os">iPhone / iPad</b>' + ol(['เปิดลิงก์ใน <b>Safari</b>', 'แตะ <b>แชร์</b> <span class="k">⬆︎</span>', 'เลือก <b>เพิ่มไปยังหน้าจอโฮม</b> → <b>เพิ่ม</b>']) +
+      '<b class="os">Android</b>' + ol(['เปิดลิงก์ใน <b>Chrome</b>', 'แตะ <span class="k">⋮</span> มุมขวาบน', 'เลือก <b>ติดตั้งแอป</b> / <b>เพิ่มลงในหน้าจอหลัก</b>']) + '</div></div>';
+  const desktop = '<div class="inst-os"><b class="os">Windows / Mac — Chrome หรือ Edge</b>' +
+      ol(['เปิดลิงก์นี้ใน <b>Chrome</b> หรือ <b>Edge</b>', 'กดไอคอน <span class="k">⊕</span> หรือ <span class="k">⤓</span> ท้ายช่องที่อยู่เว็บ<br><small>หรือเมนู <span class="k">⋮</span> → <b>บันทึกและแชร์ / แอป</b> → <b>ติดตั้ง KiwNgan</b></small>', 'กด <b>ติดตั้ง</b> แอปจะอยู่บนเดสก์ท็อปและเมนู Start / Dock']) +
+      '<b class="os">Mac — Safari</b>' + ol(['เมนู <b>ไฟล์</b> → <b>เพิ่มไปที่ Dock</b>']) + '</div>';
   return '<div class="lg-install">' +
-    '<div class="lg-inst-row"><span class="lg-inst-ic">' + I.download + '</span><div><b>ติดตั้งแอปลงเครื่อง</b><small>' + (IS_IOS || IS_ANDROID ? 'มีไอคอนบนหน้าจอโฮม เปิดเต็มจอเหมือนแอปทั่วไป' : 'เปิดเป็นหน้าต่างแอปแยก ไม่ต้องหาในแท็บเบราว์เซอร์') + '</small></div>' +
-      '<button type="button" class="btn primary sm" data-act="install">' + (INST.evt ? 'ติดตั้ง' : INST.help ? 'ปิด' : 'วิธีติดตั้ง') + '</button></div>' +
-    (INST.help && !INST.evt ? '<ol class="lg-steps">' + steps.map(x => '<li>' + x + '</li>').join('') + '</ol>' : '') +
+    '<div class="lg-inst-row"><span class="lg-inst-ic">' + I.download + '</span><div><b>ติดตั้งแอปลงเครื่อง</b><small>ใช้ได้ทั้งมือถือและคอมพิวเตอร์ เปิดจากไอคอนได้ทันที</small></div>' +
+      (INST.evt ? '<button type="button" class="btn primary sm" data-act="install">ติดตั้งเลย</button>' : '') +
+      '<button type="button" class="btn sm' + (INST.evt ? '' : ' primary') + '" data-act="insthelp">' + (INST.help ? 'ปิด' : (INST.evt ? 'อุปกรณ์อื่น' : 'วิธีติดตั้ง')) + '</button></div>' +
+    (INST.help ? '<div class="inst-panel"><div class="seg" role="tablist"><button data-insttab="mobile" aria-pressed="' + (tab === 'mobile') + '">📱 มือถือ</button><button data-insttab="desktop" aria-pressed="' + (tab === 'desktop') + '">💻 คอมพิวเตอร์</button></div>' +
+      (tab === 'mobile' ? mobile : desktop) +
+      '<div class="inst-link"><span class="mono">' + esc(appUrl().replace(/^https?:\/\//, '')) + '</span><button type="button" class="btn sm" data-act="copyapp">คัดลอกลิงก์</button></div></div>' : '') +
   '</div>';
 }
 
@@ -1237,6 +1259,7 @@ document.addEventListener('click', async e => {
   // user admin
   if (d.themepick) { setTheme(Object.assign({ preset: d.themepick }, d.themepick === 'classic' ? { sidebar: 'plain', header: 'plain' } : getTheme().preset === 'classic' ? { sidebar: 'gradient', header: 'gradient' } : {}, (THEMES.find(x => x.id === d.themepick) || {}).mode ? { mode: THEMES.find(x => x.id === d.themepick).mode } : {})); return render(); }
   if (d.themeset) { setTheme({ [d.themeset]: d.val }); return render(); }
+  if (d.insttab) { INST.tab = d.insttab; renderLogin(); drawQr(); return; }
   if (d.saveuser) return saveUserRow(d.saveuser);
   if (d.rmphoto) return setPhoto(d.rmphoto, null);
   if (d.resetpin) { try { const r = await mutate(() => api().resetPin({ userId: d.resetpin })); S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
@@ -1267,6 +1290,8 @@ document.addEventListener('click', async e => {
     case 'refresh': return load(false).then(() => { if (S.sync === 'ok') toast('อัปเดตข้อมูลล่าสุดแล้ว'); });
     case 'csv': return exportCsv();
     case 'install': return installApp();
+    case 'insthelp': INST.help = !INST.help; renderLogin(); if (INST.help) drawQr(); return;
+    case 'copyapp': try { await navigator.clipboard.writeText(appUrl()); toast('คัดลอกลิงก์แล้ว ส่งให้ทีมหรือเปิดบนอีกเครื่องได้เลย'); } catch (x) { toast(appUrl()); } return;
     case 'themereset': LS.del('theme'); applyTheme(); toast('คืนค่าธีมเริ่มต้นแล้ว'); return render();
     case 'print': return printReport();
     case 'connect': return connect();
