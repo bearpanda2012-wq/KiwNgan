@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -29,8 +29,10 @@ const SHEETS = {
   TimeLogs: ['id', 'jobId', 'member', 'start', 'end', 'minutes'],
   Activity: ['ts', 'jobId', 'who', 'action', 'detail'],
   Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo'],
-  Settings: ['key', 'value']
+  Settings: ['key', 'value'],
+  Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7']
 };
+const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
 const STATUSES = ['queue', 'doing', 'review', 'hold', 'done'];
 const COLORS = ['#0B6B70', '#2D5FC4', '#B05A2A', '#7A4BB5', '#2B7F4A', '#B8435F', '#5B6B7A', '#A07A12'];
 
@@ -75,6 +77,10 @@ const ACTIONS = {
   activity: (p, u) => activityFor_(p.jobId).map(a => maskAct_(a, u)),
   changePin: (p, u) => withLock_(() => changePin_(u, p.oldPin, p.newPin)),
   setPhoto: (p, u) => withLock_(() => setPhoto_(p.userId || u.id, p.photo, u)),
+  addImage: (p, u) => withLock_(() => addImage_(p, u)),
+  deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
+  thumbs: (p, u) => thumbs_(p.ids),
+  image: (p, u) => imageFull_(p.id),
   // admin
   saveSettings: (p, u) => withLock_(() => { admin_(u); return saveSettings_(p.settings, u); }),
   saveUser: (p, u) => withLock_(() => { admin_(u); return saveUser_(p.user, u); }),
@@ -407,6 +413,7 @@ function bootstrap_(u) {
     settings: settings_(),
     users: readAll_('Users').filter(x => isAdmin_(u) || x.role !== 'admin').map(publicUser_),
     jobs: readAll_('Jobs').map(j => maskJob_(j, u)), logs: logs.map(l => maskLog_(l, u)),
+    images: imageMeta_().map(m => Object.assign(m, { createdBy: maskName_(m.createdBy, u) })),
     me: publicUser_(u), serverTime: nowIso_(), version: VERSION
   };
 }
@@ -474,8 +481,62 @@ function deleteJob_(id, u) {
     const ids = sh.getRange(2, 2, last - 1, 1).getDisplayValues();
     for (let i = ids.length - 1; i >= 0; i--) if (ids[i][0] === id) sh.deleteRow(i + 2);
   }
+  // ลบรูปของงานนี้
+  const ish = sheet_('Images'), ilast = ish.getLastRow();
+  if (ilast >= 2) {
+    const jids = ish.getRange(2, 2, ilast - 1, 1).getDisplayValues();
+    for (let i = jids.length - 1; i >= 0; i--) if (jids[i][0] === id) ish.deleteRow(i + 2);
+  }
   log_(id, u.name, 'delete', job.code);
   return { id: id };
+}
+
+/* ---------- รูปงาน (เก็บในชีต Images แบ่งเป็นช่วง ๆ เพราะ 1 ช่องเก็บได้ไม่เกิน 50,000 ตัวอักษร) ---------- */
+const IMG_RE_ = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/;
+function imageMeta_() {
+  const sh = sheet_('Images'), last = sh.getLastRow();
+  if (last < 2) return [];
+  return sh.getRange(2, 1, last - 1, 4).getDisplayValues().filter(r => r[0]).map(r => ({ id: r[0], jobId: r[1], createdBy: r[2], createdAt: r[3] }));
+}
+function addImage_(p, u) {
+  const jr = rowOf_('Jobs', p.jobId);
+  if (jr < 0) throw new Error('ไม่พบงานนี้');
+  const job = readRow_('Jobs', jr);
+  if (!ownsJob_(u, job)) throw new Error('เพิ่มรูปได้เฉพาะงานของตัวเอง');
+  const thumb = String(p.thumb || ''), full = String(p.full || '');
+  if (!IMG_RE_.test(thumb) || !IMG_RE_.test(full)) throw new Error('ไฟล์รูปไม่ถูกต้อง');
+  if (thumb.length > IMG_CELL) throw new Error('รูปย่อใหญ่เกินไป');
+  if (full.length > IMG_CELL * IMG_PARTS) throw new Error('รูปใหญ่เกินไป');
+  if (imageMeta_().filter(m => m.jobId === p.jobId).length >= IMG_MAX_PER_JOB) throw new Error('ใส่รูปได้สูงสุด ' + IMG_MAX_PER_JOB + ' รูปต่องาน');
+  const img = { id: uid_('i_'), jobId: p.jobId, createdBy: u.name, createdAt: nowIso_(), thumb: thumb };
+  for (let i = 0; i < IMG_PARTS; i++) img['f' + i] = full.slice(i * IMG_CELL, (i + 1) * IMG_CELL);
+  writeRow_('Images', img, -1);
+  log_(p.jobId, u.name, 'image', 'เพิ่มรูป');
+  return { image: { id: img.id, jobId: img.jobId, createdBy: maskName_(img.createdBy, u), createdAt: img.createdAt, thumb: thumb } };
+}
+function deleteImage_(id, u) {
+  const row = rowOf_('Images', id);
+  if (row < 0) throw new Error('ไม่พบรูปนี้');
+  const meta = sheet_('Images').getRange(row, 1, 1, 4).getDisplayValues()[0];
+  const jr = rowOf_('Jobs', meta[1]), job = jr > 0 ? readRow_('Jobs', jr) : null;
+  if (!isAdmin_(u) && meta[2] !== u.name && !(job && ownsJob_(u, job))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง');
+  sheet_('Images').deleteRow(row);
+  log_(meta[1], u.name, 'image', 'ลบรูป');
+  return { id: id, jobId: meta[1] };
+}
+function thumbs_(ids) {
+  ids = (ids || []).slice(0, 60).map(String);
+  const sh = sheet_('Images'), last = sh.getLastRow(), out = {};
+  if (last < 2 || !ids.length) return { thumbs: out };
+  const all = sh.getRange(2, 1, last - 1, 1).getDisplayValues();
+  all.forEach((r, i) => { if (ids.indexOf(r[0]) >= 0) out[r[0]] = sh.getRange(i + 2, 5).getDisplayValue(); });
+  return { thumbs: out };
+}
+function imageFull_(id) {
+  const row = rowOf_('Images', id);
+  if (row < 0) throw new Error('ไม่พบรูปนี้');
+  const parts = sheet_('Images').getRange(row, 6, 1, IMG_PARTS).getDisplayValues()[0];
+  return { id: id, full: parts.join('') };
 }
 
 function recalcMinutes_(jobId) {

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.8.3';
+const APP_VERSION = '1.9.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -105,6 +105,7 @@ const STI = {
   pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4.5L15.5 5a2.1 2.1 0 0 1 3 3L8 18.5z"/><path d="M13.5 7l3 3"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg>',
   all: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>',
+  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l1.6-2.4h6.8L17 8h3v11H4z"/><circle cx="12" cy="13.3" r="3.4"/></svg>',
   calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>'
 };
 const ST_EMPTY = { queue: 'ไม่มีงานรอคิว เยี่ยมเลย!', doing: 'ยังไม่มีงานที่กำลังทำ', review: 'ไม่มีงานรอตรวจ', done: 'ยังไม่มีงานเสร็จใน 14 วัน' };
@@ -331,6 +332,13 @@ const Demo = {
   db() { let d = LS.get('demo', null); if (!d || !d.jobs || !d.users) { d = seedDemo(); LS.set('demo', d); } return d; },
   save(d) { LS.set('demo', d); },
   pub(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '' }; },
+  async addImage(p) { const d = this.db(), u = this.me(d), j = d.jobs.find(x => x.id === p.jobId); if (!j) throw new Error('ไม่พบงานนี้'); if (!P.owns(u, j)) throw new Error('เพิ่มรูปได้เฉพาะงานของตัวเอง'); d.images = d.images || []; if (d.images.filter(m => m.jobId === p.jobId).length >= IMG_MAX) throw new Error('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน');
+    const m = { id: uid('i_'), jobId: p.jobId, createdBy: u.name, createdAt: nowLocal(), thumb: p.thumb, full: p.full }; d.images.push(m);
+    try { this.save(d); } catch (e) { d.images.pop(); throw new Error('พื้นที่ในโหมดทดลองเต็ม ลบรูปเก่าก่อน'); }
+    return { image: { id: m.id, jobId: m.jobId, createdBy: this.mask(d, u, { n: m.createdBy }, ['n']).n, createdAt: m.createdAt, thumb: m.thumb } }; },
+  async deleteImage(p) { const d = this.db(), u = this.me(d), m = (d.images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); const j = d.jobs.find(x => x.id === m.jobId); if (!P.admin(u) && m.createdBy !== u.name && !(j && P.owns(u, j))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง'); d.images = d.images.filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
+  async thumbs(p) { const d = this.db(), out = {}; (d.images || []).forEach(m => { if ((p.ids || []).indexOf(m.id) >= 0) out[m.id] = m.thumb; }); return { thumbs: out }; },
+  async image(p) { const m = (this.db().images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); return { id: m.id, full: m.full }; },
   async setPhoto(p) { const d = this.db(), me = this.me(d), id = p.userId || me.id; if (id !== me.id) this.admin(me); const u = d.users.find(x => x.id === id); if (!u) throw new Error('ไม่พบผู้ใช้'); u.photo = String(p.photo || ''); this.save(d); return { user: this.pub(u) }; },
   me(d) {
     const u = d.users.find(x => x.id === LS.get(tokenKey(), ''));
@@ -356,7 +364,7 @@ const Demo = {
     return { token: u.id, user: this.pub(u) };
   },
   async logout() { return {}; },
-  async bootstrap() { const d = this.db(), u = this.me(d); return { settings: d.settings, users: d.users.filter(x => P.admin(u) || x.role !== 'admin').map(this.pub), jobs: d.jobs.map(j => this.mj(d, u, j)), logs: d.logs.map(l => this.ml(d, u, l)), me: this.pub(u) }; },
+  async bootstrap() { const d = this.db(), u = this.me(d); return { settings: d.settings, users: d.users.filter(x => P.admin(u) || x.role !== 'admin').map(this.pub), jobs: d.jobs.map(j => this.mj(d, u, j)), logs: d.logs.map(l => this.ml(d, u, l)), images: (d.images || []).map(m => ({ id: m.id, jobId: m.jobId, createdBy: this.mask(d, u, { n: m.createdBy }, ['n']).n, createdAt: m.createdAt })), me: this.pub(u) }; },
   async saveJob(p) {
     const d = this.db(), u = this.me(d), job = Object.assign({}, p.job);
     delete job.baseUpdatedAt; delete job.minutes; delete job.createdBy; delete job.createdAt;
@@ -384,7 +392,7 @@ const Demo = {
     const d = this.db(), u = this.me(d), j = d.jobs.find(x => x.id === p.id);
     if (!j) throw new Error('ไม่พบงานนี้');
     if (!P.del(u, j)) throw new Error('ลบได้เฉพาะงานที่ตัวเองสร้าง หรือให้แอดมินลบ');
-    d.jobs = d.jobs.filter(x => x.id !== p.id); d.logs = d.logs.filter(l => l.jobId !== p.id); this.save(d); return { id: p.id };
+    d.jobs = d.jobs.filter(x => x.id !== p.id); d.logs = d.logs.filter(l => l.jobId !== p.id); d.images = (d.images || []).filter(m => m.jobId !== p.id); this.save(d); return { id: p.id };
   },
   recalc(d, jobId) { const t = d.logs.filter(l => l.jobId === jobId && l.end).reduce((s, l) => s + l.minutes, 0); const j = d.jobs.find(x => x.id === jobId); if (j) j.minutes = t; return t; },
   async startTimer(p) {
@@ -454,7 +462,7 @@ const Remote = {
     return data.data;
   }
 };
-['ping', 'roster', 'login', 'logout', 'setPhoto', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
+['ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -469,7 +477,7 @@ async function load(silent) {
     const d = await api().bootstrap();
     S.settings = normalizeSettings(d.settings);
     S.users = d.users || []; S.user = d.me; S.me = d.me.name;
-    S.jobs = d.jobs || []; S.logs = d.logs || [];
+    S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || [];
     if (!S.draftDirty) S.draft = null;
     S.sync = 'ok'; S.syncErr = ''; S.lastSync = Date.now(); S.loaded = true;
     if (S.screen !== 'app') S.animIn = true;
@@ -728,6 +736,180 @@ function themeSection() {
     '</div></section>';
 }
 
+/* ============ job images ============ */
+const IMG_MAX = 8;
+const imgsOf = jobId => (S.images || []).filter(m => m.jobId === jobId).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+const THUMBS = (() => { try { return JSON.parse(sessionStorage.getItem('kiwngan:thumbs') || '{}'); } catch (e) { return {}; } })();
+const FULL = {};
+let thumbQ = [], thumbT = null;
+function saveThumbCache() { try { sessionStorage.setItem('kiwngan:thumbs', JSON.stringify(THUMBS)); } catch (e) { /* full: keep in memory only */ } }
+function paintThumb(id) { document.querySelectorAll('img[data-thumb="' + id + '"]').forEach(el => { if (THUMBS[id]) { el.src = THUMBS[id]; el.classList.add('ok'); } }); }
+function wantThumbs(ids) {
+  ids.forEach(id => { if (THUMBS[id]) paintThumb(id); else if (thumbQ.indexOf(id) < 0) thumbQ.push(id); });
+  if (!thumbQ.length || thumbT) return;
+  thumbT = setTimeout(async () => {
+    const batch = thumbQ.splice(0, 40); thumbT = null;
+    try { const r = await api().thumbs({ ids: batch }); Object.assign(THUMBS, r.thumbs || {}); saveThumbCache(); batch.forEach(paintThumb); } catch (e) { batch.forEach(id => document.querySelectorAll('img[data-thumb="' + id + '"]').forEach(el => el.classList.add('fail'))); }
+    if (thumbQ.length) wantThumbs([]);
+  }, 60);
+}
+function paintAllThumbs(root) { const ids = []; (root || document).querySelectorAll('img[data-thumb]').forEach(el => { const id = el.dataset.thumb; if (ids.indexOf(id) < 0) ids.push(id); }); if (ids.length) wantThumbs(ids); }
+const thumbImg = (m, cls) => '<img class="th ' + (cls || '') + '" data-thumb="' + esc(m.id) + '" alt="" src="' + (THUMBS[m.id] || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=') + '"' + (THUMBS[m.id] ? '' : ' loading="lazy"') + '>';
+function canAddImg(j) { return !!j && canEdit(j); }
+function canDelImg(m, j) { return isAdmin() || m.createdBy === S.me || (j && canEdit(j)); }
+
+// resize to a JPEG data URL no longer than maxLen characters
+function shrinkImage(file, maxSide, maxLen, q0) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type)) return reject(new Error('เลือกไฟล์รูปภาพ (JPG, PNG)'));
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      let side = maxSide, q = q0 || 0.85, out = '';
+      for (let i = 0; i < 9; i++) {
+        const k = Math.min(1, side / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+        const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+        out = c.toDataURL('image/jpeg', q);
+        if (out.length <= maxLen) break;
+        if (q > 0.6) q -= 0.1; else side = Math.round(side * 0.8);
+      }
+      URL.revokeObjectURL(url);
+      out.length <= maxLen ? resolve(out) : reject(new Error('รูปใหญ่เกินไป'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('อ่านไฟล์รูปไม่ได้')); };
+    img.src = url;
+  });
+}
+async function uploadImages(jobId, files) {
+  const j = jobById(jobId); if (!canAddImg(j)) return toast('เพิ่มรูปได้เฉพาะงานของตัวเอง', true);
+  const room = IMG_MAX - imgsOf(jobId).length;
+  files = Array.from(files || []).slice(0, Math.max(0, room));
+  if (!files.length) return toast('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน', true);
+  S.uploading = (S.uploading || 0) + files.length; if (S.edit) renderEditor();
+  let ok = 0;
+  for (const f of files) {
+    try {
+      const thumb = await shrinkImage(f, 360, 44000, 0.72);
+      const full = await shrinkImage(f, 1800, 340000, 0.85);
+      const r = await api().addImage({ jobId: jobId, thumb: thumb, full: full });
+      THUMBS[r.image.id] = thumb; FULL[r.image.id] = full; saveThumbCache();
+      S.images = (S.images || []).concat([{ id: r.image.id, jobId: jobId, createdBy: r.image.createdBy, createdAt: r.image.createdAt }]); ok++;
+    } catch (e) { toast(e.message || 'อัปโหลดรูปไม่สำเร็จ', true); }
+    S.uploading--; if (S.edit) renderEditor(); render();
+  }
+  if (ok) toast('เพิ่มรูปแล้ว ' + ok + ' รูป');
+}
+async function deleteImage(id) {
+  try { await mutate(() => api().deleteImage({ id: id }), 'ลบรูปแล้ว'); S.images = (S.images || []).filter(m => m.id !== id); delete THUMBS[id]; saveThumbCache(); closeLightbox(); if (S.edit) renderEditor(); render(); } catch (e) {}
+}
+// full-screen viewer
+function openLightbox(jobId, id) {
+  const list = imgsOf(jobId); let i = Math.max(0, list.findIndex(m => m.id === id));
+  S.lb = { jobId: jobId, i: i }; drawLightbox();
+}
+async function drawLightbox() {
+  const L = S.lb; if (!L) return;
+  const list = imgsOf(L.jobId); if (!list.length) return closeLightbox();
+  L.i = (L.i + list.length) % list.length;
+  const m = list[L.i], j = jobById(L.jobId);
+  let box = $('#lightbox'); if (!box) { box = document.createElement('div'); box.id = 'lightbox'; box.className = 'lightbox'; document.body.appendChild(box); }
+  box.innerHTML = '<div class="lb-top"><span class="lb-t"><b class="mono">' + esc(j ? j.code : '') + '</b> · รูป ' + (L.i + 1) + '/' + list.length + '<small>' + esc(m.createdBy || '') + ' · ' + esc(fdt(String(m.createdAt).slice(0, 16))) + '</small></span>' +
+    (canDelImg(m, j) ? '<button class="lb-btn" data-lbdel="' + esc(m.id) + '" title="ลบรูป">' + I.trash + '</button>' : '') + '<button class="lb-btn" data-lb="close" aria-label="ปิด">✕</button></div>' +
+    '<div class="lb-stage">' + (list.length > 1 ? '<button class="lb-nav prev" data-lb="prev" aria-label="ก่อนหน้า">‹</button>' : '') +
+    '<img id="lbImg" alt="" src="' + (FULL[m.id] || THUMBS[m.id] || '') + '" class="' + (FULL[m.id] ? 'ok' : 'blur') + '">' + (FULL[m.id] ? '' : '<span class="lb-load"><span class="spin-dot"></span></span>') +
+    (list.length > 1 ? '<button class="lb-nav next" data-lb="next" aria-label="ถัดไป">›</button>' : '') + '</div>' +
+    '<div class="lb-strip">' + list.map((x, k) => '<button data-lbgo="' + k + '" class="' + (k === L.i ? 'on' : '') + '">' + thumbImg(x) + '</button>').join('') + '</div>';
+  box.classList.add('open'); paintAllThumbs(box);
+  if (!FULL[m.id]) {
+    try { const r = await api().image({ id: m.id }); FULL[m.id] = r.full; if (S.lb && imgsOf(S.lb.jobId)[S.lb.i] && imgsOf(S.lb.jobId)[S.lb.i].id === m.id) drawLightbox(); } catch (e) { toast(e.message, true); }
+  }
+}
+function closeLightbox() { S.lb = null; const b = $('#lightbox'); if (b) b.classList.remove('open'); }
+
+/* ============ hover preview (mouse only) ============ */
+let hovT = null, hovId = null, hovEl = null;
+function jobInfoHtml(j, compact) {
+  const di = dueInfo(j), run = runningOf(j.id), mins = totalMinutes(j), st = isLate(j) ? 'late' : j.status;
+  const imgs = imgsOf(j.id);
+  return '<div class="hv-head">' + stBadge(j, 'lg') + '<div><b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '–') + '</small></div></div>' +
+    '<div class="hv-grid">' +
+      '<span>สถานะ</span><b>' + stPill(j) + '</b>' +
+      '<span>ผู้รับผิดชอบ</span><b class="hv-who">' + av(j.assignee) + esc(j.assignee || 'ยังไม่มอบหมาย') + '</b>' +
+      '<span>กลุ่ม / งาน</span><b>' + esc([groupShort(j.group), j.taskType].filter(Boolean).join(' · ') || '–') + '</b>' +
+      '<span>กำหนดส่ง</span><b class="' + (di.cls === 'late' ? 'bad' : '') + '">' + esc(di.text) + (j.due && j.status !== 'done' ? ' · ' + fdY(j.due) : '') + '</b>' +
+      '<span>เวลาทำงาน</span><b>' + (run ? '<span class="live" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : (mins ? fdur(mins) : '–')) + '</b>' +
+      (j.sale ? '<span>Sale</span><b>' + esc(j.sale) + '</b>' : '') +
+    '</div>' +
+    (j.note && !compact ? '<p class="hv-note">' + esc(j.note) + '</p>' : '') +
+    (imgs.length ? '<div class="hv-imgs">' + imgs.slice(0, 4).map(m => thumbImg(m)).join('') + (imgs.length > 4 ? '<span class="more">+' + (imgs.length - 4) + '</span>' : '') + '</div>' : '<div class="hv-noimg">' + DECO.palette.replace('palette', '') + 'ยังไม่มีรูปงาน</div>');
+}
+function showHover(el) {
+  const j = jobById(el.dataset.open); if (!j) return;
+  let h = $('#hovercard'); if (!h) { h = document.createElement('div'); h.id = 'hovercard'; h.className = 'hovercard'; h.setAttribute('role', 'tooltip'); document.body.appendChild(h); }
+  h.className = 'hovercard ' + (ST[isLate(j) ? 'late' : j.status] ? 's-' + (isLate(j) ? 'late' : j.status) : '');
+  h.innerHTML = jobInfoHtml(j, false);
+  const r = el.getBoundingClientRect(), W = 320, vw = window.innerWidth, vh = window.innerHeight;
+  let x = r.right + 12; if (x + W > vw - 8) x = Math.max(8, r.left - W - 12);
+  h.style.left = x + 'px'; h.style.top = '0px'; h.classList.add('show');
+  const hh = h.offsetHeight; let y = r.top + r.height / 2 - hh / 2; y = Math.max(8, Math.min(vh - hh - 8, y));
+  h.style.top = y + 'px'; hovId = j.id; hovEl = el; paintAllThumbs(h);
+}
+function hideHover() { clearTimeout(hovT); hovT = null; hovId = null; hovEl = null; const h = $('#hovercard'); if (h) h.classList.remove('show'); }
+if (window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches) {
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open]');
+    if (!el) return;
+    if (el.dataset.open === hovId) return;
+    clearTimeout(hovT); hovT = setTimeout(() => { if (!S.edit && !S.drag) showHover(el); }, 380);
+  });
+  document.addEventListener('mouseout', e => {
+    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open]');
+    if (el && (!e.relatedTarget || !el.contains(e.relatedTarget))) hideHover();
+  });
+  document.addEventListener('scroll', () => { if (hovEl && hovEl.isConnected && hovEl.matches(':hover')) showHover(hovEl); else if (hovId) hideHover(); }, true);
+  document.addEventListener('mousedown', hideHover, true);
+}
+
+/* animated status badge */
+function stBadge(j, size) {
+  const st = isLate(j) ? 'late' : j.status;
+  const ic = st === 'late' ? STI.fire : (STI[j.status] || STI.queue);
+  return '<span class="st-badge sb-' + st + (size ? ' ' + size : '') + '" title="' + esc(isLate(j) ? 'เลยกำหนด' : (ST[j.status] || ST.queue).label) + '"><i>' + ic + '</i></span>';
+}
+
+/* job detail (view mode inside the side sheet) */
+function renderDetail(E, j, live, ro, timer) {
+  const jj = live || j, imgs = imgsOf(jj.id), di = dueInfo(jj), st = isLate(jj) ? 'late' : jj.status;
+  const idx = jj.status === 'hold' ? 0 : FLOW.indexOf(jj.status);
+  const steps = '<div class="dt-steps">' + FLOW.map((f, i) => '<div class="dt-step ' + ST[f].cls + (i < idx ? ' past' : i === idx ? ' now' : '') + '"><span class="dt-dot">' + STI[f] + '</span><small>' + ST[f].label + '</small></div>' + (i < FLOW.length - 1 ? '<span class="dt-line' + (i < idx ? ' on' : '') + '"></span>' : '')).join('') + '</div>';
+  const nextSt = jj.status === 'hold' ? 'doing' : FLOW[FLOW.indexOf(jj.status) + 1];
+  const gallery = '<section class="dt-sec"><div class="dt-h"><b>' + DECO.palette.replace('palette', '') + 'รูปงาน</b><span class="sub">' + imgs.length + '/' + IMG_MAX + '</span></div>' +
+    '<div class="gal">' + imgs.map(m => '<button type="button" class="gal-it" data-lbopen="' + esc(m.id) + '" data-lbjob="' + esc(jj.id) + '">' + thumbImg(m) + '</button>').join('') +
+      Array.from({ length: S.uploading || 0 }).map(() => '<span class="gal-it up"><span class="spin-dot dark"></span><small>กำลังอัปโหลด</small></span>').join('') +
+      (canAddImg(jj) && imgs.length < IMG_MAX ? '<label class="gal-add"><input type="file" accept="image/*" multiple data-imgjob="' + esc(jj.id) + '" hidden><span class="ga-ic">' + I.plus + '</span><small>เพิ่มรูป</small></label>' : '') +
+      (!imgs.length && !canAddImg(jj) ? '<span class="sub">ยังไม่มีรูป</span>' : '') +
+    '</div></section>';
+  $('#sheetBody').innerHTML =
+    '<div class="dt-hero s-' + st + '">' + stBadge(jj, 'xl') + '<div class="dt-hero-t"><span class="eyebrow">' + esc(isLate(jj) ? 'เลยกำหนด · ' + di.text : (ST[jj.status] || ST.queue).label) + '</span><b>' + esc(jj.title || jj.code) + '</b><small>' + esc([groupShort(jj.group), jj.taskType].filter(Boolean).join(' · ')) + '</small></div>' +
+      (jj.priority === 'urgent' ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '</div>' +
+    steps + gallery + timer +
+    '<section class="dt-sec"><div class="dt-h"><b>' + DECO.info + 'ข้อมูลงาน</b></div><div class="hv-grid dt-grid">' +
+      '<span>เลข Job</span><b class="mono">' + esc(jj.code) + '</b>' +
+      '<span>ผู้รับผิดชอบ</span><b class="hv-who">' + av(jj.assignee) + esc(jj.assignee || 'ยังไม่มอบหมาย') + '</b>' +
+      '<span>Sale</span><b>' + esc(jj.sale || '–') + '</b>' +
+      '<span>จำนวน / ระดับ</span><b>' + (jj.qty === 'multi' ? 'หลายชิ้น' : 'ชิ้นเดียว') + ' · ' + lvBars(jj.level) + '</b>' +
+      '<span>รับงาน</span><b>' + fdY(jj.received) + '</b>' +
+      '<span>กำหนดส่ง</span><b class="' + (di.cls === 'late' ? 'bad' : '') + '">' + fdY(jj.due) + ' <small>(' + esc(di.text) + ')</small></b>' +
+      '<span>เริ่มทำ</span><b>' + fdt(jj.startedAt) + '</b>' +
+      '<span>ปิดงาน</span><b>' + fdt(jj.finishedAt) + '</b>' +
+    '</div>' + (jj.note ? '<p class="hv-note">' + esc(jj.note) + '</p>' : '') + '</section>' +
+    '<section class="dt-sec"><div class="dt-h"><b>' + DECO.clock + 'ประวัติ</b></div><div class="hist" id="hist">' + (E.hist ? histHtml(E.hist) : '<span>กำลังโหลด…</span>') + '</div></section>';
+  $('#sheetFoot').innerHTML = '<button class="btn" data-act="close" type="button">ปิด</button>' +
+    (!ro && nextSt ? '<button class="btn" type="button" data-move="' + esc(jj.id) + '" data-to="' + nextSt + '">' + (STI[nextSt] || '') + 'เลื่อนเป็น ' + ST[nextSt].label + '</button>' : '') +
+    (!ro ? '<button class="btn primary" data-act="editmode" type="button">' + I.settings + 'แก้ไขข้อมูล</button>' : '');
+  paintAllThumbs($('#sheetBody'));
+}
+
 /* ============ brand ============ */
 function applyBrand() {
   const s = S.settings || defaultSettings();
@@ -780,6 +962,7 @@ function render() {
   else h += viewHome();
   v.innerHTML = h;
   decorate(v);
+  paintAllThumbs(v);
   if (S.animIn) {
     S.animIn = false;
     const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -909,7 +1092,7 @@ function minutesOn(date, member) {
 }
 function aItem(j) {
   const di = dueInfo(j), run = runningOf(j.id);
-  return '<button class="aitem" data-open="' + esc(j.id) + '">' + av(j.assignee) + '<span style="min-width:0"><span class="code">' + esc(j.code) + '</span> ' +
+  return '<button class="aitem" data-open="' + esc(j.id) + '">' + stBadge(j) + '<span style="min-width:0"><span class="code">' + esc(j.code) + '</span> ' + (imgsOf(j.id).length ? '<span class="img-chip">' + STI.camera + imgsOf(j.id).length + '</span> ' : '') +
     (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span> ' : '') + (run ? '<span class="tag late">● จับเวลา</span>' : '') +
     '<small>' + esc([j.title, groupShort(j.group), j.taskType].filter(Boolean).join(' · ')) + '</small></span>' +
     '<span style="text-align:right">' + stPill(j) + '<small class="' + (di.cls === 'late' ? 'tag late' : '') + '">' + esc(di.text) + '</small></span></button>';
@@ -948,7 +1131,7 @@ function card(j) {
   const mine = canEdit(j);
   const dueIc = di.cls === 'late' ? STI.fire : di.cls === 'soon' ? STI.hourglass : j.status === 'done' ? STI.done : STI.calendar;
   return '<div class="card' + (late ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + (mine ? '' : ' ro') + '" draggable="' + mine + '" data-id="' + esc(j.id) + '" data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
-    '<div class="card-top"><div class="code">' + esc(j.code) + '</div>' +
+    '<div class="card-top">' + stBadge(j) + '<div class="code">' + esc(j.code) + '</div>' + (imgsOf(j.id).length ? '<span class="card-th">' + thumbImg(imgsOf(j.id)[0]) + (imgsOf(j.id).length > 1 ? '<b>' + imgsOf(j.id).length + '</b>' : '') + '</span>' : '') +
     (nextSt && mine ? '<button class="adv" data-move="' + esc(j.id) + '" data-to="' + nextSt + '" title="เลื่อนเป็น ' + ST[nextSt].label + '" aria-label="เลื่อนเป็น ' + ST[nextSt].label + '">' + I.next + '</button>' : '') + '</div>' +
     (j.title ? '<div class="title">' + esc(j.title) + '</div>' : '') +
     '<div class="tags">' + (j.priority === 'urgent' ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">' + STI.pen + 'แก้ไข</span>' : '') + (j.status === 'hold' ? '<span class="pill s-hold">' + STI.hold + 'พักไว้</span>' : '') +
@@ -1010,7 +1193,7 @@ function viewList() {
   const body = rows.length ? rows.map(j => {
     const di = dueInfo(j), run = runningOf(j.id), mins = totalMinutes(j);
     return '<div class="row' + (isLate(j) ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + '" data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
-      '<div class="cell c-main"><div class="code">' + esc(j.code) + '</div><div class="meta">' + (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">แก้ไข</span>' : '') +
+      '<div class="cell c-main"><div class="code">' + stBadge(j) + esc(j.code) + (imgsOf(j.id).length ? '<span class="img-chip">' + STI.camera + imgsOf(j.id).length + '</span>' : '') + '</div><div class="meta">' + (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">แก้ไข</span>' : '') +
         (j.title ? '<span>' + esc(j.title) + '</span>' : '') + '<span>' + esc(groupShort(j.group)) + '</span>' + lvBars(j.level) + '<span>' + esc(j.taskType) + '</span></div></div>' +
       '<div class="cell c-who"><span class="who">' + av(j.assignee) + '<span>' + esc(j.assignee || 'ยังไม่มอบหมาย') + '<small>Sale ' + esc(j.sale || '–') + '</small></span></span></div>' +
       '<div class="cell c-time">' + (run ? '<span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : '<span class="tnum">' + (mins ? fdur(mins) : '–') + '</span>') + '<small>เริ่ม ' + fdt(j.startedAt) + '</small></div>' +
@@ -1274,7 +1457,8 @@ function openEditor(id) {
     sale: '', priority: 'normal', revision: false, status: 'queue', received: today(), due: '', startedAt: '', finishedAt: '', note: ''
   };
   base.baseUpdatedAt = j ? j.updatedAt : '';
-  S.edit = { job: base, isNew: !j, confirm: false, hist: null, dueTouched: !!(j && j.due) };
+  S.edit = { job: base, isNew: !j, confirm: false, hist: null, dueTouched: !!(j && j.due), mode: j ? 'view' : 'edit' };
+  hideHover();
   renderEditor();
   $('#sheet').classList.add('open'); $('#scrim').classList.add('open');
   if (S.edit.isNew) setTimeout(() => { const el = $('#e-code'); if (el) el.focus(); }, 260);
@@ -1297,6 +1481,7 @@ function renderEditor() {
   const ro = !E.isNew && !canEdit(live || j);
   $('#sheetEyebrow').textContent = E.isNew ? 'งานใหม่' : (ST[j.status] ? ST[j.status].label : '') + (live && isLate(live) ? ' · เลยกำหนด' : '');
   $('#sheetTitle').textContent = E.isNew ? 'เพิ่มงานใหม่' : j.code;
+  $('#sheet').classList.toggle('viewing', E.mode === 'view');
   const sg = suggestDue(j);
   const dueHint = sg ? '<span class="hint">แนะนำ ' + fdY(sg.date) + ' (' + (sg.cat === 'cam' ? 'CAM' : 'เขียนแบบ') + ' ' + sg.days + ' วันทำการ)' + (j.due !== sg.date ? ' · <button type="button" data-act="usesg">ใช้วันนี้</button>' : '') + '</span>' : '<span class="hint">เลือกกลุ่มงานและรายละเอียดเพื่อให้ระบบแนะนำกำหนดส่ง</span>';
 
@@ -1311,6 +1496,7 @@ function renderEditor() {
       (logs.length ? '<div class="logs">' + logs.slice(0, 8).map(l => '<div>' + av(l.member) + '<span>' + fdt(l.start) + (l.end ? ' – ' + l.end.slice(11, 16) : ' – ตอนนี้') + '</span><span class="tnum">' + (l.end ? fdur(l.minutes) : '') + '</span>' + (l.end && (l.member === S.me || isAdmin()) ? '<button type="button" class="x" data-dellog="' + esc(l.id) + '" aria-label="ลบรายการเวลา">ลบ</button>' : '<span></span>') + '</div>').join('') + '</div>' : '') + '</div>';
   }
 
+  if (E.mode === 'view' && live) return renderDetail(E, j, live, ro, timer);
   const statusSeg = '<div class="seg status">' + ['queue', 'doing', 'review', 'hold', 'done'].map(st => '<button type="button" class="' + ST[st].cls + '" data-est="' + st + '" aria-pressed="' + (j.status === st) + '">' + ST[st].label + '</button>').join('') + '</div>';
   const levels = (s.levels && s.levels.length ? s.levels : defaultSettings().levels);
 
@@ -1415,6 +1601,10 @@ document.addEventListener('click', async e => {
   if (d.add) { const k = d.add; if (k === 'members') S.draft.members.push({ id: uid('m_'), name: '', full: '', color: COLORS[S.draft.members.length % COLORS.length] }); else if (k === 'taskTypes') S.draft.taskTypes.push({ name: '', cat: 'draw' }); else S.draft[k].push(''); markDirty(); render(); setTimeout(() => { const ins = document.querySelectorAll('[data-d^="' + k + '."]'); const last = ins[k === 'members' ? ins.length - 2 : ins.length - 1]; if (last) last.focus(); }, 20); return; }
   if (d.del) { const p = d.del.split('.'); S.draft[p[0]].splice(+p[1], 1); markDirty(); return render(); }
 
+  if (d.lbopen) return openLightbox(d.lbjob, d.lbopen);
+  if (d.lbgo !== undefined) { S.lb.i = +d.lbgo; return drawLightbox(); }
+  if (d.lb) { if (d.lb === 'close') return closeLightbox(); S.lb.i += d.lb === 'next' ? 1 : -1; return drawLightbox(); }
+  if (d.lbdel) return deleteImage(d.lbdel);
   if (d.open && !e.target.closest('.adv')) return openEditor(d.open);
 
   switch (d.act) {
@@ -1429,6 +1619,7 @@ document.addEventListener('click', async e => {
     case 'stop': if (S.edit) readEditor(); return stopTimer(d.log);
     case 'refresh': return load(false).then(() => { if (S.sync === 'ok') toast('อัปเดตข้อมูลล่าสุดแล้ว'); });
     case 'csv': return exportCsv();
+    case 'editmode': if (S.edit) { S.edit.mode = 'edit'; renderEditor(); } return;
     case 'install': return installApp();
     case 'insthelp': INST.help = !INST.help; renderLogin(); if (INST.help) drawQr(); return;
     case 'copyapp': try { await navigator.clipboard.writeText(appUrl()); toast('คัดลอกลิงก์แล้ว ส่งให้ทีมหรือเปิดบนอีกเครื่องได้เลย'); } catch (x) { toast(appUrl()); } return;
@@ -1453,6 +1644,7 @@ document.addEventListener('click', async e => {
 document.addEventListener('submit', e => { if (e.target.id === 'pinForm') { e.preventDefault(); doLogin(); } });
 document.addEventListener('keydown', e => {
   if (e.target && e.target.id === 'adminName' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); if (S.login.pin.length >= 4) doLogin(); else { const k = $('.keypad'); if (k) { k.classList.remove('nudge'); void k.offsetWidth; k.classList.add('nudge'); } } return; }
+  if (S.lb) { if (e.key === 'Escape') return closeLightbox(); if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { S.lb.i += e.key === 'ArrowRight' ? 1 : -1; return drawLightbox(); } }
   if (e.key === 'Escape' && S.edit) closeEditor();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.card,.row') ) { e.preventDefault(); openEditor(e.target.dataset.open); }
   if (e.key === 'n' && S.screen === 'app' && !S.edit && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openEditor(null); }
@@ -1495,6 +1687,7 @@ document.addEventListener('change', e => {
   if (t.dataset.rsec) { reportState().sec[t.dataset.rsec] = t.checked; saveReportState(); return render(); }
   if (t.id === 'logoIn' && t.files && t.files[0]) return readLogo(t.files[0]);
   if (t.dataset.photofor && t.files && t.files[0]) return setPhoto(t.dataset.photofor, t.files[0]);
+  if (t.dataset.imgjob && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return uploadImages(t.dataset.imgjob, f); }
   if (S.edit && t.closest('#sheetBody') && t.dataset.e) {
     readEditor();
     if (['group', 'taskType', 'received'].indexOf(t.dataset.e) >= 0) autoDue();
