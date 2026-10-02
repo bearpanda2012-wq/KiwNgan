@@ -1555,3 +1555,98 @@ body.auth .msg-fab{display:none}
 .me-chip .role-chip.sm{background:rgba(255,255,255,.2);color:#fff}
 [data-sidebar="plain"] .me-chip .role-chip.sm{background:color-mix(in oklab,var(--rc) 13%,var(--surface));color:var(--rc)}
 .urow select[data-u="role"]{font-weight:600}
+
+/* ---------- screen share & remote ---------- */
+.mp-rtc{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px 12px 0}
+.mp-rtc button{display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:7px 6px;font-size:13px;font-weight:600;color:var(--ink);transition:transform .15s,background .15s,border-color .15s}
+.mp-rtc button svg{width:18px;height:18px;color:var(--accent);flex:none}
+.mp-rtc button:hover:not(:disabled){background:var(--accent-soft);border-color:color-mix(in oklab,var(--accent) 40%,var(--line));transform:translateY(-1px)}
+.mp-rtc button:hover:not(:disabled) svg{animation:bob .9s ease-in-out infinite}
+.mp-rtc button:disabled{opacity:.45;cursor:not-allowed}
+.mp-rtc.on{display:flex;align-items:center;gap:8px;margin:8px 12px 0;padding:7px 8px 7px 12px;border-radius:12px;background:var(--late-soft);color:var(--late);font-size:13px;font-weight:600}
+.mp-rtc.on span:not(.rtc-rec){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-rtc.on .btn svg{width:14px;height:14px}
+.rtc-rec{width:10px;height:10px;border-radius:50%;background:#E5484D;flex:none;animation:pulse 1.6s infinite;--late:#E5484D}
+
+/* viewer: full-screen stage */
+.rtc-view{position:fixed;inset:0;z-index:120;display:flex;flex-direction:column;background:#0b0f13;color:#e9eef3;opacity:0;transform:scale(.985);transition:opacity .28s,transform .28s}
+.rtc-view.in{opacity:1;transform:none}
+.rtc-bar{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px;background:linear-gradient(#141b22,#10161c);border-bottom:1px solid #222c35}
+.rtc-who{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.3}
+.rtc-who b{font:600 15px var(--f-display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rtc-who small{color:#93a3b2;font-size:12px;display:flex;align-items:center;gap:6px}
+.rtc-live{font-style:normal;font-weight:700;font-size:10px;letter-spacing:.08em;background:#E5484D;color:#fff;border-radius:5px;padding:1px 6px;animation:flash 1.6s infinite}
+.av.rtc-mini{width:36px;height:36px;font-size:14px;flex:none}
+.rtc-tools{display:flex;gap:6px;flex:none}
+.rtc-tb{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 12px;border-radius:10px;border:1px solid #2c3742;background:#1a232c;color:#dce5ee;font-size:13px;font-weight:600}
+.rtc-tb svg{width:18px;height:18px}
+.rtc-tb:hover{background:#243039}
+.rtc-tb.end{background:#E5484D;border-color:#E5484D;color:#fff}
+.rtc-tb.end:hover{background:#cc3a3f}
+.rtc-stage{position:relative;flex:1;min-height:0;display:grid;place-items:center;overflow:auto;background:radial-gradient(circle at 50% 40%,#16202a,#0b0f13 70%)}
+.rtc-stage video{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;background:#000;animation:fadeIn .4s}
+.rtc-stage video.actual{width:auto;height:auto;max-width:none;max-height:none;object-fit:none;place-self:start}
+.rtc-stage:fullscreen{background:#000}
+.rtc-waiting{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px}
+.rtc-waiting b{font:600 19px var(--f-display);margin-top:18px}
+.rtc-waiting small{color:#93a3b2}
+.rtc-dots{display:flex;gap:6px;margin-top:6px}
+.rtc-dots i{width:8px;height:8px;border-radius:50%;background:var(--brand);animation:bob 1s ease-in-out infinite}
+.rtc-dots i:nth-child(2){animation-delay:.15s}.rtc-dots i:nth-child(3){animation-delay:.3s}
+
+/* avatar with pulsing rings */
+.rtc-ring{position:relative;width:76px;height:76px;margin:0 auto;display:grid;place-items:center}
+.rtc-ring.big{width:120px;height:120px}
+.rtc-ring .av.rtc-av{width:100%;height:100%;font-size:28px;position:relative;z-index:1;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)}
+.rtc-ring.big .av.rtc-av{font-size:42px}
+.rtc-ring>i{position:absolute;inset:0;border-radius:50%;border:2px solid var(--brand);animation:ringOut 2.1s ease-out infinite;opacity:0}
+.rtc-ring>i:nth-of-type(2){animation-delay:.7s}.rtc-ring>i:nth-of-type(3){animation-delay:1.4s}
+.rtc-badge{position:absolute;right:-4px;bottom:-4px;z-index:2;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#fff;background:var(--doing);border:3px solid var(--surface);animation:pop .4s cubic-bezier(.3,1.6,.5,1)}
+.rtc-ring.big .rtc-badge{width:40px;height:40px}
+.rtc-view .rtc-badge{border-color:#0b0f13}
+.rtc-badge svg{width:16px;height:16px}
+.rtc-badge.offer{background:var(--done)}
+.rtc-badge.ctl{background:var(--review)}
+.rtc-badge.ctl svg{animation:wiggle 2.4s infinite}
+
+/* host: floating "you are sharing" pill */
+.rtc-host{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top,0px));z-index:110;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 12px;border-radius:999px;background:#151c22;color:#e9eef3;box-shadow:0 12px 34px -8px rgba(0,0,0,.45),0 0 0 1px #2a343e;transform:translateX(-50%);animation:rtcDrop .45s cubic-bezier(.3,1.4,.5,1);max-width:calc(100vw - 24px)}
+.rtc-host.out{transition:opacity .25s,transform .25s;opacity:0;transform:translate(-50%,-20px)}
+.rtc-host .rtc-who b{font-size:14px}
+.rtc-host .rtc-tb{height:34px;border-radius:999px}
+.rtc-host .av.rtc-mini{width:30px;height:30px;font-size:12px}
+.rtc-host[data-state="connecting"] .rtc-rec{background:var(--urgent);animation:flash 1s infinite}
+@keyframes rtcDrop{from{opacity:0;transform:translate(-50%,-30px) scale(.9)}to{opacity:1;transform:translateX(-50%)}}
+
+/* prompts */
+.rtc-modal{position:fixed;inset:0;z-index:130;display:grid;place-items:center;padding:16px;background:rgba(10,14,18,.55);backdrop-filter:blur(4px);opacity:0;transition:opacity .25s}
+.rtc-modal.in{opacity:1}
+.rtc-card{width:min(420px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--surface);color:var(--ink);border-radius:20px;padding:26px 22px 18px;text-align:center;box-shadow:0 30px 80px -20px rgba(0,0,0,.5);transform:translateY(18px) scale(.96);transition:transform .35s cubic-bezier(.3,1.4,.5,1)}
+.rtc-modal.in .rtc-card{transform:none}
+.rtc-card h3{font:700 19px/1.35 var(--f-display);margin:18px 0 6px}
+.rtc-card p{margin:0 0 14px;color:var(--muted);font-size:14px}
+.rtc-card p.sub{font-size:12px;margin:8px 0 0}
+.rtc-acts{display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+.rtc-acts .btn{flex:1;min-width:120px;justify-content:center;height:44px}
+.rtc-acts .btn svg{width:18px;height:18px}
+.rtc-go{animation:readyGlow 1.6s ease-in-out infinite}
+.rtc-steps{text-align:left;margin:4px 0 12px;padding:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:8px;font-size:14px}
+.rtc-steps li{counter-increment:s;display:grid;grid-template-columns:24px 1fr;align-items:center;gap:10px}
+.rtc-steps li::before{content:counter(s);width:24px;height:24px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:12px;display:grid;place-items:center;flex:none}
+.rtc-steps small{color:var(--muted)}
+.rtc-steps .btn svg{width:16px;height:16px}
+.rtc-code-in{display:flex;gap:8px}
+.rtc-code-in input{flex:1;min-width:0;height:44px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;font-size:18px;letter-spacing:.08em;background:var(--surface-2);text-align:center}
+.rtc-code-in input:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+.rtc-code-in input.shake{animation:shake .4s}
+.rtc-code{display:inline-flex;align-items:center;gap:10px;margin:14px 0 14px;padding:12px 18px;border:2px dashed color-mix(in oklab,var(--review) 50%,var(--line));border-radius:14px;background:var(--review-soft);color:var(--review);font-size:26px;font-weight:700;letter-spacing:.06em}
+.rtc-code svg{width:20px;height:20px;opacity:.7}
+.rtc-code:hover{border-style:solid}
+@media (max-width:640px){
+  .rtc-tb span{display:none}
+  .rtc-tb{padding:0 10px}
+  .mp-rtc button{font-size:12px}
+  .rtc-host .rtc-who small{display:none}
+}
+@media (prefers-reduced-motion:reduce){.rtc-ring>i,.rtc-go,.rtc-dots i,.rtc-live{animation:none}}
+@media print{.rtc-view,.rtc-host,.rtc-modal{display:none!important}}

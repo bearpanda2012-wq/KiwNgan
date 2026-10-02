@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -84,6 +84,8 @@ const ACTIONS = {
   markRead: (p, u) => withLock_(() => markRead_(p.ids, u)),
   helpUpdate: (p, u) => withLock_(() => helpUpdate_(p.id, p.status, u)),
   deleteMessages: (p, u) => withLock_(() => { admin_(u); return deleteMessages_(p.ids, u); }),
+  rtcSend: (p, u) => withLock_(() => rtcSend_(p, u)),
+  rtcPoll: (p, u) => rtcPoll_(u),
   deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
   thumbs: (p, u) => thumbs_(p.ids),
   image: (p, u) => imageFull_(p.id),
@@ -823,4 +825,49 @@ function deleteMessages_(ids, u) {
   for (let i = idv.length - 1; i >= 0; i--) if (ids.indexOf(idv[i][0]) >= 0) { sh.deleteRow(i + 2); n++; }
   log_('', u.name, 'message', 'ลบข้อความ ' + n + ' รายการ');
   return { deleted: n };
+}
+
+/* ---------- แชร์หน้าจอ / รีโมท: ส่งสัญญาณ WebRTC ผ่าน CacheService (ไม่เขียนลงชีต)
+   ภาพหน้าจอวิ่งตรงระหว่างเครื่อง (peer-to-peer) ไม่ผ่านเซิร์ฟเวอร์นี้ */
+const RTC_TYPES_ = ['req', 'offer', 'answer', 'bye', 'deny', 'ctl', 'ctlcode', 'ctlno'];
+function rtcBox_(name) { return 'rtc:' + name; }
+function rtcSend_(p, u) {
+  const type = String(p.type || '');
+  if (RTC_TYPES_.indexOf(type) < 0) throw new Error('คำสั่งแชร์หน้าจอไม่ถูกต้อง');
+  const to = String(p.to || ''), users = readAll_('Users').filter(x => x.active);
+  let targets;
+  if (to === 'admin' || to === ADMIN_LABEL) targets = adminNames_();
+  else {
+    const t = users.find(x => x.name === to);
+    if (!t) throw new Error('ไม่พบผู้ใช้ปลายทาง');
+    if (t.role === 'admin' && !isAdmin_(u)) throw new Error('ไม่มีสิทธิ์');
+    targets = [t.name];
+  }
+  targets = targets.filter(n => n !== u.name);
+  if (!targets.length) throw new Error('ไม่พบผู้ใช้ปลายทาง');
+  const data = JSON.stringify(p.data == null ? '' : p.data);
+  if (data.length > 60000) throw new Error('ข้อมูลใหญ่เกินไป');
+  const cache = CacheService.getScriptCache();
+  targets.forEach(n => {
+    const ru = users.find(x => x.name === n) || { role: 'user' };
+    const sig = { id: uid_('r_'), sid: String(p.sid || '').slice(0, 40), type: type, from: maskName_(u.name, ru), fromAdmin: isAdmin_(u), data: data, ts: Date.now() };
+    let box = [];
+    try { box = JSON.parse(cache.get(rtcBox_(n)) || '[]'); } catch (e) { box = []; }
+    box = box.filter(x => Date.now() - x.ts < 120000);
+    box.push(sig);
+    let raw = JSON.stringify(box);
+    while (raw.length > 90000 && box.length > 1) { box.shift(); raw = JSON.stringify(box); }
+    cache.put(rtcBox_(n), raw, 180);
+  });
+  return { ok: true };
+}
+function rtcPoll_(u) {
+  const cache = CacheService.getScriptCache(), key = rtcBox_(u.name);
+  if (!cache.get(key)) return { signals: [] };
+  return withLock_(() => {
+    let box = [];
+    try { box = JSON.parse(cache.get(key) || '[]'); } catch (e) { box = []; }
+    cache.remove(key);
+    return { signals: box.filter(x => Date.now() - x.ts < 120000).map(x => Object.assign(x, { data: x.data ? JSON.parse(x.data) : '' })) };
+  });
 }
