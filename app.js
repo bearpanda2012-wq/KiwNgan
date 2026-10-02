@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.6.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -420,7 +420,7 @@ async function load(silent) {
 /* ============ login ============ */
 async function showLogin(keepErr) {
   S.screen = 'login'; S.user = null; S.me = ''; closeEditor();
-  document.body.classList.add('auth');
+  document.body.classList.add('auth'); applyTheme();
   const L = S.login; if (!keepErr) L.err = ''; L.pin = ''; L.busy = true; L.roster = null;
   renderLogin();
   try { const r = await api().roster(); L.roster = r.users || []; L.brand = r.brand || null; if (L.brand) { S.settings = normalizeSettings(Object.assign(S.settings || {}, L.brand)); applyBrand(); } }
@@ -448,15 +448,27 @@ function renderLogin() {
   else body = '<button type="button" class="back-who" data-who="">‹ เปลี่ยนชื่อ</button><div class="pin-head">' + avUser(sel, 'lg') + '<div><b>' + esc(sel.name) + '</b><small>ใส่ PIN 4–6 หลัก</small></div></div>' + pinForm();
 
   const showConn = L.showConn;
-  $('#view').innerHTML = '<div class="login"><div class="login-card">' +
-    '<div class="login-brand">' + brandMark(b) + '<div><b>' + esc(b.appName || 'KiwNgan คิวงาน') + '</b><small>' + esc(b.company || '') + '</small></div></div>' +
+  const hr = new Date().getHours(), greet = hr < 12 ? 'อรุณสวัสดิ์' : hr < 17 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น';
+  const hero = '<section class="lg-hero" aria-hidden="false">' +
+      '<div class="lg-brand">' + brandMark(b) + '<div><b>' + esc(b.appName || 'KiwNgan คิวงาน') + '</b><small>' + esc(b.company || '') + '</small></div></div>' +
+      '<div class="lg-copy"><h1>จัดคิวงานทีม<br>ให้ทุกชิ้น<span>ส่งตรงเวลา</span></h1><p>บอร์ดงาน จับเวลาทำงาน และสรุปรายงาน ครบในที่เดียว ใช้ได้ทั้งมือถือและคอมพิวเตอร์</p></div>' +
+      '<div class="lg-art" aria-hidden="true">' +
+        '<div class="lg-card c1"><i class="s-queue"></i><b>รอคิว</b><span></span><span class="w60"></span></div>' +
+        '<div class="lg-card c2"><i class="s-doing"></i><b>กำลังทำ</b><span></span><em>00:42:18</em></div>' +
+        '<div class="lg-card c3"><i class="s-done"></i><b>เสร็จแล้ว</b><span class="w70"></span><strong>✓ ตรงเวลา</strong></div>' +
+        '<div class="lg-ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5"/><circle class="on" cx="18" cy="18" r="15.5" pathLength="100" stroke-dasharray="86 100"/></svg><b>86%</b><small>ตรงเวลา</small></div>' +
+      '</div>' +
+      '<ul class="lg-feat"><li>' + I.board + 'บอร์ดงานลากวาง</li><li>' + I.play + 'จับเวลาต่อชิ้นงาน</li><li>' + I.report + 'สรุปรายงานพร้อมพิมพ์</li></ul>' +
+    '</section>';
+  $('#view').innerHTML = '<div class="login">' + hero + '<section class="lg-side"><div class="login-card">' +
+    '<div class="lg-hello"><span class="eyebrow">' + greet + '</span><b>ยินดีต้อนรับสู่ ' + esc(b.appName || 'KiwNgan คิวงาน') + '</b></div>' +
     (mode() === 'demo' ? '<div class="banner"><span><b>โหมดทดลอง</b> ทุกคนใช้ PIN 1234 · ผู้ดูแลระบบเข้าที่ลิงก์ด้านล่าง ชื่อ "แอดมิน"</span></div>' : '') +
     body + (L.err ? '<div class="err" role="alert">' + esc(L.err) + '</div>' : '') +
     '<div class="login-foot">' +
       (showConn ? '<div class="f"><label for="cUrl">URL ฐานข้อมูล (Apps Script /exec)</label><input id="cUrl" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" autocomplete="off"></div><div class="top-actions"><button class="btn primary sm" data-act="connect">เชื่อมต่อ</button>' + (mode() === 'sheet' ? '<button class="btn sm" data-act="disconnect">ใช้โหมดทดลอง</button>' : '') + '</div>'
         : '<div class="top-actions" style="justify-content:space-between">' + (!L.adminMode ? '<button type="button" class="btn ghost sm" data-act="adminon">ผู้ดูแลระบบ</button>' : '<span></span>') +
           (mode() === 'demo' ? '<button type="button" class="btn ghost sm" data-act="showconn">เชื่อมต่อ Google Sheet ของทีม</button>' : '') + '</div>') +
-    '</div></div></div>';
+    '</div></div><p class="lg-legal">' + esc(b.company || '') + ' · KiwNgan v' + APP_VERSION + '</p></section></div>';
   const focus = L.adminMode && !L.adminName ? $('#adminName') : $('#pinIn');
   if (focus && (!('ontouchstart' in window) || focus.id === 'adminName')) focus.focus();
 }
@@ -538,7 +550,8 @@ const isHex = v => /^#[0-9a-f]{6}$/i.test(v || '');
 function getTheme() { return Object.assign({}, THEME_DEFAULT, LS.get('theme', {}) || {}); }
 function setTheme(patch) { const t = Object.assign(getTheme(), patch); LS.set('theme', t); applyTheme(); return t; }
 function applyTheme() {
-  const t = getTheme(), root = document.documentElement, s = S.settings || defaultSettings();
+  // the sign-in page always uses the default look; personal themes apply only inside the app
+  const t = S.screen === 'app' ? getTheme() : Object.assign({}, THEME_DEFAULT, { mode: 'light' }), root = document.documentElement, s = S.settings || defaultSettings();
   const team = isHex(s.accent) ? s.accent : '#0B6B70';
   let c1 = team, c2 = '';
   if (t.preset === 'custom') { c1 = isHex(t.c1) ? t.c1 : team; c2 = isHex(t.c2) ? t.c2 : ''; }
