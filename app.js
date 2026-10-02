@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.6.2';
+const APP_VERSION = '2.6.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1319,11 +1319,11 @@ async function rtcHost(peer, name, sid, remote, src) {
   }
   rtcCleanup(true);
   Object.assign(R, { sid: sid || uid('s_'), peer: peer, name: name, role: 'host', state: 'connecting', stream: stream, t0: Date.now(), rmode: !!remote, peekOpen: true, src: src, facing: 'environment' });
-  const tr = stream.getVideoTracks()[0]; if (tr) { tr.onended = () => rtcHang(); try { tr.contentHint = src === 'camera' ? 'motion' : 'detail'; } catch (e) {} }
+  const tr = stream.getVideoTracks()[0]; if (tr) { tr.onended = () => { if (!R.flipping) rtcHang(); }; try { tr.contentHint = src === 'camera' ? 'motion' : 'detail'; } catch (e) {} }
   renderRtc(); rtcLoop();
   if (mode() === 'demo') { setTimeout(() => { if (R.state === 'connecting') { R.state = 'live'; R.t0 = Date.now(); renderRtc(); toast(name + ' กำลังดูหน้าจอของคุณ'); inkDemo(); } }, 2000); return; }
   try {
-    const pc = rtcPc(); rtcDc(pc.createDataChannel('ink')); stream.getTracks().forEach(t => pc.addTrack(t, stream));
+    const pc = rtcPc(); rtcDc(pc.createDataChannel('ink')); stream.getTracks().forEach(t => { const sd = pc.addTrack(t, stream); if (t.kind === 'video') R.vsender = sd; });
     await pc.setLocalDescription(await pc.createOffer()); await rtcIce(pc);
     await rtcSig(peer, R.sid, 'offer', { sdp: pc.localDescription.sdp, name: S.me, src: R.src });
     rtcGuard(75000, 'timeout');
@@ -1382,7 +1382,7 @@ function rtcCleanup(keepUi) {
   if (R.inkRaf) { try { (R.inkWin || window).cancelAnimationFrame(R.inkRaf); } catch (e) {} R.inkRaf = 0; }
   const pip = R.pip; R.pip = null; if (R.peek) R.peek.remove(); if (pip) { try { pip.close(); } catch (e) {} }
   inkTitle(false);
-  Object.assign(R, { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, demo: false, dc: null, tool: '', drawId: '', ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, rmode: false, src: '', facing: '', nudgeT: 0, nudged: 0 });
+  Object.assign(R, { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, demo: false, dc: null, tool: '', drawId: '', ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, rmode: false, src: '', facing: '', vsender: null, flipping: false, nudgeT: 0, nudged: 0 });
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (!keepUi) renderRtc();
 }
@@ -1440,13 +1440,23 @@ async function rtcAct(a, t) {
     case 'sharecam': return rtcHost(t.dataset.peer, t.dataset.name, '', false, 'camera');
     case 'flip': {
       if (R.role !== 'host' || R.src !== 'camera') return;
+      if (R.flipping) return;
       const want = R.facing === 'user' ? 'environment' : 'user';
-      try {
-        const ns = await camStream(want), nt = ns.getVideoTracks()[0];
-        const snd = R.pc && R.pc.getSenders().find(x => x.track && x.track.kind === 'video'); if (snd) await snd.replaceTrack(nt);
-        R.stream.getTracks().forEach(x => { x.onended = null; x.stop(); }); nt.onended = () => rtcHang();
-        R.stream = ns; R.facing = want; const v = R.peek && R.peek.querySelector('video'); if (v) { v.srcObject = ns; v.play().catch(() => {}); }
-      } catch (e) { toast('สลับกล้องไม่ได้', true); }
+      /* มือถือ (โดยเฉพาะ iPhone) เปิดกล้องได้ทีละตัว: ปล่อยกล้องเดิมก่อน แล้วค่อยเปิดกล้องใหม่และสลับภาพในสายเดิม ไม่ตัดสาย */
+      R.flipping = true; t.disabled = true;
+      const snd = R.vsender || (R.pc && R.pc.getSenders().find(x => !x.track || x.track.kind === 'video'));
+      R.stream.getTracks().forEach(x => { x.onended = null; x.stop(); });
+      let ns = null, got = want;
+      try { ns = await camStream(want); }
+      catch (e) { got = R.facing; try { ns = await camStream(R.facing); toast('สลับกล้องไม่ได้ — ใช้กล้องเดิมต่อ', true); } catch (e2) { ns = null; } }
+      R.flipping = false; t.disabled = false;
+      if (!ns) { toast('เปิดกล้องไม่ได้ — หยุดแชร์', true); return rtcHang(); }
+      if (R.role !== 'host' || !R.state) { ns.getTracks().forEach(x => x.stop()); return; }
+      const nt = ns.getVideoTracks()[0];
+      try { if (snd) await snd.replaceTrack(nt); } catch (e) {}
+      nt.onended = () => { if (!R.flipping) rtcHang(); }; try { nt.contentHint = 'motion'; } catch (e) {}
+      R.stream = ns; R.facing = got;
+      const v = R.peek && R.peek.querySelector('video'); if (v) { v.srcObject = ns; v.play().catch(() => {}); }
       return;
     }
     case 'peek': R.peekOpen = !R.peekOpen; if (R.pip) { try { R.pip.close(); } catch (e) {} } return renderRtc();
