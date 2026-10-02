@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.0.1';
+const APP_VERSION = '2.0.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1003,7 +1003,9 @@ async function markChanRead(ch) {
 /* floating launcher */
 function renderMsgFab() {
   let b = $('#msgFab');
-  if (S.screen !== 'app' || !S.user) { if (b) b.remove(); return; }
+  if (b) b.remove();
+  if (S.screen !== 'app' || !S.user) { renderChatHeads(); return; }
+  renderChatHeads(); return;
   if (!b) { b = document.createElement('button'); b.id = 'msgFab'; b.className = 'msg-fab'; b.dataset.act = 'msgopen'; b.setAttribute('aria-label', 'ข้อความ'); document.body.appendChild(b); }
   const n = unreadAll(), h = openHelps().length;
   b.innerHTML = MSG_IC.chat + (n ? '<span class="mf-n">' + (n > 99 ? '99+' : n) + '</span>' : '') + (h ? '<span class="mf-sos" title="มีคนขอความช่วยเหลือ">' + MSG_IC.sos + '</span>' : '');
@@ -1036,8 +1038,8 @@ function renderChatHeads() {
   show.forEach((h, i) => {
     keep[h.key] = 1;
     const u = memberBy(h.name), inner = (h.admin ? '<span class="av ch-adm">' + MSG_IC.shield + '</span>' : avUser(u, '', h.name)) +
-      (h.help ? '<i class="hd-sos">' + MSG_IC.sos + '</i>' : '') + (h.n ? '<b class="hd-n">' + h.n + '</b>' : '') +
-      '<span class="hd-tip"><b>' + esc(h.name) + (h.help ? ' · ขอความช่วยเหลือ' : '') + '</b>' + esc(String(h.last.text).slice(0, 80)) + '</span>';
+      (h.help ? '<i class="hd-sos">' + MSG_IC.sos + '</i>' : '') +
+      '<span class="hd-name"><b>' + esc(h.name) + '</b><small>' + (h.help ? '🛟 ขอความช่วยเหลือ' : esc(String(h.last.text).slice(0, 40))) + '</small></span>' + (h.n ? '<b class="hd-n">' + h.n + '</b>' : '');
     let el = have[h.key];
     if (!el) { el = document.createElement('button'); el.className = 'ch-head enter'; el.dataset.key = h.key; setTimeout(() => el.classList.remove('enter'), 700); }
     el.dataset.head = h.last.id; el.classList.toggle('help', h.help); el.setAttribute('aria-label', h.name + (h.help ? ' ขอความช่วยเหลือ' : ' ส่งข้อความ'));
@@ -1232,7 +1234,7 @@ function topbar(title, sub, extra) {
   const d = new Date();
   const hr = d.getHours(), tod = hr < 6 || hr >= 18 ? 'moon' : hr < 11 ? 'sunrise' : 'sun';
   return '<div class="topbar"><span class="hero-ic" aria-hidden="true">' + (I[S.view] || I.home) + '</span><span class="hero-dots" aria-hidden="true"><i></i><i></i><i></i></span><div><div class="eyebrow"><span class="tod ' + tod + '" aria-hidden="true">' + DECO[tod] + '</span>' + esc(s.company) + ' · วัน' + TH_D[d.getDay()] + ' ' + fdY(today()) + '</div><h1>' + title + '</h1>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
-    '<div class="top-actions">' + (extra || '') + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
+    '<div class="top-actions">' + (extra || '') + '<button class="btn top-msg" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span></button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
     '<button class="btn primary new" data-act="new">' + I.plus + 'เพิ่มงาน</button></div></div>';
 }
 

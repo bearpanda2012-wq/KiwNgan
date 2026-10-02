@@ -1385,3 +1385,30 @@ body.auth .msg-fab{display:none}
 .t-chat.has svg{animation:wiggle 2.8s ease-in-out infinite}
 @media print{ .chat-heads{display:none !important} }
 @media (max-width:960px){ .chat-heads .ch-head:nth-of-type(n+4){display:none} }
+
+/* v2.0.2: no permanent message button — a name pill appears only when someone writes */
+.chat-heads{bottom:24px;right:24px;align-items:flex-end}
+@media (max-width:960px){ .chat-heads{right:16px;bottom:calc(150px + env(safe-area-inset-bottom,0px))} }
+.ch-head{width:auto;height:auto;display:flex;align-items:center;gap:10px;padding:5px 14px 5px 5px;border-radius:999px;background:var(--surface);box-shadow:0 14px 30px -12px rgba(0,0,0,.45),0 0 0 1px var(--line);max-width:min(300px,calc(100vw - 32px))}
+.ch-head .av{width:42px;height:42px;font-size:16px;box-shadow:0 0 0 2px var(--surface)}
+.ch-head:hover{transform:translateX(-4px)}
+.ch-head.help{box-shadow:0 0 0 2px var(--urgent),0 14px 30px -12px var(--urgent)}
+.ch-head.help::before{border-radius:999px}
+.ch-head.help .av{box-shadow:0 0 0 2px var(--surface)}
+.hd-name{display:flex;flex-direction:column;min-width:0;text-align:left}
+.hd-name b{font:700 14px/1.2 var(--f-display);color:var(--ink)}
+.hd-name small{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+.ch-head.help .hd-name small{color:var(--urgent);font-weight:600}
+.hd-n{position:static;margin-left:2px;flex:none}
+.hd-sos{left:30px;right:auto;bottom:0}
+.hd-tip{display:none}
+.ch-head.enter{animation:pillIn .6s cubic-bezier(.3,1.5,.5,1) both}
+@keyframes pillIn{0%{opacity:0;transform:translateX(120%)}100%{opacity:1;transform:none}}
+.ch-head.bump{animation:pillBump .6s cubic-bezier(.3,1.8,.5,1)}
+@keyframes pillBump{0%{transform:none}30%{transform:translateX(-10px) scale(1.06)}60%{transform:translateX(3px)}100%{transform:none}}
+.top-msg svg{width:18px;height:18px}
+@media (max-width:640px){ .top-msg span{display:none} .top-msg{padding:8px 10px} }
+@media (max-width:960px){ .ch-head .av{width:38px;height:38px} .chat-heads .ch-head:nth-of-type(n+4){display:flex} .chat-heads .ch-head:nth-of-type(n+3){display:none} }
+.ch-head.help::before{display:none}
+.ch-head.help{animation:pillGlow 1.6s ease-out infinite}
+@keyframes pillGlow{0%{box-shadow:0 0 0 2px var(--urgent),0 0 0 2px color-mix(in oklab,var(--urgent) 50%,transparent),0 14px 30px -12px var(--urgent)}100%{box-shadow:0 0 0 2px var(--urgent),0 0 0 12px transparent,0 14px 30px -12px var(--urgent)}}
