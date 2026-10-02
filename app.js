@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -42,11 +42,13 @@ const I = {
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>',
   stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg>',
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  report: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 17v-3M13 17v-6M16 17v-2"/></svg>',
+  print: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9V3h10v6M7 17H4v-7h16v7h-3"/><rect x="7" y="14" width="10" height="7"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'
 };
 const VIEWS = [
   { id: 'home', label: 'ภาพรวม' }, { id: 'board', label: 'บอร์ดงาน' }, { id: 'list', label: 'รายการงาน' },
-  { id: 'team', label: 'ทีมงาน' }, { id: 'settings', label: 'ตั้งค่า' }
+  { id: 'team', label: 'ทีมงาน' }, { id: 'report', label: 'รายงาน' }, { id: 'settings', label: 'ตั้งค่า' }
 ];
 
 /* ============ state ============ */
@@ -555,6 +557,7 @@ function render() {
   if (S.view === 'board') h += viewBoard();
   else if (S.view === 'list') h += viewList();
   else if (S.view === 'team') h += viewTeam();
+  else if (S.view === 'report') h += viewReport();
   else if (S.view === 'settings') h += viewSettings();
   else h += viewHome();
   v.innerHTML = h;
@@ -784,6 +787,131 @@ function viewTeam() {
   return topbar('ทีมงาน', 'ภาระงานและผลงานรายคน เดือน' + monthLabel(m)) + '<div class="teams">' + cards + '</div>';
 }
 
+/* ============ render: report (printable) ============ */
+const R_SECTIONS = [['kpi', 'สรุปตัวเลข'], ['people', 'สรุปรายคน'], ['groups', 'สรุปตามกลุ่มงาน'], ['jobs', 'รายการงาน'], ['sign', 'ช่องลงชื่อ']];
+const R_PRESETS = [['today', 'วันนี้'], ['week', 'สัปดาห์นี้'], ['month', 'เดือนนี้'], ['lastmonth', 'เดือนก่อน'], ['year', 'ปีนี้'], ['custom', 'กำหนดเอง']];
+const R_SCOPES = [['all', 'งานที่เกี่ยวข้องในช่วงนี้'], ['received', 'งานที่รับเข้าในช่วงนี้'], ['done', 'งานที่เสร็จในช่วงนี้'], ['open', 'งานที่ยังค้างอยู่']];
+function reportState() {
+  if (!S.r) {
+    const saved = LS.get('report', {}) || {};
+    S.r = Object.assign({ preset: 'month', from: '', to: '', member: 'all', group: 'all', scope: 'all', orient: 'portrait', sec: { kpi: true, people: true, groups: true, jobs: true, sign: false } }, saved);
+    S.r.sec = Object.assign({ kpi: true, people: true, groups: true, jobs: true, sign: false }, saved.sec || {});
+    if (S.r.preset !== 'custom' || !S.r.from || !S.r.to) applyPreset(S.r.preset === 'custom' ? 'month' : S.r.preset);
+  }
+  return S.r;
+}
+function saveReportState() { const r = S.r; LS.set('report', { preset: r.preset, from: r.preset === 'custom' ? r.from : '', to: r.preset === 'custom' ? r.to : '', scope: r.scope, orient: r.orient, sec: r.sec }); }
+function applyPreset(p) {
+  const r = S.r, d = new Date(), t = today();
+  r.preset = p;
+  if (p === 'today') { r.from = r.to = t; }
+  else if (p === 'week') { const off = (d.getDay() + 6) % 7; r.from = addDays(t, -off); r.to = addDays(r.from, 6); }
+  else if (p === 'month') { r.from = t.slice(0, 8) + '01'; r.to = isoOf(new Date(d.getFullYear(), d.getMonth() + 1, 0)); }
+  else if (p === 'lastmonth') { r.from = isoOf(new Date(d.getFullYear(), d.getMonth() - 1, 1)); r.to = isoOf(new Date(d.getFullYear(), d.getMonth(), 0)); }
+  else if (p === 'year') { r.from = d.getFullYear() + '-01-01'; r.to = d.getFullYear() + '-12-31'; }
+}
+function fdFull(iso) { if (!iso) return '–'; const d = parseLocal(iso); return d.getDate() + ' ' + TH_M[d.getMonth()] + ' ' + (d.getFullYear() + 543); }
+function rangeLabel(r) { return r.from === r.to ? fdFull(r.from) : fdFull(r.from) + ' – ' + fdFull(r.to); }
+function logMinutes(l) { return l.end ? (+l.minutes || 0) : Math.max(0, (Date.now() - parseLocal(l.start)) / 60000); }
+const inR = (iso, r) => !!iso && iso >= r.from && iso <= r.to;
+
+function reportData() {
+  const r = reportState();
+  const who = j => j.assignee || '';
+  const base = S.jobs.filter(j => (r.member === 'all' || (r.member === '__none' ? !j.assignee : j.assignee === r.member)) && (r.group === 'all' || j.group === r.group));
+  const recv = j => inR(j.received, r), fin = j => j.status === 'done' && inR(finDate(j), r);
+  const openNow = j => isOpen(j) && (!j.received || j.received <= r.to);
+  const scoped = base.filter(j => r.scope === 'received' ? recv(j) : r.scope === 'done' ? fin(j) : r.scope === 'open' ? openNow(j) : (recv(j) || fin(j) || openNow(j)));
+  const ids = {}; base.forEach(j => { ids[j.id] = j; });
+  const logs = S.logs.filter(l => inR((l.start || '').slice(0, 10), r) && ids[l.jobId] && (r.member === 'all' || r.member === '__none' || l.member === r.member));
+  const minsBy = (key, val) => logs.filter(l => (key === 'member' ? l.member : (ids[l.jobId] || {})[key]) === val).reduce((s, l) => s + logMinutes(l), 0);
+  const stat = js => {
+    const done = js.filter(fin), ok = done.filter(onTime).length, open = js.filter(openNow);
+    return { recv: js.filter(recv).length, done: done.length, ok: ok, late: done.length - ok, pct: done.length ? Math.round(ok / done.length * 100) : null, open: open.length, overdue: open.filter(isLate).length };
+  };
+  const total = stat(base); total.mins = logs.reduce((s, l) => s + logMinutes(l), 0);
+  // people: active members first, then anyone else appearing in the data
+  const names = []; const add = n => { if (names.indexOf(n) < 0) names.push(n); };
+  if (r.member !== 'all') add(r.member === '__none' ? '' : r.member);
+  else { members().forEach(m => add(m.name)); base.forEach(j => { if (recv(j) || fin(j) || openNow(j)) add(who(j)); }); logs.forEach(l => add(l.member)); }
+  const people = names.map(n => Object.assign({ name: n, mins: n ? minsBy('member', n) : 0 }, stat(base.filter(j => who(j) === n))))
+    .filter(p => r.member !== 'all' || p.recv || p.done || p.open || p.mins || (p.name && memberBy(p.name) && memberBy(p.name).role !== 'admin'));
+  const gnames = (S.settings.groups || []).slice(); base.forEach(j => { if (j.group && gnames.indexOf(j.group) < 0) gnames.push(j.group); });
+  const groups = gnames.map(g => { const js = base.filter(j => j.group === g), s = stat(js), done = js.filter(fin); return Object.assign({ name: g, mins: minsBy('group', g), avg: done.length ? done.reduce((a, j) => a + (j.minutes || 0), 0) / done.length : 0 }, s); })
+    .filter(g => g.recv || g.done || g.open);
+  const jobs = scoped.slice().sort((a, b) => String(a.received || '').localeCompare(String(b.received || '')) || String(a.code).localeCompare(String(b.code)));
+  return { r: r, total: total, people: people, groups: groups, jobs: jobs };
+}
+
+function viewReport() {
+  const D = reportData(), r = D.r, s = S.settings, T = D.total;
+  const ms = members();
+  const opt = (v, cur, label) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(label) + '</option>';
+  const memberName = r.member === 'all' ? 'ทุกคน' : r.member === '__none' ? 'ยังไม่มอบหมาย' : r.member;
+  const controls = '<div class="panel rep-controls">' +
+    '<div class="chips" role="group" aria-label="ช่วงเวลา">' + R_PRESETS.map(p => '<button class="chip" data-rpreset="' + p[0] + '" aria-pressed="' + (r.preset === p[0]) + '">' + p[1] + '</button>').join('') + '</div>' +
+    '<div class="rep-grid">' +
+      '<div class="f"><label for="rFrom">ตั้งแต่วันที่</label><input type="date" id="rFrom" value="' + esc(r.from) + '"></div>' +
+      '<div class="f"><label for="rTo">ถึงวันที่</label><input type="date" id="rTo" value="' + esc(r.to) + '"></div>' +
+      '<div class="f"><label for="rMember">ผู้รับผิดชอบ</label><select id="rMember">' + opt('all', r.member, 'ทุกคน') + ms.map(m => opt(m.name, r.member, m.name)).join('') + opt('__none', r.member, 'ยังไม่มอบหมาย') + '</select></div>' +
+      '<div class="f"><label for="rGroup">กลุ่มงาน</label><select id="rGroup">' + opt('all', r.group, 'ทุกกลุ่มงาน') + (s.groups || []).map(g => opt(g, r.group, g)).join('') + '</select></div>' +
+      '<div class="f"><label for="rScope">รายการงานที่แสดง</label><select id="rScope">' + R_SCOPES.map(x => opt(x[0], r.scope, x[1])).join('') + '</select></div>' +
+      '<div class="f"><label for="rOrient">หน้ากระดาษ A4</label><select id="rOrient">' + opt('portrait', r.orient, 'แนวตั้ง') + opt('landscape', r.orient, 'แนวนอน') + '</select></div>' +
+    '</div>' +
+    '<div class="rep-secs"><span class="sub">หัวข้อที่จะพิมพ์</span>' + R_SECTIONS.map(x => '<label class="toggle sm"><input type="checkbox" data-rsec="' + x[0] + '"' + (r.sec[x[0]] ? ' checked' : '') + '>' + x[1] + '</label>').join('') + '</div></div>';
+
+  const pctTxt = v => v == null ? '–' : v + '%';
+  const kpi = r.sec.kpi ? '<section class="rsec"><h3>สรุปตัวเลข</h3><div class="rkpis">' +
+    [['รับงานเข้า', T.recv, 'งาน'], ['เสร็จแล้ว', T.done, 'งาน'], ['ตรงเวลา', pctTxt(T.pct), T.done ? T.ok + ' จาก ' + T.done + ' งาน' : ''], ['เสร็จช้า', T.late, 'งาน'],
+     ['ค้างอยู่', T.open, T.overdue ? 'เลยกำหนด ' + T.overdue + ' งาน' : 'ไม่มีงานเลยกำหนด'], ['เวลาทำงานรวม', fdur(T.mins), 'จากการจับเวลา', 'sm']]
+      .map(k => '<div class="rkpi' + (k[3] ? ' ' + k[3] : '') + '"><span>' + k[0] + '</span><b>' + k[1] + '</b><small>' + esc(k[2]) + '</small></div>').join('') + '</div></section>' : '';
+
+  const th = cols => '<thead><tr>' + cols.map(c => '<th' + (c[1] ? ' class="' + c[1] + '"' : '') + '>' + c[0] + '</th>').join('') + '</tr></thead>';
+  const sumRow = (label, x, extra) => '<tr class="tot"><td>' + label + '</td><td class="n">' + x.recv + '</td><td class="n">' + x.done + '</td><td class="n">' + x.ok + '</td><td class="n">' + x.late + '</td><td class="n">' + pctTxt(x.pct) + '</td><td class="n">' + x.open + '</td><td class="n">' + x.overdue + '</td>' + extra + '</tr>';
+  const people = r.sec.people ? '<section class="rsec"><h3>สรุปรายคน</h3>' + (D.people.length ? '<div class="rtable-wrap"><table class="rtable">' +
+    th([['ผู้รับผิดชอบ'], ['รับเข้า', 'n'], ['เสร็จ', 'n'], ['ตรงเวลา', 'n'], ['ช้า', 'n'], ['% ตรงเวลา', 'n'], ['ค้างอยู่', 'n'], ['เลยกำหนด', 'n'], ['เวลาทำงาน', 'n']]) + '<tbody>' +
+    D.people.map(p => '<tr><td><span class="rwho">' + (p.name ? av(p.name) : '') + esc(p.name || 'ยังไม่มอบหมาย') + '</span></td><td class="n">' + p.recv + '</td><td class="n">' + p.done + '</td><td class="n">' + p.ok + '</td><td class="n">' + p.late + '</td><td class="n">' + pctTxt(p.pct) + '</td><td class="n">' + p.open + '</td><td class="n' + (p.overdue ? ' bad' : '') + '">' + p.overdue + '</td><td class="n">' + (p.mins ? fdur(p.mins) : '–') + '</td></tr>').join('') +
+    '</tbody>' + (D.people.length > 1 ? '<tfoot>' + sumRow('รวม', T, '<td class="n">' + fdur(T.mins) + '</td>') + '</tfoot>' : '') + '</table></div>' : '<p class="rnone">ไม่มีข้อมูลในช่วงนี้</p>') + '</section>' : '';
+
+  const groups = r.sec.groups ? '<section class="rsec"><h3>สรุปตามกลุ่มงาน</h3>' + (D.groups.length ? '<div class="rtable-wrap"><table class="rtable">' +
+    th([['กลุ่มงาน'], ['รับเข้า', 'n'], ['เสร็จ', 'n'], ['ตรงเวลา', 'n'], ['ช้า', 'n'], ['% ตรงเวลา', 'n'], ['ค้างอยู่', 'n'], ['เลยกำหนด', 'n'], ['เวลาเฉลี่ย/งาน', 'n']]) + '<tbody>' +
+    D.groups.map(g => '<tr><td>' + esc(g.name) + '</td><td class="n">' + g.recv + '</td><td class="n">' + g.done + '</td><td class="n">' + g.ok + '</td><td class="n">' + g.late + '</td><td class="n">' + pctTxt(g.pct) + '</td><td class="n">' + g.open + '</td><td class="n' + (g.overdue ? ' bad' : '') + '">' + g.overdue + '</td><td class="n">' + (g.avg ? fdur(g.avg) : '–') + '</td></tr>').join('') +
+    '</tbody></table></div>' : '<p class="rnone">ไม่มีข้อมูลในช่วงนี้</p>') + '</section>' : '';
+
+  const result = j => {
+    if (j.status === 'done') return onTime(j) ? '<span class="rres ok">ตรงเวลา</span>' : '<span class="rres bad">ช้า ' + (j.due && finDate(j) ? daysBetween(j.due, finDate(j)) + ' วัน' : '') + '</span>';
+    return isLate(j) ? '<span class="rres bad">เลยกำหนด</span>' : '<span class="rres">' + esc((ST[j.status] || ST.queue).label) + '</span>';
+  };
+  const scopeLabel = (R_SCOPES.find(x => x[0] === r.scope) || R_SCOPES[0])[1];
+  const jobs = r.sec.jobs ? '<section class="rsec rsec-jobs"><h3>รายการงาน <small>' + esc(scopeLabel) + ' · ' + D.jobs.length + ' งาน</small></h3>' + (D.jobs.length ? '<div class="rtable-wrap"><table class="rtable rjobs">' +
+    th([['#', 'n'], ['เลข Job'], ['ลูกค้า / รายละเอียด'], ['กลุ่ม'], ['ผู้รับผิดชอบ'], ['รับ'], ['กำหนดส่ง'], ['เสร็จ'], ['สถานะ'], ['เวลาทำ', 'n']]) + '<tbody>' +
+    D.jobs.map((j, i) => '<tr><td class="n">' + (i + 1) + '</td><td class="mono">' + esc(j.code) + (j.priority === 'urgent' ? ' <span class="rflag">ด่วน</span>' : '') + (j.revision ? ' <span class="rflag">แก้</span>' : '') + '</td><td>' + esc(j.title || '–') + '<small>' + esc(j.taskType || '') + (j.sale ? ' · Sale ' + esc(j.sale) : '') + '</small></td><td>' + esc(groupShort(j.group) || '–') + '</td><td>' + esc(j.assignee || '–') + '</td><td>' + fdY(j.received) + '</td><td>' + fdY(j.due) + '</td><td>' + (j.status === 'done' ? fdY(finDate(j)) : '–') + '</td><td>' + result(j) + '</td><td class="n">' + (totalMinutes(j) ? fdur(totalMinutes(j)) : '–') + '</td></tr>').join('') +
+    '</tbody></table></div>' : '<p class="rnone">ไม่มีงานในช่วงนี้</p>') + '</section>' : '';
+
+  const sign = r.sec.sign ? '<section class="rsec rsign"><div><span></span>ผู้จัดทำรายงาน<small>(' + esc(S.me) + ')</small><small>วันที่ ........../........../..........</small></div><div><span></span>ผู้ตรวจสอบ<small>(..........................................)</small><small>วันที่ ........../........../..........</small></div></section>' : '';
+
+  const nowD = new Date();
+  const paper = '<article class="paper" id="reportPaper">' +
+    '<header class="rhead"><div class="rbrand">' + brandMark(s) + '<div><b>' + esc(s.company) + '</b><small>' + esc(s.appName) + '</small></div></div>' +
+      '<div class="rtitle"><h2>รายงานสรุปงาน</h2><p>' + rangeLabel(r) + '</p></div></header>' +
+    '<div class="rmeta"><span>ผู้รับผิดชอบ: <b>' + esc(memberName) + '</b></span><span>กลุ่มงาน: <b>' + esc(r.group === 'all' ? 'ทุกกลุ่มงาน' : r.group) + '</b></span><span>พิมพ์โดย ' + esc(S.me) + ' · ' + fdFull(today()) + ' ' + pad(nowD.getHours()) + ':' + pad(nowD.getMinutes()) + ' น.</span></div>' +
+    (kpi + people + groups + jobs + sign || '<p class="rnone">เลือกหัวข้อที่จะพิมพ์อย่างน้อย 1 หัวข้อ</p>') +
+    '<footer class="rfoot">' + esc(s.company) + ' · ' + esc(s.appName) + '</footer></article>';
+
+  return topbar('รายงาน', 'เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF', '<button class="btn primary" data-act="print">' + I.print + '<span>พิมพ์รายงาน</span></button>') + controls + paper;
+}
+function setPageOrient(o) {
+  let el = document.getElementById('pageStyle');
+  if (!el) { el = document.createElement('style'); el.id = 'pageStyle'; document.head.appendChild(el); }
+  el.textContent = '@page{size:A4 ' + (o === 'landscape' ? 'landscape' : 'portrait') + ';margin:12mm 11mm}';
+}
+function printReport() {
+  setPageOrient(reportState().orient);
+  document.body.classList.add('printing');
+  setTimeout(() => { try { window.print(); } catch (x) { toast('เบราว์เซอร์นี้สั่งพิมพ์ไม่ได้ ลองเปิดเว็บใน Chrome หรือ Safari', true); } }, 50);
+}
+window.addEventListener('afterprint', () => document.body.classList.remove('printing'));
+
 /* ============ render: settings ============ */
 function viewSettings() {
   const admin = isAdmin();
@@ -986,6 +1114,7 @@ document.addEventListener('click', async e => {
   if (d.view) return go(d.view);
   if (d.go) return go(d.go, d.sec);
   if (d.move) { e.stopPropagation(); return moveJob(d.move, d.to); }
+  if (d.rpreset) { reportState(); if (d.rpreset !== 'custom') applyPreset(d.rpreset); else S.r.preset = 'custom'; saveReportState(); return render(); }
   if (d.filterGo) { S.f.status = d.filterGo; S.f.month = ''; return go('list'); }
   if (d.mine) { S.f.member = '__me'; LS.set('fMember', S.f.member); return go('board'); }
   if (d.memberjobs) { S.f.member = d.memberjobs; S.f.status = 'open'; LS.set('fMember', S.f.member); return go('list'); }
@@ -1023,6 +1152,7 @@ document.addEventListener('click', async e => {
     case 'stop': if (S.edit) readEditor(); return stopTimer(d.log);
     case 'refresh': return load(false).then(() => { if (S.sync === 'ok') toast('อัปเดตข้อมูลล่าสุดแล้ว'); });
     case 'csv': return exportCsv();
+    case 'print': return printReport();
     case 'connect': return connect();
     case 'disconnect': S.conn = null; LS.del('conn'); S.loaded = false; S.login.showConn = false; toast('กลับสู่โหมดทดลองแล้ว'); return load(false);
     case 'resetdemo': LS.del('demo'); LS.del(tokenKey()); toast('รีเซ็ตข้อมูลตัวอย่างแล้ว'); return showLogin();
@@ -1067,6 +1197,14 @@ document.addEventListener('change', e => {
   if (t.id === 'fMember') { S.f.member = t.value; LS.set('fMember', t.value); return render(); }
   if (t.id === 'fGroup') { S.f.group = t.value; return render(); }
   if (t.id === 'fMonth') { S.f.month = t.value; return render(); }
+  if (/^r(From|To|Member|Group|Scope|Orient)$/.test(t.id)) {
+    const r = reportState(), k = t.id.slice(1).toLowerCase();
+    if (k === 'from' || k === 'to') { if (!t.value) return render(); r[k] = t.value; r.preset = 'custom'; if (r.from > r.to) { if (k === 'from') r.to = r.from; else r.from = r.to; } }
+    else r[k] = t.value;
+    if (k === 'orient') setPageOrient(r.orient);
+    saveReportState(); return render();
+  }
+  if (t.dataset.rsec) { reportState().sec[t.dataset.rsec] = t.checked; saveReportState(); return render(); }
   if (t.id === 'logoIn' && t.files && t.files[0]) return readLogo(t.files[0]);
   if (t.dataset.photofor && t.files && t.files[0]) return setPhoto(t.dataset.photofor, t.files[0]);
   if (S.edit && t.closest('#sheetBody') && t.dataset.e) {
