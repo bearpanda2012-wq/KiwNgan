@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -520,12 +520,66 @@ async function stopTimer(logId) {
   applyStop(r); render();
 }
 
+/* ============ personal theme (per device) ============ */
+const THEMES = [
+  { id: 'brand', name: 'สีบริษัท', c1: '', c2: '' },
+  { id: 'ocean', name: 'ทะเลลึก', c1: '#0B6B70', c2: '#2D5FC4' },
+  { id: 'sky', name: 'ฟ้าใส', c1: '#1C7ED6', c2: '#15AABF' },
+  { id: 'grape', name: 'องุ่น', c1: '#6741D9', c2: '#C2255C' },
+  { id: 'sunset', name: 'พระอาทิตย์ตก', c1: '#E8590C', c2: '#D6336C' },
+  { id: 'forest', name: 'ป่าเขียว', c1: '#2B8A3E', c2: '#0C8599' },
+  { id: 'gold', name: 'ทองอำพัน', c1: '#C2410C', c2: '#B7791F' },
+  { id: 'rose', name: 'ชมพูพาสเทล', c1: '#D6336C', c2: '#9C36B5' },
+  { id: 'night', name: 'กลางคืน', c1: '#364FC7', c2: '#1098AD', mode: 'dark' },
+  { id: 'classic', name: 'เรียบคลาสสิก', c1: '', c2: '', sidebar: 'plain', header: 'plain' }
+];
+const THEME_DEFAULT = { preset: 'brand', mode: 'auto', c1: '#0B6B70', c2: '#5B3FD6', sidebar: 'gradient', header: 'gradient', radius: 'round' };
+const isHex = v => /^#[0-9a-f]{6}$/i.test(v || '');
+function getTheme() { return Object.assign({}, THEME_DEFAULT, LS.get('theme', {}) || {}); }
+function setTheme(patch) { const t = Object.assign(getTheme(), patch); LS.set('theme', t); applyTheme(); return t; }
+function applyTheme() {
+  const t = getTheme(), root = document.documentElement, s = S.settings || defaultSettings();
+  const team = isHex(s.accent) ? s.accent : '#0B6B70';
+  let c1 = team, c2 = '';
+  if (t.preset === 'custom') { c1 = isHex(t.c1) ? t.c1 : team; c2 = isHex(t.c2) ? t.c2 : ''; }
+  else { const p = THEMES.find(x => x.id === t.preset); if (p && p.c1) { c1 = p.c1; c2 = p.c2; } }
+  root.style.setProperty('--brand', c1);
+  if (c2) root.style.setProperty('--brand-2', c2); else root.style.removeProperty('--brand-2');
+  if (t.mode === 'light' || t.mode === 'dark') root.setAttribute('data-theme', t.mode); else root.removeAttribute('data-theme');
+  root.setAttribute('data-sidebar', t.sidebar === 'plain' ? 'plain' : 'gradient');
+  root.setAttribute('data-header', ['soft', 'plain'].indexOf(t.header) >= 0 ? t.header : 'gradient');
+  root.setAttribute('data-radius', t.radius === 'sharp' ? 'sharp' : 'round');
+  const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.setAttribute('content', c1);
+}
+function themeSection() {
+  const t = getTheme(), s = S.settings || defaultSettings(), team = isHex(s.accent) ? s.accent : '#0B6B70';
+  const sw = p => {
+    const c1 = p.c1 || team, c2 = p.c2 || 'color-mix(in oklab,' + team + ' 50%,#5B3FD6)';
+    return '<button class="theme-sw' + (t.preset === p.id ? ' on' : '') + '" data-themepick="' + p.id + '" aria-pressed="' + (t.preset === p.id) + '" style="--t1:' + c1 + ';--t2:' + c2 + '">' +
+      '<span class="tp-prev' + (p.id === 'classic' ? ' classic' : '') + (p.mode === 'dark' ? ' dark' : '') + '"><i class="tp-rail"></i><i class="tp-head"></i><i class="tp-a"></i><i class="tp-b"></i></span><b>' + p.name + '</b></button>';
+  };
+  const seg = (key, opts) => '<div class="seg" role="group">' + opts.map(o => '<button data-themeset="' + key + '" data-val="' + o[0] + '" aria-pressed="' + (t[key] === o[0]) + '">' + o[1] + '</button>').join('') + '</div>';
+  const c1 = t.preset === 'custom' && isHex(t.c1) ? t.c1 : (THEMES.find(x => x.id === t.preset) || {}).c1 || team;
+  const c2 = t.preset === 'custom' && isHex(t.c2) ? t.c2 : (THEMES.find(x => x.id === t.preset) || {}).c2 || '#5B3FD6';
+  return '<section class="panel sec" id="s-theme"><div class="panel-h"><h2>ธีมและโหมดสี</h2><button class="btn sm ghost" data-act="themereset">คืนค่าเริ่มต้น</button></div>' +
+    '<p class="help">ปรับหน้าตาแอปตามชอบ ใช้เฉพาะเครื่องนี้ ไม่กระทบคนอื่นในทีม</p>' +
+    '<div class="sub" style="font-weight:600;color:var(--ink)">เทมเพลตสี</div><div class="theme-grid">' + THEMES.map(sw).join('') +
+      '<label class="theme-sw custom' + (t.preset === 'custom' ? ' on' : '') + '" style="--t1:' + esc(c1) + ';--t2:' + esc(c2) + '"><span class="tp-prev"><i class="tp-rail"></i><i class="tp-head"></i><i class="tp-a"></i><i class="tp-b"></i></span><b>กำหนดเอง</b></label></div>' +
+    '<div class="theme-opts">' +
+      '<div class="f"><span class="lbl">สีหลัก / สีรอง (กำหนดเอง)</span><div class="theme-colors"><input type="color" id="thC1" value="' + esc(c1) + '" aria-label="สีหลัก"><span>→</span><input type="color" id="thC2" value="' + esc(c2) + '" aria-label="สีรอง"></div></div>' +
+      '<div class="f"><span class="lbl">โหมด</span>' + seg('mode', [['auto', 'ตามเครื่อง'], ['light', 'สว่าง'], ['dark', 'มืด']]) + '</div>' +
+      '<div class="f"><span class="lbl">เมนูด้านข้าง</span>' + seg('sidebar', [['gradient', 'สีไล่'], ['plain', 'พื้นเรียบ']]) + '</div>' +
+      '<div class="f"><span class="lbl">หัวหน้าเพจ</span>' + seg('header', [['gradient', 'สีไล่'], ['soft', 'สีอ่อน'], ['plain', 'เรียบ']]) + '</div>' +
+      '<div class="f"><span class="lbl">มุมการ์ด</span>' + seg('radius', [['round', 'โค้งมน'], ['sharp', 'เหลี่ยม']]) + '</div>' +
+    '</div></section>';
+}
+
 /* ============ brand ============ */
 function applyBrand() {
   const s = S.settings || defaultSettings();
   document.documentElement.style.setProperty('--brand', /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : '#0B6B70');
   document.title = s.appName || 'KiwNgan คิวงาน';
-  const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.setAttribute('content', s.accent || '#0B6B70');
+  applyTheme();
 }
 function brandMark(s) {
   return s.logo ? '<div class="brand-mark"><img src="' + esc(s.logo) + '" alt=""></div>'
@@ -930,7 +984,7 @@ function viewSettings() {
   const admin = isAdmin();
   if (admin && !S.draft) { S.draft = clone(S.settings); S.draftDirty = false; }
   const d = S.draft || S.settings, c = S.conn || { url: '' };
-  const nav = [['me', 'บัญชีของฉัน']].concat(admin ? [['conn', 'ฐานข้อมูล'], ['users', 'ผู้ใช้งานและสิทธิ์'], ['brand', 'แบรนด์'], ['lists', 'รายการตัวเลือก'], ['sla', 'ระยะเวลามาตรฐาน']] : []).concat([['about', 'เกี่ยวกับ']]);
+  const nav = [['me', 'บัญชีของฉัน'], ['theme', 'ธีมและสี']].concat(admin ? [['conn', 'ฐานข้อมูล'], ['users', 'ผู้ใช้งานและสิทธิ์'], ['brand', 'แบรนด์'], ['lists', 'รายการตัวเลือก'], ['sla', 'ระยะเวลามาตรฐาน']] : []).concat([['about', 'เกี่ยวกับ']]);
   let h = topbar('ตั้งค่า', admin ? 'คุณเป็นแอดมิน จัดการผู้ใช้ การตั้งค่า และแบรนด์ได้' : 'บัญชีของคุณและการเชื่อมต่อ') +
     '<div class="settings"><nav class="snav">' + nav.map(n => '<a href="#s-' + n[0] + '">' + n[1] + '</a>').join('') + '</nav><div class="sbody">';
 
@@ -943,6 +997,7 @@ function viewSettings() {
     '<div class="f"><label for="pNew">PIN ใหม่ (4–6 หลัก)</label><input id="pNew" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>' +
     '<div class="f"><label for="pNew2">ยืนยัน PIN ใหม่</label><input id="pNew2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div></div>' +
     '<div><button class="btn" data-act="changepin">เปลี่ยน PIN</button></div></section>';
+  h += themeSection();
 
   if (admin) h += '<section class="panel sec" id="s-conn"><div class="panel-h"><h2>ฐานข้อมูล</h2>' + (mode() === 'sheet' ? '<span class="pill s-done">Google Sheet</span>' : '<span class="pill s-hold">โหมดทดลอง</span>') + '</div>' +
     (mode() === 'sheet'
@@ -1136,6 +1191,8 @@ document.addEventListener('click', async e => {
   if (d.who !== undefined) { S.login.userId = d.who; S.login.pin = ''; S.login.err = ''; return renderLogin(); }
   if (d.pin) { const L = S.login; const an = $('#adminName'); if (an) L.adminName = an.value; if (d.pin === 'clear') L.pin = ''; else if (d.pin === 'back') L.pin = L.pin.slice(0, -1); else if (L.pin.length < 6) L.pin += d.pin; L.err = ''; return renderLogin(); }
   // user admin
+  if (d.themepick) { setTheme(Object.assign({ preset: d.themepick }, d.themepick === 'classic' ? { sidebar: 'plain', header: 'plain' } : getTheme().preset === 'classic' ? { sidebar: 'gradient', header: 'gradient' } : {}, (THEMES.find(x => x.id === d.themepick) || {}).mode ? { mode: THEMES.find(x => x.id === d.themepick).mode } : {})); return render(); }
+  if (d.themeset) { setTheme({ [d.themeset]: d.val }); return render(); }
   if (d.saveuser) return saveUserRow(d.saveuser);
   if (d.rmphoto) return setPhoto(d.rmphoto, null);
   if (d.resetpin) { try { const r = await mutate(() => api().resetPin({ userId: d.resetpin })); S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
@@ -1165,6 +1222,7 @@ document.addEventListener('click', async e => {
     case 'stop': if (S.edit) readEditor(); return stopTimer(d.log);
     case 'refresh': return load(false).then(() => { if (S.sync === 'ok') toast('อัปเดตข้อมูลล่าสุดแล้ว'); });
     case 'csv': return exportCsv();
+    case 'themereset': LS.del('theme'); applyTheme(); toast('คืนค่าธีมเริ่มต้นแล้ว'); return render();
     case 'print': return printReport();
     case 'connect': return connect();
     case 'disconnect': S.conn = null; LS.del('conn'); S.loaded = false; S.login.showConn = false; toast('กลับสู่โหมดทดลองแล้ว'); return load(false);
@@ -1195,6 +1253,9 @@ document.addEventListener('input', e => {
   if (t.id === 'adminName') { S.login.adminName = t.value; return; }
   if (t.id === 'pinIn') { S.login.pin = t.value.replace(/\D/g, '').slice(0, 6); S.login.err = ''; const dots = document.querySelectorAll('.pin-dots i'); dots.forEach((el, i) => el.classList.toggle('on', i < S.login.pin.length)); const sb = document.querySelector('#pinForm [type=submit]'); if (sb) sb.disabled = S.login.pin.length < 4; return; }
   if (t.id === 'q') { S.f.q = t.value; const pos = t.selectionStart; render(); const q = $('#q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
+  if ((t.id === 'thC1' || t.id === 'thC2') && $('#thC1') && $('#thC2')) { // live preview while dragging the picker
+    document.documentElement.style.setProperty('--brand', $('#thC1').value); document.documentElement.style.setProperty('--brand-2', $('#thC2').value); return;
+  }
   if (t.dataset.d && S.draft) {
     const v = t.type === 'checkbox' ? t.checked : t.value;
     const path = t.dataset.d; const old = path.split('.');
@@ -1211,6 +1272,7 @@ document.addEventListener('change', e => {
   if (t.id === 'fMember') { S.f.member = t.value; LS.set('fMember', t.value); return render(); }
   if (t.id === 'fGroup') { S.f.group = t.value; return render(); }
   if (t.id === 'fMonth') { S.f.month = t.value; return render(); }
+  if (t.id === 'thC1' || t.id === 'thC2') { setTheme({ preset: 'custom', c1: $('#thC1').value, c2: $('#thC2').value }); return render(); }
   if (/^r(From|To|Member|Group|Scope|Orient)$/.test(t.id)) {
     const r = reportState(), k = t.id.slice(1).toLowerCase();
     if (k === 'from' || k === 'to') { if (!t.value) return render(); r[k] = t.value; r.preset = 'custom'; if (r.from > r.to) { if (k === 'from') r.to = r.from; else r.from = r.to; } }
@@ -1357,6 +1419,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|u
     if (api) { u.searchParams.delete('api'); history.replaceState(null, '', u.pathname + u.search + u.hash); }
   } catch (e) {}
 })();
+try { applyTheme(); } catch (e) {}
 window.KiwNgan = { S: S, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION };
 load(false);
 })();
