@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.5.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2010,16 +2010,16 @@ function aItem(j) {
 }
 
 /* ============ render: board ============ */
-function filterBar(opts) {
+function filterBar(opts, noMember) {
   const ms = members();
   return '<div class="filters"><label class="search">' + I.search + '<input id="q" type="search" placeholder="ค้นหาเลข Job, ลูกค้า, sale, หมายเหตุ…" value="' + esc(S.f.q) + '" aria-label="ค้นหางาน"></label>' +
-    '<select class="sel" id="fMember" aria-label="ทีมงาน"><option value="all">ทุกคน</option>' + (S.me ? '<option value="__me"' + (S.f.member === '__me' ? ' selected' : '') + '>งานของฉัน (' + esc(S.me) + ')</option>' : '') +
-    ms.map(x => '<option value="' + esc(x.name) + '"' + (S.f.member === x.name ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') + '<option value="__none"' + (S.f.member === '__none' ? ' selected' : '') + '>ยังไม่มอบหมาย</option></select>' +
+    (noMember ? '' : '<select class="sel" id="fMember" aria-label="ทีมงาน"><option value="all">ทุกคน</option>' + (S.me ? '<option value="__me"' + (S.f.member === '__me' ? ' selected' : '') + '>งานของฉัน (' + esc(S.me) + ')</option>' : '') +
+    ms.map(x => '<option value="' + esc(x.name) + '"' + (S.f.member === x.name ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') + '<option value="__none"' + (S.f.member === '__none' ? ' selected' : '') + '>ยังไม่มอบหมาย</option></select>') +
     '<select class="sel" id="fGroup" aria-label="กลุ่มงาน"><option value="all">ทุกกลุ่มงาน</option>' + (S.settings.groups || []).map(g => '<option' + (S.f.group === g ? ' selected' : '') + '>' + esc(g) + '</option>').join('') + '</select>' +
     (opts || '') + '</div>';
 }
-function matchBase(j) {
-  const f = S.f, q = f.q.trim().toLowerCase();
+function matchBase(j, anyMember) {
+  const f = anyMember ? Object.assign({}, S.f, { member: 'all' }) : S.f, q = f.q.trim().toLowerCase();
   if (f.member === '__me' && j.assignee !== S.me) return false;
   if (f.member === '__none' && j.assignee) return false;
   if (f.member !== 'all' && f.member !== '__me' && f.member !== '__none' && j.assignee !== f.member) return false;
@@ -2054,7 +2054,7 @@ function card(j) {
 function viewBoard() {
   const q = S.f.quick || 'all', t = today();
   const quickOk = j => q === 'mine' ? j.assignee === S.me : q === 'urgent' ? j.priority === 'urgent' && isOpen(j) : q === 'late' ? isLate(j) : q === 'today' ? isOpen(j) && j.due && j.due <= addDays(t, 1) : true;
-  const base0 = S.jobs.filter(matchBase), base = base0.filter(quickOk);
+  const base0 = S.jobs.filter(j => matchBase(j)), base = base0.filter(quickOk);
   const cols = FLOW.slice();
   const hold = base.filter(j => j.status === 'hold');
   const cutoff = addDays(today(), -14);
@@ -2080,9 +2080,12 @@ function viewBoard() {
 }
 
 /* ============ render: list ============ */
+/* พนักงานเห็นเฉพาะงานที่ตัวเองรับผิดชอบในหน้ารายการงาน — หัวหน้างาน/แอดมินเห็นทุกงาน */
+const listPool = () => isLead() ? S.jobs : S.jobs.filter(j => j.assignee === S.me);
+const listMatch = j => matchBase(j, !isLead());
 function listRows() {
   const f = S.f, t = today();
-  return S.jobs.filter(matchBase).filter(j => {
+  return listPool().filter(listMatch).filter(j => {
     if (f.status === 'open') return isOpen(j);
     if (f.status === 'late') return isLate(j);
     if (f.status === 'urgent') return isOpen(j) && j.priority === 'urgent';
@@ -2094,11 +2097,11 @@ function listRows() {
     : sortOpen(a, b));
 }
 function viewList() {
-  const base = S.jobs.filter(matchBase);
+  const pool = listPool(), base = pool.filter(listMatch);
   const n = k => base.filter(j => k === 'open' ? isOpen(j) : k === 'late' ? isLate(j) : k === 'urgent' ? isOpen(j) && j.priority === 'urgent' : k === 'all' ? true : j.status === k).length;
   const chips = [['open', 'ยังไม่เสร็จ'], ['late', 'เลยกำหนด'], ['urgent', 'ด่วน'], ['doing', 'กำลังทำ'], ['review', 'รอตรวจ/แก้'], ['hold', 'พักไว้'], ['done', 'เสร็จแล้ว'], ['all', 'ทั้งหมด']]
     .map(x => '<button class="chip" data-fstatus="' + x[0] + '" aria-pressed="' + (S.f.status === x[0]) + '">' + ({ open: STI.layers, late: STI.fire, urgent: STI.fire, doing: STI.doing, review: STI.review, hold: STI.hold, done: STI.done, all: STI.all }[x[0]] || '') + x[1] + ' <b>' + n(x[0]) + '</b></button>').join('');
-  const months = {}; S.jobs.forEach(j => { if (finDate(j)) months[finDate(j).slice(0, 7)] = 1; });
+  const months = {}; pool.forEach(j => { if (finDate(j)) months[finDate(j).slice(0, 7)] = 1; });
   const monthSel = S.f.status === 'done' ? '<select class="sel" id="fMonth" aria-label="เดือนที่เสร็จ"><option value="">ทุกเดือน</option>' + Object.keys(months).sort().reverse().map(m => '<option value="' + m + '"' + (S.f.month === m ? ' selected' : '') + '>' + monthLabel(m) + '</option>').join('') + '</select>' : '';
   const rows = listRows();
   const body = rows.length ? rows.map(j => {
@@ -2112,8 +2115,8 @@ function viewList() {
       '<div class="cell c-due"><span class="' + (di.cls === 'late' ? 'tag late' : '') + '">' + esc(di.text) + '</span>' + (j.status !== 'done' && j.due ? '<small>กำหนด ' + fdY(j.due) + '</small>' : '') + '</div>' +
       '<div class="cell c-st">' + stPill(j) + '</div></div>';
   }).join('') : '<div class="empty"><b>ไม่พบงาน</b>ลองเปลี่ยนตัวกรองหรือคำค้น</div>';
-  return topbar('รายการงาน', rows.length + ' รายการ จากทั้งหมด ' + S.jobs.length + ' งาน', '<button class="btn" data-act="csv">' + I.download + '<span>ส่งออก CSV</span></button>') +
-    filterBar(monthSel) + '<div class="chips">' + chips + '</div>' +
+  return topbar('รายการงาน', isLead() ? rows.length + ' รายการ จากทั้งหมด ' + S.jobs.length + ' งาน' : 'งานของ' + esc(S.me) + ' · ' + rows.length + ' รายการ จาก ' + pool.length + ' งาน', '<button class="btn" data-act="csv">' + I.download + '<span>ส่งออก CSV</span></button>') +
+    filterBar(monthSel, !isLead()) + '<div class="chips">' + chips + '</div>' +
     '<div class="list"><div class="lhead"><span>JOB</span><span>ผู้รับผิดชอบ</span><span>เวลาทำงาน</span><span>วันที่รับ</span><span>กำหนดส่ง</span><span>สถานะ</span></div>' + body + '</div>';
 }
 function exportCsv() {
