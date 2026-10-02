@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.8.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -551,16 +551,18 @@ async function showLogin(keepErr) {
 }
 function renderLogin() {
   const L = S.login, b = L.brand || S.settings || defaultSettings(), sel = (L.roster || []).find(u => u.id === L.userId);
-  const dots = '<div class="pin-dots" aria-hidden="true">' + [0, 1, 2, 3, 4, 5].map(i => '<i class="' + (i < L.pin.length ? 'on' : '') + (i >= 4 ? ' opt' : '') + '"></i>').join('') + '</div>';
+  const dots = '<div class="pin-dots' + (L.shake ? ' shake' : '') + '" aria-hidden="true">' + [0, 1, 2, 3, 4, 5].map(i => '<i class="' + (i < L.pin.length ? 'on' : '') + (i === L.pin.length ? ' next' : '') + (i >= 4 ? ' opt' : '') + '"></i>').join('') + '</div>' +
+    '<div class="pin-hint' + (L.err ? ' bad' : '') + '" aria-live="polite">' + (L.err ? esc(L.err) : L.pin.length === 0 ? 'แตะตัวเลขเพื่อใส่ PIN' : L.pin.length < 4 ? 'อีก ' + (4 - L.pin.length) + ' หลัก' : 'พร้อมแล้ว กดเข้าสู่ระบบ') + '</div>';
+  L.shake = false;
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'].map(k => k === 'clear' ? '<button type="button" class="key fn" data-pin="clear">ล้าง</button>'
     : k === 'back' ? '<button type="button" class="key fn" data-pin="back" aria-label="ลบ">⌫</button>' : '<button type="button" class="key" data-pin="' + k + '">' + k + '</button>').join('');
   const pinForm = extra => '<form id="pinForm" class="pin-form">' + (extra || '') + '<input id="pinIn" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password" value="' + esc(L.pin) + '" aria-label="PIN">' + dots +
-    '<div class="keypad">' + keys + '</div><button class="btn primary" type="submit"' + (L.pin.length < 4 ? ' disabled' : '') + '>' + (L.submitting ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ') + '</button></form>';
+    '<div class="keypad">' + keys + '</div><button class="btn primary login-go' + (L.submitting ? ' busy' : '') + (L.pin.length >= 4 ? ' ready' : '') + '" type="submit"' + (L.pin.length < 4 || L.submitting ? ' disabled' : '') + '>' + (L.submitting ? '<span class="spin-dot"></span>กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ') + '</button></form>';
   const c = S.conn || { url: '' };
   let body;
   if (L.busy) body = '<div class="loading" style="min-height:160px"><span class="spinner"></span>กำลังโหลด…</div>';
   else if (L.adminMode) body = '<button type="button" class="back-who" data-act="adminoff">‹ กลับ</button><h2 class="login-h">ผู้ดูแลระบบ</h2>' +
-    pinForm('<div class="f"><label for="adminName">ชื่อผู้ดูแล</label><input id="adminName" value="' + esc(L.adminName || '') + '" autocomplete="username"></div>');
+    pinForm('<div class="f"><label for="adminName">ชื่อผู้ดูแล</label><div class="name-in' + (L.adminName && L.adminName.trim() ? ' has' : '') + '"><span class="ni-ic">' + STI.user + '</span><input id="adminName" value="' + esc(L.adminName || '') + '" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" placeholder="พิมพ์ชื่อ เช่น แอดมิน"><span class="ni-ok" aria-hidden="true">✓</span></div></div>');
   else if (!sel) body = '<h2 class="login-h">เข้าสู่ระบบ</h2><p class="sub">เลือกชื่อของคุณ</p>' +
     ((L.roster || []).length ? '<div class="who-grid">' + L.roster.map(u => '<button type="button" class="who" data-who="' + esc(u.id) + '">' + avUser(u, 'lg') + '<b>' + esc(u.name) + '</b><small>' + esc(u.full || 'ผู้ใช้งาน') + '</small></button>').join('') + '</div>'
       : '<div class="empty" style="padding:20px 0"><b>ยังไม่มีผู้ใช้งาน</b>ผู้ดูแลระบบเพิ่มทีมงานได้ในหน้าตั้งค่า</div>');
@@ -582,7 +584,7 @@ function renderLogin() {
   $('#view').innerHTML = '<div class="login">' + hero + '<section class="lg-side"><div class="login-card">' +
     '<div class="lg-hello"><span class="eyebrow">' + greet + '</span><b>ยินดีต้อนรับสู่ ' + esc(b.appName || 'KiwNgan คิวงาน') + '</b></div>' +
     (mode() === 'demo' ? '<div class="banner"><span><b>โหมดทดลอง</b> ทุกคนใช้ PIN 1234 · ผู้ดูแลระบบเข้าที่ลิงก์ด้านล่าง ชื่อ "แอดมิน"</span></div>' : '') +
-    body + (L.err ? '<div class="err" role="alert">' + esc(L.err) + '</div>' : '') +
+    body + (L.err && !(L.adminMode || sel) ? '<div class="err" role="alert">' + esc(L.err) + '</div>' : '') +
     '<div class="login-foot">' +
       (showConn ? '<div class="f"><label for="cUrl">URL ฐานข้อมูล (Apps Script /exec)</label><input id="cUrl" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" autocomplete="off"></div><div class="top-actions"><button class="btn primary sm" data-act="connect">เชื่อมต่อ</button>' + (mode() === 'sheet' ? '' + (LOCKED() ? '' : '<button class="btn sm" data-act="disconnect">ใช้โหมดทดลอง</button>') + '' : '') + '</div>'
         : '<div class="top-actions" style="justify-content:space-between">' + (!L.adminMode ? '<button type="button" class="btn ghost sm" data-act="adminon">ผู้ดูแลระบบ</button>' : '<span></span>') +
@@ -590,6 +592,26 @@ function renderLogin() {
     '</div></div>' + installBlock() + '<p class="lg-legal">' + esc(b.company || '') + ' · KiwNgan v' + APP_VERSION + '</p></section></div>';
   const focus = L.adminMode && !L.adminName ? $('#adminName') : $('#pinIn');
   if (focus && (!('ontouchstart' in window) || focus.id === 'adminName')) focus.focus();
+}
+// keypad: update in place (no full redraw) so it feels instant and the name field keeps its text
+function pressKey(k, btn) {
+  const L = S.login, an = $('#adminName'); if (an) L.adminName = an.value;
+  const before = L.pin.length;
+  if (k === 'clear') L.pin = ''; else if (k === 'back') L.pin = L.pin.slice(0, -1); else if (L.pin.length < 6) L.pin += k;
+  try { if (navigator.vibrate) navigator.vibrate(k === 'clear' || k === 'back' ? 6 : 12); } catch (e) {}
+  if (btn) { btn.classList.remove('hit'); void btn.offsetWidth; btn.classList.add('hit'); }
+  if (L.err) { L.err = ''; const er = $('.login .err'); if (er) er.remove(); const h = $('.pin-hint'); if (h) h.classList.remove('bad'); }
+  syncPin(L.pin.length > before);
+}
+function syncPin(added) {
+  const L = S.login, n = L.pin.length;
+  document.querySelectorAll('.pin-dots i').forEach((el, i) => {
+    el.classList.toggle('on', i < n); el.classList.toggle('next', i === n && n < 6); el.classList.remove('just');
+    if (added && i === n - 1) { void el.offsetWidth; el.classList.add('just'); }
+  });
+  const pi = $('#pinIn'); if (pi && pi.value !== L.pin) pi.value = L.pin;
+  const sb = $('#pinForm [type=submit]'); if (sb) { sb.disabled = n < 4; sb.classList.toggle('ready', n >= 4); }
+  const hint = $('.pin-hint'); if (hint) hint.textContent = n === 0 ? 'แตะตัวเลขเพื่อใส่ PIN' : n < 4 ? 'อีก ' + (4 - n) + ' หลัก' : 'พร้อมแล้ว กดเข้าสู่ระบบ';
 }
 async function doLogin() {
   const L = S.login; if (L.pin.length < 4 || L.submitting) return;
@@ -604,7 +626,7 @@ async function doLogin() {
     LS.set(tokenKey(), r.token); L.submitting = false; L.pin = '';
     S.loaded = false; await load(false);
     if (S.user) toast('สวัสดี ' + S.user.name);
-  } catch (e) { L.submitting = false; L.err = e.message; L.pin = ''; renderLogin(); }
+  } catch (e) { L.submitting = false; L.err = e.message; L.pin = ''; L.shake = true; try { if (navigator.vibrate) navigator.vibrate([30, 40, 30]); } catch (x) {} renderLogin(); }
 }
 async function logout() {
   try { await api().logout({}); } catch (e) {}
@@ -1346,7 +1368,7 @@ document.addEventListener('click', async e => {
   if (d.fstatus) { S.f.status = d.fstatus; if (d.fstatus !== 'done') S.f.month = ''; return render(); }
   // login screen
   if (d.who !== undefined) { S.login.userId = d.who; S.login.pin = ''; S.login.err = ''; return renderLogin(); }
-  if (d.pin) { const L = S.login; const an = $('#adminName'); if (an) L.adminName = an.value; if (d.pin === 'clear') L.pin = ''; else if (d.pin === 'back') L.pin = L.pin.slice(0, -1); else if (L.pin.length < 6) L.pin += d.pin; L.err = ''; return renderLogin(); }
+  if (d.pin) { pressKey(d.pin, t); return; }
   // user admin
   if (d.themepick) { setTheme(Object.assign({ preset: d.themepick }, d.themepick === 'classic' ? { sidebar: 'plain', header: 'plain' } : getTheme().preset === 'classic' ? { sidebar: 'gradient', header: 'gradient' } : {}, (THEMES.find(x => x.id === d.themepick) || {}).mode ? { mode: THEMES.find(x => x.id === d.themepick).mode } : {})); return render(); }
   if (d.themeset) { setTheme({ [d.themeset]: d.val }); return render(); }
@@ -1404,6 +1426,7 @@ document.addEventListener('click', async e => {
 
 document.addEventListener('submit', e => { if (e.target.id === 'pinForm') { e.preventDefault(); doLogin(); } });
 document.addEventListener('keydown', e => {
+  if (e.target && e.target.id === 'adminName' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); if (S.login.pin.length >= 4) doLogin(); else { const k = $('.keypad'); if (k) { k.classList.remove('nudge'); void k.offsetWidth; k.classList.add('nudge'); } } return; }
   if (e.key === 'Escape' && S.edit) closeEditor();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.card,.row') ) { e.preventDefault(); openEditor(e.target.dataset.open); }
   if (e.key === 'n' && S.screen === 'app' && !S.edit && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openEditor(null); }
@@ -1412,7 +1435,7 @@ $('#scrim').addEventListener('click', closeEditor);
 
 document.addEventListener('input', e => {
   const t = e.target;
-  if (t.id === 'adminName') { S.login.adminName = t.value; return; }
+  if (t.id === 'adminName') { S.login.adminName = t.value; const w = t.closest('.name-in'); if (w) { w.classList.toggle('has', !!t.value.trim()); w.classList.remove('typing'); void w.offsetWidth; w.classList.add('typing'); } return; }
   if (t.id === 'pinIn') { S.login.pin = t.value.replace(/\D/g, '').slice(0, 6); S.login.err = ''; const dots = document.querySelectorAll('.pin-dots i'); dots.forEach((el, i) => el.classList.toggle('on', i < S.login.pin.length)); const sb = document.querySelector('#pinForm [type=submit]'); if (sb) sb.disabled = S.login.pin.length < 4; return; }
   if (t.id === 'q') { S.f.q = t.value; const pos = t.selectionStart; render(); const q = $('#q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if ((t.id === 'thC1' || t.id === 'thC2') && $('#thC1') && $('#thC2')) { // live preview while dragging the picker
