@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.6.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -67,6 +67,7 @@ const S = {
   edit: null, draft: null, draftDirty: false,
   sync: 'idle', syncErr: '', lastSync: 0, loaded: false
 };
+try { const qv = new URLSearchParams(location.search).get('view'); if (qv && VIEWS.some(v => v.id === qv)) S.view = qv; } catch (e) {}
 const mode = () => (S.conn && S.conn.url ? 'sheet' : 'demo');
 const tokenKey = () => 'token:' + (mode() === 'sheet' ? S.conn.url : 'demo');
 
@@ -417,6 +418,36 @@ async function load(silent) {
   applyBrand(); render();
 }
 
+/* ============ install as an app (PWA) ============ */
+const INST = { evt: null, installed: false, help: false };
+try { INST.installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) {}
+const UA = navigator.userAgent || '';
+const IS_IOS = /iphone|ipad|ipod/i.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+const IS_ANDROID = /android/i.test(UA);
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); INST.evt = e; if (S.screen === 'login') renderLogin(); });
+window.addEventListener('appinstalled', () => { INST.installed = true; INST.evt = null; INST.help = false; toast('ติดตั้งแอปเรียบร้อย เปิดได้จากหน้าจอหลักหรือเมนูแอป'); if (S.screen === 'login') renderLogin(); });
+async function installApp() {
+  if (INST.evt) {
+    const e = INST.evt; INST.evt = null;
+    try { await e.prompt(); const c = await e.userChoice; if (c && c.outcome === 'accepted') { INST.installed = true; } } catch (x) {}
+    if (S.screen === 'login') renderLogin(); return;
+  }
+  INST.help = !INST.help; renderLogin();
+}
+function installBlock() {
+  if (INST.installed) return '';
+  const steps = IS_IOS
+    ? ['เปิดหน้านี้ใน <b>Safari</b>', 'แตะปุ่ม <b>แชร์</b> <span class="k">⬆︎</span> ด้านล่างจอ', 'เลือก <b>เพิ่มไปยังหน้าจอโฮม</b> แล้วแตะ <b>เพิ่ม</b>']
+    : IS_ANDROID
+      ? ['เปิดหน้านี้ใน <b>Chrome</b>', 'แตะเมนู <span class="k">⋮</span> มุมขวาบน', 'เลือก <b>ติดตั้งแอป</b> หรือ <b>เพิ่มลงในหน้าจอหลัก</b>']
+      : ['เปิดหน้านี้ใน <b>Chrome</b> หรือ <b>Edge</b>', 'กดไอคอนติดตั้ง <span class="k">⊕</span> ท้ายช่องที่อยู่เว็บ หรือเมนู <span class="k">⋮</span>', 'เลือก <b>ติดตั้ง KiwNgan</b>'];
+  return '<div class="lg-install">' +
+    '<div class="lg-inst-row"><span class="lg-inst-ic">' + I.download + '</span><div><b>ติดตั้งแอปลงเครื่อง</b><small>' + (IS_IOS || IS_ANDROID ? 'มีไอคอนบนหน้าจอโฮม เปิดเต็มจอเหมือนแอปทั่วไป' : 'เปิดเป็นหน้าต่างแอปแยก ไม่ต้องหาในแท็บเบราว์เซอร์') + '</small></div>' +
+      '<button type="button" class="btn primary sm" data-act="install">' + (INST.evt ? 'ติดตั้ง' : INST.help ? 'ปิด' : 'วิธีติดตั้ง') + '</button></div>' +
+    (INST.help && !INST.evt ? '<ol class="lg-steps">' + steps.map(x => '<li>' + x + '</li>').join('') + '</ol>' : '') +
+  '</div>';
+}
+
 /* ============ login ============ */
 async function showLogin(keepErr) {
   S.screen = 'login'; S.user = null; S.me = ''; closeEditor();
@@ -468,7 +499,7 @@ function renderLogin() {
       (showConn ? '<div class="f"><label for="cUrl">URL ฐานข้อมูล (Apps Script /exec)</label><input id="cUrl" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" autocomplete="off"></div><div class="top-actions"><button class="btn primary sm" data-act="connect">เชื่อมต่อ</button>' + (mode() === 'sheet' ? '<button class="btn sm" data-act="disconnect">ใช้โหมดทดลอง</button>' : '') + '</div>'
         : '<div class="top-actions" style="justify-content:space-between">' + (!L.adminMode ? '<button type="button" class="btn ghost sm" data-act="adminon">ผู้ดูแลระบบ</button>' : '<span></span>') +
           (mode() === 'demo' ? '<button type="button" class="btn ghost sm" data-act="showconn">เชื่อมต่อ Google Sheet ของทีม</button>' : '') + '</div>') +
-    '</div></div><p class="lg-legal">' + esc(b.company || '') + ' · KiwNgan v' + APP_VERSION + '</p></section></div>';
+    '</div></div>' + installBlock() + '<p class="lg-legal">' + esc(b.company || '') + ' · KiwNgan v' + APP_VERSION + '</p></section></div>';
   const focus = L.adminMode && !L.adminName ? $('#adminName') : $('#pinIn');
   if (focus && (!('ontouchstart' in window) || focus.id === 'adminName')) focus.focus();
 }
@@ -1235,6 +1266,7 @@ document.addEventListener('click', async e => {
     case 'stop': if (S.edit) readEditor(); return stopTimer(d.log);
     case 'refresh': return load(false).then(() => { if (S.sync === 'ok') toast('อัปเดตข้อมูลล่าสุดแล้ว'); });
     case 'csv': return exportCsv();
+    case 'install': return installApp();
     case 'themereset': LS.del('theme'); applyTheme(); toast('คืนค่าธีมเริ่มต้นแล้ว'); return render();
     case 'print': return printReport();
     case 'connect': return connect();

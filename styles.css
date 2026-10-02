@@ -795,3 +795,12 @@ body.auth .wrap{max-width:none;gap:0}
 @media (max-width:960px){ body.auth .login + *{display:none} }
 .lg-side{position:relative;z-index:1}
 @media (max-width:960px){ .lg-side .who-grid{grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px} .lg-side .who{padding:12px 6px} .lg-side .who .av{width:46px;height:46px;font-size:18px} }
+.lg-install{width:min(440px,100%);background:var(--surface);border-radius:18px;padding:12px 14px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:10px}
+.lg-inst-row{display:flex;align-items:center;gap:12px}
+.lg-inst-row>div{flex:1;min-width:0}
+.lg-inst-row b{display:block;font:600 14.5px var(--f-display)}
+.lg-inst-row small{display:block;color:var(--muted);font-size:12.5px;line-height:1.4}
+.lg-inst-ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--grad);color:#fff;flex:none}
+.lg-inst-ic svg{width:20px;height:20px}
+.lg-steps{margin:0;padding:10px 12px 10px 32px;background:var(--surface-2);border-radius:12px;font-size:13.5px;display:flex;flex-direction:column;gap:5px}
+.lg-steps .k{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 4px;border-radius:6px;background:var(--surface);border:1px solid var(--line);font-size:12px;vertical-align:middle}
