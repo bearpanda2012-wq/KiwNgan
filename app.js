@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.1.2';
+const APP_VERSION = '2.2.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -142,9 +142,20 @@ const tokenKey = () => 'token:' + (mode() === 'sheet' ? S.conn.url : 'demo');
 const P = {
   admin: u => !!u && u.role === 'admin',
   owns: (u, j) => !!u && (u.role === 'admin' || j.assignee === u.name || j.createdBy === u.name),
-  del: (u, j) => !!u && (u.role === 'admin' || j.createdBy === u.name)
+  del: (u, j) => !!u && (u.role === 'admin' || j.createdBy === u.name),
+  lead: u => !!u && (u.role === 'admin' || u.role === 'lead')
 };
 const isAdmin = () => P.admin(S.user);
+const isLead = () => P.lead(S.user);   // หัวหน้างาน/แอดมิน: see everyone's numbers and reports
+const ROLES = { admin: { label: 'ผู้ดูแลระบบ', cls: 'r-admin' }, lead: { label: 'หัวหน้างาน', cls: 'r-lead' }, user: { label: 'พนักงาน', cls: 'r-user' } };
+const ROLE_IC = {
+  admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.6-3.4 8-8 9-4.6-1-8-4.4-8-9V6z"/></svg>',
+  lead: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17h18l-1.6-9.5-4.4 3.8L12 4l-3 7.3-4.4-3.8z"/><rect x="3" y="18.5" width="18" height="2.2" rx="1"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg>'
+};
+const roleOf = u => (u && ROLES[u.role]) ? u.role : 'user';
+const roleChip = (u, small) => { const r = roleOf(u); return '<span class="role-chip ' + ROLES[r].cls + (small ? ' sm' : '') + '" title="' + ROLES[r].label + '">' + ROLE_IC[r] + (small ? '' : '<span>' + ROLES[r].label + '</span>') + '</span>'; };
+const roleOpts = cur => ['user', 'lead', 'admin'].map(r => '<option value="' + r + '"' + ((cur || 'user') === r ? ' selected' : '') + '>' + ROLES[r].label + '</option>').join('');
 const ADMIN_LABEL = 'ผู้ดูแลระบบ';
 const canEdit = j => P.owns(S.user, j);
 
@@ -275,7 +286,7 @@ function seedDemo() {
   const R = mulberry32(20261002), pick = a => a[Math.floor(R() * a.length)];
   const s = defaultSettings();
   s.company = 'บริษัทตัวอย่าง จำกัด';
-  const users = [{ id: 'u0', name: 'แอดมิน', full: '', role: 'admin', color: '#2B2F36', active: true, pin: '1234' }, { id: 'u1', name: 'ต้น', full: 'ธนพล', role: 'user', color: '#0B6B70', active: true, pin: '1234' }, { id: 'u2', name: 'ฝน', full: 'ปภาวรินทร์', role: 'user', color: '#2D5FC4', active: true, pin: '1234' }, { id: 'u3', name: 'บอส', full: 'ณัฐวุฒิ', role: 'user', color: '#B05A2A', active: true, pin: '1234' }];
+  const users = [{ id: 'u0', name: 'แอดมิน', full: '', role: 'admin', color: '#2B2F36', active: true, pin: '1234' }, { id: 'u1', name: 'ต้น', full: 'ธนพล', role: 'user', color: '#0B6B70', active: true, pin: '1234' }, { id: 'u2', name: 'ฝน', full: 'ปภาวรินทร์', role: 'user', color: '#2D5FC4', active: true, pin: '1234' }, { id: 'u3', name: 'บอส', full: 'ณัฐวุฒิ', role: 'lead', color: '#B05A2A', active: true, pin: '1234' }];
   s.sales = ['เอ', 'บี', 'ซี', 'ดี'];
   const titles = ['ฉากกั้นห้อง ลายใบไม้', 'ฟาซาด อาคารสำนักงาน', 'แผงระแนงลายคลื่น', 'ป้ายโลโก้ร้านกาแฟ', 'ผนังโชว์รูมรถยนต์', 'ฝ้าเพดานลายเรขาคณิต', 'ประตูบานเลื่อนลายไทย', 'ผนังคลินิกทันตกรรม', 'ล็อบบี้โรงแรม', 'รั้วบ้านลายฉลุ', 'ผนังห้องประชุม', 'ช่องลมลายดอกพิกุล'];
   const groupsW = ['งาน 2D', 'งาน 2D', 'งาน 2D', 'งาน 3D', 'งาน 3D', 'งาน โครงการ', 'งาน โครงการ', 'งาน 2.5D', 'งาน ตัวอย่าง'];
@@ -459,13 +470,13 @@ const Demo = {
     if (u) {
       if (u.id === me.id && data.role !== 'admin') throw new Error('ลดสิทธิ์ตัวเองไม่ได้ ให้แอดมินคนอื่นทำแทน');
       if (u.id === me.id && data.active === false) throw new Error('ปิดบัญชีตัวเองไม่ได้');
-      if (data.role === 'user' && u.role === 'admin' && d.users.filter(x => x.role === 'admin' && x.active).length <= 1) throw new Error('ต้องมีแอดมินอย่างน้อย 1 คน');
+      if (data.role !== 'admin' && u.role === 'admin' && d.users.filter(x => x.role === 'admin' && x.active).length <= 1) throw new Error('ต้องมีแอดมินอย่างน้อย 1 คน');
       const old = u.name;
-      Object.assign(u, { name: name, full: data.full || '', role: data.role === 'admin' ? 'admin' : 'user', color: data.color || u.color, active: data.active !== false });
+      Object.assign(u, { name: name, full: data.full || '', role: ['admin', 'lead'].indexOf(data.role) >= 0 ? data.role : 'user', color: data.color || u.color, active: data.active !== false });
       if (old !== name) { d.jobs.forEach(j => { ['assignee', 'createdBy', 'updatedBy'].forEach(k => { if (j[k] === old) j[k] = name; }); }); d.logs.forEach(l => { if (l.member === old) l.member = name; }); }
     } else {
       pin = /^\d{4,6}$/.test(String(data.pin || '')) ? String(data.pin) : String(Math.floor(1000 + Math.random() * 9000));
-      u = { id: uid('u_'), name: name, full: data.full || '', role: data.role === 'admin' ? 'admin' : 'user', color: data.color || COLORS[d.users.length % COLORS.length], active: true, pin: pin };
+      u = { id: uid('u_'), name: name, full: data.full || '', role: ['admin', 'lead'].indexOf(data.role) >= 0 ? data.role : 'user', color: data.color || COLORS[d.users.length % COLORS.length], active: true, pin: pin };
       d.users.push(u);
     }
     this.save(d); return { user: this.pub(u), pin: pin };
@@ -602,7 +613,7 @@ function renderLogin() {
   else if (L.adminMode) body = '<button type="button" class="back-who" data-act="adminoff">‹ กลับ</button><h2 class="login-h">ผู้ดูแลระบบ</h2>' +
     pinForm('<div class="f"><label for="adminName">ชื่อผู้ดูแล</label><div class="name-in' + (L.adminName && L.adminName.trim() ? ' has' : '') + '"><span class="ni-ic">' + STI.user + '</span><input id="adminName" value="' + esc(L.adminName || '') + '" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" placeholder="พิมพ์ชื่อ เช่น แอดมิน"><span class="ni-ok" aria-hidden="true">✓</span></div></div>');
   else if (!sel) body = '<h2 class="login-h">เข้าสู่ระบบ</h2><p class="sub">เลือกชื่อของคุณ</p>' +
-    ((L.roster || []).length ? '<div class="who-grid">' + L.roster.map(u => '<button type="button" class="who" data-who="' + esc(u.id) + '">' + avUser(u, 'lg') + '<b>' + esc(u.name) + '</b><small>' + esc(u.full || 'ผู้ใช้งาน') + '</small></button>').join('') + '</div>'
+    ((L.roster || []).length ? '<div class="who-grid">' + L.roster.map(u => '<button type="button" class="who" data-who="' + esc(u.id) + '">' + '<span class="t-av">' + avUser(u, 'lg') + '<i class="av-role ' + ROLES[roleOf(u)].cls + '">' + ROLE_IC[roleOf(u)] + '</i></span><b>' + esc(u.name) + '</b><small>' + ROLES[roleOf(u)].label + '</small></button>').join('') + '</div>'
       : '<div class="empty" style="padding:20px 0"><b>ยังไม่มีผู้ใช้งาน</b>ผู้ดูแลระบบเพิ่มทีมงานได้ในหน้าตั้งค่า</div>');
   else body = '<button type="button" class="back-who" data-who="">‹ เปลี่ยนชื่อ</button><div class="pin-head">' + avUser(sel, 'lg') + '<div><b>' + esc(sel.name) + '</b><small>ใส่ PIN 4–6 หลัก</small></div></div>' + pinForm();
 
@@ -1217,7 +1228,7 @@ function renderShell() {
   $('#tabbar').innerHTML = navHtml(true);
   const connCls = mode() === 'demo' ? '' : (S.sync === 'err' ? 'err' : 'ok');
   const connTxt = mode() === 'demo' ? 'โหมดทดลอง (เก็บในเครื่องนี้)' : (S.sync === 'err' ? 'เชื่อมต่อไม่ได้' : S.sync === 'busy' ? 'กำลังซิงก์…' : (isAdmin() ? 'เชื่อมต่อ Google Sheet' : 'ซิงก์ข้อมูลแล้ว'));
-  $('#railFoot').innerHTML = '<button class="me-chip" data-go="settings" data-sec="me">' + av(S.me) + '<span><small>' + (isAdmin() ? 'แอดมิน' : 'ผู้ใช้งาน') + '</small><b>' + esc(S.me) + '</b></span></button>' +
+  $('#railFoot').innerHTML = '<button class="me-chip" data-go="settings" data-sec="me">' + av(S.me) + '<span><small>' + ROLES[roleOf(S.user)].label + '</small><b>' + esc(S.me) + '</b></span>' + roleChip(S.user, true) + '</button>' +
     '<div class="conn ' + connCls + '"><i></i>' + connTxt + '</div>';
   renderTimerbar();
 }
@@ -1568,13 +1579,14 @@ function viewTeam() {
     const unr = M.list.filter(m => !m.read && m.from === x.name && !m.fromAdmin).length, canChat = x.name !== S.me;
     const helpBox = hp.length ? '<div class="t-help' + (hOpen.length ? '' : ' taken') + '"><span class="th-ic">' + MSG_IC.sos + '</span><div class="th-b"><b>' + (hOpen.length ? 'ขอความช่วยเหลือ' : (hp[0].helper ? esc(hp[0].helper) + ' กำลังช่วย' : 'มีคนรับช่วยแล้ว')) + '</b><p>' + esc(hp[hp.length - 1].text) + '</p></div>' +
       '<div class="th-act">' + (hOpen.length && canChat ? '<button class="btn sm primary" data-helptake="' + esc(hOpen[hOpen.length - 1].id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + '<button class="btn sm" data-ch="' + esc(hp[hp.length - 1].to === 'team' ? 'team' : chanOf(hp[hp.length - 1])) + '">ดูข้อความ</button></div></div>' : '';
-    return '<div class="tcard' + (hOpen.length ? ' needs-help' : '') + '" style="--c:' + esc(x.color || '#5B6B7A') + '"><div class="tcard-h"><span class="t-av">' + av(x.name, 'lg') + (hOpen.length ? '<i class="t-sos">' + MSG_IC.sos + '</i>' : unr ? '<i class="t-unread">' + unr + '</i>' : '') + '</span><div><b>' + esc(x.name) + (x.name === S.me ? ' <span class="tag rev">คุณ</span>' : '') + '</b><small>' + esc(x.full || '') + '</small></div></div>' +
+    const full = isLead() || x.name === S.me;
+    return '<div class="tcard' + (hOpen.length ? ' needs-help' : '') + '" style="--c:' + esc(x.color || '#5B6B7A') + '"><div class="tcard-h"><span class="t-av">' + av(x.name, 'lg') + '<i class="av-role tl ' + ROLES[roleOf(x)].cls + '">' + ROLE_IC[roleOf(x)] + '</i>' + (hOpen.length ? '<i class="t-sos">' + MSG_IC.sos + '</i>' : unr ? '<i class="t-unread">' + unr + '</i>' : '') + '</span><div><b>' + esc(x.name) + (x.name === S.me ? ' <span class="tag rev">คุณ</span>' : '') + '</b><small>' + esc(x.full || '') + '</small>' + roleChip(x) + '</div></div>' +
       (rj ? '<button class="now-on" data-open="' + esc(rj.id) + '" style="border:0;text-align:left"><span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>กำลังทำ <b>' + esc(rj.code) + '</b></button>' : '') +
-      '<div class="tstats"><div><span>งานค้าง</span><b>' + open.length + '</b></div><div><span>เลยกำหนด</span><b style="color:' + (late.length ? 'var(--late)' : 'inherit') + '">' + late.length + '</b></div><div><span>เสร็จเดือนนี้</span><b>' + doneM.length + '</b></div></div>' +
-      '<div><div class="panel-h" style="margin-bottom:6px"><span class="sub">ตรงเวลา ' + (doneM.length ? pct + '%' : '–') + '</span><span class="sub">เวลาทำ ' + fdur(minsM) + ' · ยากเฉลี่ย ' + lv + '</span></div><div class="meter"><i style="width:' + pct + '%"></i></div></div>' +
+      (full ? '<div class="tstats"><div><span>งานค้าง</span><b>' + open.length + '</b></div><div><span>เลยกำหนด</span><b style="color:' + (late.length ? 'var(--late)' : 'inherit') + '">' + late.length + '</b></div><div><span>เสร็จเดือนนี้</span><b>' + doneM.length + '</b></div></div>' +
+      '<div><div class="panel-h" style="margin-bottom:6px"><span class="sub">ตรงเวลา ' + (doneM.length ? pct + '%' : '–') + '</span><span class="sub">เวลาทำ ' + fdur(minsM) + ' · ยากเฉลี่ย ' + lv + '</span></div><div class="meter"><i style="width:' + pct + '%"></i></div></div>' : '') +
       helpBox + '<div class="t-btns"><button class="btn" data-memberjobs="' + esc(x.name) + '">ดูงานของ' + esc(x.name) + '</button>' + (canChat ? '<button class="btn t-chat' + (unr ? ' has' : '') + '" data-ch="u:' + esc(x.name) + '" title="ส่งข้อความถึง ' + esc(x.name) + '">' + MSG_IC.chat + (unr ? '<b>' + unr + '</b>' : '') + '</button>' : '<button class="btn t-sosbtn" data-act="askhelp" data-job="" title="ขอความช่วยเหลือจากทีมและ' + ADMIN_LABEL + '">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') + '</div></div>';
   }).join('');
-  return topbar('ทีมงาน', 'ภาระงานและผลงานรายคน เดือน' + monthLabel(m)) + '<div class="teams">' + cards + '</div>';
+  return topbar('ทีมงาน', isLead() ? 'ภาระงานและผลงานรายคน เดือน' + monthLabel(m) : 'คุยกับเพื่อนร่วมทีม และดูผลงานของคุณ เดือน' + monthLabel(m)) + '<div class="teams">' + cards + '</div>';
 }
 
 /* ============ render: report (printable) ============ */
@@ -1607,7 +1619,7 @@ const inR = (iso, r) => !!iso && iso >= r.from && iso <= r.to;
 
 function reportData() {
   const r = reportState();
-  if (!isAdmin()) r.member = S.me; // users only ever report on their own work
+  if (!isLead()) r.member = S.me; // staff only report on their own work; leads and admins see everyone
   const who = j => j.assignee || '';
   const base = S.jobs.filter(j => (r.member === 'all' || (r.member === '__none' ? !j.assignee : j.assignee === r.member)) && (r.group === 'all' || j.group === r.group));
   const recv = j => inR(j.received, r), fin = j => j.status === 'done' && inR(finDate(j), r);
@@ -1644,13 +1656,13 @@ function viewReport() {
     '<div class="rep-grid">' +
       '<div class="f"><label for="rFrom">ตั้งแต่วันที่</label><input type="date" id="rFrom" value="' + esc(r.from) + '"></div>' +
       '<div class="f"><label for="rTo">ถึงวันที่</label><input type="date" id="rTo" value="' + esc(r.to) + '"></div>' +
-      (isAdmin() ? '<div class="f"><label for="rMember">ผู้รับผิดชอบ</label><select id="rMember">' + opt('all', r.member, 'ทุกคน') + ms.map(m => opt(m.name, r.member, m.name)).join('') + opt('__none', r.member, 'ยังไม่มอบหมาย') + '</select></div>'
+      (isLead() ? '<div class="f"><label for="rMember">ผู้รับผิดชอบ</label><select id="rMember">' + opt('all', r.member, 'ทุกคน') + ms.map(m => opt(m.name, r.member, m.name)).join('') + opt('__none', r.member, 'ยังไม่มอบหมาย') + '</select></div>'
         : '<div class="f"><label>ผู้รับผิดชอบ</label><div class="rme">' + av(S.me) + '<b>' + esc(S.me) + '</b><small>งานของฉัน</small></div></div>') +
       '<div class="f"><label for="rGroup">กลุ่มงาน</label><select id="rGroup">' + opt('all', r.group, 'ทุกกลุ่มงาน') + (s.groups || []).map(g => opt(g, r.group, g)).join('') + '</select></div>' +
       '<div class="f"><label for="rScope">รายการงานที่แสดง</label><select id="rScope">' + R_SCOPES.map(x => opt(x[0], r.scope, x[1])).join('') + '</select></div>' +
       '<div class="f"><label for="rOrient">หน้ากระดาษ A4</label><select id="rOrient">' + opt('portrait', r.orient, 'แนวตั้ง') + opt('landscape', r.orient, 'แนวนอน') + '</select></div>' +
     '</div>' +
-    '<div class="rep-secs"><span class="sub">หัวข้อที่จะพิมพ์</span>' + R_SECTIONS.filter(x => !x[2] || isAdmin()).map(x => '<label class="toggle sm"><input type="checkbox" data-rsec="' + x[0] + '"' + (r.sec[x[0]] ? ' checked' : '') + '>' + x[1] + '</label>').join('') + '</div></div>';
+    '<div class="rep-secs"><span class="sub">หัวข้อที่จะพิมพ์</span>' + R_SECTIONS.filter(x => !x[2] || isLead()).map(x => '<label class="toggle sm"><input type="checkbox" data-rsec="' + x[0] + '"' + (r.sec[x[0]] ? ' checked' : '') + '>' + x[1] + '</label>').join('') + '</div></div>';
 
   const pctTxt = v => v == null ? '–' : v + '%';
   const kpi = r.sec.kpi ? '<section class="rsec"><h3>สรุปตัวเลข</h3><div class="rkpis">' +
@@ -1660,7 +1672,7 @@ function viewReport() {
 
   const th = cols => '<thead><tr>' + cols.map(c => '<th' + (c[1] ? ' class="' + c[1] + '"' : '') + '>' + c[0] + '</th>').join('') + '</tr></thead>';
   const sumRow = (label, x, extra) => '<tr class="tot"><td>' + label + '</td><td class="n">' + x.recv + '</td><td class="n">' + x.done + '</td><td class="n">' + x.ok + '</td><td class="n">' + x.late + '</td><td class="n">' + pctTxt(x.pct) + '</td><td class="n">' + x.open + '</td><td class="n">' + x.overdue + '</td>' + extra + '</tr>';
-  const showPeople = r.sec.people && isAdmin();
+  const showPeople = r.sec.people && isLead();
   const people = showPeople ? '<section class="rsec"><h3>สรุปรายคน</h3>' + (D.people.length ? '<div class="rtable-wrap"><table class="rtable">' +
     th([['ผู้รับผิดชอบ'], ['รับเข้า', 'n'], ['เสร็จ', 'n'], ['ตรงเวลา', 'n'], ['ช้า', 'n'], ['% ตรงเวลา', 'n'], ['ค้างอยู่', 'n'], ['เลยกำหนด', 'n'], ['เวลาทำงาน', 'n']]) + '<tbody>' +
     D.people.map(p => '<tr><td><span class="rwho">' + (p.name ? av(p.name) : '') + esc(p.name || 'ยังไม่มอบหมาย') + '</span></td><td class="n">' + p.recv + '</td><td class="n">' + p.done + '</td><td class="n">' + p.ok + '</td><td class="n">' + p.late + '</td><td class="n">' + pctTxt(p.pct) + '</td><td class="n">' + p.open + '</td><td class="n' + (p.overdue ? ' bad' : '') + '">' + p.overdue + '</td><td class="n">' + (p.mins ? fdur(p.mins) : '–') + '</td></tr>').join('') +
@@ -1691,7 +1703,7 @@ function viewReport() {
     (kpi + people + groups + jobs + sign || '<p class="rnone">เลือกหัวข้อที่จะพิมพ์อย่างน้อย 1 หัวข้อ</p>') +
     '<footer class="rfoot">' + esc(s.company) + ' · ' + esc(s.appName) + '</footer></article>';
 
-  return topbar('สรุปรายงาน', isAdmin() ? 'เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF' : 'สรุปงานของคุณ เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF', '<button class="btn primary" data-act="print">' + I.print + '<span>พิมพ์รายงาน</span></button>') + controls + paper;
+  return topbar('สรุปรายงาน', isLead() ? 'เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF' : 'สรุปงานของคุณ เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF', '<button class="btn primary" data-act="print">' + I.print + '<span>พิมพ์รายงาน</span></button>') + controls + paper;
 }
 function setPageOrient(o) {
   let el = document.getElementById('pageStyle');
@@ -1715,7 +1727,7 @@ function viewSettings() {
     '<div class="settings"><nav class="snav">' + nav.map(n => '<a href="#s-' + n[0] + '">' + n[1] + '</a>').join('') + '</nav><div class="sbody">';
 
   h += '<section class="panel sec" id="s-me"><div class="panel-h"><h2>บัญชีของฉัน</h2><button class="btn sm" data-act="logout">ออกจากระบบ</button></div>' +
-    '<div class="tcard-h">' + avUser(S.user, 'xl') + '<div><b>' + esc(S.me) + '</b><small>' + ((S.user && S.user.full) ? esc(S.user.full) + ' · ' : '') + (admin ? 'แอดมิน' : 'ผู้ใช้งาน') + '</small>' +
+    '<div class="tcard-h">' + avUser(S.user, 'xl') + '<div><b>' + esc(S.me) + '</b><small>' + ((S.user && S.user.full) ? esc(S.user.full) + ' · ' : '') + '</small>' + roleChip(S.user) +
       '<div class="top-actions" style="margin-top:8px"><label class="btn sm">' + (S.user && S.user.photo ? 'เปลี่ยนรูป' : 'ใส่รูปโปรไฟล์') + '<input type="file" accept="image/*" data-photofor="' + esc(S.user ? S.user.id : '') + '" hidden></label>' +
       (S.user && S.user.photo ? '<button class="btn sm ghost" data-rmphoto="' + esc(S.user.id) + '">ลบรูป</button>' : '') + '</div></div></div>' +
     '<p class="help">' + (admin ? 'แก้ไขและลบได้ทุกงาน มอบหมายงาน และจัดการผู้ใช้' : 'ลงงานใหม่ แก้ไขและจับเวลางานของตัวเองได้ งานของคนอื่นดูได้อย่างเดียว') + '</p>' +
@@ -1738,7 +1750,7 @@ function viewSettings() {
       (u.photo ? '<button class="ph-x" data-rmphoto="' + esc(u.id) + '" aria-label="ลบรูปของ ' + esc(u.name) + '">×</button>' : '') + '</div>' +
       '<input type="color" value="' + esc(u.color || '#5B6B7A') + '" data-u="color" aria-label="สี">' +
       '<input value="' + esc(u.name) + '" data-u="name" aria-label="ชื่อเล่น" placeholder="ชื่อเล่น"><input class="opt" value="' + esc(u.full || '') + '" data-u="full" aria-label="ชื่อจริง" placeholder="ชื่อจริง">' +
-      '<select data-u="role" aria-label="สิทธิ์"><option value="user"' + (u.role !== 'admin' ? ' selected' : '') + '>ผู้ใช้งาน</option><option value="admin"' + (u.role === 'admin' ? ' selected' : '') + '>แอดมิน</option></select>' +
+      '<select data-u="role" aria-label="ตำแหน่ง">' + roleOpts(u.role) + '</select>' +
       '<label class="toggle sm"><input type="checkbox" data-u="active"' + (u.active ? ' checked' : '') + '>ใช้งาน</label>' +
       '<div class="urow-act"><button class="btn sm" data-saveuser="' + esc(u.id) + '">บันทึก</button><button class="btn sm ghost" data-pinedit="' + esc(u.id) + '">' + STI.key + 'PIN</button></div>' +
       (S.pinEdit === u.id ? '<div class="pin-edit"><span class="pe-ic">' + STI.key + '</span><div class="pe-b"><b>เปลี่ยน PIN ของ ' + esc(u.name) + '</b><small>ระบบเก็บ PIN แบบเข้ารหัส จึงดู PIN เดิมไม่ได้ ตั้งใหม่ได้เลย</small></div>' +
@@ -1748,7 +1760,7 @@ function viewSettings() {
       '<p class="help"><b>แอดมิน</b> แก้ไขได้ทั้งหมด · <b>ผู้ใช้งาน</b> ลงงานและแก้ไขงานของตัวเองได้ ปิด "ใช้งาน" เพื่อระงับบัญชีโดยไม่ลบประวัติงาน</p>' +
       '<div class="ulist">' + rows + '</div>' +
       '<div class="uadd"><b>เพิ่มผู้ใช้</b><span class="sub">ใส่รูปได้หลังเพิ่มแล้ว โดยกดที่วงกลมหน้าชื่อ</span><div class="urow"><input type="color" id="nuColor" value="' + COLORS[S.users.length % COLORS.length] + '" aria-label="สี"><input id="nuName" placeholder="ชื่อเล่น" aria-label="ชื่อเล่น"><input id="nuFull" class="opt" placeholder="ชื่อจริง" aria-label="ชื่อจริง">' +
-      '<select id="nuRole" aria-label="สิทธิ์"><option value="user">ผู้ใช้งาน</option><option value="admin">แอดมิน</option></select><input id="nuPin" inputmode="numeric" maxlength="6" placeholder="PIN (ว่าง = สุ่ม)" aria-label="PIN เริ่มต้น">' +
+      '<select id="nuRole" aria-label="ตำแหน่ง">' + roleOpts('user') + '</select><input id="nuPin" inputmode="numeric" maxlength="6" placeholder="PIN (ว่าง = สุ่ม)" aria-label="PIN เริ่มต้น">' +
       '<div class="urow-act"><button class="btn sm primary" data-act="adduser">' + I.plus + 'เพิ่ม</button></div>' +
       (S.pinNote && S.pinNote.userId === 'new' ? '<div class="pin-note">เพิ่ม ' + esc(S.pinNote.name) + ' แล้ว PIN: <b class="mono">' + esc(S.pinNote.pin) + '</b></div>' : '') + '</div></div></section>';
 

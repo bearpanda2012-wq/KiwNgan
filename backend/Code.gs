@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.5.2';
+const VERSION = '1.6.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -166,6 +166,7 @@ function dropSessionsOf_(uid) {
 
 function admin_(u) { if (u.role !== 'admin') throw new Error('เฉพาะแอดมินเท่านั้น'); }
 const isAdmin_ = u => u.role === 'admin';
+const ROLE_ = r => r === 'admin' || r === 'lead' ? r : 'user'; // admin = ผู้ดูแลระบบ, lead = หัวหน้างาน, user = พนักงาน
 const ownsJob_ = (u, j) => isAdmin_(u) || j.assignee === u.name || j.createdBy === u.name;
 
 /* ซ่อนชื่อแอดมินจากผู้ใช้งานทั่วไป */
@@ -340,8 +341,8 @@ function saveUser_(data, admin) {
     const oldName = u.name;
     if (u.id === admin.id && (data.role && data.role !== 'admin')) throw new Error('ลดสิทธิ์ตัวเองไม่ได้ ให้แอดมินคนอื่นทำแทน');
     if (u.id === admin.id && data.active === false) throw new Error('ปิดบัญชีตัวเองไม่ได้');
-    if (data.role === 'user' && u.role === 'admin' && users.filter(x => x.role === 'admin' && x.active).length <= 1) throw new Error('ต้องมีแอดมินอย่างน้อย 1 คน');
-    Object.assign(u, { name: name, full: String(data.full || ''), role: data.role === 'admin' ? 'admin' : 'user', color: data.color || u.color, active: data.active !== false });
+    if (data.role !== 'admin' && u.role === 'admin' && users.filter(x => x.role === 'admin' && x.active).length <= 1) throw new Error('ต้องมีแอดมินอย่างน้อย 1 คน');
+    Object.assign(u, { name: name, full: String(data.full || ''), role: ROLE_(data.role), color: data.color || u.color, active: data.active !== false });
     writeRow_('Users', u, row);
     if (!u.active) dropSessionsOf_(u.id);
     if (oldName !== name) renameMember_(oldName, name);
@@ -349,7 +350,7 @@ function saveUser_(data, admin) {
   } else {
     pin = validPin_(data.pin) ? String(data.pin) : randomPin_();
     const salt = Utilities.getUuid();
-    u = { id: uid_('u_'), name: name, full: String(data.full || ''), role: data.role === 'admin' ? 'admin' : 'user',
+    u = { id: uid_('u_'), name: name, full: String(data.full || ''), role: ROLE_(data.role),
           color: data.color || COLORS[users.length % COLORS.length], active: true, pinHash: hash_(salt, pin), salt: salt, createdAt: nowIso_() };
     writeRow_('Users', u, -1);
     log_('', admin.name, 'user', 'เพิ่มผู้ใช้ ' + name);

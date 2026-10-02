@@ -1538,3 +1538,20 @@ body.auth .msg-fab{display:none}
 .mp-confirm svg{width:16px;height:16px}
 .mp-confirm span{display:block;line-height:1.5}
 .mp-confirm span svg{display:inline;vertical-align:-3px;margin-right:4px}
+
+/* v2.2 roles */
+.role-chip{display:inline-flex;align-items:center;gap:4px;font:700 11.5px var(--f-body);padding:2px 9px 2px 6px;border-radius:999px;color:var(--rc);background:color-mix(in oklab,var(--rc) 13%,var(--surface));vertical-align:middle;white-space:nowrap}
+.role-chip svg{width:13px;height:13px}
+.role-chip.sm{padding:4px;margin-left:auto}
+.r-admin{--rc:var(--review)}.r-lead{--rc:#C27A0A}.r-user{--rc:var(--doing)}
+.r-lead svg{filter:drop-shadow(0 1px 1px rgba(194,122,10,.35))}
+.role-chip.r-lead svg{animation:crown 3s ease-in-out infinite}
+@keyframes crown{0%,80%,100%{transform:rotate(0)}85%{transform:rotate(-12deg)}90%{transform:rotate(10deg)}95%{transform:rotate(-5deg)}}
+.tcard-h small+.role-chip,.tcard-h .role-chip{margin-top:4px}
+.tcard-h>div{display:flex;flex-direction:column;align-items:flex-start}
+.av-role{position:absolute;top:-4px;left:-4px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:#fff;background:var(--rc);box-shadow:0 0 0 2.5px var(--surface);z-index:1}
+.av-role svg{width:13px;height:13px}
+.who .t-av{position:relative;display:inline-block}
+.me-chip .role-chip.sm{background:rgba(255,255,255,.2);color:#fff}
+[data-sidebar="plain"] .me-chip .role-chip.sm{background:color-mix(in oklab,var(--rc) 13%,var(--surface));color:var(--rc)}
+.urow select[data-u="role"]{font-weight:600}
