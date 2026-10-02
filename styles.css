@@ -1332,3 +1332,56 @@ body.auth .msg-fab{display:none}
 @keyframes ntfBar{from{width:100%}to{width:0}}
 #sheetFoot .btn svg{width:17px;height:17px}
 @media print{ .msg-fab,.msg-panel,.ntf-stack{display:none !important} }
+
+/* ---------- v2.0.1 chat heads + team help banners ---------- */
+.chat-heads{position:fixed;right:30px;bottom:96px;z-index:41;display:flex;flex-direction:column-reverse;align-items:center;gap:10px;pointer-events:none;transition:opacity .25s,transform .25s}
+.chat-heads.hide{opacity:0;transform:translateX(30px)}
+.ch-head,.ch-more{pointer-events:auto;position:relative;width:48px;height:48px;padding:0;border:0;border-radius:50%;background:none;cursor:pointer;animation:headFloat 3.6s ease-in-out infinite;animation-delay:calc(var(--i,0) * -.7s)}
+.ch-head .av{width:48px;height:48px;font-size:18px;box-shadow:0 0 0 3px var(--surface),0 10px 22px -8px rgba(0,0,0,.45);transition:transform .25s cubic-bezier(.3,1.6,.5,1)}
+.ch-head:hover .av{transform:scale(1.1)}
+.ch-adm{background:var(--review);color:#fff}.ch-adm svg{width:24px;height:24px}
+.ch-head.help .av{box-shadow:0 0 0 3px var(--urgent),0 10px 22px -8px var(--urgent)}
+.ch-head.help::before{content:"";position:absolute;inset:-5px;border-radius:50%;border:3px solid var(--urgent);animation:ringOut 1.5s ease-out infinite;pointer-events:none}
+.ch-head.enter{animation:headIn .6s cubic-bezier(.3,1.6,.5,1) both}
+.ch-head.leave{animation:headOut .3s ease-in forwards}
+.ch-head.bump .av{animation:bump .6s cubic-bezier(.3,1.8,.5,1)}
+@keyframes headIn{0%{opacity:0;transform:translateX(60px) scale(.3)}100%{opacity:1;transform:none}}
+@keyframes headOut{to{opacity:0;transform:scale(.3)}}
+@keyframes headFloat{0%,100%{translate:0 0}50%{translate:0 -4px}}
+@keyframes bump{0%{transform:scale(1)}30%{transform:scale(1.25) rotate(-8deg)}60%{transform:scale(.95) rotate(5deg)}100%{transform:scale(1)}}
+.hd-n{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#FF4D3D;color:#fff;font:700 11px/20px var(--f-display);box-shadow:0 0 0 2px var(--surface);animation:badge 2s ease-in-out infinite}
+.hd-sos{position:absolute;bottom:-4px;right:-4px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--urgent);color:#fff;box-shadow:0 0 0 2px var(--surface)}
+.hd-sos svg{width:14px;height:14px;animation:spinSlow 3s linear infinite}
+.hd-tip{position:absolute;right:60px;top:50%;translate:0 -50%;width:max-content;max-width:240px;padding:8px 12px;border-radius:14px 14px 4px 14px;background:var(--surface);color:var(--ink);font-size:13px;line-height:1.4;text-align:left;box-shadow:0 14px 34px -12px rgba(0,0,0,.4),0 0 0 1px var(--line);opacity:0;transform:translateX(10px) scale(.92);transform-origin:right center;transition:opacity .2s,transform .25s cubic-bezier(.3,1.5,.5,1);pointer-events:none;white-space:normal}
+.hd-tip b{display:block;font:700 12.5px var(--f-display);color:var(--brand)}
+.ch-head.help .hd-tip b{color:var(--urgent)}
+.ch-head:hover .hd-tip,.ch-head.peek .hd-tip{opacity:1;transform:none}
+.ch-more{display:grid;place-items:center;background:var(--surface);color:var(--ink);font:700 13px var(--f-display);box-shadow:0 8px 18px -8px rgba(0,0,0,.4),0 0 0 1px var(--line);width:40px;height:40px}
+@media (max-width:960px){ .chat-heads{right:20px;bottom:calc(214px + env(safe-area-inset-bottom,0px));gap:8px} .ch-head,.ch-head .av{width:44px;height:44px} .hd-tip{max-width:200px} }
+
+.nav .count.sos,.tabbar .count.sos{background:var(--urgent);animation:badge 1.6s ease-in-out infinite}
+.t-av{position:relative;display:inline-block}
+.t-sos,.t-unread{position:absolute;right:-4px;bottom:-4px;min-width:22px;height:22px;border-radius:999px;display:grid;place-items:center;color:#fff;font:700 11px var(--f-display);box-shadow:0 0 0 3px var(--surface)}
+.t-sos{background:var(--urgent);animation:sosPulse 1.6s ease-out infinite}
+.t-sos svg{width:14px;height:14px;animation:spinSlow 3s linear infinite}
+.t-unread{background:#FF4D3D;padding:0 5px;animation:badge 2s ease-in-out infinite}
+.tcard.needs-help{box-shadow:0 0 0 2px color-mix(in oklab,var(--urgent) 55%,transparent),var(--shadow)}
+.tcard.needs-help::before{background:linear-gradient(90deg,var(--urgent),#FFB347,var(--urgent));background-size:200% 100%;animation:heroShift 3s linear infinite}
+.t-help{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:start;padding:10px 12px;border-radius:14px;background:linear-gradient(135deg,var(--urgent-soft),var(--surface));border:1px solid color-mix(in oklab,var(--urgent) 30%,transparent);animation:riseIn .4s ease-out}
+.t-help.taken{background:linear-gradient(135deg,var(--doing-soft),var(--surface));border-color:color-mix(in oklab,var(--doing) 30%,transparent)}
+.th-ic{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#fff;background:var(--urgent);animation:sosPulse 1.6s ease-out infinite}
+.t-help.taken .th-ic{background:var(--doing);animation:none}
+.th-ic svg{width:18px;height:18px;animation:spinSlow 4s linear infinite}
+.th-b b{display:block;font:700 13.5px var(--f-display);color:var(--urgent)}
+.t-help.taken .th-b b{color:var(--doing)}
+.th-b p{margin:2px 0 0;font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.th-act{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+.th-act .btn svg{width:15px;height:15px}
+.t-btns{display:flex;gap:8px}
+.t-btns .btn:first-child{flex:1}
+.t-chat{position:relative;width:46px;padding:0}
+.t-chat svg{width:20px;height:20px;color:var(--brand)}
+.t-chat b{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#FF4D3D;color:#fff;font-size:11px;line-height:18px}
+.t-chat.has svg{animation:wiggle 2.8s ease-in-out infinite}
+@media print{ .chat-heads{display:none !important} }
+@media (max-width:960px){ .chat-heads .ch-head:nth-of-type(n+4){display:none} }

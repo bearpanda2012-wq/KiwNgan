@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.0.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -976,9 +976,11 @@ async function pollMessages(first) {
     M.list.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
     if (r.serverTime) M.since = r.serverTime;
     M.loaded = true;
+    const sig = M.list.map(m => m.id + (m.read ? 1 : 0) + m.status).join('|');
     fresh.forEach(notifyMsg);
     if (M.open) { renderMsgPanel(); markChanRead(M.ch); }
-    renderMsgFab();
+    if (sig !== M.sig) { M.sig = sig; if (!first && !S.edit) render(); else { renderMsgFab(); renderShell(); } } else renderMsgFab();
+    fresh.forEach(m => peekHead(m));
   } catch (e) { /* offline: try again next tick */ }
 }
 function startMsgPolling() {
@@ -1006,16 +1008,59 @@ function renderMsgFab() {
   const n = unreadAll(), h = openHelps().length;
   b.innerHTML = MSG_IC.chat + (n ? '<span class="mf-n">' + (n > 99 ? '99+' : n) + '</span>' : '') + (h ? '<span class="mf-sos" title="มีคนขอความช่วยเหลือ">' + MSG_IC.sos + '</span>' : '');
   b.classList.toggle('has', n > 0); b.classList.toggle('sos', h > 0);
+  renderChatHeads();
+}
+// floating "chat heads": who wrote to me / who is asking for help
+function headsData() {
+  const by = {};
+  M.list.forEach(m => {
+    const mine = (m.from === S.me && !m.fromAdmin) || (isAdmin() && m.from === S.me);
+    if (mine) return;
+    const help = m.kind === 'help' && m.status === 'open', unread = !m.read;
+    if (!help && !unread) return;
+    const key = m.fromAdmin && !isAdmin() ? '__admin' : m.from;
+    const h = by[key] || (by[key] = { key: key, name: m.fromAdmin && !isAdmin() ? ADMIN_LABEL : m.from, admin: m.fromAdmin && !isAdmin(), n: 0, help: false, last: m });
+    if (unread) h.n++; if (help) h.help = true;
+    if (String(m.ts) >= String(h.last.ts)) h.last = m;
+  });
+  return Object.values(by).sort((a, b) => (b.help - a.help) || String(b.last.ts).localeCompare(String(a.last.ts)));
+}
+function renderChatHeads() {
+  let w = $('#chatHeads');
+  if (S.screen !== 'app' || !S.user || M.open) { if (w) w.classList.add('hide'); if (S.screen !== 'app' && w) w.remove(); return; }
+  if (!w) { w = document.createElement('div'); w.id = 'chatHeads'; w.className = 'chat-heads'; document.body.appendChild(w); }
+  w.classList.remove('hide');
+  const hs = headsData(), show = hs.slice(0, 4), have = {};
+  w.querySelectorAll('.ch-head').forEach(el => { have[el.dataset.key] = el; });
+  const keep = {};
+  show.forEach((h, i) => {
+    keep[h.key] = 1;
+    const u = memberBy(h.name), inner = (h.admin ? '<span class="av ch-adm">' + MSG_IC.shield + '</span>' : avUser(u, '', h.name)) +
+      (h.help ? '<i class="hd-sos">' + MSG_IC.sos + '</i>' : '') + (h.n ? '<b class="hd-n">' + h.n + '</b>' : '') +
+      '<span class="hd-tip"><b>' + esc(h.name) + (h.help ? ' · ขอความช่วยเหลือ' : '') + '</b>' + esc(String(h.last.text).slice(0, 80)) + '</span>';
+    let el = have[h.key];
+    if (!el) { el = document.createElement('button'); el.className = 'ch-head enter'; el.dataset.key = h.key; setTimeout(() => el.classList.remove('enter'), 700); }
+    el.dataset.head = h.last.id; el.classList.toggle('help', h.help); el.setAttribute('aria-label', h.name + (h.help ? ' ขอความช่วยเหลือ' : ' ส่งข้อความ'));
+    el.innerHTML = inner; el.style.setProperty('--i', i);
+    w.appendChild(el);
+  });
+  Object.keys(have).forEach(k => { if (!keep[k]) { have[k].classList.add('leave'); setTimeout(() => have[k].remove(), 300); } });
+  let more = w.querySelector('.ch-more');
+  if (hs.length > 4) { if (!more) { more = document.createElement('button'); more.className = 'ch-more'; more.dataset.act = 'msgopen'; } more.textContent = '+' + (hs.length - 4); w.appendChild(more); } else if (more) more.remove();
+}
+function peekHead(m) {
+  const key = m.fromAdmin && !isAdmin() ? '__admin' : m.from, el = document.querySelector('.ch-head[data-key="' + CSS.escape(key) + '"]');
+  if (!el) return; el.classList.remove('peek', 'bump'); void el.offsetWidth; el.classList.add('peek', 'bump'); setTimeout(() => el.classList.remove('peek'), 4500);
 }
 
 /* side panel */
 function openMsgPanel(ch, opts) {
-  M.open = true; if (ch) M.ch = ch;
+  M.open = true; renderChatHeads(); if (ch) M.ch = ch;
   if (opts && opts.help) { M.help = true; M.jobId = opts.jobId || ''; M.helpTo = opts.to || 'team'; }
   hideHover(); renderMsgPanel(); markChanRead(M.ch);
   requestAnimationFrame(() => { $('#msgPanel').classList.add('open'); const t = $('#msgText'); if (t && matchMedia('(pointer:fine)').matches) t.focus(); });
 }
-function closeMsgPanel() { M.open = false; M.help = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); }
+function closeMsgPanel() { M.open = false; M.help = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); renderChatHeads(); }
 function msgTime(ts) { const t = String(ts); return t.slice(0, 10) === today() ? t.slice(11, 16) : fd(t.slice(0, 10)) + ' ' + t.slice(11, 16); }
 function helpCard(m) {
   const mine = m.from === S.me && !m.fromAdmin || (isAdmin() && m.from === S.me), j = m.jobId ? jobById(m.jobId) : null;
@@ -1129,7 +1174,8 @@ function brandMark(s) {
 function navHtml(withCount) {
   const late = S.jobs.filter(isLate).length;
   return VIEWS.map(v => '<button data-view="' + v.id + '" aria-current="' + (S.view === v.id) + '">' + I[v.id] + '<span>' + v.label + '</span>' +
-    (withCount && v.id === 'board' && late ? '<span class="count">' + late + '</span>' : '') + '</button>').join('');
+    (withCount && v.id === 'board' && late ? '<span class="count">' + late + '</span>' : '') +
+    (withCount && v.id === 'team' && typeof M !== 'undefined' && openHelps().length ? '<span class="count sos" title="มีคนขอความช่วยเหลือ">' + openHelps().length + '</span>' : '') + '</button>').join('');
 }
 function renderShell() {
   const s = S.settings || defaultSettings();
@@ -1433,11 +1479,15 @@ function viewTeam() {
     const minsM = S.logs.filter(l => l.member === x.name && (l.start || '').slice(0, 7) === m).reduce((s, l) => s + (l.end ? l.minutes : (Date.now() - parseLocal(l.start)) / 60000), 0);
     const lv = doneM.length ? (doneM.reduce((s, j) => s + (+j.level || 0), 0) / doneM.length).toFixed(1) : '–';
     const run = S.logs.find(l => !l.end && l.member === x.name), rj = run && jobById(run.jobId);
-    return '<div class="tcard" style="--c:' + esc(x.color || '#5B6B7A') + '"><div class="tcard-h">' + av(x.name, 'lg') + '<div><b>' + esc(x.name) + (x.name === S.me ? ' <span class="tag rev">คุณ</span>' : '') + '</b><small>' + esc(x.full || '') + '</small></div></div>' +
+    const hp = M.list.filter(m => m.kind === 'help' && m.status !== 'done' && m.from === x.name && !m.fromAdmin), hOpen = hp.filter(m => m.status === 'open');
+    const unr = M.list.filter(m => !m.read && m.from === x.name && !m.fromAdmin).length, canChat = x.name !== S.me;
+    const helpBox = hp.length ? '<div class="t-help' + (hOpen.length ? '' : ' taken') + '"><span class="th-ic">' + MSG_IC.sos + '</span><div class="th-b"><b>' + (hOpen.length ? 'ขอความช่วยเหลือ' : (hp[0].helper ? esc(hp[0].helper) + ' กำลังช่วย' : 'มีคนรับช่วยแล้ว')) + '</b><p>' + esc(hp[hp.length - 1].text) + '</p></div>' +
+      '<div class="th-act">' + (hOpen.length && canChat ? '<button class="btn sm primary" data-helptake="' + esc(hOpen[hOpen.length - 1].id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + '<button class="btn sm" data-ch="' + esc(hp[hp.length - 1].to === 'team' ? 'team' : chanOf(hp[hp.length - 1])) + '">ดูข้อความ</button></div></div>' : '';
+    return '<div class="tcard' + (hOpen.length ? ' needs-help' : '') + '" style="--c:' + esc(x.color || '#5B6B7A') + '"><div class="tcard-h"><span class="t-av">' + av(x.name, 'lg') + (hOpen.length ? '<i class="t-sos">' + MSG_IC.sos + '</i>' : unr ? '<i class="t-unread">' + unr + '</i>' : '') + '</span><div><b>' + esc(x.name) + (x.name === S.me ? ' <span class="tag rev">คุณ</span>' : '') + '</b><small>' + esc(x.full || '') + '</small></div></div>' +
       (rj ? '<button class="now-on" data-open="' + esc(rj.id) + '" style="border:0;text-align:left"><span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>กำลังทำ <b>' + esc(rj.code) + '</b></button>' : '') +
       '<div class="tstats"><div><span>งานค้าง</span><b>' + open.length + '</b></div><div><span>เลยกำหนด</span><b style="color:' + (late.length ? 'var(--late)' : 'inherit') + '">' + late.length + '</b></div><div><span>เสร็จเดือนนี้</span><b>' + doneM.length + '</b></div></div>' +
       '<div><div class="panel-h" style="margin-bottom:6px"><span class="sub">ตรงเวลา ' + (doneM.length ? pct + '%' : '–') + '</span><span class="sub">เวลาทำ ' + fdur(minsM) + ' · ยากเฉลี่ย ' + lv + '</span></div><div class="meter"><i style="width:' + pct + '%"></i></div></div>' +
-      '<button class="btn" data-memberjobs="' + esc(x.name) + '">ดูงานของ' + esc(x.name) + '</button></div>';
+      helpBox + '<div class="t-btns"><button class="btn" data-memberjobs="' + esc(x.name) + '">ดูงานของ' + esc(x.name) + '</button>' + (canChat ? '<button class="btn t-chat' + (unr ? ' has' : '') + '" data-ch="u:' + esc(x.name) + '" title="ส่งข้อความถึง ' + esc(x.name) + '">' + MSG_IC.chat + (unr ? '<b>' + unr + '</b>' : '') + '</button>' : '') + '</div></div>';
   }).join('');
   return topbar('ทีมงาน', 'ภาระงานและผลงานรายคน เดือน' + monthLabel(m)) + '<div class="teams">' + cards + '</div>';
 }
@@ -1805,7 +1855,8 @@ document.addEventListener('click', async e => {
   if (d.add) { const k = d.add; if (k === 'members') S.draft.members.push({ id: uid('m_'), name: '', full: '', color: COLORS[S.draft.members.length % COLORS.length] }); else if (k === 'taskTypes') S.draft.taskTypes.push({ name: '', cat: 'draw' }); else S.draft[k].push(''); markDirty(); render(); setTimeout(() => { const ins = document.querySelectorAll('[data-d^="' + k + '."]'); const last = ins[k === 'members' ? ins.length - 2 : ins.length - 1]; if (last) last.focus(); }, 20); return; }
   if (d.del) { const p = d.del.split('.'); S.draft[p[0]].splice(+p[1], 1); markDirty(); return render(); }
 
-  if (d.ch) { M.ch = d.ch; M.help = false; renderMsgPanel(); return markChanRead(d.ch); }
+  if (d.ch) { M.help = false; if (!M.open) return openMsgPanel(d.ch); M.ch = d.ch; renderMsgPanel(); return markChanRead(d.ch); }
+  if (d.head) { const m = M.list.find(x => x.id === d.head); return openMsgPanel(m ? chanOf(m) : 'team'); }
   if (d.helpto) { M.helpTo = d.helpto; renderMsgPanel(); return; }
   if (d.helptopic) { const t = $('#msgText'); if (t) { t.value = d.helptopic + (t.value ? ' — ' + t.value : ''); t.focus(); } return; }
   if (d.helptake) return helpUpdate(d.helptake, 'taken');
