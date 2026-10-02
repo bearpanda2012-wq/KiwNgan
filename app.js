@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.8.2';
+const APP_VERSION = '1.8.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -826,18 +826,26 @@ function viewHome() {
       (my.length ? '<div class="alist">' + my.slice(0, 5).map(aItem).join('') + '</div>' : '<div class="empty"><b>ไม่มีงานค้าง</b>กดปุ่ม + เพื่อรับงานใหม่</div>') + '</section>';
   }
 
-  // 30-day chart
-  const days = []; for (let i = 29; i >= 0; i--) days.push(addDays(t, -i));
-  const per = {}; days.forEach(d => per[d] = { ok: 0, late: 0 });
-  const done30 = S.jobs.filter(j => j.status === 'done' && per[finDate(j)]);
-  done30.forEach(j => per[finDate(j)][onTime(j) ? 'ok' : 'late']++);
-  let max = Math.max(2, ...days.map(d => per[d].ok + per[d].late)); if (max % 2) max++;
-  const bars = days.map((d, i) => {
+  // finished-jobs chart over a chosen date range
+  const hr = homeRange(), span = daysBetween(hr.from, hr.to) + 1, weekly = span > 62;
+  const days = []; for (let i = 0; i < span; i++) days.push(addDays(hr.from, i));
+  const keyOf = d => { if (!weekly) return d; const x = parseLocal(d); return addDays(d, -((x.getDay() + 6) % 7)); };
+  const keys = []; days.forEach(d => { const k = keyOf(d); if (keys.indexOf(k) < 0) keys.push(k); });
+  const per = {}; keys.forEach(k => per[k] = { ok: 0, late: 0 });
+  const done30 = S.jobs.filter(j => j.status === 'done' && finDate(j) >= hr.from && finDate(j) <= hr.to);
+  done30.forEach(j => { const k = keyOf(finDate(j)); if (per[k]) per[k][onTime(j) ? 'ok' : 'late']++; });
+  let max = Math.max(2, ...keys.map(d => per[d].ok + per[d].late)); if (max % 2) max++;
+  const every = Math.max(1, Math.ceil(keys.length / 7));
+  const bars = keys.map((d, i) => {
     const p = per[d], n = p.ok + p.late, wd = parseLocal(d).getDay();
-    const lab = (i % 5 === 4 || i === 0) ? '<em>' + parseLocal(d).getDate() + '</em>' : '';
-    return '<div class="bar' + (d === t ? ' today' : '') + (wd === 0 || wd === 6 ? ' wk' : '') + '"' + (n ? ' data-tip="' + fd(d) + ' · เสร็จ ' + n + (p.late ? ' (ช้า ' + p.late + ')' : '') + '"' : '') + '><div class="stack" style="height:' + (n / max * 100) + '%">' +
+    const lab = (i % every === 0 || i === keys.length - 1) ? '<em>' + (weekly || span > 31 ? fd(d < hr.from ? hr.from : d) : parseLocal(d).getDate()) + '</em>' : '';
+    const tipD = weekly ? 'สัปดาห์ ' + fd(d < hr.from ? hr.from : d) + ' – ' + fd(addDays(d, 6) > hr.to ? hr.to : addDays(d, 6)) : fd(d);
+    return '<div class="bar' + (!weekly && d === t ? ' today' : '') + (!weekly && (wd === 0 || wd === 6) ? ' wk' : '') + '"' + (n ? ' data-tip="' + tipD + ' · เสร็จ ' + n + (p.late ? ' (ช้า ' + p.late + ')' : '') + '"' : '') + '><div class="stack" style="height:' + (n / max * 100) + '%">' +
       (p.ok ? '<i style="flex:' + p.ok + '"></i>' : '') + (p.late ? '<i class="late" style="flex:' + p.late + '"></i>' : '') + '</div>' + lab + '</div>';
   }).join('');
+  const rangeTxt = hr.from === hr.to ? fdY(hr.from) : fdY(hr.from) + ' – ' + fdY(hr.to);
+  const hrCtl = '<div class="hr-ctl"><div class="hr-chips">' + H_PRESETS.map(x => '<button class="chip sm" data-hpreset="' + x[0] + '" aria-pressed="' + (hr.preset === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
+    '<div class="hr-dates"><label>' + STI.calendar + '<input type="date" id="hFrom" value="' + hr.from + '" max="' + t + '" aria-label="ตั้งแต่วันที่"></label><span>–</span><label><input type="date" id="hTo" value="' + hr.to + '" max="' + t + '" aria-label="ถึงวันที่"></label></div></div>';
   const ok30 = done30.filter(onTime).length;
   const withMin = done30.filter(j => j.minutes > 0);
   const avgMin = withMin.length ? withMin.reduce((s, j) => s + j.minutes, 0) / withMin.length : 0;
@@ -869,15 +877,32 @@ function viewHome() {
       '<section class="panel"><div class="panel-h"><div><h2>ต้องจัดการก่อน</h2><div class="sub">เลยกำหนด → ด่วน → ส่งภายในพรุ่งนี้</div></div><button class="btn ghost sm" data-filter-go="open">ดูทั้งหมด</button></div>' +
       (att.length ? '<div class="alist">' + att.map(aItem).join('') + '</div>' : '<div class="empty"><b>ไม่มีงานเร่งด่วน</b>คิวงานอยู่ในกำหนดทั้งหมด</div>') + '</section>' +
     '</div>' +
-    '<section class="panel"><div class="panel-h"><div><h2>งานที่เสร็จ 30 วันล่าสุด</h2><div class="sub">นับตามวันที่ปิดงาน</div></div><div class="legend"><span><i style="background:var(--accent)"></i>ตรงเวลา</span><span><i style="background:var(--urgent)"></i>ช้ากว่ากำหนด</span></div></div>' +
-      '<div class="minis"><div class="mini"><span>งานเสร็จ</span><b>' + done30.length + '</b></div><div class="mini"><span>ตรงเวลา</span><b>' + (done30.length ? Math.round(ok30 / done30.length * 100) + '%' : '–') + '</b></div>' +
+    '<section class="panel"><div class="panel-h"><div><h2>งานที่เสร็จ</h2><div class="sub">' + rangeTxt + ' · ' + span + ' วัน' + (weekly ? ' (รวมเป็นรายสัปดาห์)' : '') + ' · นับตามวันที่ปิดงาน</div></div><div class="legend"><span><i style="background:var(--accent)"></i>ตรงเวลา</span><span><i style="background:var(--urgent)"></i>ช้ากว่ากำหนด</span></div></div>' +
+      hrCtl + '<div class="minis"><div class="mini"><span>งานเสร็จ</span><b>' + done30.length + '</b></div><div class="mini"><span>ตรงเวลา</span><b>' + (done30.length ? Math.round(ok30 / done30.length * 100) + '%' : '–') + '</b></div>' +
       '<div class="mini"><span>เวลาทำเฉลี่ย/งาน</span><b>' + (avgMin ? fdur(avgMin) : '–') + '</b></div><div class="mini"><span>รับงาน → เสร็จ เฉลี่ย</span><b>' + (leads.length ? avgLead.toFixed(1) + ' วัน' : '–') + '</b></div></div>' +
       '<div class="chart"><div class="y"><span>' + max + '</span><span>' + (max / 2) + '</span><span>0</span></div><div class="plot">' + bars + '</div></div></section>' +
     '<div class="grid2 even">' +
       '<section class="panel"><div class="panel-h"><div><h2>ภาระงานรายคน</h2><div class="sub">งานที่ยังไม่เสร็จ แยกตามสถานะ</div></div><div class="legend"><span><i style="background:var(--doing)"></i>กำลังทำ</span><span><i style="background:var(--review)"></i>รอตรวจ</span><span><i style="background:var(--queue)"></i>รอคิว</span></div></div><div class="hbars">' + loadH + '</div></section>' +
-      '<section class="panel"><div class="panel-h"><div><h2>งานเสร็จตามกลุ่มงาน</h2><div class="sub">30 วันล่าสุด</div></div></div><div class="hbars">' + grpH + '</div></section>' +
+      '<section class="panel"><div class="panel-h"><div><h2>งานเสร็จตามกลุ่มงาน</h2><div class="sub">' + rangeTxt + '</div></div></div><div class="hbars">' + grpH + '</div></section>' +
     '</div>';
 }
+const H_PRESETS = [['7d', '7 วัน'], ['30d', '30 วัน'], ['month', 'เดือนนี้'], ['lastmonth', 'เดือนก่อน'], ['90d', '90 วัน'], ['year', 'ปีนี้']];
+function homeRange() {
+  const t = today(), d = new Date();
+  if (!S.hr) { const sv = LS.get('homeRange', null) || {}; S.hr = { preset: sv.preset || '30d', from: sv.from || '', to: sv.to || '' }; }
+  const r = S.hr;
+  if (r.preset === '7d') { r.from = addDays(t, -6); r.to = t; }
+  else if (r.preset === '30d') { r.from = addDays(t, -29); r.to = t; }
+  else if (r.preset === '90d') { r.from = addDays(t, -89); r.to = t; }
+  else if (r.preset === 'month') { r.from = t.slice(0, 8) + '01'; r.to = t; }
+  else if (r.preset === 'lastmonth') { r.from = isoOf(new Date(d.getFullYear(), d.getMonth() - 1, 1)); r.to = isoOf(new Date(d.getFullYear(), d.getMonth(), 0)); }
+  else if (r.preset === 'year') { r.from = d.getFullYear() + '-01-01'; r.to = t; }
+  if (!r.from || !r.to) { r.preset = '30d'; r.from = addDays(t, -29); r.to = t; }
+  if (r.from > r.to) { const x = r.from; r.from = r.to; r.to = x; }
+  if (daysBetween(r.from, r.to) > 730) r.from = addDays(r.to, -730);   // keep the chart readable
+  return r;
+}
+function saveHomeRange() { LS.set('homeRange', S.hr.preset === 'custom' ? S.hr : { preset: S.hr.preset }); }
 function minutesOn(date, member) {
   return S.logs.filter(l => l.member === member && (l.start || '').slice(0, 10) === date)
     .reduce((s, l) => s + (l.end ? l.minutes : (Date.now() - parseLocal(l.start)) / 60000), 0);
@@ -1374,6 +1399,7 @@ document.addEventListener('click', async e => {
   if (d.themeset) { setTheme({ [d.themeset]: d.val }); return render(); }
   if (d.insttab) { INST.tab = d.insttab; renderLogin(); drawQr(); return; }
   if (d.quick) { S.f.quick = d.quick; return render(); }
+  if (d.hpreset) { homeRange(); S.hr.preset = d.hpreset; homeRange(); saveHomeRange(); return render(); }
   if (d.saveuser) return saveUserRow(d.saveuser);
   if (d.rmphoto) return setPhoto(d.rmphoto, null);
   if (d.resetpin) { try { const r = await mutate(() => api().resetPin({ userId: d.resetpin })); S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
@@ -1457,6 +1483,7 @@ document.addEventListener('change', e => {
   if (t.id === 'fMember') { S.f.member = t.value; LS.set('fMember', t.value); return render(); }
   if (t.id === 'fGroup') { S.f.group = t.value; return render(); }
   if (t.id === 'fMonth') { S.f.month = t.value; return render(); }
+  if ((t.id === 'hFrom' || t.id === 'hTo') && t.value) { homeRange(); S.hr.preset = 'custom'; S.hr[t.id === 'hFrom' ? 'from' : 'to'] = t.value; homeRange(); saveHomeRange(); return render(); }
   if (t.id === 'thC1' || t.id === 'thC2') { setTheme({ preset: 'custom', c1: $('#thC1').value, c2: $('#thC2').value }); return render(); }
   if (/^r(From|To|Member|Group|Scope|Orient)$/.test(t.id)) {
     const r = reportState(), k = t.id.slice(1).toLowerCase();
