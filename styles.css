@@ -1423,3 +1423,15 @@ body.auth .msg-fab{display:none}
 .nav .count.pop,.tabbar .count.pop{animation:countPop .7s cubic-bezier(.3,1.8,.5,1),badge 2s ease-in-out .7s infinite}
 @keyframes countPop{0%{transform:scale(0)}50%{transform:scale(1.5)}75%{transform:scale(.9)}100%{transform:scale(1)}}
 .tabbar button[data-view="team"] .count{top:0}
+
+/* v2.0.6: floating "add job" button on desktop too */
+@media (min-width:961px){
+  .fab{display:grid;place-items:center;position:fixed;right:28px;bottom:28px;width:62px;height:62px;border-radius:20px;border:0;color:#fff;background:var(--grad);box-shadow:0 14px 30px -10px var(--brand);z-index:31;animation:fabIn .6s cubic-bezier(.3,1.6,.5,1) both}
+  .fab svg{width:28px;height:28px}
+  .fab::after{content:"เพิ่มงาน";position:absolute;right:74px;top:50%;translate:0 -50%;white-space:nowrap;padding:6px 12px;border-radius:10px;background:var(--ink);color:var(--bg);font:600 13px var(--f-body);opacity:0;transform:translateX(8px);transition:opacity .2s,transform .2s;pointer-events:none}
+  .fab:hover::after{opacity:1;transform:none}
+  .top-actions .new{display:none}
+  .chat-heads{bottom:108px;right:28px}
+}
+@keyframes fabIn{from{opacity:0;transform:scale(.4) rotate(-90deg)}to{opacity:1;transform:none}}
+.sheet.open ~ .fab,body:has(.sheet.open) .fab{opacity:0;pointer-events:none}
