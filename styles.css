@@ -100,7 +100,11 @@ main{min-width:0;padding-inline:28px;padding-block:22px 56px}
 .timerbar .btn{background:var(--late);border-color:var(--late);color:#fff;min-height:36px}
 
 /* ---------- KPIs & panels ---------- */
-.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.kpi.k-doing .kpi-spin{animation:spin 6s linear infinite}
+.kpi.k-doing.is-live .kpi-spin{animation-duration:2.2s}
+.kpi.k-doing.is-live small::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--late);margin-right:6px;vertical-align:1px;animation:flash 1.2s infinite}
+@media (max-width:1180px) and (min-width:961px){.kpis{grid-template-columns:repeat(6,minmax(0,1fr))}.kpis>.kpi{grid-column:span 2}.kpis>.kpi:nth-child(-n+2){grid-column:span 3}}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:3px;text-align:left;position:relative;overflow:hidden}
 .kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--k,var(--line))}
 button.kpi:hover{background:var(--surface-2)}
@@ -336,6 +340,7 @@ legend{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--
   .rail{display:none}
   main{padding-inline:16px;padding-block:14px 116px}
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpis>.kpi.k-open{grid-column:1/-1}
   .grid2,.grid2.even{grid-template-columns:minmax(0,1fr)}
   .minis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tabbar{display:grid;grid-template-columns:repeat(6,1fr);position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:30}
@@ -905,7 +910,7 @@ button.kpi:hover .kpi-ic{transform:scale(1.12) rotate(-8deg)}
 /* page entrance: pieces slide up one after another */
 .enter>*,.enter .kpis>*,.enter .grid2>*,.enter .teams>*,.enter .col,.enter .sbody>*{animation:riseIn .55s cubic-bezier(.2,.8,.2,1) both}
 .enter>*:nth-child(2){animation-delay:.05s}.enter>*:nth-child(3){animation-delay:.1s}.enter>*:nth-child(4){animation-delay:.15s}.enter>*:nth-child(5){animation-delay:.2s}.enter>*:nth-child(n+6){animation-delay:.25s}
-.enter .kpis>*:nth-child(1){animation-delay:.08s}.enter .kpis>*:nth-child(2){animation-delay:.14s}.enter .kpis>*:nth-child(3){animation-delay:.2s}.enter .kpis>*:nth-child(4){animation-delay:.26s}
+.enter .kpis>*:nth-child(1){animation-delay:.08s}.enter .kpis>*:nth-child(2){animation-delay:.14s}.enter .kpis>*:nth-child(3){animation-delay:.2s}.enter .kpis>*:nth-child(4){animation-delay:.26s}.enter .kpis>*:nth-child(5){animation-delay:.32s}
 .enter .grid2>*:nth-child(2),.enter .teams>*:nth-child(2),.enter .col:nth-child(2){animation-delay:.12s}
 .enter .teams>*:nth-child(3),.enter .col:nth-child(3){animation-delay:.18s}
 .enter .teams>*:nth-child(n+4),.enter .col:nth-child(4){animation-delay:.24s}

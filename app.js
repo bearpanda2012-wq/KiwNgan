@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.5.4';
+const APP_VERSION = '2.5.5';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -114,6 +114,7 @@ const KPI_IC = {
   open: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5" stroke-linecap="round"/></svg>',
   late: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>',
   urgent: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg>',
+  doing: '<svg class="kpi-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>',
   done: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg>'
 };
 const VIEWS = [
@@ -1853,14 +1854,16 @@ function viewHome() {
   const m = t.slice(0, 7), doneM = pool.filter(j => j.status === 'done' && finDate(j).slice(0, 7) === m);
   const okM = doneM.filter(onTime).length;
   const pct = doneM.length ? Math.round(okM / doneM.length * 100) : null;
-  const doing = open.filter(j => j.status === 'doing').length, queue = open.filter(j => j.status === 'queue').length;
+  const doingJ = open.filter(j => j.status === 'doing'), doing = doingJ.length, queue = open.filter(j => j.status === 'queue' || j.status === 'hold').length, review = open.filter(j => j.status === 'review').length;
+  const timing = doingJ.filter(j => runningOf(j.id)).length;
 
   const kp = [
-    { k: 'var(--doing)', l: 'งานที่ยังไม่เสร็จ', n: open.length, s: 'กำลังทำ ' + doing + ' · รอคิว ' + queue, f: 'open' },
+    { k: 'var(--accent)', l: 'งานที่ยังไม่เสร็จ', n: open.length, s: 'กำลังทำ ' + doing + ' · รอตรวจ ' + review + ' · รอคิว ' + queue, f: 'open' },
+    { k: 'var(--doing)', l: 'กำลังทำ', n: doing, s: doing ? (timing ? 'จับเวลาอยู่ ' + timing + ' งาน' : doingJ.slice(0, 2).map(j => j.code).join(', ') + (doing > 2 ? ' …' : '')) : 'ยังไม่มีงานที่กำลังทำ', f: 'doing', live: timing },
     { k: 'var(--late)', l: 'เลยกำหนดส่ง', n: late.length, s: late.length ? 'ต้องเร่งปิดงาน' : 'ไม่มีงานค้างเกินกำหนด', f: 'late' },
     { k: 'var(--urgent)', l: 'งานด่วนคงค้าง', n: urgent.length, s: 'ติดธงงานด่วน', f: 'urgent' },
     { k: 'var(--done)', l: 'เสร็จเดือนนี้', n: doneM.length, s: (pct === null ? 'เดือนนี้ยังไม่มีงานเสร็จ' : 'ตรงเวลา ' + pct + '%') + ' · รวมทุกเดือน ' + pool.filter(j => j.status === 'done').length, f: 'done', m: m }
-  ].map(x => '<button class="kpi" style="--k:' + x.k + '" data-filter-go="' + x.f + '"' + (x.m ? ' data-fmonth="' + x.m + '"' : '') + '><i class="kpi-ic" aria-hidden="true">' + KPI_IC[x.f] + '</i><span>' + x.l + '</span><b>' + x.n + '</b><small>' + x.s + '</small></button>').join('');
+  ].map(x => '<button class="kpi k-' + x.f + (x.live ? ' is-live' : '') + '" style="--k:' + x.k + '" data-filter-go="' + x.f + '"' + (x.m ? ' data-fmonth="' + x.m + '"' : '') + '><i class="kpi-ic" aria-hidden="true">' + KPI_IC[x.f] + '</i><span>' + x.l + '</span><b>' + x.n + '</b><small>' + x.s + '</small></button>').join('');
 
   // me
   let mine = '';
