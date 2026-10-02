@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KiwNgan คิวงาน</title>
+<meta name="description" content="ระบบคิวงานออกแบบและงาน CAD/CAM สำหรับทีมผลิต ใช้ได้ทั้งมือถือและคอมพิวเตอร์">
+<meta name="theme-color" content="#0B6B70">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="KiwNgan">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=Bai+Jamjuree:wght@500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!--APP-->
+<div class="app">
+  <aside class="rail">
+    <div class="brand" id="brand"></div>
+    <nav class="nav" id="nav" aria-label="เมนูหลัก"></nav>
+    <div class="rail-foot" id="railFoot"></div>
+  </aside>
+  <main>
+    <div class="timerbar" id="timerbar" hidden></div>
+    <div class="wrap" id="view"><div class="loading"><span class="spinner"></span>กำลังโหลด…</div></div>
+  </main>
+</div>
+<nav class="tabbar" id="tabbar" aria-label="เมนูหลัก"></nav>
+<button class="fab" data-act="new" aria-label="เพิ่มงานใหม่"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+
+<div class="scrim" id="scrim"></div>
+<aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-h">
+    <div class="sheet-title"><span class="eyebrow" id="sheetEyebrow">งาน</span><h3 id="sheetTitle">งาน</h3></div>
+    <button class="icon-btn" data-act="close" aria-label="ปิด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="sheet-b" id="sheetBody"></div>
+  <div class="sheet-f" id="sheetFoot"></div>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!--/APP-->
+<script src="app.js"></script>
+</body>
+</html>
