@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.0.3';
+const APP_VERSION = '2.0.4';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -479,7 +479,7 @@ const Remote = {
       res = await fetch(c.url, { method: 'POST', body: JSON.stringify({ token: conn ? '' : LS.get(tokenKey(), ''), action: action, payload: payload || {} }), redirect: 'follow' });
     } catch (e) { throw new Error('ติดต่อฐานข้อมูลไม่ได้ ตรวจอินเทอร์เน็ตหรือ URL ของ Apps Script'); }
     let data;
-    try { data = await res.json(); } catch (e) { throw new Error('URL นี้ไม่ใช่ API ของ KiwNgan หรือยังไม่ได้ Deploy แบบ "ทุกคน"'); }
+    try { data = await res.json(); } catch (e) { if (res && !res.ok) throw new Error('ฐานข้อมูลไม่ว่างชั่วคราว (' + res.status + ') ลองใหม่อีกครั้ง'); throw new Error('URL นี้ไม่ใช่ API ของ KiwNgan หรือยังไม่ได้ Deploy แบบ "ทุกคน"'); }
     if (!data.ok) { const e = new Error(String(data.error || 'เกิดข้อผิดพลาด').replace(/^AUTH:/, '')); e.code = data.code; throw e; }
     return data.data;
   }
@@ -496,7 +496,13 @@ async function load(silent) {
   if (!LS.get(tokenKey(), '')) return showLogin();
   S.sync = 'busy'; if (!silent && S.screen === 'app') renderShell();
   try {
-    const d = await api().bootstrap();
+    let d = null;
+    for (let i = 0; i < 3; i++) {   // Apps Script occasionally answers empty while busy/redeploying: retry quietly
+      try { d = await api().bootstrap(); } catch (x) { if (x.code === 'auth' || i === 2) throw x; d = null; }
+      if (d && d.me && d.settings) break;
+      d = null; await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+    }
+    if (!d) throw new Error('ฐานข้อมูลตอบกลับไม่ครบ กรุณากด "ลองอีกครั้ง"');
     S.settings = normalizeSettings(d.settings);
     S.users = d.users || []; S.user = d.me; S.me = d.me.name;
     S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || [];
@@ -508,7 +514,7 @@ async function load(silent) {
     if (e.code === 'auth') { LS.del(tokenKey()); toast(e.message, true); return showLogin(); }
     S.sync = 'err'; S.syncErr = e.message;
     if (!S.loaded) { S.settings = normalizeSettings(null); S.loaded = true; }
-    if (S.screen !== 'app') { S.login.err = e.message; return showLogin(true); }
+    if (S.screen !== 'app') { S.login.err = e.message; S.login.retry = true; return showLogin(true); }
     if (!silent) toast(e.message, true);
   }
   applyBrand(); render();
@@ -614,7 +620,7 @@ function renderLogin() {
   $('#view').innerHTML = '<div class="login">' + hero + '<section class="lg-side"><div class="login-card">' +
     '<div class="lg-hello"><span class="eyebrow">' + greet + '</span><b>ยินดีต้อนรับสู่ ' + esc(b.appName || 'KiwNgan คิวงาน') + '</b></div>' +
     (mode() === 'demo' ? '<div class="banner"><span><b>โหมดทดลอง</b> ทุกคนใช้ PIN 1234 · ผู้ดูแลระบบเข้าที่ลิงก์ด้านล่าง ชื่อ "แอดมิน"</span></div>' : '') +
-    body + (L.err && !(L.adminMode || sel) ? '<div class="err" role="alert">' + esc(L.err) + '</div>' : '') +
+    body + (L.err && !(L.adminMode || sel) ? '<div class="err" role="alert">' + esc(L.err) + (L.retry && LS.get(tokenKey(), '') ? ' <button type="button" class="btn sm" data-act="retryload">ลองอีกครั้ง</button>' : '') + '</div>' : '') +
     '<div class="login-foot">' +
       (showConn ? '<div class="f"><label for="cUrl">URL ฐานข้อมูล (Apps Script /exec)</label><input id="cUrl" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" autocomplete="off"></div><div class="top-actions"><button class="btn primary sm" data-act="connect">เชื่อมต่อ</button>' + (mode() === 'sheet' ? '' + (LOCKED() ? '' : '<button class="btn sm" data-act="disconnect">ใช้โหมดทดลอง</button>') + '' : '') + '</div>'
         : '<div class="top-actions" style="justify-content:space-between">' + (!L.adminMode ? '<button type="button" class="btn ghost sm" data-act="adminon">ผู้ดูแลระบบ</button>' : '<span></span>') +
@@ -1883,6 +1889,7 @@ document.addEventListener('click', async e => {
     case 'stop': if (S.edit) readEditor(); return stopTimer(d.log);
     case 'refresh': return load(false).then(() => { if (S.sync === 'ok') toast('อัปเดตข้อมูลล่าสุดแล้ว'); });
     case 'csv': return exportCsv();
+    case 'retryload': S.login.err = ''; S.login.retry = false; S.login.busy = true; renderLogin(); return load(false);
     case 'msgopen': return M.open ? closeMsgPanel() : openMsgPanel();
     case 'msgclose': return closeMsgPanel();
     case 'helpon': M.help = true; M.helpTo = M.ch === 'admin' ? 'admin' : 'team'; renderMsgPanel(); { const x = $('#msgText'); if (x) x.focus(); } return;
