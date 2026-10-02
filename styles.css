@@ -366,3 +366,59 @@ legend{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--
   .erow .opt{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- login ---------- */
+body.auth .app{grid-template-columns:minmax(0,1fr)}
+body.auth .rail,body.auth .tabbar,body.auth .fab,body.auth .timerbar{display:none!important}
+body.auth main{padding-block:24px}
+.login{min-height:calc(100vh - 48px);display:grid;place-items:center}
+.login-card{width:min(440px,100%);background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:24px;display:flex;flex-direction:column;gap:16px;box-shadow:var(--shadow)}
+.login-brand{display:flex;align-items:center;gap:12px}
+.login-brand .brand-mark{width:48px;height:48px;border-radius:13px;font-size:18px}
+.login-brand b{display:block;font:700 20px/1.2 var(--f-display)}
+.login-brand small{color:var(--muted)}
+.login-h{margin:4px 0 0;font:600 22px var(--f-display)}
+.login-card>.sub{margin:-12px 0 0}
+.who-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px}
+.who{display:flex;flex-direction:column;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface-2);border-radius:14px;padding:14px 8px;min-width:0}
+.who:hover{border-color:var(--accent);background:var(--accent-soft)}
+.who b{font:600 15px var(--f-display);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who small{font-size:12px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.back-who{align-self:flex-start;border:0;background:none;color:var(--accent);padding:0;font-weight:600}
+.pin-head{display:flex;align-items:center;gap:12px}
+.pin-head b{display:block;font:600 18px var(--f-display)}
+.pin-head small{color:var(--muted)}
+.pin-form{display:flex;flex-direction:column;gap:14px;align-items:stretch}
+.pin-form input{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px}
+@media (hover:hover) and (pointer:fine){.pin-form input{position:static;opacity:1;pointer-events:auto;width:100%;height:auto;text-align:center;letter-spacing:.5em;font:600 22px var(--f-display);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px}.pin-dots{display:none!important}}
+.pin-dots{display:flex;justify-content:center;gap:12px;padding:6px 0}
+.pin-dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--line)}
+.pin-dots i.on{background:var(--accent);border-color:var(--accent)}
+.pin-dots i.opt{border-style:dashed}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.key{border:1px solid var(--line);background:var(--surface-2);border-radius:12px;min-height:54px;font:600 22px var(--f-display)}
+.key:active{background:var(--accent-soft)}
+.key.fn{font:500 14px var(--f-body);color:var(--muted)}
+.login-foot{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+
+/* ---------- read-only cards ---------- */
+.card.ro{cursor:pointer;background:color-mix(in oklab,var(--surface) 82%,var(--surface-3))}
+.card.ro .code{color:var(--muted)}
+
+/* ---------- users admin ---------- */
+.ulist,.uadd{display:flex;flex-direction:column;gap:8px}
+.uadd{border-top:1px solid var(--line);padding-top:12px}
+.urow{display:grid;grid-template-columns:40px minmax(0,1fr) minmax(0,1fr) 120px auto auto;gap:8px;align-items:center}
+.uadd .urow{grid-template-columns:40px minmax(0,1fr) minmax(0,1fr) 120px 130px auto}
+.urow input,.urow select{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:38px}
+.urow input[type=color]{padding:3px;width:40px}
+.urow.off input,.urow.off select{opacity:.55}
+.urow-act{display:flex;gap:4px}
+.toggle.sm{min-height:38px;padding:6px 10px;font-size:13.5px;white-space:nowrap}
+.pin-note{grid-column:1/-1;background:var(--urgent-soft);border-radius:8px;padding:8px 12px;font-size:13.5px}
+.pin-note b{font-size:16px;letter-spacing:.1em}
+@media (max-width:760px){
+  .urow,.uadd .urow{grid-template-columns:40px minmax(0,1fr) minmax(0,1fr);padding-bottom:10px;border-bottom:1px solid var(--line)}
+  .urow .opt{display:block}
+  .urow-act{grid-column:1/-1}
+}
