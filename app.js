@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -456,9 +456,13 @@ function renderLogin() {
 }
 async function doLogin() {
   const L = S.login; if (L.pin.length < 4 || L.submitting) return;
+  if (L.adminMode) {
+    const n = $('#adminName'); if (n) L.adminName = n.value;
+    L.adminName = String(L.adminName || '').trim();
+    if (!L.adminName) { L.err = 'ใส่ชื่อผู้ดูแล'; return renderLogin(); }
+  }
   L.submitting = true; L.err = ''; renderLogin();
   try {
-    if (L.adminMode) { const n = $('#adminName'); L.adminName = n ? n.value.trim() : L.adminName; if (!L.adminName) { L.submitting = false; L.err = 'ใส่ชื่อผู้ดูแล'; return renderLogin(); } }
     const r = await api().login(L.adminMode ? { name: L.adminName, pin: L.pin } : { userId: L.userId, pin: L.pin });
     LS.set(tokenKey(), r.token); L.submitting = false; L.pin = '';
     S.loaded = false; await load(false);
@@ -1179,6 +1183,7 @@ $('#scrim').addEventListener('click', closeEditor);
 
 document.addEventListener('input', e => {
   const t = e.target;
+  if (t.id === 'adminName') { S.login.adminName = t.value; return; }
   if (t.id === 'pinIn') { S.login.pin = t.value.replace(/\D/g, '').slice(0, 6); S.login.err = ''; const dots = document.querySelectorAll('.pin-dots i'); dots.forEach((el, i) => el.classList.toggle('on', i < S.login.pin.length)); const sb = document.querySelector('#pinForm [type=submit]'); if (sb) sb.disabled = S.login.pin.length < 4; return; }
   if (t.id === 'q') { S.f.q = t.value; const pos = t.selectionStart; render(); const q = $('#q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if (t.dataset.d && S.draft) {
