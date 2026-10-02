@@ -1524,3 +1524,17 @@ body.auth .msg-fab{display:none}
 .pe-b small{color:var(--muted);font-size:12px}
 .pin-edit #pinSet{width:150px !important;flex:none;font:600 16px var(--f-mono) !important;letter-spacing:.2em;text-align:center}
 .pin-note .btn{margin:0 6px}
+.bub,.help-card{position:relative}
+.bub-del{position:absolute;top:-8px;width:26px;height:26px;border-radius:50%;border:0;display:grid;place-items:center;background:var(--surface);color:var(--late);box-shadow:var(--shadow-sm),0 0 0 1px var(--line);opacity:0;transform:scale(.8);transition:opacity .15s,transform .15s;z-index:2}
+.bub-del svg{width:14px;height:14px}
+.bub .bub-del{right:-8px}.bub.me .bub-del{left:-8px;right:auto}
+.help-card .bub-del{right:-6px}
+.bub:hover .bub-del,.help-card:hover .bub-del,.bub-del:focus{opacity:1;transform:none}
+.bub-del:hover{background:var(--late);color:#fff}
+@media (hover:none){ .bub-del{opacity:.85;transform:none} }
+.mp-head .icon-btn svg{width:19px;height:19px}
+.mp-confirm{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;background:var(--late-soft);color:var(--late);font-size:13px;animation:riseIn .25s ease-out}
+.mp-confirm span{flex:1;min-width:180px;display:flex;align-items:center;gap:6px}
+.mp-confirm svg{width:16px;height:16px}
+.mp-confirm span{display:block;line-height:1.5}
+.mp-confirm span svg{display:inline;vertical-align:-3px;margin-right:4px}

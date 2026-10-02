@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.5.1';
+const VERSION = '1.5.2';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -83,6 +83,7 @@ const ACTIONS = {
   sendMessage: (p, u) => withLock_(() => sendMessage_(p, u)),
   markRead: (p, u) => withLock_(() => markRead_(p.ids, u)),
   helpUpdate: (p, u) => withLock_(() => helpUpdate_(p.id, p.status, u)),
+  deleteMessages: (p, u) => withLock_(() => { admin_(u); return deleteMessages_(p.ids, u); }),
   deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
   thumbs: (p, u) => thumbs_(p.ids),
   image: (p, u) => imageFull_(p.id),
@@ -754,8 +755,9 @@ function maskMsg_(m, u) {
 function messages_(u, since) {
   const cutoff = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), tz_(), "yyyy-MM-dd'T'HH:mm:ss");
   const s = String(since || '');
-  const list = readAll_('Messages').filter(m => msgVisible_(m, u) && m.ts >= cutoff && (!s || m.ts > s || (m.kind === 'help' && m.status !== 'done')));
-  return { messages: list.slice(-400).map(m => maskMsg_(m, u)), serverTime: nowIso_() };
+  const vis = readAll_('Messages').filter(m => msgVisible_(m, u) && m.ts >= cutoff);
+  const list = vis.filter(m => !s || m.ts > s || (m.kind === 'help' && m.status !== 'done'));
+  return { messages: list.slice(-400).map(m => maskMsg_(m, u)), ids: vis.map(m => m.id), serverTime: nowIso_() };
 }
 function sendMessage_(p, u) {
   const text = String(p.text || '').trim().slice(0, 1000);
@@ -809,4 +811,15 @@ function helpUpdate_(id, status, u) {
     return { message: maskMsg_(m, u) };
   }
   throw new Error('สถานะไม่ถูกต้อง');
+}
+
+function deleteMessages_(ids, u) {
+  ids = (ids || []).slice(0, 2000).map(String);
+  const sh = sheet_('Messages'), last = sh.getLastRow();
+  if (last < 2 || !ids.length) return { deleted: 0 };
+  const idv = sh.getRange(2, 1, last - 1, 1).getDisplayValues();
+  let n = 0;
+  for (let i = idv.length - 1; i >= 0; i--) if (ids.indexOf(idv[i][0]) >= 0) { sh.deleteRow(i + 2); n++; }
+  log_('', u.name, 'message', 'ลบข้อความ ' + n + ' รายการ');
+  return { deleted: n };
 }

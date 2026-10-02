@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.1.1';
+const APP_VERSION = '2.1.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -343,13 +343,14 @@ const Demo = {
   pub(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '' }; },
   async messages(p) { const d = this.db(), u = this.me(d); d.messages = d.messages || seedMsgs(d); this.save(d);
     const vis = m => m.to === 'team' || m.from === u.name || m.to === u.name || (m.to === 'admin' && P.admin(u));
-    return { messages: d.messages.filter(m => vis(m) && (!p.since || m.ts > p.since || (m.kind === 'help' && m.status !== 'done'))).map(m => this.mmsg(d, u, m)), serverTime: nowLocal() + ':' + pad(new Date().getSeconds()) }; },
+    return { ids: d.messages.filter(vis).map(m => m.id), messages: d.messages.filter(m => vis(m) && (!p.since || m.ts > p.since || (m.kind === 'help' && m.status !== 'done'))).map(m => this.mmsg(d, u, m)), serverTime: nowLocal() + ':' + pad(new Date().getSeconds()) }; },
   mmsg(d, u, m) { const admins = d.users.filter(x => x.role === 'admin').map(x => x.name); const o = Object.assign({}, m, { fromAdmin: admins.indexOf(m.from) >= 0, read: (m.readBy || []).indexOf(u.name) >= 0 || m.from === u.name }); delete o.readBy;
     if (!P.admin(u)) { if (o.fromAdmin) o.from = ADMIN_LABEL; if (admins.indexOf(o.helper) >= 0) o.helper = ADMIN_LABEL; if (admins.indexOf(o.to) >= 0) o.to = 'admin'; } return o; },
   async sendMessage(p) { const d = this.db(), u = this.me(d); d.messages = d.messages || []; const text = String(p.text || '').trim(); if (!text) throw new Error('พิมพ์ข้อความก่อนส่ง');
     let to = p.to || 'team'; const tu = d.users.find(x => x.name === to); if (tu && tu.role === 'admin' && !P.admin(u)) to = 'admin';
     const m = { id: uid('m_'), ts: nowLocal() + ':' + pad(new Date().getSeconds()), from: u.name, to: to, kind: p.kind === 'help' ? 'help' : 'msg', text: text, jobId: p.jobId || '', status: p.kind === 'help' ? 'open' : '', helper: '', readBy: [u.name] };
     d.messages.push(m); this.save(d); return { message: this.mmsg(d, u, m) }; },
+  async deleteMessages(p) { const d = this.db(); this.admin(this.me(d)); const n0 = (d.messages || []).length; d.messages = (d.messages || []).filter(m => (p.ids || []).indexOf(m.id) < 0); this.save(d); return { deleted: n0 - d.messages.length }; },
   async markRead(p) { const d = this.db(), u = this.me(d); (d.messages || []).forEach(m => { if ((p.ids || []).indexOf(m.id) >= 0) { m.readBy = m.readBy || []; if (m.readBy.indexOf(u.name) < 0) m.readBy.push(u.name); } }); this.save(d); return {}; },
   async helpUpdate(p) { const d = this.db(), u = this.me(d), m = (d.messages || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบคำขอนี้');
     if (p.status === 'taken') { if (m.from === u.name) throw new Error('รับช่วยคำขอของตัวเองไม่ได้'); if (m.status !== 'open') throw new Error('มีคนรับช่วยแล้ว'); m.status = 'taken'; m.helper = u.name;
@@ -485,7 +486,7 @@ const Remote = {
     return data.data;
   }
 };
-['ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
+['ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -989,6 +990,7 @@ async function pollMessages(first) {
       if (i >= 0) M.list[i] = Object.assign(M.list[i], m); else { M.list.push(m); if (M.loaded && !m.read && !M.seen[m.id]) fresh.push(m); }
       M.seen[m.id] = 1;
     });
+    if (Array.isArray(r.ids)) { const keep = {}; r.ids.forEach(id => { keep[id] = 1; }); M.list = M.list.filter(m => keep[m.id]); }
     M.list.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
     if (r.serverTime) M.since = r.serverTime;
     M.loaded = true;
@@ -1085,7 +1087,7 @@ function helpCard(m) {
   const st = m.status || 'open';
   const lab = st === 'open' ? 'รอคนช่วย' : st === 'taken' ? (m.helper ? m.helper + ' กำลังช่วย' : 'มีคนรับช่วยแล้ว') : 'เรียบร้อยแล้ว';
   const canTake = st === 'open' && !mine, canClose = st !== 'done' && (mine || isAdmin() || m.helper === S.me);
-  return '<div class="help-card hc-' + st + '"><div class="hc-top"><span class="hc-ic">' + MSG_IC.sos + '</span><div><b>' + (mine ? 'คุณขอความช่วยเหลือ' : esc(m.from) + ' ขอความช่วยเหลือ') + '</b><small>' + (m.to === 'team' ? 'ถึงทั้งทีม' : m.to === 'admin' ? 'ถึง' + ADMIN_LABEL : 'ถึง ' + esc(m.to)) + ' · ' + msgTime(m.ts) + '</small></div><span class="hc-st">' + lab + '</span></div>' +
+  return '<div class="help-card hc-' + st + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบคำขอนี้">' + I.trash + '</button>' : '') + '<div class="hc-top"><span class="hc-ic">' + MSG_IC.sos + '</span><div><b>' + (mine ? 'คุณขอความช่วยเหลือ' : esc(m.from) + ' ขอความช่วยเหลือ') + '</b><small>' + (m.to === 'team' ? 'ถึงทั้งทีม' : m.to === 'admin' ? 'ถึง' + ADMIN_LABEL : 'ถึง ' + esc(m.to)) + ' · ' + msgTime(m.ts) + '</small></div><span class="hc-st">' + lab + '</span></div>' +
     '<p>' + esc(m.text) + '</p>' + (j ? '<button class="hc-job" data-open="' + esc(j.id) + '">' + stBadge(j) + '<b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '') + '</small></button>' : '') +
     (canTake || canClose ? '<div class="hc-act">' + (canTake ? '<button class="btn sm primary" data-helptake="' + esc(m.id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + (canClose ? '<button class="btn sm" data-helpdone="' + esc(m.id) + '">' + STI.done + 'ปิดคำขอ</button>' : '') + '</div>' : '') + '</div>';
 }
@@ -1101,7 +1103,7 @@ function renderMsgPanel() {
     const day = String(m.ts).slice(0, 10), sep = day !== lastDay ? '<div class="mp-day"><span>' + (day === today() ? 'วันนี้' : fdY(day)) + '</span></div>' : ''; lastDay = day;
     if (m.kind === 'help') return sep + helpCard(m);
     const mine = (m.from === S.me && !m.fromAdmin) || (isAdmin() && m.from === S.me);
-    return sep + '<div class="bub' + (mine ? ' me' : '') + '">' + (mine ? '' : (m.fromAdmin && !isAdmin() ? '<span class="av bub-av adm">' + MSG_IC.shield + '</span>' : av(m.from, 'bub-av'))) +
+    return sep + '<div class="bub' + (mine ? ' me' : '') + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบข้อความนี้">' + I.trash + '</button>' : '') + (mine ? '' : (m.fromAdmin && !isAdmin() ? '<span class="av bub-av adm">' + MSG_IC.shield + '</span>' : av(m.from, 'bub-av'))) +
       '<div class="bub-b">' + (mine || M.ch !== 'team' ? '' : '<small class="bub-n">' + esc(m.from) + '</small>') + '<p>' + esc(m.text).replace(/\n/g, '<br>') + '</p>' + (m.jobId && jobById(m.jobId) ? '<button class="bub-job" data-open="' + esc(m.jobId) + '">' + esc(jobById(m.jobId).code) + '</button>' : '') + '<time>' + msgTime(m.ts) + '</time></div></div>';
   }).join('') : '<div class="mp-empty"><span class="e-ic">' + MSG_IC.chat + '</span><b>ยังไม่มีข้อความ</b><small>' + (M.ch === 'team' ? 'ส่งข้อความถึงทุกคนในทีมได้ที่นี่' : 'เริ่มคุยกับ ' + esc(cur.name)) + '</small></div>';
   const helpForm = M.help ? '<div class="mp-help"><div class="mp-help-h"><span class="hc-ic">' + MSG_IC.sos + '</span><b>ขอความช่วยเหลือ</b><button class="icon-btn sm" data-act="helpoff" aria-label="ยกเลิก">✕</button></div>' +
@@ -1111,7 +1113,9 @@ function renderMsgPanel() {
       '</div>' : '';
   p.innerHTML = '<div class="mp-head"><span class="mp-hic">' + MSG_IC.chat + '</span><div><b>ข้อความ</b><small>' + (helps.length ? helps.length + ' คำขอความช่วยเหลือรออยู่' : 'คุยกับทีมและ' + ADMIN_LABEL) + '</small></div>' +
       ('Notification' in window && Notification.permission === 'default' ? '<button class="icon-btn" data-act="notifyperm" title="เปิดแจ้งเตือนบนเครื่องนี้">' + MSG_IC.bell + '</button>' : '') +
+      (isAdmin() && M.list.some(m => chanOf(m) === M.ch) ? '<button class="icon-btn" data-act="msgclear" title="ล้างประวัติห้องนี้">' + I.trash + '</button>' : '') +
       '<button class="icon-btn" data-act="msgclose" aria-label="ปิด">✕</button></div>' +
+    (M.confirmClear ? '<div class="mp-confirm"><span>' + I.trash + 'ลบข้อความทั้งหมดในห้อง <b>' + esc(cur.name) + '</b> (' + M.list.filter(m => chanOf(m) === M.ch).length + ' ข้อความ)? ย้อนกลับไม่ได้</span><button class="btn sm danger" data-act="msgclearyes">ลบทั้งหมด</button><button class="btn sm" data-act="msgclearno">ยกเลิก</button></div>' : '') +
     '<div class="mp-chans">' + chans.map(c => { const n = unreadIn(c.id); return '<button class="mp-ch' + (c.id === M.ch ? ' on' : '') + '" data-ch="' + esc(c.id) + '">' + (c.user ? avUser(c.user) : '<span class="av ch-ic">' + c.icon + '</span>') + '<span>' + esc(c.name) + '</span>' + (n ? '<b>' + n + '</b>' : '') + '</button>'; }).join('') + '</div>' +
     (helps.length && M.ch !== 'team' ? '<button class="mp-sosbar" data-ch="team">' + MSG_IC.sos + helps.length + ' คำขอความช่วยเหลือรอคนช่วย · ดู</button>' : '') +
     '<div class="mp-body" id="mpBody">' + body + '</div>' +
@@ -1132,6 +1136,11 @@ async function sendMsg() {
     if (M.help) { M.ch = chanOf(r.message); M.help = false; M.jobId = ''; toast('ส่งคำขอความช่วยเหลือแล้ว'); }
     M.sending = false; renderMsgPanel(); renderMsgFab();
   } catch (e) { M.sending = false; toast(e.message, true); }
+}
+async function delMsgs(ids, okText) {
+  if (!ids.length) return;
+  try { await api().deleteMessages({ ids: ids }); M.list = M.list.filter(m => ids.indexOf(m.id) < 0); toast(okText); renderMsgPanel(); renderMsgFab(); if (S.screen === 'app') render(); }
+  catch (e) { toast(e.message, true); }
 }
 async function helpUpdate(id, status) {
   try {
@@ -1941,6 +1950,7 @@ document.addEventListener('click', async e => {
   if (d.head) { const m = M.list.find(x => x.id === d.head); return openMsgPanel(m ? chanOf(m) : 'team'); }
   if (d.helpto) { M.helpTo = d.helpto; renderMsgPanel(); return; }
   if (d.helptopic) { const t = $('#msgText'); if (t) { t.value = d.helptopic + (t.value ? ' — ' + t.value : ''); t.focus(); } return; }
+  if (d.msgdel) return delMsgs([d.msgdel], 'ลบข้อความแล้ว');
   if (d.helptake) return helpUpdate(d.helptake, 'taken');
   if (d.helpdone) return helpUpdate(d.helpdone, 'done');
   if (d.ntfopen) { dismissNtf(t.closest('.ntf')); return openMsgPanel(d.ntfopen); }
@@ -1968,6 +1978,9 @@ document.addEventListener('click', async e => {
     case 'msgclose': return closeMsgPanel();
     case 'helpon': M.help = true; M.helpTo = M.ch === 'admin' ? 'admin' : 'team'; renderMsgPanel(); { const x = $('#msgText'); if (x) x.focus(); } return;
     case 'helpnojob': M.jobId = ''; renderMsgPanel(); return;
+    case 'msgclear': M.confirmClear = true; renderMsgPanel(); return;
+    case 'msgclearno': M.confirmClear = false; renderMsgPanel(); return;
+    case 'msgclearyes': { M.confirmClear = false; const ids = M.list.filter(m => chanOf(m) === M.ch).map(m => m.id); return delMsgs(ids, 'ล้างประวัติแล้ว ' + ids.length + ' ข้อความ'); }
     case 'helpoff': M.help = false; renderMsgPanel(); return;
     case 'askhelp': { const jid = d.job; closeEditor(); return openMsgPanel(null, { help: true, jobId: jid }); }
     case 'notifyperm': try { Notification.requestPermission().then(() => renderMsgPanel()); } catch (x) {} return;
