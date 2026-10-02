@@ -1491,3 +1491,7 @@ body.auth .msg-fab{display:none}
 .ln-path{stroke-dasharray:none;animation:none}
 .lnc{animation:revealX 1.2s cubic-bezier(.3,.7,.3,1) both}
 @keyframes revealX{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+.mp-topic{width:100%;min-height:40px;border-radius:12px}
+.mp-jobchip{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 8px;border-radius:12px;background:var(--surface);border:1px solid var(--line);font-size:13px}
+.mp-jobchip>span{flex:1}
+.mp-jobchip .st-badge{width:22px;height:22px}.mp-jobchip .st-badge svg{width:13px;height:13px}

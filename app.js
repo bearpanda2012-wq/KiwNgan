@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.0.8';
+const APP_VERSION = '2.0.9';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1094,11 +1094,11 @@ function renderMsgPanel() {
     return sep + '<div class="bub' + (mine ? ' me' : '') + '">' + (mine ? '' : (m.fromAdmin && !isAdmin() ? '<span class="av bub-av adm">' + MSG_IC.shield + '</span>' : av(m.from, 'bub-av'))) +
       '<div class="bub-b">' + (mine || M.ch !== 'team' ? '' : '<small class="bub-n">' + esc(m.from) + '</small>') + '<p>' + esc(m.text).replace(/\n/g, '<br>') + '</p>' + (m.jobId && jobById(m.jobId) ? '<button class="bub-job" data-open="' + esc(m.jobId) + '">' + esc(jobById(m.jobId).code) + '</button>' : '') + '<time>' + msgTime(m.ts) + '</time></div></div>';
   }).join('') : '<div class="mp-empty"><span class="e-ic">' + MSG_IC.chat + '</span><b>ยังไม่มีข้อความ</b><small>' + (M.ch === 'team' ? 'ส่งข้อความถึงทุกคนในทีมได้ที่นี่' : 'เริ่มคุยกับ ' + esc(cur.name)) + '</small></div>';
-  const myJobs = S.jobs.filter(j => isOpen(j) && (isAdmin() || j.assignee === S.me)).sort(sortOpen);
   const helpForm = M.help ? '<div class="mp-help"><div class="mp-help-h"><span class="hc-ic">' + MSG_IC.sos + '</span><b>ขอความช่วยเหลือ</b><button class="icon-btn sm" data-act="helpoff" aria-label="ยกเลิก">✕</button></div>' +
       '<div class="seg"><button data-helpto="team" aria-pressed="' + (M.helpTo === 'team') + '">' + MSG_IC.team + 'ทั้งทีม</button>' + (!isAdmin() ? '<button data-helpto="admin" aria-pressed="' + (M.helpTo === 'admin') + '">' + MSG_IC.shield + ADMIN_LABEL + '</button>' : '') + '</div>' +
-      '<div class="mp-topics">' + HELP_TOPICS.map(t => '<button class="chip sm" data-helptopic="' + esc(t) + '">' + esc(t) + '</button>').join('') + '</div>' +
-      (myJobs.length ? '<label class="mp-jobsel"><span>' + STI.layers + 'แนบงานที่ต้องการให้ช่วย <small>(ไม่บังคับ)</small></span><select id="helpJob" class="sel"><option value="">— ไม่แนบงาน —</option>' + myJobs.map(j => '<option value="' + esc(j.id) + '"' + (M.jobId === j.id ? ' selected' : '') + '>' + esc(j.code + (j.title ? ' · ' + j.title : '')) + '</option>').join('') + '</select></label>' : '') + '</div>' : '';
+      '<select id="helpTopic" class="sel mp-topic"><option value="">เลือกเรื่องที่ต้องการให้ช่วย…</option>' + HELP_TOPICS.map(t => '<option>' + esc(t) + '</option>').join('') + '</select>' +
+      (M.jobId && jobById(M.jobId) ? '<div class="mp-jobchip">' + stBadge(jobById(M.jobId)) + '<span>แนบงาน <b class="mono">' + esc(jobById(M.jobId).code) + '</b></span><button type="button" class="icon-btn sm" data-act="helpnojob" aria-label="ไม่แนบงาน">✕</button></div>' : '') +
+      '</div>' : '';
   p.innerHTML = '<div class="mp-head"><span class="mp-hic">' + MSG_IC.chat + '</span><div><b>ข้อความ</b><small>' + (helps.length ? helps.length + ' คำขอความช่วยเหลือรออยู่' : 'คุยกับทีมและ' + ADMIN_LABEL) + '</small></div>' +
       ('Notification' in window && Notification.permission === 'default' ? '<button class="icon-btn" data-act="notifyperm" title="เปิดแจ้งเตือนบนเครื่องนี้">' + MSG_IC.bell + '</button>' : '') +
       '<button class="icon-btn" data-act="msgclose" aria-label="ปิด">✕</button></div>' +
@@ -1114,7 +1114,7 @@ function renderMsgPanel() {
 async function sendMsg() {
   const t = $('#msgText'); if (!t || M.sending) return;
   const text = t.value.trim(); if (!text) { t.focus(); return; }
-  const p = M.help ? { to: M.helpTo, kind: 'help', text: text, jobId: ($('#helpJob') || {}).value || '' } : { to: chanTo(M.ch), kind: 'msg', text: text };
+  const p = M.help ? { to: M.helpTo, kind: 'help', text: text, jobId: M.jobId || '' } : { to: chanTo(M.ch), kind: 'msg', text: text };
   M.sending = true;
   try {
     const r = await api().sendMessage(p);
@@ -1952,6 +1952,7 @@ document.addEventListener('click', async e => {
     case 'msgopen': return M.open ? closeMsgPanel() : openMsgPanel();
     case 'msgclose': return closeMsgPanel();
     case 'helpon': M.help = true; M.helpTo = M.ch === 'admin' ? 'admin' : 'team'; renderMsgPanel(); { const x = $('#msgText'); if (x) x.focus(); } return;
+    case 'helpnojob': M.jobId = ''; renderMsgPanel(); return;
     case 'helpoff': M.help = false; renderMsgPanel(); return;
     case 'askhelp': { const jid = d.job; closeEditor(); return openMsgPanel(null, { help: true, jobId: jid }); }
     case 'notifyperm': try { Notification.requestPermission().then(() => renderMsgPanel()); } catch (x) {} return;
@@ -2013,6 +2014,7 @@ document.addEventListener('change', e => {
   const t = e.target;
   if (t.id === 'fMember') { S.f.member = t.value; LS.set('fMember', t.value); return render(); }
   if (t.id === 'fGroup') { S.f.group = t.value; return render(); }
+  if (t.id === 'helpTopic' && t.value) { const x = $('#msgText'); if (x) { x.value = t.value + (x.value ? ' — ' + x.value : ''); x.focus(); } t.value = ''; return; }
   if (t.id === 'fMonth') { S.f.month = t.value; return render(); }
   if ((t.id === 'hFrom' || t.id === 'hTo') && t.value) { homeRange(); S.hr.preset = 'custom'; S.hr[t.id === 'hFrom' ? 'from' : 'to'] = t.value; homeRange(); saveHomeRange(); return render(); }
   if (t.id === 'thC1' || t.id === 'thC2') { setTheme({ preset: 'custom', c1: $('#thC1').value, c2: $('#thC2').value }); return render(); }
