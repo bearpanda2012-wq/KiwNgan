@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.5.1';
+const APP_VERSION = '2.5.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1781,7 +1781,7 @@ function teamBadge() {
   return '<span class="count' + (openHelps().length ? ' sos' : '') + (grow ? ' pop' : '') + '" title="ข้อความใหม่ / ขอความช่วยเหลือ">' + (n > 99 ? '99+' : n) + '</span>';
 }
 function navHtml(withCount) {
-  const late = S.jobs.filter(isLate).length;
+  const late = listPool().filter(isLate).length;
   return VIEWS.map(v => '<button data-view="' + v.id + '" aria-current="' + (S.view === v.id) + '">' + I[v.id] + '<span>' + v.label + '</span>' +
     (withCount && v.id === 'board' && late ? '<span class="count">' + late + '</span>' : '') +
     (withCount && v.id === 'team' && typeof M !== 'undefined' ? teamBadge() : '') + '</button>').join('');
@@ -2054,7 +2054,7 @@ function card(j) {
 function viewBoard() {
   const q = S.f.quick || 'all', t = today();
   const quickOk = j => q === 'mine' ? j.assignee === S.me : q === 'urgent' ? j.priority === 'urgent' && isOpen(j) : q === 'late' ? isLate(j) : q === 'today' ? isOpen(j) && j.due && j.due <= addDays(t, 1) : true;
-  const base0 = S.jobs.filter(j => matchBase(j)), base = base0.filter(quickOk);
+  const base0 = listPool().filter(listMatch), base = base0.filter(quickOk);
   const cols = FLOW.slice();
   const hold = base.filter(j => j.status === 'hold');
   const cutoff = addDays(today(), -14);
@@ -2073,14 +2073,14 @@ function viewBoard() {
   const flow = '<div class="flow">' + FLOW.map((st, i) => '<div class="flow-step ' + ST[st].cls + '"><span class="flow-ic ic-' + st + '">' + STI[st] + '</span><div><b>' + cnt(st) + '</b><small>' + ST[st].label + '</small></div></div>' + (i < FLOW.length - 1 ? '<span class="flow-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '')).join('') + '</div>';
   const qn = k => base0.filter(j => (k === 'mine' ? j.assignee === S.me : k === 'urgent' ? j.priority === 'urgent' && isOpen(j) : k === 'late' ? isLate(j) : k === 'today' ? isOpen(j) && j.due && j.due <= addDays(t, 1) : true) && (k === 'all' || isOpen(j) || k === 'mine')).length;
   const quick = '<div class="qchips">' + [['all', 'ทั้งหมด', STI.all, ''], ['mine', 'งานของฉัน', STI.user, 'doing'], ['today', 'ส่งวันนี้/พรุ่งนี้', STI.hourglass, 'review'], ['urgent', 'งานด่วน', STI.fire, 'urgent'], ['late', 'เลยกำหนด', STI.clock, 'late']]
-    .filter(x => x[0] !== 'mine' || S.me)
+    .filter(x => x[0] !== 'mine' || (S.me && isLead()))
     .map(x => '<button class="qchip' + (x[3] ? ' q-' + x[3] : '') + '" data-quick="' + x[0] + '" aria-pressed="' + (q === x[0]) + '"><span class="qi">' + x[2] + '</span>' + x[1] + (x[0] !== 'all' ? '<b>' + qn(x[0]) + '</b>' : '') + '</button>').join('') + '</div>';
-  return topbar('บอร์ดงาน', (isAdmin() ? 'ลากการ์ดเพื่อเปลี่ยนสถานะ หรือกดลูกศรเพื่อเลื่อนไปขั้นถัดไป' : 'ลากหรือกดลูกศรบนการ์ดของคุณเพื่อเปลี่ยนสถานะ งานของคนอื่นดูได้อย่างเดียว') + (hold.length ? ' · พักไว้ ' + hold.length + ' งาน (อยู่ในช่องรอคิว)' : '')) +
-    flow + filterBar() + quick + '<div class="board-scroll"><div class="board">' + colHtml + '</div></div>';
+  return topbar('บอร์ดงาน', (isAdmin() ? 'ลากการ์ดเพื่อเปลี่ยนสถานะ หรือกดลูกศรเพื่อเลื่อนไปขั้นถัดไป' : isLead() ? 'ลากหรือกดลูกศรบนการ์ดของคุณเพื่อเปลี่ยนสถานะ งานของคนอื่นดูได้อย่างเดียว' : 'งานของ' + esc(S.me) + ' · ลากหรือกดลูกศรบนการ์ดเพื่อเปลี่ยนสถานะ') + (hold.length ? ' · พักไว้ ' + hold.length + ' งาน (อยู่ในช่องรอคิว)' : '')) +
+    flow + filterBar('', !isLead()) + quick + '<div class="board-scroll"><div class="board">' + colHtml + '</div></div>';
 }
 
 /* ============ render: list ============ */
-/* พนักงานเห็นเฉพาะงานที่ตัวเองรับผิดชอบในหน้ารายการงาน — หัวหน้างาน/แอดมินเห็นทุกงาน */
+/* พนักงานเห็นเฉพาะงานที่ตัวเองรับผิดชอบในหน้ารายการงานและบอร์ดงาน — หัวหน้างาน/แอดมินเห็นทุกงาน */
 const listPool = () => isLead() ? S.jobs : S.jobs.filter(j => j.assignee === S.me);
 const listMatch = j => matchBase(j, !isLead());
 function listRows() {
