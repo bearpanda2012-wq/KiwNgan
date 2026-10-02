@@ -1665,3 +1665,12 @@ body.auth .msg-fab{display:none}
 }
 @media (prefers-reduced-motion:reduce){.rtc-ring>i,.rtc-go,.rtc-dots i,.rtc-live{animation:none}}
 @media print{.rtc-view,.rtc-host,.rtc-modal{display:none!important}}
+
+/* staff home: team pulse (totals only) */
+.team-pulse{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;margin:0;padding:10px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-size:14px;color:var(--ink-2,var(--ink));animation:fadeIn .4s}
+.team-pulse b{font-family:var(--f-display);font-size:16px;color:var(--ink)}
+.team-pulse .tp-ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);flex:none}
+.team-pulse .tp-ic svg{width:18px;height:18px}
+.team-pulse .tp-dot{width:4px;height:4px;border-radius:50%;background:var(--line)}
+.team-pulse small{margin-left:auto;padding:3px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:600}
+@media (max-width:640px){.team-pulse small{margin-left:0}}

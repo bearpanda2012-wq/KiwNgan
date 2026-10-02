@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.5.2';
+const APP_VERSION = '2.5.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1847,8 +1847,10 @@ function topbar(title, sub, extra) {
 
 /* ============ render: home ============ */
 function viewHome() {
-  const t = today(), open = S.jobs.filter(isOpen), late = open.filter(isLate), urgent = open.filter(j => j.priority === 'urgent');
-  const m = t.slice(0, 7), doneM = S.jobs.filter(j => j.status === 'done' && finDate(j).slice(0, 7) === m);
+  /* พนักงานเห็นภาพรวมเฉพาะงานตัวเอง + ตัวเลขรวมของทีม (ไม่มีชื่อ) — หัวหน้างาน/แอดมินเห็นทั้งทีม */
+  const lead = isLead(), pool = listPool();
+  const t = today(), open = pool.filter(isOpen), late = open.filter(isLate), urgent = open.filter(j => j.priority === 'urgent');
+  const m = t.slice(0, 7), doneM = pool.filter(j => j.status === 'done' && finDate(j).slice(0, 7) === m);
   const okM = doneM.filter(onTime).length;
   const pct = doneM.length ? Math.round(okM / doneM.length * 100) : null;
   const doing = open.filter(j => j.status === 'doing').length, queue = open.filter(j => j.status === 'queue').length;
@@ -1874,7 +1876,7 @@ function viewHome() {
   const keyOf = d => { if (!weekly) return d; const x = parseLocal(d); return addDays(d, -((x.getDay() + 6) % 7)); };
   const keys = []; days.forEach(d => { const k = keyOf(d); if (keys.indexOf(k) < 0) keys.push(k); });
   const per = {}; keys.forEach(k => per[k] = { ok: 0, late: 0 });
-  const done30 = S.jobs.filter(j => j.status === 'done' && finDate(j) >= hr.from && finDate(j) <= hr.to);
+  const done30 = pool.filter(j => j.status === 'done' && finDate(j) >= hr.from && finDate(j) <= hr.to);
   done30.forEach(j => { const k = keyOf(finDate(j)); if (per[k]) per[k][onTime(j) ? 'ok' : 'late']++; });
   let max = Math.max(2, ...keys.map(d => per[d].ok + per[d].late)); if (max % 2) max++;
   const every = Math.max(1, Math.ceil(keys.length / 7));
@@ -1915,20 +1917,23 @@ function viewHome() {
   const arr = Object.entries(agg).sort((a, b) => b[1] - a[1]); const topG = arr.length ? arr[0][1] : 1;
   const grpH = arr.length ? arr.map(a => '<div class="hb"><span title="' + esc(a[0]) + '">' + esc(groupShort(a[0])) + '</span><div class="track"><i style="width:' + (a[1] / topG * 100) + '%;background:var(--accent)"></i></div><b>' + a[1] + '</b></div>').join('') : '<div class="sub">ยังไม่มีงานเสร็จใน 30 วัน</div>';
 
-  return topbar('สวัสดี' + (S.me ? ' ' + esc(S.me) : '') + ' <span class="wave" aria-hidden="true">👋</span>', 'ภาพรวมคิวงานของทีมวันนี้') +
-    '<div class="kpis">' + kp + '</div>' +
+  // team pulse for staff: totals only, no names
+  const tOpen = S.jobs.filter(isOpen), tDoing = tOpen.filter(j => j.status === 'doing').length, tLate = tOpen.filter(isLate).length;
+  const pulse = lead ? '' : '<div class="team-pulse"><span class="tp-ic">' + I.team + '</span><span>ทั้งทีมมีงานค้างอยู่ <b>' + tOpen.length + '</b> งาน</span><span class="tp-dot"></span><span>กำลังทำ <b>' + tDoing + '</b></span>' + (tLate ? '<span class="tp-dot"></span><span>เลยกำหนด <b>' + tLate + '</b></span>' : '') + '<small>' + (tOpen.length > members().length * 4 ? 'ช่วงนี้ทีมงานแน่น' : tOpen.length > members().length * 2 ? 'งานทีมปานกลาง' : 'งานทีมเบา') + '</small></div>';
+  const grpPanel = '<section class="panel"><div class="panel-h"><div><h2>' + (lead ? 'งานเสร็จตามกลุ่มงาน' : 'งานที่คุณทำเสร็จ ตามกลุ่มงาน') + '</h2><div class="sub">' + rangeTxt + '</div></div></div><div class="hbars">' + grpH + '</div></section>';
+  return topbar('สวัสดี' + (S.me ? ' ' + esc(S.me) : '') + ' <span class="wave" aria-hidden="true">👋</span>', lead ? 'ภาพรวมคิวงานของทีมวันนี้' : 'ภาพรวมงานของคุณวันนี้') +
+    '<div class="kpis">' + kp + '</div>' + pulse +
     '<div class="grid2">' + mine +
       '<section class="panel"><div class="panel-h"><div><h2>ต้องจัดการก่อน</h2><div class="sub">เลยกำหนด → ด่วน → ส่งภายในพรุ่งนี้</div></div><button class="btn ghost sm" data-filter-go="open">ดูทั้งหมด</button></div>' +
       (att.length ? '<div class="alist">' + att.map(aItem).join('') + '</div>' : '<div class="empty"><b>ไม่มีงานเร่งด่วน</b>คิวงานอยู่ในกำหนดทั้งหมด</div>') + '</section>' +
     '</div>' +
-    '<section class="panel"><div class="panel-h"><div><h2>งานที่เสร็จ</h2><div class="sub">' + rangeTxt + ' · ' + span + ' วัน' + (weekly ? ' (รวมเป็นรายสัปดาห์)' : '') + ' · นับตามวันที่ปิดงาน</div></div><div class="legend"><span><i style="background:var(--accent)"></i>ตรงเวลา</span><span><i style="background:var(--urgent)"></i>ช้ากว่ากำหนด</span></div></div>' +
+    '<section class="panel"><div class="panel-h"><div><h2>' + (lead ? 'งานที่เสร็จ' : 'งานที่คุณทำเสร็จ') + '</h2><div class="sub">' + rangeTxt + ' · ' + span + ' วัน' + (weekly ? ' (รวมเป็นรายสัปดาห์)' : '') + ' · นับตามวันที่ปิดงาน</div></div><div class="legend"><span><i style="background:var(--accent)"></i>ตรงเวลา</span><span><i style="background:var(--urgent)"></i>ช้ากว่ากำหนด</span></div></div>' +
       hrCtl + '<div class="minis"><div class="mini"><span>งานเสร็จ</span><b>' + done30.length + '</b></div><div class="mini"><span>ตรงเวลา</span><b>' + (done30.length ? Math.round(ok30 / done30.length * 100) + '%' : '–') + '</b></div>' +
       '<div class="mini"><span>เวลาทำเฉลี่ย/งาน</span><b>' + (avgMin ? fdur(avgMin) : '–') + '</b></div><div class="mini"><span>รับงาน → เสร็จ เฉลี่ย</span><b>' + (leads.length ? avgLead.toFixed(1) + ' วัน' : '–') + '</b></div></div>' +
       chartBlock(keys, per, max, every, weekly, span, hr, done30, bars) + '</section>' +
-    '<div class="grid2 even">' +
+    (lead ? '<div class="grid2 even">' +
       '<section class="panel"><div class="panel-h"><div><h2>ภาระงานรายคน</h2><div class="sub">งานที่ยังไม่เสร็จ แยกตามสถานะ</div></div><div class="legend"><span><i style="background:var(--doing)"></i>กำลังทำ</span><span><i style="background:var(--review)"></i>รอตรวจ</span><span><i style="background:var(--queue)"></i>รอคิว</span></div></div><div class="hbars">' + loadH + '</div></section>' +
-      '<section class="panel"><div class="panel-h"><div><h2>งานเสร็จตามกลุ่มงาน</h2><div class="sub">' + rangeTxt + '</div></div></div><div class="hbars">' + grpH + '</div></section>' +
-    '</div>';
+      grpPanel + '</div>' : grpPanel);
 }
 const H_PRESETS = [['7d', '7 วัน'], ['30d', '30 วัน'], ['month', 'เดือนนี้'], ['lastmonth', 'เดือนก่อน'], ['90d', '90 วัน'], ['year', 'ปีนี้']];
 function homeRange() {
