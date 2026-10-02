@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.0.4';
+const APP_VERSION = '2.0.5';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -985,7 +985,7 @@ async function pollMessages(first) {
     const sig = M.list.map(m => m.id + (m.read ? 1 : 0) + m.status).join('|');
     fresh.forEach(notifyMsg);
     if (M.open) { renderMsgPanel(); markChanRead(M.ch); }
-    if (sig !== M.sig) { M.sig = sig; if (!first && !S.edit) render(); else { renderMsgFab(); renderShell(); } } else renderMsgFab();
+    if (sig !== M.sig) { M.sig = sig; if (!first && !S.edit && !S.lb) render(); else { renderMsgFab(); if (S.screen === 'app') { $('#nav').innerHTML = navHtml(true); $('#tabbar').innerHTML = navHtml(true); } } } else renderMsgFab();
     fresh.forEach(m => peekHead(m));
   } catch (e) { /* offline: try again next tick */ }
 }
@@ -1002,7 +1002,7 @@ async function markChanRead(ch) {
   const ids = M.list.filter(m => !m.read && chanOf(m) === ch).map(m => m.id);
   if (!ids.length) return;
   M.list.forEach(m => { if (ids.indexOf(m.id) >= 0) m.read = true; });
-  renderMsgFab();
+  renderMsgFab(); if (S.screen === 'app') { $('#nav').innerHTML = navHtml(true); $('#tabbar').innerHTML = navHtml(true); }
   try { await api().markRead({ ids: ids }); } catch (e) {}
 }
 
@@ -1179,11 +1179,17 @@ function brandMark(s) {
 }
 
 /* ============ render: shell ============ */
+function teamBadge() {
+  const ids = {}; M.list.forEach(m => { if (!m.read) ids[m.id] = 1; }); openHelps().forEach(m => { ids[m.id] = 1; });
+  const n = Object.keys(ids).length; if (!n) { M.lastBadge = 0; return ''; }
+  const grow = n > (M.lastBadge || 0); M.lastBadge = n;
+  return '<span class="count' + (openHelps().length ? ' sos' : '') + (grow ? ' pop' : '') + '" title="ข้อความใหม่ / ขอความช่วยเหลือ">' + (n > 99 ? '99+' : n) + '</span>';
+}
 function navHtml(withCount) {
   const late = S.jobs.filter(isLate).length;
   return VIEWS.map(v => '<button data-view="' + v.id + '" aria-current="' + (S.view === v.id) + '">' + I[v.id] + '<span>' + v.label + '</span>' +
     (withCount && v.id === 'board' && late ? '<span class="count">' + late + '</span>' : '') +
-    (withCount && v.id === 'team' && typeof M !== 'undefined' && openHelps().length ? '<span class="count sos" title="มีคนขอความช่วยเหลือ">' + openHelps().length + '</span>' : '') + '</button>').join('');
+    (withCount && v.id === 'team' && typeof M !== 'undefined' ? teamBadge() : '') + '</button>').join('');
 }
 function renderShell() {
   const s = S.settings || defaultSettings();

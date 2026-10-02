@@ -1417,3 +1417,9 @@ body.auth .msg-fab{display:none}
 .t-sosbtn svg{width:18px;height:18px;animation:spinSlow 5s linear infinite}
 .t-btns .t-sosbtn{flex:none}
 @media (max-width:420px){ .t-btns .t-sosbtn span{display:none} }
+.tabbar .count.sos{background:var(--urgent)}
+.nav .count.sos{background:var(--urgent);color:#fff}
+.nav .count.msg,.tabbar .count.msg{background:#FF4D3D;color:#fff}
+.nav .count.pop,.tabbar .count.pop{animation:countPop .7s cubic-bezier(.3,1.8,.5,1),badge 2s ease-in-out .7s infinite}
+@keyframes countPop{0%{transform:scale(0)}50%{transform:scale(1.5)}75%{transform:scale(.9)}100%{transform:scale(1)}}
+.tabbar button[data-view="team"] .count{top:0}
