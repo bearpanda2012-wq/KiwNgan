@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '2.0.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -262,6 +262,14 @@ function normalizeSettings(s) {
 
 /* ============ demo data ============ */
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function seedMsgs(d) {
+  const t = today(), y = addDays(t, -1), op = (d.jobs || []).find(j => j.status === 'doing') || {};
+  return [
+    { id: 'm_demo1', ts: y + 'T08:30:00', from: 'แอดมิน', to: 'team', kind: 'msg', text: 'สวัสดีทีม 👋 สัปดาห์นี้งานด่วนเยอะ ช่วยอัปเดตสถานะในบอร์ดด้วยนะ', jobId: '', status: '', helper: '', readBy: [] },
+    { id: 'm_demo2', ts: t + 'T09:12:00', from: 'บอส', to: 'team', kind: 'help', text: 'ช่วยตรวจไฟล์ CAM ให้หน่อย ไม่แน่ใจเรื่องขนาดดอกกัด', jobId: op.id || '', status: 'open', helper: '', readBy: ['บอส'] },
+    { id: 'm_demo3', ts: t + 'T09:40:00', from: 'ต้น', to: 'ฝน', kind: 'msg', text: 'ฝน งานผนังล็อบบี้ได้ไฟล์ลูกค้ายัง', jobId: '', status: '', helper: '', readBy: ['ต้น'] }
+  ];
+}
 function seedDemo() {
   const R = mulberry32(20261002), pick = a => a[Math.floor(R() * a.length)];
   const s = defaultSettings();
@@ -332,6 +340,20 @@ const Demo = {
   db() { let d = LS.get('demo', null); if (!d || !d.jobs || !d.users) { d = seedDemo(); LS.set('demo', d); } return d; },
   save(d) { LS.set('demo', d); },
   pub(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '' }; },
+  async messages(p) { const d = this.db(), u = this.me(d); d.messages = d.messages || seedMsgs(d); this.save(d);
+    const vis = m => m.to === 'team' || m.from === u.name || m.to === u.name || (m.to === 'admin' && P.admin(u));
+    return { messages: d.messages.filter(m => vis(m) && (!p.since || m.ts > p.since || (m.kind === 'help' && m.status !== 'done'))).map(m => this.mmsg(d, u, m)), serverTime: nowLocal() + ':' + pad(new Date().getSeconds()) }; },
+  mmsg(d, u, m) { const admins = d.users.filter(x => x.role === 'admin').map(x => x.name); const o = Object.assign({}, m, { fromAdmin: admins.indexOf(m.from) >= 0, read: (m.readBy || []).indexOf(u.name) >= 0 || m.from === u.name }); delete o.readBy;
+    if (!P.admin(u)) { if (o.fromAdmin) o.from = ADMIN_LABEL; if (admins.indexOf(o.helper) >= 0) o.helper = ADMIN_LABEL; if (admins.indexOf(o.to) >= 0) o.to = 'admin'; } return o; },
+  async sendMessage(p) { const d = this.db(), u = this.me(d); d.messages = d.messages || []; const text = String(p.text || '').trim(); if (!text) throw new Error('พิมพ์ข้อความก่อนส่ง');
+    let to = p.to || 'team'; const tu = d.users.find(x => x.name === to); if (tu && tu.role === 'admin' && !P.admin(u)) to = 'admin';
+    const m = { id: uid('m_'), ts: nowLocal() + ':' + pad(new Date().getSeconds()), from: u.name, to: to, kind: p.kind === 'help' ? 'help' : 'msg', text: text, jobId: p.jobId || '', status: p.kind === 'help' ? 'open' : '', helper: '', readBy: [u.name] };
+    d.messages.push(m); this.save(d); return { message: this.mmsg(d, u, m) }; },
+  async markRead(p) { const d = this.db(), u = this.me(d); (d.messages || []).forEach(m => { if ((p.ids || []).indexOf(m.id) >= 0) { m.readBy = m.readBy || []; if (m.readBy.indexOf(u.name) < 0) m.readBy.push(u.name); } }); this.save(d); return {}; },
+  async helpUpdate(p) { const d = this.db(), u = this.me(d), m = (d.messages || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบคำขอนี้');
+    if (p.status === 'taken') { if (m.from === u.name) throw new Error('รับช่วยคำขอของตัวเองไม่ได้'); if (m.status !== 'open') throw new Error('มีคนรับช่วยแล้ว'); m.status = 'taken'; m.helper = u.name;
+      const n = { id: uid('m_'), ts: nowLocal() + ':' + pad(new Date().getSeconds()), from: u.name, to: m.to === 'team' ? 'team' : m.from, kind: 'msg', text: '🙋 รับช่วยเรื่อง "' + m.text.slice(0, 60) + '" แล้ว', jobId: m.jobId, status: '', helper: '', readBy: [u.name] }; d.messages.push(n); this.save(d); return { message: this.mmsg(d, u, m), note: this.mmsg(d, u, n) }; }
+    if (m.from !== u.name && m.helper !== u.name && !P.admin(u)) throw new Error('ปิดได้เฉพาะคนขอ คนที่รับช่วย หรือแอดมิน'); m.status = p.status; this.save(d); return { message: this.mmsg(d, u, m) }; },
   async addImage(p) { const d = this.db(), u = this.me(d), j = d.jobs.find(x => x.id === p.jobId); if (!j) throw new Error('ไม่พบงานนี้'); if (!P.owns(u, j)) throw new Error('เพิ่มรูปได้เฉพาะงานของตัวเอง'); d.images = d.images || []; if (d.images.filter(m => m.jobId === p.jobId).length >= IMG_MAX) throw new Error('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน');
     const m = { id: uid('i_'), jobId: p.jobId, createdBy: u.name, createdAt: nowLocal(), thumb: p.thumb, full: p.full }; d.images.push(m);
     try { this.save(d); } catch (e) { d.images.pop(); throw new Error('พื้นที่ในโหมดทดลองเต็ม ลบรูปเก่าก่อน'); }
@@ -462,7 +484,7 @@ const Remote = {
     return data.data;
   }
 };
-['ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
+['ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -480,7 +502,7 @@ async function load(silent) {
     S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || [];
     if (!S.draftDirty) S.draft = null;
     S.sync = 'ok'; S.syncErr = ''; S.lastSync = Date.now(); S.loaded = true;
-    if (S.screen !== 'app') S.animIn = true;
+    if (S.screen !== 'app') { S.animIn = true; setTimeout(startMsgPolling, 800); }
     S.screen = 'app'; document.body.classList.remove('auth');
   } catch (e) {
     if (e.code === 'auth') { LS.del(tokenKey()); toast(e.message, true); return showLogin(); }
@@ -638,7 +660,7 @@ async function doLogin() {
 }
 async function logout() {
   try { await api().logout({}); } catch (e) {}
-  LS.del(tokenKey()); S.jobs = []; S.logs = []; S.users = []; S.login.userId = ''; S.login.adminMode = false; showLogin();
+  stopMsgPolling(); LS.del(tokenKey()); S.jobs = []; S.logs = []; S.users = []; S.login.userId = ''; S.login.adminMode = false; showLogin();
 }
 
 async function mutate(fn, okMsg) {
@@ -905,9 +927,190 @@ function renderDetail(E, j, live, ro, timer) {
     '</div>' + (jj.note ? '<p class="hv-note">' + esc(jj.note) + '</p>' : '') + '</section>' +
     '<section class="dt-sec"><div class="dt-h"><b>' + DECO.clock + 'ประวัติ</b></div><div class="hist" id="hist">' + (E.hist ? histHtml(E.hist) : '<span>กำลังโหลด…</span>') + '</div></section>';
   $('#sheetFoot').innerHTML = '<button class="btn" data-act="close" type="button">ปิด</button>' +
+    '<button class="btn" type="button" data-act="askhelp" data-job="' + esc(jj.id) + '">' + MSG_IC.sos + 'ขอช่วย</button>' +
     (!ro && nextSt ? '<button class="btn" type="button" data-move="' + esc(jj.id) + '" data-to="' + nextSt + '">' + (STI[nextSt] || '') + 'เลื่อนเป็น ' + ST[nextSt].label + '</button>' : '') +
     (!ro ? '<button class="btn primary" data-act="editmode" type="button">' + I.settings + 'แก้ไขข้อมูล</button>' : '');
   paintAllThumbs($('#sheetBody'));
+}
+
+/* ============ messages, help requests & notifications ============ */
+const MSG_IC = {
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5" stroke-linecap="round"/></svg>',
+  send: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4l17.4-7.5c.8-.4.8-1.5 0-1.8L3.4 3.6c-.7-.3-1.4.3-1.2 1l1.7 6.1 9.1 1.3-9.1 1.3-1.7 6.1c-.2.7.5 1.3 1.2 1z"/></svg>',
+  sos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M5.6 5.6l3.6 3.6M14.8 14.8l3.6 3.6M18.4 5.6l-3.6 3.6M9.2 14.8l-3.6 3.6"/></svg>',
+  team: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4l11 4V6z"/><path d="M15 9.5a3 3 0 0 1 0 5M7 14.5l1 4.5h3l-1-3.6"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.6-3.4 8-8 9-4.6-1-8-4.4-8-9V6z"/></svg>',
+  bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg>',
+  hand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 10V4.5a1.5 1.5 0 0 1 3 0V11M14 10.5V6a1.5 1.5 0 0 1 3 0v8a7 7 0 0 1-7 7h-.5a6 6 0 0 1-4.6-2.2L2.7 15.5a1.5 1.5 0 0 1 2.3-1.9L8 16"/></svg>'
+};
+const HELP_TOPICS = ['ช่วยดูแบบ / ตรวจไฟล์', 'ช่วยทำ CAM', 'ช่วยเขียนแบบ', 'งานด่วน ต้องการคนช่วย', 'สอบถามข้อมูลงาน'];
+const M = { list: [], since: '', loaded: false, open: false, ch: 'team', help: false, helpTo: 'team', jobId: '', timer: null, seen: {}, sending: false };
+const msgMine = m => m.from === S.me && !m.fromAdmin || (isAdmin() && m.from === S.me);
+function chanOf(m) {
+  if (m.to === 'team') return 'team';
+  if (isAdmin()) { if (m.to === 'admin') return 'u:' + m.from; return 'u:' + (m.from === S.me ? m.to : m.from); }
+  if (m.fromAdmin || m.to === 'admin') return 'admin';
+  return 'u:' + (m.from === S.me ? m.to : m.from);
+}
+function chanList() {
+  const out = [{ id: 'team', name: 'ทั้งทีม', icon: MSG_IC.team }];
+  if (!isAdmin()) out.push({ id: 'admin', name: ADMIN_LABEL, icon: MSG_IC.shield });
+  members().filter(u => u.name !== S.me && (isAdmin() || u.role !== 'admin')).forEach(u => out.push({ id: 'u:' + u.name, name: u.name, user: u }));
+  return out;
+}
+const chanTo = ch => ch === 'team' ? 'team' : ch === 'admin' ? 'admin' : ch.slice(2);
+const unreadIn = ch => M.list.filter(m => !m.read && chanOf(m) === ch).length;
+const unreadAll = () => M.list.filter(m => !m.read).length;
+const openHelps = () => M.list.filter(m => m.kind === 'help' && m.status === 'open' && m.from !== S.me);
+
+async function pollMessages(first) {
+  if (S.screen !== 'app' || !S.user) return;
+  try {
+    const r = await api().messages({ since: M.since });
+    const fresh = [];
+    (r.messages || []).forEach(m => {
+      const i = M.list.findIndex(x => x.id === m.id);
+      if (i >= 0) M.list[i] = Object.assign(M.list[i], m); else { M.list.push(m); if (M.loaded && !m.read && !M.seen[m.id]) fresh.push(m); }
+      M.seen[m.id] = 1;
+    });
+    M.list.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+    if (r.serverTime) M.since = r.serverTime;
+    M.loaded = true;
+    fresh.forEach(notifyMsg);
+    if (M.open) { renderMsgPanel(); markChanRead(M.ch); }
+    renderMsgFab();
+  } catch (e) { /* offline: try again next tick */ }
+}
+function startMsgPolling() {
+  if (M.timer) return;
+  M.list = []; M.since = ''; M.loaded = false; M.seen = {};
+  pollMessages(true);
+  M.timer = setInterval(() => { if (document.visibilityState === 'visible' || 'Notification' in window && Notification.permission === 'granted') pollMessages(); }, 20000);
+}
+function stopMsgPolling() { clearInterval(M.timer); M.timer = null; M.list = []; M.open = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); renderMsgFab(); }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && M.timer) pollMessages(); });
+
+async function markChanRead(ch) {
+  const ids = M.list.filter(m => !m.read && chanOf(m) === ch).map(m => m.id);
+  if (!ids.length) return;
+  M.list.forEach(m => { if (ids.indexOf(m.id) >= 0) m.read = true; });
+  renderMsgFab();
+  try { await api().markRead({ ids: ids }); } catch (e) {}
+}
+
+/* floating launcher */
+function renderMsgFab() {
+  let b = $('#msgFab');
+  if (S.screen !== 'app' || !S.user) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('button'); b.id = 'msgFab'; b.className = 'msg-fab'; b.dataset.act = 'msgopen'; b.setAttribute('aria-label', 'ข้อความ'); document.body.appendChild(b); }
+  const n = unreadAll(), h = openHelps().length;
+  b.innerHTML = MSG_IC.chat + (n ? '<span class="mf-n">' + (n > 99 ? '99+' : n) + '</span>' : '') + (h ? '<span class="mf-sos" title="มีคนขอความช่วยเหลือ">' + MSG_IC.sos + '</span>' : '');
+  b.classList.toggle('has', n > 0); b.classList.toggle('sos', h > 0);
+}
+
+/* side panel */
+function openMsgPanel(ch, opts) {
+  M.open = true; if (ch) M.ch = ch;
+  if (opts && opts.help) { M.help = true; M.jobId = opts.jobId || ''; M.helpTo = opts.to || 'team'; }
+  hideHover(); renderMsgPanel(); markChanRead(M.ch);
+  requestAnimationFrame(() => { $('#msgPanel').classList.add('open'); const t = $('#msgText'); if (t && matchMedia('(pointer:fine)').matches) t.focus(); });
+}
+function closeMsgPanel() { M.open = false; M.help = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); }
+function msgTime(ts) { const t = String(ts); return t.slice(0, 10) === today() ? t.slice(11, 16) : fd(t.slice(0, 10)) + ' ' + t.slice(11, 16); }
+function helpCard(m) {
+  const mine = m.from === S.me && !m.fromAdmin || (isAdmin() && m.from === S.me), j = m.jobId ? jobById(m.jobId) : null;
+  const st = m.status || 'open';
+  const lab = st === 'open' ? 'รอคนช่วย' : st === 'taken' ? (m.helper ? m.helper + ' กำลังช่วย' : 'มีคนรับช่วยแล้ว') : 'เรียบร้อยแล้ว';
+  const canTake = st === 'open' && !mine, canClose = st !== 'done' && (mine || isAdmin() || m.helper === S.me);
+  return '<div class="help-card hc-' + st + '"><div class="hc-top"><span class="hc-ic">' + MSG_IC.sos + '</span><div><b>' + (mine ? 'คุณขอความช่วยเหลือ' : esc(m.from) + ' ขอความช่วยเหลือ') + '</b><small>' + (m.to === 'team' ? 'ถึงทั้งทีม' : m.to === 'admin' ? 'ถึง' + ADMIN_LABEL : 'ถึง ' + esc(m.to)) + ' · ' + msgTime(m.ts) + '</small></div><span class="hc-st">' + lab + '</span></div>' +
+    '<p>' + esc(m.text) + '</p>' + (j ? '<button class="hc-job" data-open="' + esc(j.id) + '">' + stBadge(j) + '<b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '') + '</small></button>' : '') +
+    (canTake || canClose ? '<div class="hc-act">' + (canTake ? '<button class="btn sm primary" data-helptake="' + esc(m.id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + (canClose ? '<button class="btn sm" data-helpdone="' + esc(m.id) + '">' + STI.done + 'ปิดคำขอ</button>' : '') + '</div>' : '') + '</div>';
+}
+function renderMsgPanel() {
+  let p = $('#msgPanel');
+  if (!p) { p = document.createElement('aside'); p.id = 'msgPanel'; p.className = 'msg-panel'; p.setAttribute('aria-label', 'ข้อความ'); document.body.appendChild(p); }
+  const chans = chanList(); if (!chans.some(c => c.id === M.ch)) M.ch = 'team';
+  const cur = chans.find(c => c.id === M.ch);
+  const list = M.list.filter(m => chanOf(m) === M.ch);
+  const helps = openHelps();
+  let lastDay = '';
+  const body = list.length ? list.map(m => {
+    const day = String(m.ts).slice(0, 10), sep = day !== lastDay ? '<div class="mp-day"><span>' + (day === today() ? 'วันนี้' : fdY(day)) + '</span></div>' : ''; lastDay = day;
+    if (m.kind === 'help') return sep + helpCard(m);
+    const mine = (m.from === S.me && !m.fromAdmin) || (isAdmin() && m.from === S.me);
+    return sep + '<div class="bub' + (mine ? ' me' : '') + '">' + (mine ? '' : (m.fromAdmin && !isAdmin() ? '<span class="av bub-av adm">' + MSG_IC.shield + '</span>' : av(m.from, 'bub-av'))) +
+      '<div class="bub-b">' + (mine || M.ch !== 'team' ? '' : '<small class="bub-n">' + esc(m.from) + '</small>') + '<p>' + esc(m.text).replace(/\n/g, '<br>') + '</p>' + (m.jobId && jobById(m.jobId) ? '<button class="bub-job" data-open="' + esc(m.jobId) + '">' + esc(jobById(m.jobId).code) + '</button>' : '') + '<time>' + msgTime(m.ts) + '</time></div></div>';
+  }).join('') : '<div class="mp-empty"><span class="e-ic">' + MSG_IC.chat + '</span><b>ยังไม่มีข้อความ</b><small>' + (M.ch === 'team' ? 'ส่งข้อความถึงทุกคนในทีมได้ที่นี่' : 'เริ่มคุยกับ ' + esc(cur.name)) + '</small></div>';
+  const myJobs = S.jobs.filter(j => isOpen(j) && (isAdmin() || j.assignee === S.me)).sort(sortOpen);
+  const helpForm = M.help ? '<div class="mp-help"><div class="mp-help-h"><span class="hc-ic">' + MSG_IC.sos + '</span><b>ขอความช่วยเหลือ</b><button class="icon-btn sm" data-act="helpoff" aria-label="ยกเลิก">✕</button></div>' +
+      '<div class="seg"><button data-helpto="team" aria-pressed="' + (M.helpTo === 'team') + '">' + MSG_IC.team + 'ทั้งทีม</button>' + (!isAdmin() ? '<button data-helpto="admin" aria-pressed="' + (M.helpTo === 'admin') + '">' + MSG_IC.shield + ADMIN_LABEL + '</button>' : '') + '</div>' +
+      '<div class="mp-topics">' + HELP_TOPICS.map(t => '<button class="chip sm" data-helptopic="' + esc(t) + '">' + esc(t) + '</button>').join('') + '</div>' +
+      '<select id="helpJob" class="sel"><option value="">ไม่ระบุงาน</option>' + myJobs.map(j => '<option value="' + esc(j.id) + '"' + (M.jobId === j.id ? ' selected' : '') + '>' + esc(j.code + (j.title ? ' · ' + j.title : '')) + '</option>').join('') + '</select></div>' : '';
+  p.innerHTML = '<div class="mp-head"><span class="mp-hic">' + MSG_IC.chat + '</span><div><b>ข้อความ</b><small>' + (helps.length ? helps.length + ' คำขอความช่วยเหลือรออยู่' : 'คุยกับทีมและ' + ADMIN_LABEL) + '</small></div>' +
+      ('Notification' in window && Notification.permission === 'default' ? '<button class="icon-btn" data-act="notifyperm" title="เปิดแจ้งเตือนบนเครื่องนี้">' + MSG_IC.bell + '</button>' : '') +
+      '<button class="icon-btn" data-act="msgclose" aria-label="ปิด">✕</button></div>' +
+    '<div class="mp-chans">' + chans.map(c => { const n = unreadIn(c.id); return '<button class="mp-ch' + (c.id === M.ch ? ' on' : '') + '" data-ch="' + esc(c.id) + '">' + (c.user ? avUser(c.user) : '<span class="av ch-ic">' + c.icon + '</span>') + '<span>' + esc(c.name) + '</span>' + (n ? '<b>' + n + '</b>' : '') + '</button>'; }).join('') + '</div>' +
+    (helps.length && M.ch !== 'team' ? '<button class="mp-sosbar" data-ch="team">' + MSG_IC.sos + helps.length + ' คำขอความช่วยเหลือรอคนช่วย · ดู</button>' : '') +
+    '<div class="mp-body" id="mpBody">' + body + '</div>' +
+    '<form class="mp-compose' + (M.help ? ' helping' : '') + '" id="msgForm">' + helpForm +
+      '<div class="mp-row">' + (M.help ? '' : '<button type="button" class="mp-sos-btn" data-act="helpon" title="ขอความช่วยเหลือ">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') +
+      '<textarea id="msgText" rows="1" maxlength="1000" placeholder="' + (M.help ? 'บอกว่าอยากให้ช่วยอะไร…' : 'พิมพ์ข้อความถึง ' + esc(cur.name) + '…') + '"></textarea>' +
+      '<button type="submit" class="mp-send' + (M.help ? ' sos' : '') + '" aria-label="ส่ง"' + (M.sending ? ' disabled' : '') + '>' + MSG_IC.send + '</button></div></form>';
+  const b = $('#mpBody'); if (b) b.scrollTop = b.scrollHeight;
+}
+async function sendMsg() {
+  const t = $('#msgText'); if (!t || M.sending) return;
+  const text = t.value.trim(); if (!text) { t.focus(); return; }
+  const p = M.help ? { to: M.helpTo, kind: 'help', text: text, jobId: ($('#helpJob') || {}).value || '' } : { to: chanTo(M.ch), kind: 'msg', text: text };
+  M.sending = true;
+  try {
+    const r = await api().sendMessage(p);
+    M.list.push(r.message); M.seen[r.message.id] = 1;
+    if (M.help) { M.ch = chanOf(r.message); M.help = false; M.jobId = ''; toast('ส่งคำขอความช่วยเหลือแล้ว'); }
+    M.sending = false; renderMsgPanel(); renderMsgFab();
+  } catch (e) { M.sending = false; toast(e.message, true); }
+}
+async function helpUpdate(id, status) {
+  try {
+    const r = await api().helpUpdate({ id: id, status: status });
+    const i = M.list.findIndex(x => x.id === id); if (i >= 0) M.list[i] = Object.assign(M.list[i], r.message);
+    if (r.note) { M.list.push(r.note); M.seen[r.note.id] = 1; }
+    toast(status === 'taken' ? 'รับช่วยแล้ว ทีมจะเห็นว่าคุณกำลังช่วย' : 'ปิดคำขอแล้ว');
+    if (M.open) renderMsgPanel(); renderMsgFab(); dropNotice(id);
+  } catch (e) { toast(e.message, true); }
+}
+
+/* pop-up notifications that slide in from the side */
+function notifyMsg(m) {
+  let stack = $('#ntfStack'); if (!stack) { stack = document.createElement('div'); stack.id = 'ntfStack'; stack.className = 'ntf-stack'; document.body.appendChild(stack); }
+  if (M.open && chanOf(m) === M.ch && m.kind !== 'help') return;
+  const help = m.kind === 'help', who = m.fromAdmin && !isAdmin() ? ADMIN_LABEL : m.from;
+  const el = document.createElement('div'); el.className = 'ntf' + (help ? ' help' : ''); el.dataset.mid = m.id;
+  el.innerHTML = '<span class="ntf-ic">' + (help ? MSG_IC.sos : m.fromAdmin && !isAdmin() ? MSG_IC.shield : MSG_IC.chat) + '</span>' +
+    '<div class="ntf-b"><b>' + (help ? esc(who) + ' ขอความช่วยเหลือ' : esc(who) + (m.to === 'team' ? ' ถึงทั้งทีม' : '')) + '</b><p>' + esc(m.text) + '</p>' +
+    '<div class="ntf-act">' + (help ? '<button class="btn sm primary" data-helptake="' + esc(m.id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + '<button class="btn sm" data-ntfopen="' + esc(chanOf(m)) + '">' + (help ? 'ดูรายละเอียด' : 'ตอบกลับ') + '</button></div></div>' +
+    '<button class="ntf-x" data-ntfx="1" aria-label="ปิด">✕</button><i class="ntf-bar"></i>';
+  stack.prepend(el);
+  requestAnimationFrame(() => el.classList.add('in'));
+  while (stack.children.length > 4) stack.lastChild.remove();
+  setTimeout(() => dismissNtf(el), help ? 15000 : 7000);
+  try { if (navigator.vibrate) navigator.vibrate(help ? [40, 60, 40] : 25); } catch (e) {}
+  ping(help);
+  if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
+    try { const n = new Notification(help ? who + ' ขอความช่วยเหลือ' : who, { body: m.text, tag: m.id, icon: 'icons/icon-192.png' }); n.onclick = () => { window.focus(); openMsgPanel(chanOf(m)); }; } catch (e) {}
+  }
+}
+function dismissNtf(el) { if (!el || !el.isConnected) return; el.classList.remove('in'); el.classList.add('out'); setTimeout(() => el.remove(), 350); }
+function dropNotice(mid) { document.querySelectorAll('.ntf[data-mid="' + mid + '"]').forEach(dismissNtf); }
+let audioCtx = null;
+function ping(strong) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime;
+    o.type = 'sine'; o.frequency.setValueAtTime(strong ? 740 : 880, t); o.frequency.setValueAtTime(strong ? 988 : 1175, t + 0.09);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.08, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + 0.3);
+  } catch (e) {}
 }
 
 /* ============ brand ============ */
@@ -963,6 +1166,7 @@ function render() {
   v.innerHTML = h;
   decorate(v);
   paintAllThumbs(v);
+  renderMsgFab();
   if (S.animIn) {
     S.animIn = false;
     const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1601,6 +1805,13 @@ document.addEventListener('click', async e => {
   if (d.add) { const k = d.add; if (k === 'members') S.draft.members.push({ id: uid('m_'), name: '', full: '', color: COLORS[S.draft.members.length % COLORS.length] }); else if (k === 'taskTypes') S.draft.taskTypes.push({ name: '', cat: 'draw' }); else S.draft[k].push(''); markDirty(); render(); setTimeout(() => { const ins = document.querySelectorAll('[data-d^="' + k + '."]'); const last = ins[k === 'members' ? ins.length - 2 : ins.length - 1]; if (last) last.focus(); }, 20); return; }
   if (d.del) { const p = d.del.split('.'); S.draft[p[0]].splice(+p[1], 1); markDirty(); return render(); }
 
+  if (d.ch) { M.ch = d.ch; M.help = false; renderMsgPanel(); return markChanRead(d.ch); }
+  if (d.helpto) { M.helpTo = d.helpto; renderMsgPanel(); return; }
+  if (d.helptopic) { const t = $('#msgText'); if (t) { t.value = d.helptopic + (t.value ? ' — ' + t.value : ''); t.focus(); } return; }
+  if (d.helptake) return helpUpdate(d.helptake, 'taken');
+  if (d.helpdone) return helpUpdate(d.helpdone, 'done');
+  if (d.ntfopen) { dismissNtf(t.closest('.ntf')); return openMsgPanel(d.ntfopen); }
+  if (d.ntfx) return dismissNtf(t.closest('.ntf'));
   if (d.lbopen) return openLightbox(d.lbjob, d.lbopen);
   if (d.lbgo !== undefined) { S.lb.i = +d.lbgo; return drawLightbox(); }
   if (d.lb) { if (d.lb === 'close') return closeLightbox(); S.lb.i += d.lb === 'next' ? 1 : -1; return drawLightbox(); }
@@ -1619,6 +1830,12 @@ document.addEventListener('click', async e => {
     case 'stop': if (S.edit) readEditor(); return stopTimer(d.log);
     case 'refresh': return load(false).then(() => { if (S.sync === 'ok') toast('อัปเดตข้อมูลล่าสุดแล้ว'); });
     case 'csv': return exportCsv();
+    case 'msgopen': return M.open ? closeMsgPanel() : openMsgPanel();
+    case 'msgclose': return closeMsgPanel();
+    case 'helpon': M.help = true; M.helpTo = M.ch === 'admin' ? 'admin' : 'team'; renderMsgPanel(); { const x = $('#msgText'); if (x) x.focus(); } return;
+    case 'helpoff': M.help = false; renderMsgPanel(); return;
+    case 'askhelp': { const jid = d.job; closeEditor(); return openMsgPanel(null, { help: true, jobId: jid }); }
+    case 'notifyperm': try { Notification.requestPermission().then(() => renderMsgPanel()); } catch (x) {} return;
     case 'editmode': if (S.edit) { S.edit.mode = 'edit'; renderEditor(); } return;
     case 'install': return installApp();
     case 'insthelp': INST.help = !INST.help; renderLogin(); if (INST.help) drawQr(); return;
@@ -1641,8 +1858,10 @@ document.addEventListener('click', async e => {
   }
 });
 
-document.addEventListener('submit', e => { if (e.target.id === 'pinForm') { e.preventDefault(); doLogin(); } });
+document.addEventListener('submit', e => { if (e.target.id === 'pinForm') { e.preventDefault(); doLogin(); } if (e.target.id === 'msgForm') { e.preventDefault(); sendMsg(); } });
 document.addEventListener('keydown', e => {
+  if (e.target && e.target.id === 'msgText' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMsg(); return; }
+  if (e.key === 'Escape' && M.open && !S.lb) { closeMsgPanel(); return; }
   if (e.target && e.target.id === 'adminName' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); if (S.login.pin.length >= 4) doLogin(); else { const k = $('.keypad'); if (k) { k.classList.remove('nudge'); void k.offsetWidth; k.classList.add('nudge'); } } return; }
   if (S.lb) { if (e.key === 'Escape') return closeLightbox(); if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { S.lb.i += e.key === 'ArrowRight' ? 1 : -1; return drawLightbox(); } }
   if (e.key === 'Escape' && S.edit) closeEditor();
@@ -1653,6 +1872,7 @@ $('#scrim').addEventListener('click', closeEditor);
 
 document.addEventListener('input', e => {
   const t = e.target;
+  if (t.id === 'msgText') { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; return; }
   if (t.id === 'adminName') { S.login.adminName = t.value; const w = t.closest('.name-in'); if (w) { w.classList.toggle('has', !!t.value.trim()); w.classList.remove('typing'); void w.offsetWidth; w.classList.add('typing'); } return; }
   if (t.id === 'pinIn') { S.login.pin = t.value.replace(/\D/g, '').slice(0, 6); S.login.err = ''; const dots = document.querySelectorAll('.pin-dots i'); dots.forEach((el, i) => el.classList.toggle('on', i < S.login.pin.length)); const sb = document.querySelector('#pinForm [type=submit]'); if (sb) sb.disabled = S.login.pin.length < 4; return; }
   if (t.id === 'q') { S.f.q = t.value; const pos = t.selectionStart; render(); const q = $('#q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
@@ -1825,6 +2045,6 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|u
   } catch (e) {}
 })();
 try { applyTheme(); } catch (e) {}
-window.KiwNgan = { S: S, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION };
+window.KiwNgan = { S: S, M: M, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION };
 load(false);
 })();

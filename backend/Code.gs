@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -30,6 +30,7 @@ const SHEETS = {
   Activity: ['ts', 'jobId', 'who', 'action', 'detail'],
   Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo'],
   Settings: ['key', 'value'],
+  Messages: ['id', 'ts', 'from', 'fromRole', 'to', 'kind', 'text', 'jobId', 'status', 'helper', 'readBy'],
   Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7']
 };
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
@@ -78,6 +79,10 @@ const ACTIONS = {
   changePin: (p, u) => withLock_(() => changePin_(u, p.oldPin, p.newPin)),
   setPhoto: (p, u) => withLock_(() => setPhoto_(p.userId || u.id, p.photo, u)),
   addImage: (p, u) => withLock_(() => addImage_(p, u)),
+  messages: (p, u) => messages_(u, p.since),
+  sendMessage: (p, u) => withLock_(() => sendMessage_(p, u)),
+  markRead: (p, u) => withLock_(() => markRead_(p.ids, u)),
+  helpUpdate: (p, u) => withLock_(() => helpUpdate_(p.id, p.status, u)),
   deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
   thumbs: (p, u) => thumbs_(p.ids),
   image: (p, u) => imageFull_(p.id),
@@ -729,4 +734,78 @@ function importJobshop() {
   Logger.log('นำเข้าเสร็จ ' + added + ' งาน');
   if (pins.length) Logger.log('PIN เริ่มต้นของทีมงาน (แจ้งแต่ละคน แล้วให้เปลี่ยนเองในหน้าตั้งค่า):\n' + pins.join('\n'));
   return added;
+}
+
+
+/* ---------- ข้อความและขอความช่วยเหลือ ----------
+   to = 'team' (ทุกคน) | 'admin' (ผู้ดูแลระบบทุกคน) | ชื่อผู้ใช้ (ข้อความส่วนตัว)
+   kind = 'msg' | 'help'   status (help) = open | taken | done */
+function msgVisible_(m, u) {
+  if (m.to === 'team' || m.from === u.name || m.to === u.name) return true;
+  return m.to === 'admin' && isAdmin_(u);
+}
+function maskMsg_(m, u) {
+  const read = (',' + m.readBy + ',').indexOf(',' + u.name + ',') >= 0 || m.from === u.name;
+  const o = { id: m.id, ts: m.ts, from: m.from, fromAdmin: m.fromRole === 'admin', to: m.to, kind: m.kind, text: m.text, jobId: m.jobId, status: m.status, helper: m.helper, read: read };
+  if (!isAdmin_(u)) { o.from = maskName_(o.from, u); o.helper = maskName_(o.helper, u); if (adminNames_().indexOf(o.to) >= 0) o.to = 'admin'; }
+  return o;
+}
+function messages_(u, since) {
+  const cutoff = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), tz_(), "yyyy-MM-dd'T'HH:mm:ss");
+  const s = String(since || '');
+  const list = readAll_('Messages').filter(m => msgVisible_(m, u) && m.ts >= cutoff && (!s || m.ts > s || (m.kind === 'help' && m.status !== 'done')));
+  return { messages: list.slice(-400).map(m => maskMsg_(m, u)), serverTime: nowIso_() };
+}
+function sendMessage_(p, u) {
+  const text = String(p.text || '').trim().slice(0, 1000);
+  if (!text) throw new Error('พิมพ์ข้อความก่อนส่ง');
+  let to = String(p.to || 'team');
+  if (to !== 'team' && to !== 'admin') {
+    const target = readAll_('Users').find(x => x.name === to && x.active);
+    if (!target) throw new Error('ไม่พบผู้รับ');
+    if (target.role === 'admin' && !isAdmin_(u)) to = 'admin';
+  }
+  const kind = p.kind === 'help' ? 'help' : 'msg';
+  const m = { id: uid_('m_'), ts: nowIso_(), from: u.name, fromRole: u.role, to: to, kind: kind, text: text, jobId: String(p.jobId || ''), status: kind === 'help' ? 'open' : '', helper: '', readBy: u.name };
+  writeRow_('Messages', m, -1);
+  return { message: maskMsg_(m, u) };
+}
+function markRead_(ids, u) {
+  ids = (ids || []).slice(0, 200).map(String);
+  const sh = sheet_('Messages'), last = sh.getLastRow();
+  if (last < 2 || !ids.length) return { ok: true };
+  const head = SHEETS.Messages, col = head.indexOf('readBy') + 1;
+  const idv = sh.getRange(2, 1, last - 1, 1).getDisplayValues(), rv = sh.getRange(2, col, last - 1, 1).getDisplayValues();
+  let changed = false;
+  for (let i = 0; i < idv.length; i++) {
+    if (ids.indexOf(idv[i][0]) < 0) continue;
+    const cur = rv[i][0] ? rv[i][0].split(',') : [];
+    if (cur.indexOf(u.name) < 0) { cur.push(u.name); rv[i][0] = cur.join(','); changed = true; }
+  }
+  if (changed) sh.getRange(2, col, last - 1, 1).setNumberFormat('@').setValues(rv);
+  return { ok: true };
+}
+function helpUpdate_(id, status, u) {
+  const row = rowOf_('Messages', id);
+  if (row < 0) throw new Error('ไม่พบคำขอนี้');
+  const m = readRow_('Messages', row);
+  if (m.kind !== 'help') throw new Error('ไม่ใช่คำขอความช่วยเหลือ');
+  if (!msgVisible_(m, u)) throw new Error('ไม่มีสิทธิ์');
+  if (status === 'taken') {
+    if (m.from === u.name) throw new Error('รับช่วยคำขอของตัวเองไม่ได้');
+    if (m.status !== 'open') throw new Error(m.status === 'taken' ? 'มีคนรับช่วยแล้ว' : 'คำขอนี้ปิดแล้ว');
+    m.status = 'taken'; m.helper = u.name;
+    writeRow_('Messages', m, row);
+    const note = { id: uid_('m_'), ts: nowIso_(), from: u.name, fromRole: u.role, to: m.to === 'team' ? 'team' : m.from, kind: 'msg', text: '🙋 รับช่วยเรื่อง "' + m.text.slice(0, 60) + '" แล้ว', jobId: m.jobId, status: '', helper: '', readBy: u.name };
+    if (m.to !== 'team' && !isAdmin_(u)) note.to = m.from;
+    writeRow_('Messages', note, -1);
+    return { message: maskMsg_(m, u), note: maskMsg_(note, u) };
+  }
+  if (status === 'done' || status === 'open') {
+    if (m.from !== u.name && m.helper !== u.name && !isAdmin_(u)) throw new Error('ปิดได้เฉพาะคนขอ คนที่รับช่วย หรือแอดมิน');
+    m.status = status; if (status === 'open') m.helper = '';
+    writeRow_('Messages', m, row);
+    return { message: maskMsg_(m, u) };
+  }
+  throw new Error('สถานะไม่ถูกต้อง');
 }
