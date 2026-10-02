@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.8.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -120,11 +120,14 @@ const VIEWS = [
 ];
 
 /* ============ state ============ */
+const CFG = window.KIWNGAN_CONFIG || {};
+const DEFAULT_CONN = () => (/^https:\/\/script\.google\.com\//.test(CFG.api || '') ? { url: CFG.api } : null);
+const LOCKED = () => !!DEFAULT_CONN();   // this site is tied to one team's database
 const S = {
   settings: null, jobs: [], logs: [],
   view: LS.get('view', 'home'),
   me: '', user: null, users: [], screen: 'boot', login: { userId: '', pin: '', err: '', busy: false, roster: null, brand: null, showConn: false },
-  conn: LS.get('conn', null),            // {url, key} when connected to a sheet
+  conn: LS.get('conn', null) || DEFAULT_CONN(),   // {url} when connected to a sheet
   f: { q: '', member: LS.get('fMember', 'all'), status: 'open', group: 'all', month: '' },
   edit: null, draft: null, draftDirty: false,
   sync: 'idle', syncErr: '', lastSync: 0, loaded: false
@@ -581,7 +584,7 @@ function renderLogin() {
     (mode() === 'demo' ? '<div class="banner"><span><b>โหมดทดลอง</b> ทุกคนใช้ PIN 1234 · ผู้ดูแลระบบเข้าที่ลิงก์ด้านล่าง ชื่อ "แอดมิน"</span></div>' : '') +
     body + (L.err ? '<div class="err" role="alert">' + esc(L.err) + '</div>' : '') +
     '<div class="login-foot">' +
-      (showConn ? '<div class="f"><label for="cUrl">URL ฐานข้อมูล (Apps Script /exec)</label><input id="cUrl" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" autocomplete="off"></div><div class="top-actions"><button class="btn primary sm" data-act="connect">เชื่อมต่อ</button>' + (mode() === 'sheet' ? '<button class="btn sm" data-act="disconnect">ใช้โหมดทดลอง</button>' : '') + '</div>'
+      (showConn ? '<div class="f"><label for="cUrl">URL ฐานข้อมูล (Apps Script /exec)</label><input id="cUrl" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" autocomplete="off"></div><div class="top-actions"><button class="btn primary sm" data-act="connect">เชื่อมต่อ</button>' + (mode() === 'sheet' ? '' + (LOCKED() ? '' : '<button class="btn sm" data-act="disconnect">ใช้โหมดทดลอง</button>') + '' : '') + '</div>'
         : '<div class="top-actions" style="justify-content:space-between">' + (!L.adminMode ? '<button type="button" class="btn ghost sm" data-act="adminon">ผู้ดูแลระบบ</button>' : '<span></span>') +
           (mode() === 'demo' ? '<button type="button" class="btn ghost sm" data-act="showconn">เชื่อมต่อ Google Sheet ของทีม</button>' : '') + '</div>') +
     '</div></div>' + installBlock() + '<p class="lg-legal">' + esc(b.company || '') + ' · KiwNgan v' + APP_VERSION + '</p></section></div>';
@@ -1155,7 +1158,7 @@ function viewSettings() {
 
   if (admin) h += '<section class="panel sec" id="s-conn"><div class="panel-h"><h2>ฐานข้อมูล</h2>' + (mode() === 'sheet' ? '<span class="pill s-done">Google Sheet</span>' : '<span class="pill s-hold">โหมดทดลอง</span>') + '</div>' +
     (mode() === 'sheet'
-      ? '<p class="help">ข้อมูลของทีมเก็บใน Google Sheet ผ่าน Apps Script ด้านล่าง</p><div class="code-box">' + esc(c.url) + '</div><div class="top-actions"><button class="btn sm" data-act="copylink">คัดลอกลิงก์เข้าใช้งานให้ทีม</button><button class="btn sm" data-act="disconnect">ออกจากฐานข้อมูลนี้</button></div>'
+      ? '<p class="help">ข้อมูลของทีมเก็บใน Google Sheet ผ่าน Apps Script ด้านล่าง</p><div class="code-box">' + esc(c.url) + '</div><div class="top-actions"><button class="btn sm" data-act="copylink">คัดลอกลิงก์เข้าใช้งานให้ทีม</button>' + (LOCKED() ? '' : '<button class="btn sm" data-act="disconnect">ออกจากฐานข้อมูลนี้</button>') + '</div>'
       : '<p class="help">ตอนนี้ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น ติดตั้ง Apps Script ตามคู่มือแล้ววาง URL ที่ลงท้าย /exec เพื่อใช้ร่วมกันทั้งทีม</p>' +
         '<div class="form-grid"><div class="f full"><label for="cUrl">URL ของ Apps Script</label><input id="cUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" inputmode="url"></div></div>' +
         '<div class="top-actions"><button class="btn primary" data-act="connect">เชื่อมต่อ</button><button class="btn sm" data-act="resetdemo">รีเซ็ตข้อมูลตัวอย่าง</button></div>') + '</section>';
@@ -1384,7 +1387,7 @@ document.addEventListener('click', async e => {
     case 'themereset': LS.del('theme'); applyTheme(); toast('คืนค่าธีมเริ่มต้นแล้ว'); return render();
     case 'print': return printReport();
     case 'connect': return connect();
-    case 'disconnect': S.conn = null; LS.del('conn'); S.loaded = false; S.login.showConn = false; toast('กลับสู่โหมดทดลองแล้ว'); return load(false);
+    case 'disconnect': if (LOCKED()) { LS.del('conn'); S.conn = DEFAULT_CONN(); toast('กลับไปใช้ฐานข้อมูลหลักของทีมแล้ว'); S.loaded = false; return load(false); } S.conn = null; LS.del('conn'); S.loaded = false; S.login.showConn = false; toast('กลับสู่โหมดทดลองแล้ว'); return load(false);
     case 'resetdemo': LS.del('demo'); LS.del(tokenKey()); toast('รีเซ็ตข้อมูลตัวอย่างแล้ว'); return showLogin();
     case 'showconn': S.login.showConn = true; return renderLogin();
     case 'adminon': Object.assign(S.login, { adminMode: true, userId: '', pin: '', err: '' }); return renderLogin();
