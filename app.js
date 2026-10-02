@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.5.3';
+const APP_VERSION = '2.5.4';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1859,8 +1859,8 @@ function viewHome() {
     { k: 'var(--doing)', l: 'งานที่ยังไม่เสร็จ', n: open.length, s: 'กำลังทำ ' + doing + ' · รอคิว ' + queue, f: 'open' },
     { k: 'var(--late)', l: 'เลยกำหนดส่ง', n: late.length, s: late.length ? 'ต้องเร่งปิดงาน' : 'ไม่มีงานค้างเกินกำหนด', f: 'late' },
     { k: 'var(--urgent)', l: 'งานด่วนคงค้าง', n: urgent.length, s: 'ติดธงงานด่วน', f: 'urgent' },
-    { k: 'var(--done)', l: 'เสร็จเดือนนี้', n: doneM.length, s: pct === null ? 'ยังไม่มีงานเสร็จ' : 'ตรงเวลา ' + pct + '%', f: 'done' }
-  ].map(x => '<button class="kpi" style="--k:' + x.k + '" data-filter-go="' + x.f + '"><i class="kpi-ic" aria-hidden="true">' + KPI_IC[x.f] + '</i><span>' + x.l + '</span><b>' + x.n + '</b><small>' + x.s + '</small></button>').join('');
+    { k: 'var(--done)', l: 'เสร็จเดือนนี้', n: doneM.length, s: (pct === null ? 'เดือนนี้ยังไม่มีงานเสร็จ' : 'ตรงเวลา ' + pct + '%') + ' · รวมทุกเดือน ' + pool.filter(j => j.status === 'done').length, f: 'done', m: m }
+  ].map(x => '<button class="kpi" style="--k:' + x.k + '" data-filter-go="' + x.f + '"' + (x.m ? ' data-fmonth="' + x.m + '"' : '') + '><i class="kpi-ic" aria-hidden="true">' + KPI_IC[x.f] + '</i><span>' + x.l + '</span><b>' + x.n + '</b><small>' + x.s + '</small></button>').join('');
 
   // me
   let mine = '';
@@ -2103,10 +2103,10 @@ function listRows() {
 }
 function viewList() {
   const pool = listPool(), base = pool.filter(listMatch);
-  const n = k => base.filter(j => k === 'open' ? isOpen(j) : k === 'late' ? isLate(j) : k === 'urgent' ? isOpen(j) && j.priority === 'urgent' : k === 'all' ? true : j.status === k).length;
+  const n = k => base.filter(j => k === 'open' ? isOpen(j) : k === 'late' ? isLate(j) : k === 'urgent' ? isOpen(j) && j.priority === 'urgent' : k === 'all' ? true : k === 'done' ? j.status === 'done' && (!S.f.month || S.f.status !== 'done' || finDate(j).slice(0, 7) === S.f.month) : j.status === k).length;
   const chips = [['open', 'ยังไม่เสร็จ'], ['late', 'เลยกำหนด'], ['urgent', 'ด่วน'], ['doing', 'กำลังทำ'], ['review', 'รอตรวจ/แก้'], ['hold', 'พักไว้'], ['done', 'เสร็จแล้ว'], ['all', 'ทั้งหมด']]
     .map(x => '<button class="chip" data-fstatus="' + x[0] + '" aria-pressed="' + (S.f.status === x[0]) + '">' + ({ open: STI.layers, late: STI.fire, urgent: STI.fire, doing: STI.doing, review: STI.review, hold: STI.hold, done: STI.done, all: STI.all }[x[0]] || '') + x[1] + ' <b>' + n(x[0]) + '</b></button>').join('');
-  const months = {}; pool.forEach(j => { if (finDate(j)) months[finDate(j).slice(0, 7)] = 1; });
+  const months = {}; pool.forEach(j => { if (finDate(j)) months[finDate(j).slice(0, 7)] = 1; }); if (S.f.month) months[S.f.month] = 1;
   const monthSel = S.f.status === 'done' ? '<select class="sel" id="fMonth" aria-label="เดือนที่เสร็จ"><option value="">ทุกเดือน</option>' + Object.keys(months).sort().reverse().map(m => '<option value="' + m + '"' + (S.f.month === m ? ' selected' : '') + '>' + monthLabel(m) + '</option>').join('') + '</select>' : '';
   const rows = listRows();
   const body = rows.length ? rows.map(j => {
@@ -2500,7 +2500,7 @@ document.addEventListener('click', async e => {
   if (d.go) return go(d.go, d.sec);
   if (d.move) { e.stopPropagation(); return moveJob(d.move, d.to); }
   if (d.rpreset) { reportState(); if (d.rpreset !== 'custom') applyPreset(d.rpreset); else S.r.preset = 'custom'; saveReportState(); return render(); }
-  if (d.filterGo) { S.f.status = d.filterGo; S.f.month = ''; return go('list'); }
+  if (d.filterGo) { S.f.status = d.filterGo; S.f.month = d.fmonth || ''; return go('list'); }
   if (d.mine) { S.f.member = '__me'; LS.set('fMember', S.f.member); return go('board'); }
   if (d.memberjobs) { S.f.member = d.memberjobs; S.f.status = 'open'; LS.set('fMember', S.f.member); return go('list'); }
   if (d.fstatus) { S.f.status = d.fstatus; if (d.fstatus !== 'done') S.f.month = ''; return render(); }
