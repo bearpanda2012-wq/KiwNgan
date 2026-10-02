@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.4.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1199,9 +1199,10 @@ function ping(strong) {
   } catch (e) {}
 }
 
-/* ============ screen share & remote control (WebRTC, signaling via the API) ============
+/* ============ screen share & remote pointer (WebRTC, signaling via the API) ============
    ภาพหน้าจอวิ่งตรงระหว่างสองเครื่อง (peer-to-peer) — ฐานข้อมูลใช้แค่ส่งสัญญาณเริ่มต้น
-   การควบคุมเมาส์/คีย์บอร์ดข้ามเครื่องทำในเบราว์เซอร์ไม่ได้ จึงส่งต่อให้ Chrome Remote Desktop ด้วยรหัสครั้งเดียว */
+   "รีโมท" = คนดูชี้/วาดบนภาพ ส่งผ่าน data channel ไปขึ้นที่เครื่องคนแชร์ (หน้าต่างลอย) — ไม่ต้องติดตั้งโปรแกรมใดๆ
+   (เบราว์เซอร์ไม่ยอมให้หน้าเว็บคลิก/พิมพ์แทนบนเครื่องอื่น จึงเป็นการชี้บอก ไม่ใช่ควบคุมแทน) */
 const RTC_IC = {
   screen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><circle cx="12" cy="10" r="2.2"/><path d="M6.5 10s2-3 5.5-3 5.5 3 5.5 3-2 3-5.5 3-5.5-3-5.5-3z"/></svg>',
@@ -1210,13 +1211,19 @@ const RTC_IC = {
   stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>',
   hang: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-3.3 0-6.3 1-8.6 2.7-.6.5-.7 1.3-.3 1.9l1.4 2c.4.6 1.2.8 1.9.4l2.3-1.3c.5-.3.8-.9.7-1.5l-.2-1.5c1.8-.6 3.8-.6 5.6 0l-.2 1.5c-.1.6.2 1.2.7 1.5l2.3 1.3c.7.4 1.5.2 1.9-.4l1.4-2c.4-.6.3-1.4-.3-1.9C18.3 10 15.3 9 12 9z"/></svg>',
   full: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+  pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4.5L16.5 4a2.1 2.1 0 0 1 3 3L8 18.5z"/><path d="M14 6.5l3 3"/></svg>',
+  laser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="7.5" opacity=".55"/><path d="M12 1.5v2.5M12 20v2.5M1.5 12H4M20 12h2.5"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  eraser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h13"/><path d="M5.6 15.6l8.5-8.5a2 2 0 0 1 2.8 0l2 2a2 2 0 0 1 0 2.8L13 18.8a3 3 0 0 1-2.1.9H8.6a2 2 0 0 1-1.4-.6l-1.6-1.6a2 2 0 0 1 0-2.9z"/><path d="M10 11l5 5"/></svg>',
+  pip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="15" rx="2"/><rect x="12" y="11" width="7" height="5.5" rx="1" fill="currentColor" opacity=".35"/></svg>',
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>'
 };
 const CAN_RTC = typeof RTCPeerConnection !== 'undefined';
 const CAN_SHARE = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
-const CRD_URL = 'https://remotedesktop.google.com/support';
+const CAN_PIP = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
+const INK_COLORS = ['#FF3B5C', '#FFB020', '#22C55E', '#3B82F6'];
 const RTC_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
-const R = { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, t0: 0, loop: null, tick: null, guard: null, prompt: null, ctl: '' };
+const R = { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, t0: 0, loop: null, tick: null, guard: null, prompt: null, dc: null, tool: '', color: INK_COLORS[0], ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, pip: null, rmode: false };
 const rtcBusy = () => !!R.state;
 const sigPeer = g => (g.fromAdmin && !isAdmin() ? 'admin' : g.from);
 const sigName = g => (g.fromAdmin && !isAdmin() ? ADMIN_LABEL : g.from);
@@ -1264,47 +1271,46 @@ function rtcOnSig(g) {
       if (!same) return;
       toast(R.role === 'view' ? name + ' หยุดแชร์หน้าจอแล้ว' : name + ' ปิดหน้าจอที่ดูแล้ว');
       return rtcCleanup();
-    case 'ctl': return rtcPrompt(g, 'ctl');
-    case 'ctlcode': return rtcCodeCard(name, g.data && g.data.code);
-    case 'ctlno': return void toast(name + ' ไม่อนุญาตให้ควบคุมเครื่อง', true);
   }
 }
 
 /* ---- viewer asks to see someone's screen ---- */
-function rtcRequest(peer, name) {
+function rtcRequest(peer, name, remote) {
   if (!CAN_RTC) return toast('เบราว์เซอร์นี้ไม่รองรับการดูหน้าจอ', true);
   if (rtcBusy()) return toast('กำลังแชร์หน้าจออยู่ ปิดอันเดิมก่อน', true);
-  Object.assign(R, { sid: uid('s_'), peer: peer, name: name, role: 'view', state: 'wait', t0: Date.now() });
-  rtcSig(peer, R.sid, 'req', { name: S.me }).catch(() => rtcCleanup());
+  Object.assign(R, { sid: uid('s_'), peer: peer, name: name, role: 'view', state: 'wait', t0: Date.now(), rmode: !!remote, tool: remote ? 'laser' : '' });
+  rtcSig(peer, R.sid, 'req', { name: S.me, mode: remote ? 'remote' : '' }).catch(() => rtcCleanup());
   rtcGuard(60000, 'timeout');
   renderRtc(); rtcLoop(); ping(false);
   if (mode() === 'demo') setTimeout(() => { if (R.state === 'wait') rtcDemoLive(); }, 2200);
 }
 /* ---- host shares own screen (on own initiative or after a request) ---- */
-async function rtcHost(peer, name, sid) {
+async function rtcHost(peer, name, sid, remote) {
   if (!CAN_SHARE) { if (sid) rtcSig(peer, sid, 'deny', { reason: 'nocap' }).catch(() => {}); return toast('อุปกรณ์นี้แชร์หน้าจอไม่ได้ ใช้คอมพิวเตอร์ (Chrome / Edge) แทน', true); }
   if (rtcBusy() && !sid) return toast('กำลังแชร์หน้าจออยู่ ปิดอันเดิมก่อน', true);
   let stream;
   try { stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 24 } }, audio: false }); }
   catch (e) { if (sid) rtcSig(peer, sid, 'deny', { reason: 'cancel' }).catch(() => {}); return toast('ยกเลิกการแชร์หน้าจอ'); }
   rtcCleanup(true);
-  Object.assign(R, { sid: sid || uid('s_'), peer: peer, name: name, role: 'host', state: 'connecting', stream: stream, t0: Date.now() });
+  Object.assign(R, { sid: sid || uid('s_'), peer: peer, name: name, role: 'host', state: 'connecting', stream: stream, t0: Date.now(), rmode: !!remote, peekOpen: true });
   const tr = stream.getVideoTracks()[0]; if (tr) { tr.onended = () => rtcHang(); try { tr.contentHint = 'detail'; } catch (e) {} }
   renderRtc(); rtcLoop();
-  if (mode() === 'demo') { setTimeout(() => { if (R.state === 'connecting') { R.state = 'live'; R.t0 = Date.now(); renderRtc(); toast(name + ' กำลังดูหน้าจอของคุณ'); } }, 2000); return; }
+  if (mode() === 'demo') { setTimeout(() => { if (R.state === 'connecting') { R.state = 'live'; R.t0 = Date.now(); renderRtc(); toast(name + ' กำลังดูหน้าจอของคุณ'); inkDemo(); } }, 2000); return; }
   try {
-    const pc = rtcPc(); stream.getTracks().forEach(t => pc.addTrack(t, stream));
+    const pc = rtcPc(); rtcDc(pc.createDataChannel('ink')); stream.getTracks().forEach(t => pc.addTrack(t, stream));
     await pc.setLocalDescription(await pc.createOffer()); await rtcIce(pc);
     await rtcSig(peer, R.sid, 'offer', { sdp: pc.localDescription.sdp, name: S.me });
     rtcGuard(75000, 'timeout');
   } catch (e) { rtcCleanup(); }
 }
 async function rtcAnswer(g) {
+  const keep = R.sid === g.sid ? { tool: R.tool, rmode: R.rmode, color: R.color } : { color: R.color };
   rtcCleanup(true);
-  Object.assign(R, { sid: g.sid, peer: sigPeer(g), name: sigName(g), role: 'view', state: 'connecting', t0: Date.now() });
+  Object.assign(R, keep, { sid: g.sid, peer: sigPeer(g), name: sigName(g), role: 'view', state: 'connecting', t0: Date.now() });
   renderRtc(); rtcLoop();
   try {
     const pc = rtcPc();
+    pc.ondatachannel = e => rtcDc(e.channel);
     pc.ontrack = e => { R.remote = e.streams[0] || new MediaStream([e.track]); const v = $('#rtcVideo'); if (v) { v.srcObject = R.remote; v.play().catch(() => {}); } };
     await pc.setRemoteDescription({ type: 'offer', sdp: g.data.sdp });
     await pc.setLocalDescription(await pc.createAnswer()); await rtcIce(pc);
@@ -1317,7 +1323,7 @@ function rtcPc() {
   pc.onconnectionstatechange = () => {
     if (R.pc !== pc) return;
     const s = pc.connectionState;
-    if (s === 'connected') { clearTimeout(R.guard); if (R.state !== 'live') { R.state = 'live'; R.t0 = Date.now(); renderRtc(); if (R.role === 'host') { toast(R.name + ' กำลังดูหน้าจอของคุณ'); ping(false); } } }
+    if (s === 'connected') { clearTimeout(R.guard); if (R.state !== 'live') { R.state = 'live'; R.t0 = Date.now(); renderRtc(); if (R.role === 'host') { toast(R.name + ' กำลังดูหน้าจอของคุณ' + (CAN_PIP ? ' — กด "หน้าต่างลอย" เพื่อเห็นจุดที่เขาชี้ขณะใช้โปรแกรมอื่น' : '')); ping(false); } } }
     else if (s === 'failed') rtcFail();
     else if (s === 'disconnected') setTimeout(() => { if (R.pc === pc && pc.connectionState === 'disconnected') { toast('การเชื่อมต่อหลุด', true); rtcHang(); } }, 6000);
   };
@@ -1345,46 +1351,36 @@ function rtcCleanup(keepUi) {
   if (R.stream) R.stream.getTracks().forEach(t => { t.onended = null; t.stop(); });
   if (R.remote && R.demo) R.remote.getTracks().forEach(t => t.stop());
   if (R.pc) { try { R.pc.close(); } catch (e) {} }
-  cancelAnimationFrame(R.raf);
-  Object.assign(R, { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, demo: false, ctl: '' });
+  cancelAnimationFrame(R.raf); clearInterval(R.demoInk);
+  if (R.dc) { try { R.dc.close(); } catch (e) {} }
+  if (R.inkRaf) { try { (R.inkWin || window).cancelAnimationFrame(R.inkRaf); } catch (e) {} R.inkRaf = 0; }
+  const pip = R.pip; R.pip = null; if (R.peek) R.peek.remove(); if (pip) { try { pip.close(); } catch (e) {} }
+  inkTitle(false);
+  Object.assign(R, { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, demo: false, dc: null, tool: '', drawId: '', ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, rmode: false, nudgeT: 0, nudged: 0 });
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (!keepUi) renderRtc();
 }
 
-/* ---- incoming prompts & remote-control hand-off ---- */
+/* ---- incoming prompts ---- */
 function rtcPrompt(g, kind) {
-  const peer = sigPeer(g), name = sigName(g);
-  const title = kind === 'req' ? name + ' ขอดูหน้าจอของคุณ' : kind === 'offer' ? name + ' ต้องการแชร์หน้าจอให้คุณดู' : name + ' ขอควบคุมเครื่องของคุณ (รีโมท)';
-  const sub = kind === 'req' ? (CAN_SHARE ? 'กด "แชร์หน้าจอ" แล้วเลือกหน้าจอหรือหน้าต่างที่จะให้ดู — เขาดูได้อย่างเดียว ควบคุมไม่ได้' : 'อุปกรณ์นี้แชร์หน้าจอไม่ได้ ต้องเปิดจากคอมพิวเตอร์ (Chrome / Edge)')
-    : kind === 'offer' ? 'กด "ดูหน้าจอ" เพื่อเปิดดู — คุณดูได้อย่างเดียว'
-    : 'การควบคุมใช้ Chrome Remote Desktop (ฟรี ของ Google) — สร้างรหัสแล้ววางที่นี่ เขาจะควบคุมได้หลังคุณกดยืนยันในหน้าต่างของ Google อีกครั้ง';
-  const body = kind === 'ctl'
-    ? '<ol class="rtc-steps"><li><span><a class="btn sm" href="' + CRD_URL + '" target="_blank" rel="noopener">' + RTC_IC.mouse + 'เปิด Chrome Remote Desktop</a></span></li><li><span>หัวข้อ <b>"รับการสนับสนุน"</b> กด <b>"+ สร้างรหัส"</b> <small>(ครั้งแรกจะให้ติดตั้งส่วนเสริมก่อน)</small></span></li><li><span>คัดลอกรหัส 12 หลักมาวางแล้วกดส่ง</span></li></ol>' +
-      '<div class="rtc-code-in"><input id="rtcCodeIn" class="mono" inputmode="numeric" autocomplete="off" maxlength="16" placeholder="เช่น 123 456 789 012"><button class="btn primary" data-rtc="ctlsend">ส่งรหัส</button></div>'
-    : '';
-  const acts = kind === 'ctl' ? '<button class="btn" data-rtc="no">ไม่อนุญาต</button>'
-    : '<button class="btn" data-rtc="no">ปฏิเสธ</button>' + (kind === 'req' && !CAN_SHARE ? '' : '<button class="btn primary rtc-go" data-rtc="yes">' + (kind === 'req' ? RTC_IC.cast + 'แชร์หน้าจอ' : RTC_IC.eye + 'ดูหน้าจอ') + '</button>');
+  const peer = sigPeer(g), name = sigName(g), rem = kind === 'req' && g.data && g.data.mode === 'remote';
+  const title = rem ? name + ' ขอรีโมทหน้าจอของคุณ' : kind === 'req' ? name + ' ขอดูหน้าจอของคุณ' : name + ' ต้องการแชร์หน้าจอให้คุณดู';
+  const sub = kind === 'req' ? (!CAN_SHARE ? 'อุปกรณ์นี้แชร์หน้าจอไม่ได้ ต้องเปิดจากคอมพิวเตอร์ (Chrome / Edge)'
+      : rem ? 'กด "แชร์หน้าจอ" แล้วเลือกจอที่จะให้ดู — เขาจะชี้และวาดบอกจุดบนจอได้ คุณเห็นตามทันทีในหน้าต่างลอย ไม่ต้องติดตั้งอะไร (เขาคลิกแทนคุณไม่ได้)'
+      : 'กด "แชร์หน้าจอ" แล้วเลือกหน้าจอหรือหน้าต่างที่จะให้ดู — เขาดูและชี้บอกจุดได้ แต่ควบคุมเครื่องไม่ได้')
+    : 'กด "ดูหน้าจอ" เพื่อเปิดดู — ชี้หรือวาดบนภาพเพื่อบอกจุดให้เขาเห็นได้';
+  const body = '';
+  const acts = '<button class="btn" data-rtc="no">ปฏิเสธ</button>' + (kind === 'req' && !CAN_SHARE ? '' : '<button class="btn primary rtc-go" data-rtc="yes">' + (kind === 'req' ? RTC_IC.cast + 'แชร์หน้าจอ' : RTC_IC.eye + 'ดูหน้าจอ') + '</button>');
   R.prompt = { sid: g.sid, peer: peer, name: name, kind: kind, g: g };
-  openRtcModal('<div class="rtc-ring">' + peerAv(peer, name, 'rtc-av') + '<i></i><i></i><span class="rtc-badge ' + kind + '">' + (kind === 'ctl' ? RTC_IC.mouse : kind === 'req' ? RTC_IC.eye : RTC_IC.cast) + '</span></div>' +
+  openRtcModal('<div class="rtc-ring">' + peerAv(peer, name, 'rtc-av') + '<i></i><i></i><span class="rtc-badge ' + (rem ? 'ctl' : kind) + '">' + (rem ? RTC_IC.mouse : kind === 'req' ? RTC_IC.eye : RTC_IC.cast) + '</span></div>' +
     '<h3>' + esc(title) + '</h3><p>' + sub + '</p>' + body + '<div class="rtc-acts">' + acts + '</div>', kind);
   ping(true); setTimeout(() => ping(true), 380);
   try { if (navigator.vibrate) navigator.vibrate([60, 80, 60]); } catch (e) {}
   if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') { try { const n = new Notification(title, { tag: 'rtc' + g.sid, icon: 'icons/icon-192.png' }); n.onclick = () => window.focus(); } catch (e) {} }
   const sid = g.sid;
-  clearTimeout(R.promptT); R.promptT = setTimeout(() => { if (R.prompt && R.prompt.sid === sid) { if (kind !== 'ctl') rtcSig(peer, sid, 'deny', { reason: 'timeout' }).catch(() => {}); closeRtcModal(); } }, kind === 'ctl' ? 300000 : 60000);
+  clearTimeout(R.promptT); R.promptT = setTimeout(() => { if (R.prompt && R.prompt.sid === sid) { rtcSig(peer, sid, 'deny', { reason: 'timeout' }).catch(() => {}); closeRtcModal(); } }, 60000);
   rtcLoop();
 }
-function rtcCodeCard(name, code) {
-  code = String(code || '').replace(/\D/g, '');
-  const pretty = code.replace(/(\d{3})(?=\d)/g, '$1 ');
-  R.ctl = code;
-  openRtcModal('<div class="rtc-ring">' + peerAv(R.peer || name, name, 'rtc-av') + '<span class="rtc-badge ctl">' + RTC_IC.mouse + '</span></div><h3>' + esc(name) + ' ส่งรหัสควบคุมมาแล้ว</h3>' +
-    '<button class="rtc-code mono" data-rtc="copycode" title="คัดลอก">' + esc(pretty) + RTC_IC.copy + '</button>' +
-    '<ol class="rtc-steps"><li><span>กด <b>"เปิดเพื่อควบคุม"</b> (Chrome Remote Desktop)</span></li><li><span>หัวข้อ <b>"ให้การสนับสนุน"</b> วางรหัสนี้แล้วกด <b>"เชื่อมต่อ"</b></span></li><li><span>รอ ' + esc(name) + ' กดยืนยัน — จากนั้นคุมเมาส์และคีย์บอร์ดได้เลย</span></li></ol>' +
-    '<p class="sub">รหัสใช้ได้ครั้งเดียวและหมดอายุใน 5 นาที</p><div class="rtc-acts"><button class="btn" data-rtc="close">ปิด</button><a class="btn primary" href="' + CRD_URL + '" target="_blank" rel="noopener" data-rtc="copygo">' + RTC_IC.mouse + 'เปิดเพื่อควบคุม</a></div>', 'ctl');
-  ping(true);
-}
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'rtcCodeIn') { e.preventDefault(); rtcAct('ctlsend'); } });
 function openRtcModal(html, kind) {
   let m = $('#rtcModal');
   if (!m) { m = document.createElement('div'); m.id = 'rtcModal'; m.className = 'rtc-modal'; document.body.appendChild(m); }
@@ -1398,35 +1394,25 @@ async function rtcAct(a, t) {
   switch (a) {
     case 'yes':
       if (!p) return; closeRtcModal();
-      if (p.kind === 'req') return rtcHost(p.peer, p.name, p.sid);
+      if (p.kind === 'req') return rtcHost(p.peer, p.name, p.sid, !!(p.g.data && p.g.data.mode === 'remote'));
       if (p.kind === 'offer') return rtcAnswer(p.g);
       return;
     case 'no':
       if (!p) return; closeRtcModal();
-      return void rtcSig(p.peer, p.sid, p.kind === 'ctl' ? 'ctlno' : 'deny', { reason: 'no' }).catch(() => {});
-    case 'ctlsend': {
-      const v = ($('#rtcCodeIn') || {}).value || '', code = v.replace(/\D/g, '');
-      if (code.length < 8) { const i = $('#rtcCodeIn'); if (i) { i.classList.remove('shake'); void i.offsetWidth; i.classList.add('shake'); i.focus(); } return toast('วางรหัส 12 หลักจาก Chrome Remote Desktop ก่อน', true); }
-      try { await rtcSig(p.peer, p.sid, 'ctlcode', { code: code }); closeRtcModal(); toast('ส่งรหัสให้ ' + p.name + ' แล้ว — เมื่อมีหน้าต่างยืนยันจาก Google ให้กด "แชร์"'); } catch (e) {}
-      return;
-    }
-    case 'ctlask': {
-      const peer = t.dataset.peer || R.peer, name = t.dataset.name || R.name;
-      if (!peer) return;
-      try { await rtcSig(peer, R.sid || uid('c_'), 'ctl', { name: S.me }); } catch (e) { return; }
-      toast('ส่งคำขอควบคุมแล้ว รอ ' + name + ' สร้างรหัส');
-      if (mode() === 'demo') setTimeout(() => rtcCodeCard(name, '482913507266'), 2200);
-      return;
-    }
-    case 'copycode': case 'copygo':
-      try { await navigator.clipboard.writeText(R.ctl); if (a === 'copycode') toast('คัดลอกรหัสแล้ว'); else toast('คัดลอกรหัสให้แล้ว วางในช่อง "ให้การสนับสนุน"'); } catch (e) {}
-      return;
+      return void rtcSig(p.peer, p.sid, 'deny', { reason: 'no' }).catch(() => {});
     case 'close': return closeRtcModal();
     case 'view': return rtcRequest(t.dataset.peer, t.dataset.name);
+    case 'remote': return rtcRequest(t.dataset.peer, t.dataset.name, true);
+    case 'tool': R.tool = R.tool === t.dataset.v ? '' : t.dataset.v; if (!R.tool) inkSendAll({ t: 'pl' }); return inkBarSync();
+    case 'color': R.color = t.dataset.v; if (!R.tool) R.tool = 'pen'; return inkBarSync();
+    case 'undo': inkSendAll({ t: 'undo' }); return inkBarSync();
+    case 'clear': inkSendAll({ t: 'clr' }); return inkBarSync();
+    case 'pip': return rtcPip();
+    case 'peek': R.peekOpen = !R.peekOpen; if (R.pip) { try { R.pip.close(); } catch (e) {} } return renderRtc();
     case 'share': return rtcHost(t.dataset.peer, t.dataset.name);
     case 'hang': return rtcHang();
     case 'full': { const w = $('#rtcStage'); if (!w) return; if (document.fullscreenElement) document.exitFullscreen(); else if (w.requestFullscreen) w.requestFullscreen().catch(() => {}); return; }
-    case 'fit': R.fit = !R.fit; { const v = $('#rtcVideo'); if (v) v.classList.toggle('actual', !!R.fit); } return;
+    case 'fit': R.fit = !R.fit; { const v = $('#rtcBox'); if (v) v.classList.toggle('actual', !!R.fit); } inkKick(); return;
   }
 }
 
@@ -1440,25 +1426,29 @@ function renderRtc() {
     if (!v) { v = document.createElement('div'); v.id = 'rtcView'; v.className = 'rtc-view'; document.body.appendChild(v); requestAnimationFrame(() => v.classList.add('in')); }
     const live = R.state === 'live';
     v.dataset.state = R.state;
-    v.innerHTML = '<div class="rtc-bar">' + peerAv(R.peer, R.name, 'rtc-mini') + '<div class="rtc-who"><b>' + (live ? 'หน้าจอของ ' : R.state === 'wait' ? 'กำลังขอดูหน้าจอของ ' : 'กำลังเชื่อมต่อกับ ') + esc(R.name) + '</b><small>' + (live ? '<i class="rtc-live">LIVE</i><span id="rtcClock">0:00</span> · ดูอย่างเดียว' : R.state === 'wait' ? 'รอ ' + esc(R.name) + ' กดอนุญาต…' : 'กำลังเปิดภาพ…') + '</small></div>' +
-      '<div class="rtc-tools">' + (live ? '<button class="rtc-tb" data-rtc="ctlask" title="ขอควบคุมเครื่อง (รีโมท)">' + RTC_IC.mouse + '<span>ขอควบคุม</span></button><button class="rtc-tb" data-rtc="fit" title="ขนาดจริง / พอดีจอ">1:1</button><button class="rtc-tb" data-rtc="full" title="เต็มจอ">' + RTC_IC.full + '</button>' : '') +
+    v.innerHTML = '<div class="rtc-bar">' + peerAv(R.peer, R.name, 'rtc-mini') + '<div class="rtc-who"><b>' + (live ? 'หน้าจอของ ' : R.state === 'wait' ? 'กำลังขอดูหน้าจอของ ' : 'กำลังเชื่อมต่อกับ ') + esc(R.name) + '</b><small>' + (live ? '<i class="rtc-live">LIVE</i><span id="rtcClock">0:00</span> · <span id="rtcInkHint">' + inkHint() + '</span>' : R.state === 'wait' ? 'รอ ' + esc(R.name) + ' กดอนุญาต…' : 'กำลังเปิดภาพ…') + '</small></div>' +
+      '<div class="rtc-tools">' + (live ? inkBar() + '<button class="rtc-tb" data-rtc="fit" title="ขนาดจริง / พอดีจอ">1:1</button><button class="rtc-tb" data-rtc="full" title="เต็มจอ">' + RTC_IC.full + '</button>' : '') +
       '<button class="rtc-tb end" data-rtc="hang" title="' + (live ? 'ปิด' : 'ยกเลิก') + '">' + RTC_IC.hang + '<span>' + (live ? 'ปิด' : 'ยกเลิก') + '</span></button></div></div>' +
-      '<div class="rtc-stage" id="rtcStage">' + (live || R.state === 'connecting' ? '<video id="rtcVideo" autoplay playsinline muted' + (R.fit ? ' class="actual"' : '') + '></video>' : '') +
+      '<div class="rtc-stage" id="rtcStage">' + (live || R.state === 'connecting' ? '<div class="rtc-vbox' + (R.fit ? ' actual' : '') + (R.tool ? ' drawing' : '') + '" id="rtcBox"><video id="rtcVideo" autoplay playsinline muted></video><canvas id="rtcInk"></canvas></div>' : '') +
       (live ? '' : '<div class="rtc-waiting"><div class="rtc-ring big">' + peerAv(R.peer, R.name, 'rtc-av') + '<i></i><i></i><i></i><span class="rtc-badge req">' + RTC_IC.eye + '</span></div><b>' + (R.state === 'wait' ? 'ส่งคำขอถึง ' + esc(R.name) + ' แล้ว' : 'กำลังเชื่อมต่อ…') + '</b><small>' + (R.state === 'wait' ? 'เมื่อเขากดแชร์ ภาพหน้าจอจะขึ้นตรงนี้' : 'ใช้เวลาไม่กี่วินาที') + '</small><span class="rtc-dots"><i></i><i></i><i></i></span></div>') + '</div>';
-    const vid = $('#rtcVideo'); if (vid && R.remote) { vid.srcObject = R.remote; vid.play().catch(() => {}); }
+    const vid = $('#rtcVideo'); if (vid) { vid.addEventListener('resize', inkKick); vid.addEventListener('loadedmetadata', inkKick); if (R.remote) { vid.srcObject = R.remote; vid.play().catch(() => {}); } }
+    inkKick();
   }
   if (R.role === 'host' && R.state) {
     if (!h) { h = document.createElement('div'); h.id = 'rtcHost'; h.className = 'rtc-host'; document.body.appendChild(h); }
     h.classList.remove('out');
     const live = R.state === 'live';
     h.dataset.state = R.state;
-    h.innerHTML = '<span class="rtc-rec"></span>' + peerAv(R.peer, R.name, 'rtc-mini') + '<div class="rtc-who"><b>' + (live ? esc(R.name) + ' กำลังดูหน้าจอคุณ' : 'รอ ' + esc(R.name) + ' เปิดดู…') + '</b><small>' + (live ? '<span id="rtcClock">0:00</span> · ดูอย่างเดียว' : 'แชร์หน้าจออยู่') + '</small></div>' +
+    h.innerHTML = '<span class="rtc-rec"></span>' + peerAv(R.peer, R.name, 'rtc-mini') + '<div class="rtc-who"><b>' + (live ? esc(R.name) + ' กำลังดูหน้าจอคุณ' : 'รอ ' + esc(R.name) + ' เปิดดู…') + '</b><small>' + (live ? '<span id="rtcClock">0:00</span> · ' + (R.rmode ? 'รีโมทชี้จอ' : 'ชี้บอกจุดได้') : 'แชร์หน้าจออยู่') + '</small></div>' +
+      (live ? (CAN_PIP ? '<button class="rtc-tb" data-rtc="pip" title="หน้าต่างลอยอยู่บนสุด — เห็นจุดที่เขาชี้แม้ใช้โปรแกรมอื่นอยู่">' + RTC_IC.pip + '<span>' + (R.pip ? 'ปิดหน้าต่างลอย' : 'หน้าต่างลอย') + '</span></button>' : '') +
+        '<button class="rtc-tb' + (R.peekOpen || R.pip ? ' on' : '') + '" data-rtc="peek" title="แสดง/ซ่อนภาพจุดที่เขาชี้">' + RTC_IC.pen + '</button>' : '') +
       '<button class="rtc-tb end" data-rtc="hang">' + RTC_IC.stop + '<span>หยุดแชร์</span></button>';
   }
   if (R.state === 'live') {
     const c = () => { const el = $('#rtcClock'); if (el) el.textContent = clock(Date.now() - R.t0).replace(/^0?0:/, ''); };
     c(); R.tick = setInterval(c, 1000);
   }
+  renderPeek();
   if (M.open) renderMsgPanel();
 }
 function rtcStrip() {
@@ -1468,7 +1458,227 @@ function rtcStrip() {
   const dp = ' data-peer="' + esc(peer) + '" data-name="' + esc(name) + '"';
   return '<div class="mp-rtc"><button data-rtc="view"' + dp + ' title="ขอดูหน้าจอของ ' + esc(name) + '">' + RTC_IC.eye + '<span>ขอดูจอ</span></button>' +
     '<button data-rtc="share"' + dp + (CAN_SHARE ? '' : ' disabled') + ' title="' + (CAN_SHARE ? 'แชร์หน้าจอของฉันให้ ' + esc(name) + ' ดู' : 'แชร์หน้าจอได้จากคอมพิวเตอร์เท่านั้น') + '">' + RTC_IC.cast + '<span>แชร์จอฉัน</span></button>' +
-    '<button data-rtc="ctlask"' + dp + ' title="ขอควบคุมเครื่องของ ' + esc(name) + ' ผ่าน Chrome Remote Desktop">' + RTC_IC.mouse + '<span>รีโมท</span></button></div>';
+    '<button data-rtc="remote"' + dp + ' title="รีโมทหน้าจอของ ' + esc(name) + ': ดูจอและชี้/วาดบอกจุดให้เขาเห็น — ไม่ต้องติดตั้งอะไร">' + RTC_IC.mouse + '<span>รีโมท</span></button></div>';
+}
+
+
+/* ---- remote pointer: ชี้ / วาดบนจอที่แชร์ ---- */
+const PEEK_CSS = `.rtc-peek{position:fixed;right:16px;bottom:16px;z-index:115;width:min(340px,calc(100vw - 32px));background:#10161c;color:#e9eef3;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px -12px rgba(0,0,0,.55),0 0 0 1px #2a343e;font:13px/1.35 'IBM Plex Sans Thai',system-ui,sans-serif;animation:peekIn .4s cubic-bezier(.3,1.4,.5,1);transition:box-shadow .3s}
+.rtc-peek.in-pip{position:fixed;inset:0;width:auto;border-radius:0;box-shadow:none;display:flex;flex-direction:column;animation:none}
+.rtc-peek.hot{box-shadow:0 0 0 3px #FF3B5C,0 18px 50px -12px rgba(0,0,0,.55)}
+.rtc-peek-bar{display:flex;align-items:center;gap:7px;padding:7px 7px 7px 11px}
+.rtc-peek-bar b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.rtc-peek-bar button{height:28px;padding:0 9px;border-radius:8px;border:1px solid #2c3742;background:#1a232c;color:#dce5ee;font:inherit;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;flex:none}
+.rtc-peek-bar button:hover{background:#243039}
+.rtc-peek-bar svg{width:15px;height:15px}
+.rtc-peek-rec{width:9px;height:9px;border-radius:50%;background:#E5484D;flex:none;animation:peekRec 1.4s infinite}
+.rtc-peek-box{position:relative;aspect-ratio:16/10;background:#000}
+.rtc-peek.in-pip .rtc-peek-box{flex:1;aspect-ratio:auto}
+.rtc-peek-box video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.rtc-peek-box canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.rtc-peek small{display:block;padding:6px 11px 9px;color:#93a3b2}
+.rtc-peek.in-pip small{display:none}
+@keyframes peekRec{50%{opacity:.3}}
+@keyframes peekIn{from{opacity:0;transform:translateY(24px) scale(.95)}}
+body.pip-body{margin:0;background:#0b0f13}`;
+(function () { if (typeof document === 'undefined') return; const st = document.createElement('style'); st.textContent = PEEK_CSS; document.head.appendChild(st); })();
+
+function rtcDc(ch) {
+  R.dc = ch;
+  ch.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } if (m && typeof m.t === 'string') inkApply(m, true); };
+}
+function inkSend(m) { if (R.dc && R.dc.readyState === 'open') { try { R.dc.send(JSON.stringify(m)); } catch (e) {} } }
+function inkSendAll(m) { inkApply(m); inkSend(m); }
+const inkN = v => Math.round(Math.min(1, Math.max(0, +v || 0)) * 10000) / 10000;
+const inkC = c => INK_COLORS.indexOf(c) >= 0 ? c : INK_COLORS[0];
+function inkApply(m, remote) {
+  const k = R.ink, now = performance.now();
+  switch (m.t) {
+    case 'p': k.ptr = { x: inkN(m.x), y: inkN(m.y), c: inkC(m.c), t: now }; break;
+    case 'pl': if (k.ptr) k.ptr.t = Math.min(k.ptr.t, now - 2400); break;
+    case 'b': {
+      const st = { id: String(m.id), c: inkC(m.c), l: !!m.l, pts: [[inkN(m.x), inkN(m.y)]], end: 0 };
+      k.strokes.push(st); if (k.strokes.length > 300) k.strokes.shift();
+      k.ptr = { x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }; k.rips.push({ x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }); break;
+    }
+    case 'm': { const st = k.strokes.find(x => x.id === String(m.id)); if (st && st.pts.length < 4000) { st.pts.push([inkN(m.x), inkN(m.y)]); k.ptr = { x: inkN(m.x), y: inkN(m.y), c: st.c, t: now }; } break; }
+    case 'e': { const st = k.strokes.find(x => x.id === String(m.id)); if (st) st.end = now; break; }
+    case 'clr': k.strokes = []; break;
+    case 'undo': for (let i = k.strokes.length - 1; i >= 0; i--) if (!k.strokes[i].l) { k.strokes.splice(i, 1); break; } break;
+    default: return;
+  }
+  if (remote && R.role === 'host' && (m.t === 'p' || m.t === 'b')) inkNudge();
+  if (R.role === 'host' && R.peek && /^(e|clr|undo)$/.test(m.t)) R.peek.querySelector('.rtc-peek-bar').innerHTML = peekBar();
+  inkKick();
+}
+function inkTitle(on) {
+  const base = (S.settings && S.settings.appName) || 'KiwNgan คิวงาน';
+  document.title = on ? '✏️ ' + R.name + ' กำลังชี้บนจอคุณ' : base;
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && /^✏️/.test(document.title)) inkTitle(false); });
+/* คนแชร์ไม่ได้ดูหน้าคิวงานอยู่ → เตือนให้เห็นว่ามีคนชี้ */
+function inkNudge() {
+  const now = Date.now(); if (now - (R.nudgeT || 0) < 6000) return; R.nudgeT = now;
+  if (R.peek) { R.peek.classList.add('hot'); setTimeout(() => R.peek && R.peek.classList.remove('hot'), 1600); }
+  if (R.pip) return;
+  if (document.visibilityState !== 'visible') {
+    inkTitle(true);
+    if (!R.nudged && 'Notification' in window && Notification.permission === 'granted') { R.nudged = 1; try { const n = new Notification(R.name + ' กำลังชี้บนหน้าจอคุณ', { body: 'เปิดคิวงานแล้วกด "หน้าต่างลอย" เพื่อเห็นจุดที่เขาชี้ขณะทำงาน', tag: 'ink' + R.sid, icon: 'icons/icon-192.png' }); n.onclick = () => window.focus(); } catch (e) {} }
+  } else if (!R.peekOpen) { R.peekOpen = true; renderRtc(); }
+}
+/* วาด */
+function inkFit(box, vw, vh) {
+  const W = box.clientWidth, H = box.clientHeight;
+  if (!vw || !vh) return { x: 0, y: 0, w: W, h: H };
+  const k = Math.min(W / vw, H / vh); return { x: (W - vw * k) / 2, y: (H - vh * k) / 2, w: vw * k, h: vh * k };
+}
+function inkPaint(cv, vid) {
+  const box = cv.parentNode; if (!box || !box.clientWidth) return;
+  const win = cv.ownerDocument.defaultView || window, dpr = win.devicePixelRatio || 1, W = box.clientWidth, H = box.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const r = inkFit(box, vid && vid.videoWidth, vid && vid.videoHeight), P = p => [r.x + p[0] * r.w, r.y + p[1] * r.h];
+  const now = performance.now(), k = R.ink, lw = Math.max(2.5, r.w / 300);
+  g.lineCap = g.lineJoin = 'round';
+  k.strokes = k.strokes.filter(x => !(x.l && x.end && now - x.end > 1500));
+  k.strokes.forEach(x => {
+    g.globalAlpha = x.l && x.end ? Math.max(0, 1 - (now - x.end) / 1500) : 1;
+    g.strokeStyle = x.c; g.lineWidth = x.l ? lw * 1.5 : lw; g.shadowColor = x.c; g.shadowBlur = x.l ? 14 : 0;
+    g.beginPath(); x.pts.forEach((p, i) => { const q = P(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); });
+    if (x.pts.length === 1) { const q = P(x.pts[0]); g.lineTo(q[0] + .1, q[1]); }
+    g.stroke();
+  });
+  g.shadowBlur = 0;
+  k.rips = k.rips.filter(x => now - x.t < 900);
+  k.rips.forEach(x => { const q = P([x.x, x.y]), f = (now - x.t) / 900; g.globalAlpha = 1 - f; g.strokeStyle = x.c; g.lineWidth = 3; g.beginPath(); g.arc(q[0], q[1], 10 + f * 36, 0, Math.PI * 2); g.stroke(); });
+  if (k.ptr && now - k.ptr.t < 3000) {
+    const q = P([k.ptr.x, k.ptr.y]), c = k.ptr.c; g.globalAlpha = Math.min(1, (3000 - (now - k.ptr.t)) / 600);
+    const pulse = 15 + 4 * Math.sin(now / 160);
+    const gr = g.createRadialGradient(q[0], q[1], 0, q[0], q[1], pulse + 10); gr.addColorStop(0, c + 'aa'); gr.addColorStop(1, c + '00');
+    g.fillStyle = gr; g.beginPath(); g.arc(q[0], q[1], pulse + 10, 0, Math.PI * 2); g.fill();
+    g.fillStyle = c; g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 7, 0, Math.PI * 2); g.fill(); g.stroke();
+    if (R.role === 'host') {
+      const label = R.name; g.font = '600 12px "IBM Plex Sans Thai", system-ui, sans-serif';
+      const tw = g.measureText(label).width + 14, lx = Math.min(q[0] + 12, W - tw - 2), ly = Math.min(q[1] + 12, H - 24);
+      g.fillStyle = c; g.beginPath(); if (g.roundRect) g.roundRect(lx, ly, tw, 20, 10); else g.rect(lx, ly, tw, 20); g.fill();
+      g.fillStyle = '#fff'; g.fillText(label, lx + 7, ly + 14);
+    }
+  }
+  g.globalAlpha = 1;
+}
+function inkKick() {
+  if (R.inkRaf || !R.state) return;
+  const w = R.pip || window; R.inkWin = w;
+  R.inkRaf = w.requestAnimationFrame(inkFrame);
+}
+function inkFrame() {
+  R.inkRaf = 0;
+  const a = $('#rtcInk'); if (a) inkPaint(a, $('#rtcVideo'));
+  if (R.peek) { const c = R.peek.querySelector('canvas'); if (c) inkPaint(c, R.peek.querySelector('video')); }
+  const k = R.ink, now = performance.now();
+  if ((k.ptr && now - k.ptr.t < 3000) || k.rips.length || k.strokes.some(x => x.l)) inkKick();
+}
+window.addEventListener('resize', () => inkKick());
+/* คนดู: ลาก/ชี้บนภาพ */
+let inkLastP = 0;
+function inkXY(e) {
+  const box = e.target.parentNode, rc = box.getBoundingClientRect(), vid = $('#rtcVideo');
+  const r = inkFit(box, vid && vid.videoWidth, vid && vid.videoHeight);
+  const x = (e.clientX - rc.left - r.x) / r.w, y = (e.clientY - rc.top - r.y) / r.h;
+  return { x: inkN(x), y: inkN(y), out: x < 0 || x > 1 || y < 0 || y > 1 };
+}
+document.addEventListener('pointerdown', e => {
+  if (!e.target || e.target.id !== 'rtcInk' || !R.tool || R.state !== 'live') return;
+  const p = inkXY(e); if (p.out) return;
+  e.preventDefault(); try { e.target.setPointerCapture(e.pointerId); } catch (x) {}
+  R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, x: p.x, y: p.y });
+});
+document.addEventListener('pointermove', e => {
+  if (!e.target || e.target.id !== 'rtcInk' || !R.tool || R.state !== 'live') return;
+  const p = inkXY(e);
+  if (R.drawId) return inkSendAll({ t: 'm', id: R.drawId, x: p.x, y: p.y });
+  if (p.out) return;
+  const now = performance.now(); if (now - inkLastP < 33) return; inkLastP = now;
+  inkSendAll({ t: 'p', x: p.x, y: p.y, c: R.color });
+});
+function inkUp() { if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); inkBarSync(); }
+document.addEventListener('pointerup', inkUp); document.addEventListener('pointercancel', inkUp);
+document.addEventListener('pointerout', e => { if (e.target && e.target.id === 'rtcInk' && !R.drawId && R.tool) inkSendAll({ t: 'pl' }); });
+document.addEventListener('keydown', e => {
+  if (R.role !== 'view' || R.state !== 'live' || /INPUT|TEXTAREA/.test((e.target && e.target.tagName) || '')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); inkSendAll({ t: 'undo' }); }
+});
+function inkHint() { return R.tool === 'laser' ? 'กำลังชี้ให้ ' + esc(R.name) + ' เห็น' : R.tool === 'pen' ? 'กำลังวาดให้ ' + esc(R.name) + ' เห็น' : 'กด "ชี้" หรือ "วาด" เพื่อบอกจุด'; }
+function inkBar() {
+  const hasPen = R.ink.strokes.some(x => !x.l);
+  return '<div class="rtc-ink" id="rtcInkBar"><button class="rtc-tb' + (R.tool === 'laser' ? ' on' : '') + '" data-rtc="tool" data-v="laser" title="ชี้ (เลเซอร์) — เขาเห็นจุดที่คุณชี้ คลิกเพื่อทำวงกระเพื่อม">' + RTC_IC.laser + '<span>ชี้</span></button>' +
+    '<button class="rtc-tb' + (R.tool === 'pen' ? ' on' : '') + '" data-rtc="tool" data-v="pen" title="วาด / วงจุดบนจอ">' + RTC_IC.pen + '<span>วาด</span></button>' +
+    (R.tool ? '<span class="rtc-dots-c">' + INK_COLORS.map(c => '<button class="rtc-dot' + (c === R.color ? ' on' : '') + '" data-rtc="color" data-v="' + c + '" style="--c:' + c + '" aria-label="สี"></button>').join('') + '</span>' : '') +
+    (hasPen ? '<button class="rtc-tb" data-rtc="undo" title="ย้อน (Ctrl+Z)">' + RTC_IC.undo + '</button><button class="rtc-tb" data-rtc="clear" title="ล้างที่วาดทั้งหมด">' + RTC_IC.eraser + '</button>' : '') + '</div>';
+}
+function inkBarSync() {
+  const b = $('#rtcInkBar'); if (b) b.outerHTML = inkBar();
+  const x = $('#rtcBox'); if (x) x.classList.toggle('drawing', !!R.tool);
+  const h = $('#rtcInkHint'); if (h) h.innerHTML = inkHint();
+}
+/* คนแชร์: ภาพจอตัวเอง + จุดที่อีกฝ่ายชี้ (ในหน้า หรือหน้าต่างลอยอยู่บนสุด) */
+function peekBar() {
+  return '<span class="rtc-peek-rec"></span><b>' + esc(R.name) + (R.pip ? ' ชี้บนจอคุณ' : ' เห็นจอนี้') + '</b>' +
+    (R.ink.strokes.some(x => !x.l) ? '<button data-peek="clr" title="ล้างที่เขาวาด">' + RTC_IC.eraser + '</button>' : '') +
+    (R.pip ? '<button data-peek="stop" title="หยุดแชร์">' + RTC_IC.stop + 'หยุด</button>'
+      : (CAN_PIP ? '<button data-peek="pip" title="หน้าต่างลอยอยู่บนสุดของทุกโปรแกรม">' + RTC_IC.pip + 'ลอย</button>' : '') + '<button data-peek="hide" title="ซ่อน">✕</button>');
+}
+function renderPeek() {
+  const want = R.role === 'host' && R.state === 'live' && R.stream;
+  if (!want) { if (R.peek) { R.peek.remove(); R.peek = null; } return; }
+  if (!R.peek) {
+    const el = document.createElement('div'); el.className = 'rtc-peek';
+    el.innerHTML = '<div class="rtc-peek-bar"></div><div class="rtc-peek-box"><video autoplay playsinline muted></video><canvas></canvas></div><small>จุดที่ ' + esc(R.name) + ' ชี้หรือวาดจะขึ้นตรงนี้ · กด "ลอย" ให้เห็นทับโปรแกรมอื่น</small>';
+    const v = el.querySelector('video'); v.srcObject = R.stream; v.addEventListener('resize', inkKick); v.addEventListener('loadedmetadata', inkKick);
+    el.addEventListener('click', e => {
+      const b = e.target.closest && e.target.closest('[data-peek]'); if (!b) return;
+      const a = b.dataset.peek;
+      if (a === 'pip') rtcPip(); else if (a === 'hide') { R.peekOpen = false; renderRtc(); }
+      else if (a === 'clr') { inkSendAll({ t: 'clr' }); renderPeek(); } else if (a === 'stop') rtcHang();
+    });
+    R.peek = el;
+  }
+  R.peek.querySelector('.rtc-peek-bar').innerHTML = peekBar();
+  R.peek.classList.toggle('in-pip', !!R.pip);
+  const home = R.pip ? R.pip.document.body : R.peekOpen ? document.body : null;
+  if (!home) R.peek.remove();
+  else if (R.peek.parentNode !== home) { home.appendChild(R.peek); const v = R.peek.querySelector('video'); v.play().catch(() => {}); }
+  inkKick();
+}
+async function rtcPip() {
+  if (!CAN_PIP) return toast('เครื่องนี้เปิดหน้าต่างลอยไม่ได้ ใช้ Chrome หรือ Edge บนคอมพิวเตอร์', true);
+  if (R.role !== 'host' || R.state !== 'live') return;
+  if (R.pip) { try { R.pip.close(); } catch (e) {} return; }
+  let w;
+  try { w = await window.documentPictureInPicture.requestWindow({ width: 440, height: 300 }); } catch (e) { return toast('เปิดหน้าต่างลอยไม่สำเร็จ', true); }
+  const st = w.document.createElement('style'); st.textContent = PEEK_CSS; w.document.head.appendChild(st);
+  w.document.body.className = 'pip-body'; w.document.title = 'คิวงาน · ' + R.name;
+  if (R.inkRaf) { try { (R.inkWin || window).cancelAnimationFrame(R.inkRaf); } catch (e) {} R.inkRaf = 0; }
+  R.pip = w; inkTitle(false);
+  w.addEventListener('pagehide', () => {
+    if (R.pip !== w) return;
+    try { w.cancelAnimationFrame(R.inkRaf); } catch (e) {} R.inkRaf = 0; R.pip = null;
+    renderRtc();
+  });
+  renderRtc();
+}
+/* demo: จำลองอีกฝ่ายชี้และวงจุดบนจอ */
+function inkDemo() {
+  let t = 0; clearInterval(R.demoInk);
+  R.demoInk = setInterval(() => {
+    if (R.role !== 'host' || R.state !== 'live') return clearInterval(R.demoInk);
+    t++;
+    if (t < 40) inkApply({ t: 'p', x: .25 + t * .008, y: .3 + Math.sin(t / 6) * .05, c: INK_COLORS[0] });
+    else if (t === 40) inkApply({ t: 'b', id: 'd1', c: INK_COLORS[0], l: 0, x: .62, y: .5 });
+    else if (t < 70) { const a = (t - 40) / 29 * Math.PI * 2.1; inkApply({ t: 'm', id: 'd1', x: .55 + Math.cos(a) * .07, y: .5 + Math.sin(a) * .11 }); }
+    else if (t === 70) { inkApply({ t: 'e', id: 'd1' }); renderPeek(); }
+    else if (t > 140) { inkApply({ t: 'clr' }); t = 0; renderPeek(); }
+  }, 60);
 }
 
 /* demo mode: no second person, so show a simulated screen */
@@ -2218,7 +2428,7 @@ document.addEventListener('click', async e => {
   const d = t.dataset;
 
   if (t.tagName === 'A' && !t.dataset.rtc && t.getAttribute('href').indexOf('#s-') === 0) { e.preventDefault(); const el = document.querySelector(t.getAttribute('href')); if (el) el.scrollIntoView({ behavior: 'smooth' }); return; }
-  if (d.rtc) { e.preventDefault(); if (d.rtc === 'copygo') { rtcAct('copygo', t); window.open(CRD_URL, '_blank', 'noopener'); return; } return rtcAct(d.rtc, t); }
+  if (d.rtc) { e.preventDefault(); return rtcAct(d.rtc, t); }
   if (d.view) return go(d.view);
   if (d.go) return go(d.go, d.sec);
   if (d.move) { e.stopPropagation(); return moveJob(d.move, d.to); }
@@ -2505,6 +2715,6 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|u
   } catch (e) {}
 })();
 try { applyTheme(); } catch (e) {}
-window.KiwNgan = { S: S, M: M, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION };
+window.KiwNgan = { S: S, M: M, R: R, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION };
 load(false);
 })();
