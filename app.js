@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.0.7';
+const APP_VERSION = '2.0.8';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1290,8 +1290,10 @@ function viewHome() {
     return '<div class="bar' + (!weekly && d === t ? ' today' : '') + (!weekly && (wd === 0 || wd === 6) ? ' wk' : '') + '"' + (n ? ' data-tip="' + tipD + ' · เสร็จ ' + n + (p.late ? ' (ช้า ' + p.late + ')' : '') + '"' : '') + '><div class="stack" style="height:' + (n / max * 100) + '%">' +
       (p.ok ? '<i style="flex:' + p.ok + '"></i>' : '') + (p.late ? '<i class="late" style="flex:' + p.late + '"></i>' : '') + '</div>' + lab + '</div>';
   }).join('');
+  const ctype = LS.get('chartType', 'bar');
+  const ctTabs = '<div class="ct-tabs" role="tablist" aria-label="รูปแบบกราฟ">' + CHART_TYPES.map(c => '<button data-ctype="' + c[0] + '" aria-pressed="' + (ctype === c[0]) + '" title="' + c[1] + '">' + c[2] + '<span>' + c[1] + '</span></button>').join('') + '</div>';
   const rangeTxt = hr.from === hr.to ? fdY(hr.from) : fdY(hr.from) + ' – ' + fdY(hr.to);
-  const hrCtl = '<div class="hr-ctl"><div class="hr-chips">' + H_PRESETS.map(x => '<button class="chip sm" data-hpreset="' + x[0] + '" aria-pressed="' + (hr.preset === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
+  const hrCtl = ctTabs + '<div class="hr-ctl"><div class="hr-chips">' + H_PRESETS.map(x => '<button class="chip sm" data-hpreset="' + x[0] + '" aria-pressed="' + (hr.preset === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
     '<div class="hr-dates"><label>' + STI.calendar + '<input type="date" id="hFrom" value="' + hr.from + '" max="' + t + '" aria-label="ตั้งแต่วันที่"></label><span>–</span><label><input type="date" id="hTo" value="' + hr.to + '" max="' + t + '" aria-label="ถึงวันที่"></label></div></div>';
   const ok30 = done30.filter(onTime).length;
   const withMin = done30.filter(j => j.minutes > 0);
@@ -1327,7 +1329,7 @@ function viewHome() {
     '<section class="panel"><div class="panel-h"><div><h2>งานที่เสร็จ</h2><div class="sub">' + rangeTxt + ' · ' + span + ' วัน' + (weekly ? ' (รวมเป็นรายสัปดาห์)' : '') + ' · นับตามวันที่ปิดงาน</div></div><div class="legend"><span><i style="background:var(--accent)"></i>ตรงเวลา</span><span><i style="background:var(--urgent)"></i>ช้ากว่ากำหนด</span></div></div>' +
       hrCtl + '<div class="minis"><div class="mini"><span>งานเสร็จ</span><b>' + done30.length + '</b></div><div class="mini"><span>ตรงเวลา</span><b>' + (done30.length ? Math.round(ok30 / done30.length * 100) + '%' : '–') + '</b></div>' +
       '<div class="mini"><span>เวลาทำเฉลี่ย/งาน</span><b>' + (avgMin ? fdur(avgMin) : '–') + '</b></div><div class="mini"><span>รับงาน → เสร็จ เฉลี่ย</span><b>' + (leads.length ? avgLead.toFixed(1) + ' วัน' : '–') + '</b></div></div>' +
-      '<div class="chart"><div class="y"><span>' + max + '</span><span>' + (max / 2) + '</span><span>0</span></div><div class="plot">' + bars + '</div></div></section>' +
+      chartBlock(keys, per, max, every, weekly, span, hr, done30, bars) + '</section>' +
     '<div class="grid2 even">' +
       '<section class="panel"><div class="panel-h"><div><h2>ภาระงานรายคน</h2><div class="sub">งานที่ยังไม่เสร็จ แยกตามสถานะ</div></div><div class="legend"><span><i style="background:var(--doing)"></i>กำลังทำ</span><span><i style="background:var(--review)"></i>รอตรวจ</span><span><i style="background:var(--queue)"></i>รอคิว</span></div></div><div class="hbars">' + loadH + '</div></section>' +
       '<section class="panel"><div class="panel-h"><div><h2>งานเสร็จตามกลุ่มงาน</h2><div class="sub">' + rangeTxt + '</div></div></div><div class="hbars">' + grpH + '</div></section>' +
@@ -1350,6 +1352,56 @@ function homeRange() {
   return r;
 }
 function saveHomeRange() { LS.set('homeRange', S.hr.preset === 'custom' ? S.hr : { preset: S.hr.preset }); }
+const CHART_TYPES = [
+  ['bar', 'แท่ง', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h16"/><rect x="5.5" y="11" width="3" height="6" rx="1"/><rect x="10.5" y="6" width="3" height="11" rx="1"/><rect x="15.5" y="13" width="3" height="4" rx="1"/></svg>'],
+  ['line', 'เส้น', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3 6-8 3 3"/></svg>'],
+  ['area', 'พื้นที่', '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20V15l5-6 4 3 6-7 3 3v12z" opacity=".35"/><path d="M3 15l5-6 4 3 6-7 3 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>'],
+  ['cum', 'สะสม', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M4 18l4-2 4-4 4-2 5-6"/><path d="M17 4h4v4"/></svg>'],
+  ['donut', 'วงกลม', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 8 8h-8z" fill="currentColor" stroke="none"/></svg>'],
+  ['people', 'รายคน', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="7" cy="7" r="2.5"/><circle cx="7" cy="17" r="2.5"/><path d="M12 7h9M12 17h5"/></svg>']
+];
+function chartBlock(keys, per, max, every, weekly, span, hr, done, bars) {
+  const type = LS.get('chartType', 'bar');
+  const lab = d => weekly || span > 31 ? fd(d < hr.from ? hr.from : d) : parseLocal(d).getDate();
+  const empty = !done.length ? '<div class="ch-empty">ยังไม่มีงานเสร็จในช่วงนี้</div>' : '';
+  if (type === 'bar') return '<div class="chart"><div class="y"><span>' + max + '</span><span>' + (max / 2) + '</span><span>0</span></div><div class="plot">' + bars + '</div></div>';
+  if (type === 'donut' || type === 'people') {
+    if (!done.length) return '<div class="chart alt">' + empty + '</div>';
+    if (type === 'donut') {
+      const ok = done.filter(onTime).length, late = done.length - ok, pct = Math.round(ok / done.length * 100), C = 2 * Math.PI * 42;
+      const agg = {}; done.forEach(j => { const k = groupShort(j.group) || 'ไม่ระบุ'; agg[k] = (agg[k] || 0) + 1; });
+      const grp = Object.entries(agg).sort((a, b) => b[1] - a[1]), cols = ['var(--brand)', 'var(--doing)', 'var(--review)', 'var(--urgent)', 'var(--done)', 'var(--hold)', 'var(--late)'];
+      let acc = 0;
+      const ring2 = grp.map((g, i) => { const len = g[1] / done.length * C * 0.72 / 0.84; const seg = '<circle r="30" cx="60" cy="60" fill="none" stroke="' + cols[i % cols.length] + '" stroke-width="10" pathLength="' + (C) + '" stroke-dasharray="' + (g[1] / done.length * C) + ' ' + C + '" stroke-dashoffset="' + (-acc) + '" style="--d:' + (i * 0.08) + 's"/>'; acc += g[1] / done.length * C; return seg; }).join('');
+      return '<div class="chart alt donut-wrap"><svg class="donut" viewBox="0 0 120 120"><circle r="42" cx="60" cy="60" fill="none" stroke="var(--surface-3)" stroke-width="12"/>' +
+        '<circle class="dn-ok" r="42" cx="60" cy="60" fill="none" stroke="var(--done)" stroke-width="12" stroke-linecap="round" pathLength="' + C + '" stroke-dasharray="' + (ok / done.length * C) + ' ' + C + '"/>' +
+        (late ? '<circle class="dn-late" r="42" cx="60" cy="60" fill="none" stroke="var(--urgent)" stroke-width="12" pathLength="' + C + '" stroke-dasharray="' + (late / done.length * C) + ' ' + C + '" stroke-dashoffset="' + (-(ok / done.length * C)) + '"/>' : '') +
+        '<g class="dn-in">' + ring2 + '</g><text x="60" y="58" text-anchor="middle" class="dn-pct">' + pct + '%</text><text x="60" y="74" text-anchor="middle" class="dn-sub">ตรงเวลา</text></svg>' +
+        '<div class="dn-legend"><div><b>สถานะการส่ง (วงนอก)</b><span><i style="background:var(--done)"></i>ตรงเวลา ' + ok + '</span><span><i style="background:var(--urgent)"></i>ช้ากว่ากำหนด ' + late + '</span></div>' +
+        '<div><b>กลุ่มงาน (วงใน)</b>' + grp.map((g, i) => '<span><i style="background:' + cols[i % cols.length] + '"></i>' + esc(g[0]) + ' ' + g[1] + '</span>').join('') + '</div></div></div>';
+    }
+    const agg = {}; done.forEach(j => { const k = j.assignee || ''; agg[k] = agg[k] || { ok: 0, late: 0 }; agg[k][onTime(j) ? 'ok' : 'late']++; });
+    const rows = Object.entries(agg).sort((a, b) => (b[1].ok + b[1].late) - (a[1].ok + a[1].late)), top = Math.max(1, ...rows.map(r => r[1].ok + r[1].late));
+    return '<div class="chart alt pp">' + rows.map((r, i) => '<div class="pp-row" style="--d:' + (i * 0.07) + 's"><span class="pp-n">' + av(r[0]) + esc(r[0] || 'ยังไม่มอบหมาย') + '</span><div class="pp-bar"><i style="width:' + (r[1].ok / top * 100) + '%"></i><i class="late" style="width:' + (r[1].late / top * 100) + '%"></i></div><b>' + (r[1].ok + r[1].late) + '</b></div>').join('') + '</div>';
+  }
+  // line / area / cumulative as SVG
+  let vals = keys.map(k => per[k].ok + per[k].late);
+  if (type === 'cum') { let a = 0; vals = vals.map(v => (a += v)); }
+  let mx = Math.max(2, ...vals); if (mx % 2) mx++;
+  const W = 600, H = 168, n = vals.length, x = i => n === 1 ? W / 2 : 8 + i * (W - 16) / (n - 1), y = v => H - 6 - v / mx * (H - 16);
+  const pts = vals.map((v, i) => [x(i), y(v)]);
+  const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = path + ' L' + x(n - 1).toFixed(1) + ' ' + (H - 6) + ' L' + x(0).toFixed(1) + ' ' + (H - 6) + ' Z';
+  const lateDots = type === 'cum' ? '' : keys.map((k, i) => per[k].late ? '<circle cx="' + x(i) + '" cy="' + y(vals[i]) + '" r="5" class="ln-late"/>' : '').join('');
+  const tip = (k, i) => (weekly ? 'สัปดาห์ ' : '') + fd(k < hr.from ? hr.from : k) + ' · ' + (type === 'cum' ? 'สะสม ' + vals[i] : 'เสร็จ ' + vals[i]);
+  const labels = keys.map((k, i) => (i % every === 0 || i === n - 1) ? '<em style="left:' + (x(i) / W * 100) + '%">' + lab(k) + '</em>' : '').join('');
+  return '<div class="chart"><div class="y"><span>' + mx + '</span><span>' + (mx / 2) + '</span><span>0</span></div><div class="plot svgplot">' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" class="lnc ' + type + '"><defs><linearGradient id="lnFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--brand)" stop-opacity=".45"/><stop offset="1" stop-color="var(--brand)" stop-opacity="0"/></linearGradient></defs>' +
+    (type !== 'line' ? '<path d="' + area + '" fill="url(#lnFill)" class="ln-area"/>' : '') +
+    '<path d="' + path + '" fill="none" class="ln-path" pathLength="1"/>' + lateDots + '</svg>' +
+    '<div class="ln-dots">' + pts.map((p, i) => '<span data-tip="' + tip(keys[i], i) + '" style="left:' + (p[0] / W * 100) + '%;top:' + (p[1] / H * 100) + '%"></span>').join('') + '</div>' +
+    '<div class="ln-x">' + labels + '</div></div></div>';
+}
 function minutesOn(date, member) {
   return S.logs.filter(l => l.member === member && (l.start || '').slice(0, 10) === date)
     .reduce((s, l) => s + (l.end ? l.minutes : (Date.now() - parseLocal(l.start)) / 60000), 0);
@@ -1853,6 +1905,7 @@ document.addEventListener('click', async e => {
   if (d.themeset) { setTheme({ [d.themeset]: d.val }); return render(); }
   if (d.insttab) { INST.tab = d.insttab; renderLogin(); drawQr(); return; }
   if (d.quick) { S.f.quick = d.quick; return render(); }
+  if (d.ctype) { LS.set('chartType', d.ctype); S.animIn = true; return render(); }
   if (d.hpreset) { homeRange(); S.hr.preset = d.hpreset; homeRange(); saveHomeRange(); return render(); }
   if (d.saveuser) return saveUserRow(d.saveuser);
   if (d.rmphoto) return setPhoto(d.rmphoto, null);
