@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.6.3';
+const APP_VERSION = '1.7.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -46,6 +46,51 @@ const I = {
   print: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9V3h10v6M7 17H4v-7h16v7h-3"/><rect x="7" y="14" width="10" height="7"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'
 };
+const DECO = {
+  sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>',
+  sunrise: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17a5 5 0 0 1 10 0M3 17h18M12 4v4M5.6 9.6l1.5 1.5M18.4 9.6l-1.5 1.5M5 20h14"/></svg>',
+  moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg>',
+  alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4.5M12 17.5h.01"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h16"/><rect x="5.5" y="11" width="3" height="6" rx="1"/><rect x="10.5" y="6" width="3" height="11" rx="1"/><rect x="15.5" y="13" width="3" height="4" rx="1"/></svg>',
+  people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M17.5 14.6c2.2.4 3.6 2 4 4.4"/></svg>',
+  pie: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>',
+  key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/></svg>',
+  palette: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.9 1.8-1.8 0-1.3-1.2-1.6-1.2-2.8 0-1 .8-1.6 1.8-1.6H17a4 4 0 0 0 4-4C21 6.5 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15.5" cy="7.5" r="1"/></svg>',
+  db: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-13M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.6-3.4 8-8 9-4.6-1-8-4.4-8-9V6z"/><path d="M8.8 12l2.3 2.3 4.2-4.3" stroke-linecap="round"/></svg>',
+  tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.4"/></svg>',
+  list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01" stroke-width="3"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5h.01"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>'
+};
+// icon in front of each panel heading, matched by the start of the title
+const HEAD_IC = [['งานของ', 'user', 'doing'], ['ต้องจัดการ', 'alert', 'late'], ['งานที่เสร็จ', 'chart', 'done'], ['ภาระงาน', 'people', 'review'], ['งานเสร็จตามกลุ่ม', 'pie', 'urgent'],
+  ['บัญชี', 'key', 'doing'], ['ธีม', 'palette', 'review'], ['ฐานข้อมูล', 'db', 'done'], ['ผู้ใช้งาน', 'shield', 'doing'], ['แบรนด์', 'tag', 'urgent'], ['รายการตัวเลือก', 'list', 'review'], ['ระยะเวลา', 'clock', 'done'], ['เกี่ยวกับ', 'info', 'queue']];
+function decorate(root) {
+  root.querySelectorAll('.panel-h h2').forEach(h => {
+    if (h.querySelector('.h-ic')) return;
+    const t = h.textContent.trim(), m = HEAD_IC.find(x => t.indexOf(x[0]) === 0);
+    if (m) h.insertAdjacentHTML('afterbegin', '<span class="h-ic" style="--hc:var(--' + m[2] + ')" aria-hidden="true">' + DECO[m[1]] + '</span>');
+  });
+  root.querySelectorAll('.empty').forEach(e => {
+    if (e.querySelector('.e-ic')) return;
+    const ok = /ไม่มีงาน/.test(e.textContent);
+    e.insertAdjacentHTML('afterbegin', '<span class="e-ic' + (ok ? ' ok' : '') + '" aria-hidden="true">' + DECO[ok ? 'check' : 'search'] + '</span>');
+  });
+}
+// count numbers up from zero when a page opens
+function countUp(root) {
+  root.querySelectorAll('.kpi b, .mini b, .rkpi b, .tstats b').forEach(el => {
+    const txt = el.textContent, m = txt.match(/^(\d+)(.*)$/); if (!m) return;
+    const end = +m[1], rest = m[2]; if (end < 2) return;
+    const t0 = performance.now(), dur = Math.min(900, 380 + end * 18);
+    const step = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(end * e) + rest; if (k < 1) requestAnimationFrame(step); };
+    el.textContent = '0' + rest; requestAnimationFrame(step);
+  });
+}
 const KPI_IC = {
   open: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5" stroke-linecap="round"/></svg>',
   late: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>',
@@ -407,6 +452,7 @@ async function load(silent) {
     S.jobs = d.jobs || []; S.logs = d.logs || [];
     if (!S.draftDirty) S.draft = null;
     S.sync = 'ok'; S.syncErr = ''; S.lastSync = Date.now(); S.loaded = true;
+    if (S.screen !== 'app') S.animIn = true;
     S.screen = 'app'; document.body.classList.remove('auth');
   } catch (e) {
     if (e.code === 'auth') { LS.del(tokenKey()); toast(e.message, true); return showLogin(); }
@@ -691,6 +737,12 @@ function render() {
   else if (S.view === 'settings') h += viewSettings();
   else h += viewHome();
   v.innerHTML = h;
+  decorate(v);
+  if (S.animIn) {
+    S.animIn = false;
+    const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduce) { v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); clearTimeout(S.animT); S.animT = setTimeout(() => v.classList.remove('enter'), 1400); countUp(v); }
+  }
   if (S.edit) renderEditor();
 }
 
@@ -703,7 +755,8 @@ function banner() {
 function topbar(title, sub, extra) {
   const s = S.settings;
   const d = new Date();
-  return '<div class="topbar"><div><div class="eyebrow">' + esc(s.company) + ' · วัน' + TH_D[d.getDay()] + ' ' + fdY(today()) + '</div><h1>' + title + '</h1>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
+  const hr = d.getHours(), tod = hr < 6 || hr >= 18 ? 'moon' : hr < 11 ? 'sunrise' : 'sun';
+  return '<div class="topbar"><span class="hero-ic" aria-hidden="true">' + (I[S.view] || I.home) + '</span><span class="hero-dots" aria-hidden="true"><i></i><i></i><i></i></span><div><div class="eyebrow"><span class="tod ' + tod + '" aria-hidden="true">' + DECO[tod] + '</span>' + esc(s.company) + ' · วัน' + TH_D[d.getDay()] + ' ' + fdY(today()) + '</div><h1>' + title + '</h1>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
     '<div class="top-actions">' + (extra || '') + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
     '<button class="btn primary new" data-act="new">' + I.plus + 'เพิ่มงาน</button></div></div>';
 }
@@ -768,7 +821,7 @@ function viewHome() {
   const arr = Object.entries(agg).sort((a, b) => b[1] - a[1]); const topG = arr.length ? arr[0][1] : 1;
   const grpH = arr.length ? arr.map(a => '<div class="hb"><span title="' + esc(a[0]) + '">' + esc(groupShort(a[0])) + '</span><div class="track"><i style="width:' + (a[1] / topG * 100) + '%;background:var(--accent)"></i></div><b>' + a[1] + '</b></div>').join('') : '<div class="sub">ยังไม่มีงานเสร็จใน 30 วัน</div>';
 
-  return topbar('สวัสดี' + (S.me ? ' ' + esc(S.me) : ''), 'ภาพรวมคิวงานของทีมวันนี้') +
+  return topbar('สวัสดี' + (S.me ? ' ' + esc(S.me) : '') + ' <span class="wave" aria-hidden="true">👋</span>', 'ภาพรวมคิวงานของทีมวันนี้') +
     '<div class="kpis">' + kp + '</div>' +
     '<div class="grid2">' + mine +
       '<section class="panel"><div class="panel-h"><div><h2>ต้องจัดการก่อน</h2><div class="sub">เลยกำหนด → ด่วน → ส่งภายในพรุ่งนี้</div></div><button class="btn ghost sm" data-filter-go="open">ดูทั้งหมด</button></div>' +
@@ -1233,7 +1286,7 @@ async function saveEditor() {
 /* ============ navigation ============ */
 function go(view, sec) {
   if (S.view === 'settings' && view !== 'settings' && S.draftDirty) { toast('มีการตั้งค่าที่ยังไม่บันทึก กดบันทึกหรือยกเลิกก่อน', true); return; }
-  S.view = view; LS.set('view', view); render();
+  S.view = view; LS.set('view', view); S.animIn = true; render();
   if (sec) setTimeout(() => { const el = document.getElementById('s-' + sec); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
   else window.scrollTo(0, 0);
 }
