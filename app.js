@@ -1463,7 +1463,7 @@ function rtcStrip() {
 
 
 /* ---- remote pointer: ชี้ / วาดบนจอที่แชร์ ---- */
-const PEEK_CSS = `.rtc-peek{position:fixed;right:16px;bottom:16px;z-index:115;width:min(340px,calc(100vw - 32px));background:#10161c;color:#e9eef3;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px -12px rgba(0,0,0,.55),0 0 0 1px #2a343e;font:13px/1.35 'IBM Plex Sans Thai',system-ui,sans-serif;animation:peekIn .4s cubic-bezier(.3,1.4,.5,1);transition:box-shadow .3s}
+const PEEK_CSS = `.rtc-peek{position:fixed;right:16px;bottom:16px;z-index:115;width:min(340px,calc(100vw - 32px));background:#10161c;color:#e9eef3;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px -12px rgba(0,0,0,.55),0 0 0 1px #2a343e;font:13px/1.35 Anuphan,system-ui,sans-serif;animation:peekIn .4s cubic-bezier(.3,1.4,.5,1);transition:box-shadow .3s}
 .rtc-peek.in-pip{position:fixed;inset:0;width:auto;border-radius:0;box-shadow:none;display:flex;flex-direction:column;animation:none}
 .rtc-peek.hot{box-shadow:0 0 0 3px #FF3B5C,0 18px 50px -12px rgba(0,0,0,.55)}
 .rtc-peek-bar{display:flex;align-items:center;gap:7px;padding:7px 7px 7px 11px}
@@ -1558,7 +1558,7 @@ function inkPaint(cv, vid) {
     g.fillStyle = gr; g.beginPath(); g.arc(q[0], q[1], pulse + 10, 0, Math.PI * 2); g.fill();
     g.fillStyle = c; g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 7, 0, Math.PI * 2); g.fill(); g.stroke();
     if (R.role === 'host') {
-      const label = R.name; g.font = '600 12px "IBM Plex Sans Thai", system-ui, sans-serif';
+      const label = R.name; g.font = '600 12px Anuphan, system-ui, sans-serif';
       const tw = g.measureText(label).width + 14, lx = Math.min(q[0] + 12, W - tw - 2), ly = Math.min(q[1] + 12, H - 24);
       g.fillStyle = c; g.beginPath(); if (g.roundRect) g.roundRect(lx, ly, tw, 20, 10); else g.rect(lx, ly, tw, 20); g.fill();
       g.fillStyle = '#fff'; g.fillText(label, lx + 7, ly + 14);
