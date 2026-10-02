@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.4.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1472,12 +1472,13 @@ const PEEK_CSS = `.rtc-peek{position:fixed;right:16px;bottom:16px;z-index:115;wi
 .rtc-peek-bar button:hover{background:#243039}
 .rtc-peek-bar svg{width:15px;height:15px}
 .rtc-peek-rec{width:9px;height:9px;border-radius:50%;background:#E5484D;flex:none;animation:peekRec 1.4s infinite}
-.rtc-peek-box{position:relative;aspect-ratio:16/10;background:#000}
+.rtc-peek-box{position:relative;aspect-ratio:16/9;background:#0d1318;margin:0 8px;border-radius:8px}
 .rtc-peek.in-pip .rtc-peek-box{flex:1;aspect-ratio:auto}
-.rtc-peek-box video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .rtc-peek-box canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.rtc-peek small{display:block;padding:6px 11px 9px;color:#93a3b2}
-.rtc-peek.in-pip small{display:none}
+.rtc-peek-where{display:flex;align-items:center;gap:7px;padding:7px 12px 9px;color:#93a3b2;font-size:13px}
+.rtc-peek-where b{color:#fff}
+.rtc-peek-where i{width:10px;height:10px;border-radius:50%;flex:none;box-shadow:0 0 8px currentColor}
+.rtc-peek.in-pip .rtc-peek-box{margin:0 8px}
 @keyframes peekRec{50%{opacity:.3}}
 @keyframes peekIn{from{opacity:0;transform:translateY(24px) scale(.95)}}
 body.pip-body{margin:0;background:#0b0f13}`;
@@ -1538,6 +1539,14 @@ function inkPaint(cv, vid) {
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
   const r = inkFit(box, vid && vid.videoWidth, vid && vid.videoHeight), P = p => [r.x + p[0] * r.w, r.y + p[1] * r.h];
+  if (cv.classList.contains('map')) {
+    g.fillStyle = '#16202a'; g.strokeStyle = '#2c3a47'; g.lineWidth = 1.5;
+    g.beginPath(); if (g.roundRect) g.roundRect(r.x + .5, r.y + .5, r.w - 1, r.h - 1, 6); else g.rect(r.x, r.y, r.w, r.h); g.fill(); g.stroke();
+    g.strokeStyle = '#223039'; g.setLineDash([3, 4]); g.beginPath();
+    [1, 2].forEach(i => { g.moveTo(r.x + r.w * i / 3, r.y + 4); g.lineTo(r.x + r.w * i / 3, r.y + r.h - 4); g.moveTo(r.x + 4, r.y + r.h * i / 3); g.lineTo(r.x + r.w - 4, r.y + r.h * i / 3); });
+    g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#2a3845'; g.fillRect(r.x + 1, r.y + r.h - 7, r.w - 2, 6);
+  }
   const now = performance.now(), k = R.ink, lw = Math.max(2.5, r.w / 300);
   g.lineCap = g.lineJoin = 'round';
   k.strokes = k.strokes.filter(x => !(x.l && x.end && now - x.end > 1500));
@@ -1566,6 +1575,21 @@ function inkPaint(cv, vid) {
   }
   g.globalAlpha = 1;
 }
+/* ขนาดจอที่แชร์ (ไม่แสดงภาพจอในกรอบ เพื่อไม่ให้ภาพซ้อนกันไม่รู้จบ) */
+function inkDims() {
+  const tr = R.stream && R.stream.getVideoTracks()[0], st = tr && tr.getSettings ? tr.getSettings() : {};
+  return { videoWidth: st.width || 1920, videoHeight: st.height || 1080 };
+}
+function inkWhere() {
+  const el = R.peek && R.peek.querySelector('.rtc-peek-where'); if (!el) return;
+  const k = R.ink, live = k.ptr && performance.now() - k.ptr.t < 3000;
+  let t;
+  if (live) {
+    const cx = k.ptr.x < .34 ? 'ซ้าย' : k.ptr.x > .66 ? 'ขวา' : '', cy = k.ptr.y < .34 ? 'บน' : k.ptr.y > .66 ? 'ล่าง' : '';
+    t = '<i style="background:' + k.ptr.c + '"></i>' + esc(R.name) + ' ชี้ที่ <b>' + (cx || cy ? (cx && cy ? 'มุม' : 'ด้าน') + cx + cy : 'กลางจอ') + '</b>';
+  } else t = k.strokes.some(x => !x.l) ? esc(R.name) + ' วาดบอกไว้ ' + k.strokes.filter(x => !x.l).length + ' จุด' : 'รอ ' + esc(R.name) + ' ชี้…';
+  if (el.innerHTML !== t) el.innerHTML = t;
+}
 function inkKick() {
   if (R.inkRaf || !R.state) return;
   const w = R.pip || window; R.inkWin = w;
@@ -1574,7 +1598,7 @@ function inkKick() {
 function inkFrame() {
   R.inkRaf = 0;
   const a = $('#rtcInk'); if (a) inkPaint(a, $('#rtcVideo'));
-  if (R.peek) { const c = R.peek.querySelector('canvas'); if (c) inkPaint(c, R.peek.querySelector('video')); }
+  if (R.peek) { const c = R.peek.querySelector('canvas'); if (c) inkPaint(c, inkDims()); inkWhere(); }
   const k = R.ink, now = performance.now();
   if ((k.ptr && now - k.ptr.t < 3000) || k.rips.length || k.strokes.some(x => x.l)) inkKick();
 }
@@ -1633,8 +1657,7 @@ function renderPeek() {
   if (!want) { if (R.peek) { R.peek.remove(); R.peek = null; } return; }
   if (!R.peek) {
     const el = document.createElement('div'); el.className = 'rtc-peek';
-    el.innerHTML = '<div class="rtc-peek-bar"></div><div class="rtc-peek-box"><video autoplay playsinline muted></video><canvas></canvas></div><small>จุดที่ ' + esc(R.name) + ' ชี้หรือวาดจะขึ้นตรงนี้ · กด "ลอย" ให้เห็นทับโปรแกรมอื่น</small>';
-    const v = el.querySelector('video'); v.srcObject = R.stream; v.addEventListener('resize', inkKick); v.addEventListener('loadedmetadata', inkKick);
+    el.innerHTML = '<div class="rtc-peek-bar"></div><div class="rtc-peek-box"><canvas class="map"></canvas></div><div class="rtc-peek-where" id="peekWhere">รอ ' + esc(R.name) + ' ชี้…</div>';
     el.addEventListener('click', e => {
       const b = e.target.closest && e.target.closest('[data-peek]'); if (!b) return;
       const a = b.dataset.peek;
@@ -1647,7 +1670,7 @@ function renderPeek() {
   R.peek.classList.toggle('in-pip', !!R.pip);
   const home = R.pip ? R.pip.document.body : R.peekOpen ? document.body : null;
   if (!home) R.peek.remove();
-  else if (R.peek.parentNode !== home) { home.appendChild(R.peek); const v = R.peek.querySelector('video'); v.play().catch(() => {}); }
+  else if (R.peek.parentNode !== home) home.appendChild(R.peek);
   inkKick();
 }
 async function rtcPip() {
@@ -1655,7 +1678,7 @@ async function rtcPip() {
   if (R.role !== 'host' || R.state !== 'live') return;
   if (R.pip) { try { R.pip.close(); } catch (e) {} return; }
   let w;
-  try { w = await window.documentPictureInPicture.requestWindow({ width: 440, height: 300 }); } catch (e) { return toast('เปิดหน้าต่างลอยไม่สำเร็จ', true); }
+  try { w = await window.documentPictureInPicture.requestWindow({ width: 360, height: 250 }); } catch (e) { return toast('เปิดหน้าต่างลอยไม่สำเร็จ', true); }
   const st = w.document.createElement('style'); st.textContent = PEEK_CSS; w.document.head.appendChild(st);
   w.document.body.className = 'pip-body'; w.document.title = 'คิวงาน · ' + R.name;
   if (R.inkRaf) { try { (R.inkWin || window).cancelAnimationFrame(R.inkRaf); } catch (e) {} R.inkRaf = 0; }
