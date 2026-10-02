@@ -19,6 +19,7 @@
 
 const VERSION = '1.1.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
+const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
 const MAX_PIN_FAILS = 5;
 
@@ -154,7 +155,14 @@ const ownsJob_ = (u, j) => isAdmin_(u) || j.assignee === u.name || j.createdBy =
 
 /* ======================= Sheet helpers ======================= */
 
-function ss_() { return SpreadsheetApp.getActiveSpreadsheet(); }
+let SS_ = null;
+function ss_() {
+  if (SS_) return SS_;
+  SS_ = SpreadsheetApp.getActiveSpreadsheet();
+  if (SS_) return SS_;
+  if (!DB_SHEET_ID) throw new Error('สคริปต์นี้ไม่ได้ผูกกับชีต ใส่ ID ของชีตฐานข้อมูลในตัวแปร DB_SHEET_ID');
+  return (SS_ = SpreadsheetApp.openById(DB_SHEET_ID));
+}
 function tz_() { return ss_().getSpreadsheetTimeZone() || 'Asia/Bangkok'; }
 function nowIso_() { return Utilities.formatDate(new Date(), tz_(), "yyyy-MM-dd'T'HH:mm:ss"); }
 function uid_(p) { return (p || '') + Utilities.getUuid().replace(/-/g, '').slice(0, 10); }
