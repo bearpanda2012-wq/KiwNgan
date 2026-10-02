@@ -1495,3 +1495,23 @@ body.auth .msg-fab{display:none}
 .mp-jobchip{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 8px;border-radius:12px;background:var(--surface);border:1px solid var(--line);font-size:13px}
 .mp-jobchip>span{flex:1}
 .mp-jobchip .st-badge{width:22px;height:22px}.mp-jobchip .st-badge svg{width:13px;height:13px}
+
+/* v2.1 personal background image */
+[data-bg] body{background:var(--bg)}
+[data-bg] body::before{content:"";position:fixed;inset:-30px;z-index:-2;background:var(--bgimg) center/cover no-repeat;pointer-events:none}
+[data-bg] body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:var(--bg);opacity:.55}
+[data-bg="soft"] body::after{opacity:.78}
+[data-bg="strong"] body::after{opacity:.28}
+[data-bgblur="1"] body::before{filter:blur(6px)}
+[data-bgblur="2"] body::before{filter:blur(16px)}
+[data-bg] .filters .search,[data-bg] .chip:not([aria-pressed="true"]),[data-bg] .qchip:not([aria-pressed="true"]){backdrop-filter:blur(8px)}
+.bg-pick{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--line)}
+.bg-prev{width:220px;aspect-ratio:16/10;border-radius:14px;background:var(--surface-2) center/cover no-repeat;border:2px dashed var(--line);display:grid;place-items:center;color:var(--muted);font-size:13px;flex:none}
+.bg-prev.has{border:0;box-shadow:var(--shadow-sm)}
+.bg-prev span{display:flex;align-items:center;gap:6px}
+.bg-prev svg{width:18px;height:18px}
+.bg-ctl{flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px}
+.bg-ctl>b{font:700 14.5px var(--f-display)}
+.bg-ctl>small{color:var(--muted);margin-top:-6px}
+.bg-ctl .btn svg{width:16px;height:16px}
+@media (max-width:640px){ .bg-prev{width:100%} }

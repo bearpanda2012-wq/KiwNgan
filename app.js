@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.0.9';
+const APP_VERSION = '2.1.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -509,7 +509,7 @@ async function load(silent) {
     if (!S.draftDirty) S.draft = null;
     S.sync = 'ok'; S.syncErr = ''; S.lastSync = Date.now(); S.loaded = true;
     if (S.screen !== 'app') { S.animIn = true; setTimeout(startMsgPolling, 800); }
-    S.screen = 'app'; document.body.classList.remove('auth');
+    S.screen = 'app'; document.body.classList.remove('auth'); applyTheme();
   } catch (e) {
     if (e.code === 'auth') { LS.del(tokenKey()); toast(e.message, true); return showLogin(); }
     S.sync = 'err'; S.syncErr = e.message;
@@ -722,7 +722,8 @@ const THEMES = [
   { id: 'night', name: 'กลางคืน', c1: '#364FC7', c2: '#1098AD', mode: 'dark' },
   { id: 'classic', name: 'เรียบคลาสสิก', c1: '', c2: '', sidebar: 'plain', header: 'plain' }
 ];
-const THEME_DEFAULT = { preset: 'brand', mode: 'auto', c1: '#0B6B70', c2: '#5B3FD6', sidebar: 'gradient', header: 'gradient', radius: 'round' };
+const THEME_DEFAULT = { bgdim: 'mid', bgblur: '0', preset: 'brand', mode: 'auto', c1: '#0B6B70', c2: '#5B3FD6', sidebar: 'gradient', header: 'gradient', radius: 'round' };
+const BGIMG = () => { try { return localStorage.getItem('kiwngan:bgimg') || ''; } catch (e) { return ''; } };
 const isHex = v => /^#[0-9a-f]{6}$/i.test(v || '');
 function getTheme() { return Object.assign({}, THEME_DEFAULT, LS.get('theme', {}) || {}); }
 function setTheme(patch) { const t = Object.assign(getTheme(), patch); LS.set('theme', t); applyTheme(); return t; }
@@ -739,6 +740,9 @@ function applyTheme() {
   root.setAttribute('data-sidebar', t.sidebar === 'plain' ? 'plain' : 'gradient');
   root.setAttribute('data-header', ['soft', 'plain'].indexOf(t.header) >= 0 ? t.header : 'gradient');
   root.setAttribute('data-radius', t.radius === 'sharp' ? 'sharp' : 'round');
+  const bg = S.screen === 'app' ? BGIMG() : '';
+  if (bg) { root.style.setProperty('--bgimg', 'url(' + bg + ')'); root.setAttribute('data-bg', t.bgdim || 'mid'); root.setAttribute('data-bgblur', t.bgblur || '0'); }
+  else { root.style.removeProperty('--bgimg'); root.removeAttribute('data-bg'); root.removeAttribute('data-bgblur'); }
   const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.setAttribute('content', c1);
 }
 function themeSection() {
@@ -761,7 +765,12 @@ function themeSection() {
       '<div class="f"><span class="lbl">เมนูด้านข้าง</span>' + seg('sidebar', [['gradient', 'สีไล่'], ['plain', 'พื้นเรียบ']]) + '</div>' +
       '<div class="f"><span class="lbl">หัวหน้าเพจ</span>' + seg('header', [['gradient', 'สีไล่'], ['soft', 'สีอ่อน'], ['plain', 'เรียบ']]) + '</div>' +
       '<div class="f"><span class="lbl">มุมการ์ด</span>' + seg('radius', [['round', 'โค้งมน'], ['sharp', 'เหลี่ยม']]) + '</div>' +
-    '</div></section>';
+    '</div>' +
+    '<div class="bg-pick"><div class="bg-prev' + (BGIMG() ? ' has' : '') + '"' + (BGIMG() ? ' style="background-image:url(' + BGIMG() + ')"' : '') + '>' + (BGIMG() ? '' : '<span>' + STI.camera + 'ยังไม่มีรูป</span>') + '</div>' +
+      '<div class="bg-ctl"><b>รูปพื้นหลัง</b><small>ใช้รูปของคุณเป็นพื้นหลังแอป (เฉพาะเครื่องนี้)</small>' +
+      '<div class="top-actions"><label class="btn sm primary">' + STI.camera + (BGIMG() ? 'เปลี่ยนรูป' : 'เลือกรูป') + '<input type="file" accept="image/*" id="bgIn" hidden></label>' + (BGIMG() ? '<button class="btn sm" data-act="bgremove">' + I.trash + 'เอาออก</button>' : '') + '</div>' +
+      (BGIMG() ? '<div class="f"><span class="lbl">ความเข้มของรูป</span>' + seg('bgdim', [['soft', 'จาง'], ['mid', 'ปานกลาง'], ['strong', 'ชัด']]) + '</div><div class="f"><span class="lbl">เบลอ</span>' + seg('bgblur', [['0', 'ไม่เบลอ'], ['1', 'เบลอเล็กน้อย'], ['2', 'เบลอมาก']]) + '</div>' : '') +
+    '</div></div></section>';
 }
 
 /* ============ job images ============ */
@@ -1960,6 +1969,7 @@ document.addEventListener('click', async e => {
     case 'install': return installApp();
     case 'insthelp': INST.help = !INST.help; renderLogin(); if (INST.help) drawQr(); return;
     case 'copyapp': try { await navigator.clipboard.writeText(appUrl()); toast('คัดลอกลิงก์แล้ว ส่งให้ทีมหรือเปิดบนอีกเครื่องได้เลย'); } catch (x) { toast(appUrl()); } return;
+    case 'bgremove': try { localStorage.removeItem('kiwngan:bgimg'); } catch (x) {} applyTheme(); toast('เอารูปพื้นหลังออกแล้ว'); return render();
     case 'themereset': LS.del('theme'); applyTheme(); toast('คืนค่าธีมเริ่มต้นแล้ว'); return render();
     case 'print': return printReport();
     case 'connect': return connect();
@@ -2027,6 +2037,7 @@ document.addEventListener('change', e => {
   }
   if (t.dataset.rsec) { reportState().sec[t.dataset.rsec] = t.checked; saveReportState(); return render(); }
   if (t.id === 'logoIn' && t.files && t.files[0]) return readLogo(t.files[0]);
+  if (t.id === 'bgIn' && t.files && t.files[0]) { const f = t.files[0]; t.value = ''; shrinkImage(f, 1920, 900000, 0.82).then(d => { try { localStorage.setItem('kiwngan:bgimg', d); } catch (x) { return toast('รูปใหญ่เกินไปสำหรับเครื่องนี้ ลองรูปอื่น', true); } applyTheme(); toast('ตั้งรูปพื้นหลังแล้ว'); render(); }).catch(e => toast(e.message, true)); return; }
   if (t.dataset.photofor && t.files && t.files[0]) return setPhoto(t.dataset.photofor, t.files[0]);
   if (t.dataset.imgjob && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return uploadImages(t.dataset.imgjob, f); }
   if (S.edit && t.closest('#sheetBody') && t.dataset.e) {
