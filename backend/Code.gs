@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.5.0';
+const VERSION = '1.5.1';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -89,7 +89,7 @@ const ACTIONS = {
   // admin
   saveSettings: (p, u) => withLock_(() => { admin_(u); return saveSettings_(p.settings, u); }),
   saveUser: (p, u) => withLock_(() => { admin_(u); return saveUser_(p.user, u); }),
-  resetPin: (p, u) => withLock_(() => { admin_(u); return resetPin_(p.userId, u); })
+  resetPin: (p, u) => withLock_(() => { admin_(u); return resetPin_(p.userId, u, p.pin); })
 };
 
 function json_(obj) {
@@ -370,16 +370,17 @@ function renameMember_(oldName, newName) {
   });
 }
 
-function resetPin_(userId, admin) {
+function resetPin_(userId, admin, wanted) {
   const row = rowOf_('Users', userId);
   if (row < 0) throw new Error('ไม่พบผู้ใช้');
   const u = readRow_('Users', row);
-  const pin = randomPin_();
+  if (wanted && !validPin_(wanted)) throw new Error('PIN ต้องเป็นตัวเลข 4–6 หลัก');
+  const pin = wanted ? String(wanted) : randomPin_();
   u.salt = Utilities.getUuid(); u.pinHash = hash_(u.salt, pin);
   writeRow_('Users', u, row);
   dropSessionsOf_(u.id);
   CacheService.getScriptCache().remove('fail_' + u.id);
-  log_('', admin.name, 'user', 'รีเซ็ต PIN ของ ' + u.name);
+  log_('', admin.name, 'user', (wanted ? 'ตั้ง PIN ใหม่ให้ ' : 'รีเซ็ต PIN ของ ') + u.name);
   return { userId: u.id, pin: pin };
 }
 

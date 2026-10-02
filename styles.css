@@ -1515,3 +1515,12 @@ body.auth .msg-fab{display:none}
 .bg-ctl>small{color:var(--muted);margin-top:-6px}
 .bg-ctl .btn svg{width:16px;height:16px}
 @media (max-width:640px){ .bg-prev{width:100%} }
+.urow-act .btn svg{width:15px;height:15px}
+.pin-edit{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-radius:12px;background:color-mix(in oklab,var(--brand) 8%,var(--surface));border:1px solid color-mix(in oklab,var(--brand) 25%,var(--line));animation:riseIn .3s ease-out}
+.pe-ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--grad);color:#fff;flex:none}
+.pe-ic svg{width:18px;height:18px}
+.pe-b{flex:1;min-width:180px}
+.pe-b b{display:block;font:700 14px var(--f-display)}
+.pe-b small{color:var(--muted);font-size:12px}
+.pin-edit #pinSet{width:150px !important;flex:none;font:600 16px var(--f-mono) !important;letter-spacing:.2em;text-align:center}
+.pin-note .btn{margin:0 6px}
