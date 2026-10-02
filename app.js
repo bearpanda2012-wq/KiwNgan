@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.6.1';
+const APP_VERSION = '2.6.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1957,7 +1957,7 @@ function viewHome() {
     '<section class="panel"><div class="panel-h"><div><h2>' + (lead ? 'งานที่เสร็จ' + (hp ? ' · ' + esc(hp === '__none' ? 'ยังไม่มอบหมาย' : hp) : ' · ทุกคน') : 'งานที่คุณทำเสร็จ') + '</h2><div class="sub">' + rangeTxt + ' · ' + span + ' วัน' + (weekly ? ' (รวมเป็นรายสัปดาห์)' : '') + ' · นับตามวันที่ปิดงาน</div></div>' + legendH + '</div>' +
       hrCtl + hpChips + '<div class="minis"><div class="mini"><span>งานเสร็จ</span><b>' + done30.length + '</b></div><div class="mini"><span>ตรงเวลา</span><b>' + (done30.length ? Math.round(ok30 / done30.length * 100) + '%' : '–') + '</b></div>' +
       '<div class="mini"><span>เวลาทำเฉลี่ย/งาน</span><b>' + (avgMin ? fdur(avgMin) : '–') + '</b></div><div class="mini"><span>รับงาน → เสร็จ เฉลี่ย</span><b>' + (leads.length ? avgLead.toFixed(1) + ' วัน' : '–') + '</b></div></div>' +
-      chartBlock(keys, per, max, every, weekly, span, hr, done30, bars) + '</section>' +
+      chartBlock(keys, per, max, every, weekly, span, hr, done30, bars, lead ? (hp ? [hp === '__none' ? '' : hp] : ppl) : null) + '</section>' +
     (lead ? '<div class="grid2 even">' +
       '<section class="panel"><div class="panel-h"><div><h2>ภาระงานรายคน</h2><div class="sub">งานที่ยังไม่เสร็จ แยกตามสถานะ</div></div><div class="legend"><span><i style="background:var(--doing)"></i>กำลังทำ</span><span><i style="background:var(--fix)"></i>แก้ไข</span><span><i style="background:var(--review)"></i>รอตรวจ</span><span><i style="background:var(--queue)"></i>รอคิว</span></div></div><div class="hbars">' + loadH + '</div></section>' +
       grpPanel + '</div>' : grpPanel);
@@ -1987,13 +1987,13 @@ const CHART_TYPES = [
   ['donut', 'วงกลม', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 8 8h-8z" fill="currentColor" stroke="none"/></svg>'],
   ['people', 'รายคน', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="7" cy="7" r="2.5"/><circle cx="7" cy="17" r="2.5"/><path d="M12 7h9M12 17h5"/></svg>']
 ];
-function chartBlock(keys, per, max, every, weekly, span, hr, done, bars) {
+function chartBlock(keys, per, max, every, weekly, span, hr, done, bars, people) {
   const type = LS.get('chartType', 'bar');
   const lab = d => weekly || span > 31 ? fd(d < hr.from ? hr.from : d) : parseLocal(d).getDate();
   const empty = !done.length ? '<div class="ch-empty">ยังไม่มีงานเสร็จในช่วงนี้</div>' : '';
   if (type === 'bar') return '<div class="chart"><div class="y"><span>' + max + '</span><span>' + (max / 2) + '</span><span>0</span></div><div class="plot">' + bars + '</div></div>';
   if (type === 'donut' || type === 'people') {
-    if (!done.length) return '<div class="chart alt">' + empty + '</div>';
+    if (!done.length && !(type === 'people' && people && people.length)) return '<div class="chart alt">' + empty + '</div>';
     if (type === 'donut') {
       const ok = done.filter(onTime).length, late = done.length - ok, pct = Math.round(ok / done.length * 100), C = 2 * Math.PI * 42;
       const agg = {}; done.forEach(j => { const k = groupShort(j.group) || 'ไม่ระบุ'; agg[k] = (agg[k] || 0) + 1; });
@@ -2007,9 +2007,10 @@ function chartBlock(keys, per, max, every, weekly, span, hr, done, bars) {
         '<div class="dn-legend"><div><b>สถานะการส่ง (วงนอก)</b><span><i style="background:var(--done)"></i>ตรงเวลา ' + ok + '</span><span><i style="background:var(--urgent)"></i>ช้ากว่ากำหนด ' + late + '</span></div>' +
         '<div><b>กลุ่มงาน (วงใน)</b>' + grp.map((g, i) => '<span><i style="background:' + cols[i % cols.length] + '"></i>' + esc(g[0]) + ' ' + g[1] + '</span>').join('') + '</div></div></div>';
     }
-    const agg = {}; done.forEach(j => { const k = j.assignee || ''; agg[k] = agg[k] || { ok: 0, late: 0 }; agg[k][onTime(j) ? 'ok' : 'late']++; });
+    const agg = {}; (people || []).forEach(n => { agg[n] = { ok: 0, late: 0 }; }); // หัวหน้างาน/แอดมิน: แสดงทุกคนแม้ยังไม่มีงานเสร็จ
+    done.forEach(j => { const k = j.assignee || ''; agg[k] = agg[k] || { ok: 0, late: 0 }; agg[k][onTime(j) ? 'ok' : 'late']++; });
     const rows = Object.entries(agg).sort((a, b) => (b[1].ok + b[1].late) - (a[1].ok + a[1].late)), top = Math.max(1, ...rows.map(r => r[1].ok + r[1].late));
-    return '<div class="chart alt pp">' + rows.map((r, i) => '<div class="pp-row" style="--d:' + (i * 0.07) + 's"><span class="pp-n">' + av(r[0]) + esc(r[0] || 'ยังไม่มอบหมาย') + '</span><div class="pp-bar"><i style="width:' + (r[1].ok / top * 100) + '%"></i><i class="late" style="width:' + (r[1].late / top * 100) + '%"></i></div><b>' + (r[1].ok + r[1].late) + '</b></div>').join('') + '</div>';
+    return '<div class="chart alt pp">' + rows.map((r, i) => { const n = r[1].ok + r[1].late; return '<div class="pp-row' + (n ? '' : ' zero') + '" style="--d:' + (i * 0.07) + 's"><span class="pp-n">' + av(r[0]) + esc(r[0] || 'ยังไม่มอบหมาย') + '</span><div class="pp-bar">' + (n ? '<i style="width:' + (r[1].ok / top * 100) + '%"></i><i class="late" style="width:' + (r[1].late / top * 100) + '%"></i>' : '<em>ยังไม่มีงานเสร็จในช่วงนี้</em>') + '</div><b>' + n + '</b></div>'; }).join('') + '</div>';
   }
   // line / area / cumulative as SVG
   let vals = keys.map(k => per[k].ok + per[k].late);

@@ -1699,3 +1699,6 @@ body.auth .msg-fab{display:none}
 .bar .stack.by-p i:last-child{border-radius:3px 3px 2px 2px}
 .bar.has-late::before{content:'';position:absolute;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--urgent);box-shadow:0 0 0 2px var(--surface);bottom:calc(var(--h,0%) + 4px);z-index:1}
 .legend .lg-late{background:var(--urgent);border-radius:50%}
+.pp-row.zero .pp-n{color:var(--muted)}
+.pp-row.zero b{color:var(--muted)}
+.pp-bar em{font-style:normal;font-size:11.5px;color:var(--muted);line-height:16px;padding-left:10px;white-space:nowrap}
