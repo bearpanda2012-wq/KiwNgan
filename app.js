@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.0.2';
+const APP_VERSION = '2.0.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1257,7 +1257,7 @@ function viewHome() {
   let mine = '';
   {
     const my = open.filter(j => j.assignee === S.me).sort(sortOpen);
-    mine = '<section class="panel"><div class="panel-h"><div><h2>งานของ' + esc(S.me) + '</h2><div class="sub">' + my.length + ' งานค้าง · ใช้เวลาวันนี้ ' + fdur(minutesOn(t, S.me)) + '</div></div><button class="btn ghost sm" data-mine="1">ดูบนบอร์ด</button></div>' +
+    mine = '<section class="panel"><div class="panel-h"><div><h2>งานของ' + esc(S.me) + '</h2><div class="sub">' + my.length + ' งานค้าง · ใช้เวลาวันนี้ ' + fdur(minutesOn(t, S.me)) + '</div></div><div class="top-actions"><button class="btn sm t-sosbtn" data-act="askhelp" data-job="">' + MSG_IC.sos + '<span>ขอความช่วยเหลือ</span></button><button class="btn ghost sm" data-mine="1">ดูบนบอร์ด</button></div></div>' +
       (my.length ? '<div class="alist">' + my.slice(0, 5).map(aItem).join('') + '</div>' : '<div class="empty"><b>ไม่มีงานค้าง</b>กดปุ่ม + เพื่อรับงานใหม่</div>') + '</section>';
   }
 
@@ -1489,7 +1489,7 @@ function viewTeam() {
       (rj ? '<button class="now-on" data-open="' + esc(rj.id) + '" style="border:0;text-align:left"><span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>กำลังทำ <b>' + esc(rj.code) + '</b></button>' : '') +
       '<div class="tstats"><div><span>งานค้าง</span><b>' + open.length + '</b></div><div><span>เลยกำหนด</span><b style="color:' + (late.length ? 'var(--late)' : 'inherit') + '">' + late.length + '</b></div><div><span>เสร็จเดือนนี้</span><b>' + doneM.length + '</b></div></div>' +
       '<div><div class="panel-h" style="margin-bottom:6px"><span class="sub">ตรงเวลา ' + (doneM.length ? pct + '%' : '–') + '</span><span class="sub">เวลาทำ ' + fdur(minsM) + ' · ยากเฉลี่ย ' + lv + '</span></div><div class="meter"><i style="width:' + pct + '%"></i></div></div>' +
-      helpBox + '<div class="t-btns"><button class="btn" data-memberjobs="' + esc(x.name) + '">ดูงานของ' + esc(x.name) + '</button>' + (canChat ? '<button class="btn t-chat' + (unr ? ' has' : '') + '" data-ch="u:' + esc(x.name) + '" title="ส่งข้อความถึง ' + esc(x.name) + '">' + MSG_IC.chat + (unr ? '<b>' + unr + '</b>' : '') + '</button>' : '') + '</div></div>';
+      helpBox + '<div class="t-btns"><button class="btn" data-memberjobs="' + esc(x.name) + '">ดูงานของ' + esc(x.name) + '</button>' + (canChat ? '<button class="btn t-chat' + (unr ? ' has' : '') + '" data-ch="u:' + esc(x.name) + '" title="ส่งข้อความถึง ' + esc(x.name) + '">' + MSG_IC.chat + (unr ? '<b>' + unr + '</b>' : '') + '</button>' : '<button class="btn t-sosbtn" data-act="askhelp" data-job="" title="ขอความช่วยเหลือจากทีมและ' + ADMIN_LABEL + '">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') + '</div></div>';
   }).join('');
   return topbar('ทีมงาน', 'ภาระงานและผลงานรายคน เดือน' + monthLabel(m)) + '<div class="teams">' + cards + '</div>';
 }

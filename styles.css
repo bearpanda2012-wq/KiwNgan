@@ -1412,3 +1412,8 @@ body.auth .msg-fab{display:none}
 .ch-head.help::before{display:none}
 .ch-head.help{animation:pillGlow 1.6s ease-out infinite}
 @keyframes pillGlow{0%{box-shadow:0 0 0 2px var(--urgent),0 0 0 2px color-mix(in oklab,var(--urgent) 50%,transparent),0 14px 30px -12px var(--urgent)}100%{box-shadow:0 0 0 2px var(--urgent),0 0 0 12px transparent,0 14px 30px -12px var(--urgent)}}
+.t-sosbtn{gap:6px;color:var(--urgent);border-color:color-mix(in oklab,var(--urgent) 40%,var(--line));background:var(--urgent-soft);font-weight:700}
+.t-sosbtn:hover{background:var(--urgent);color:#fff;border-color:var(--urgent)}
+.t-sosbtn svg{width:18px;height:18px;animation:spinSlow 5s linear infinite}
+.t-btns .t-sosbtn{flex:none}
+@media (max-width:420px){ .t-btns .t-sosbtn span{display:none} }
