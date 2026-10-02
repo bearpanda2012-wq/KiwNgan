@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.4.3';
+const APP_VERSION = '1.4.4';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -792,7 +792,7 @@ function viewTeam() {
 }
 
 /* ============ render: report (printable) ============ */
-const R_SECTIONS = [['kpi', 'สรุปตัวเลข'], ['people', 'สรุปรายคน'], ['groups', 'สรุปตามกลุ่มงาน'], ['jobs', 'รายการงาน'], ['sign', 'ช่องลงชื่อ']];
+const R_SECTIONS = [['kpi', 'สรุปตัวเลข'], ['people', 'สรุปรายคน', true], ['groups', 'สรุปตามกลุ่มงาน'], ['jobs', 'รายการงาน'], ['sign', 'ช่องลงชื่อ']];
 const R_PRESETS = [['today', 'วันนี้'], ['week', 'สัปดาห์นี้'], ['month', 'เดือนนี้'], ['lastmonth', 'เดือนก่อน'], ['year', 'ปีนี้'], ['custom', 'กำหนดเอง']];
 const R_SCOPES = [['all', 'งานที่เกี่ยวข้องในช่วงนี้'], ['received', 'งานที่รับเข้าในช่วงนี้'], ['done', 'งานที่เสร็จในช่วงนี้'], ['open', 'งานที่ยังค้างอยู่']];
 function reportState() {
@@ -821,6 +821,7 @@ const inR = (iso, r) => !!iso && iso >= r.from && iso <= r.to;
 
 function reportData() {
   const r = reportState();
+  if (!isAdmin()) r.member = S.me; // users only ever report on their own work
   const who = j => j.assignee || '';
   const base = S.jobs.filter(j => (r.member === 'all' || (r.member === '__none' ? !j.assignee : j.assignee === r.member)) && (r.group === 'all' || j.group === r.group));
   const recv = j => inR(j.received, r), fin = j => j.status === 'done' && inR(finDate(j), r);
@@ -857,12 +858,13 @@ function viewReport() {
     '<div class="rep-grid">' +
       '<div class="f"><label for="rFrom">ตั้งแต่วันที่</label><input type="date" id="rFrom" value="' + esc(r.from) + '"></div>' +
       '<div class="f"><label for="rTo">ถึงวันที่</label><input type="date" id="rTo" value="' + esc(r.to) + '"></div>' +
-      '<div class="f"><label for="rMember">ผู้รับผิดชอบ</label><select id="rMember">' + opt('all', r.member, 'ทุกคน') + ms.map(m => opt(m.name, r.member, m.name)).join('') + opt('__none', r.member, 'ยังไม่มอบหมาย') + '</select></div>' +
+      (isAdmin() ? '<div class="f"><label for="rMember">ผู้รับผิดชอบ</label><select id="rMember">' + opt('all', r.member, 'ทุกคน') + ms.map(m => opt(m.name, r.member, m.name)).join('') + opt('__none', r.member, 'ยังไม่มอบหมาย') + '</select></div>'
+        : '<div class="f"><label>ผู้รับผิดชอบ</label><div class="rme">' + av(S.me) + '<b>' + esc(S.me) + '</b><small>งานของฉัน</small></div></div>') +
       '<div class="f"><label for="rGroup">กลุ่มงาน</label><select id="rGroup">' + opt('all', r.group, 'ทุกกลุ่มงาน') + (s.groups || []).map(g => opt(g, r.group, g)).join('') + '</select></div>' +
       '<div class="f"><label for="rScope">รายการงานที่แสดง</label><select id="rScope">' + R_SCOPES.map(x => opt(x[0], r.scope, x[1])).join('') + '</select></div>' +
       '<div class="f"><label for="rOrient">หน้ากระดาษ A4</label><select id="rOrient">' + opt('portrait', r.orient, 'แนวตั้ง') + opt('landscape', r.orient, 'แนวนอน') + '</select></div>' +
     '</div>' +
-    '<div class="rep-secs"><span class="sub">หัวข้อที่จะพิมพ์</span>' + R_SECTIONS.map(x => '<label class="toggle sm"><input type="checkbox" data-rsec="' + x[0] + '"' + (r.sec[x[0]] ? ' checked' : '') + '>' + x[1] + '</label>').join('') + '</div></div>';
+    '<div class="rep-secs"><span class="sub">หัวข้อที่จะพิมพ์</span>' + R_SECTIONS.filter(x => !x[2] || isAdmin()).map(x => '<label class="toggle sm"><input type="checkbox" data-rsec="' + x[0] + '"' + (r.sec[x[0]] ? ' checked' : '') + '>' + x[1] + '</label>').join('') + '</div></div>';
 
   const pctTxt = v => v == null ? '–' : v + '%';
   const kpi = r.sec.kpi ? '<section class="rsec"><h3>สรุปตัวเลข</h3><div class="rkpis">' +
@@ -872,7 +874,8 @@ function viewReport() {
 
   const th = cols => '<thead><tr>' + cols.map(c => '<th' + (c[1] ? ' class="' + c[1] + '"' : '') + '>' + c[0] + '</th>').join('') + '</tr></thead>';
   const sumRow = (label, x, extra) => '<tr class="tot"><td>' + label + '</td><td class="n">' + x.recv + '</td><td class="n">' + x.done + '</td><td class="n">' + x.ok + '</td><td class="n">' + x.late + '</td><td class="n">' + pctTxt(x.pct) + '</td><td class="n">' + x.open + '</td><td class="n">' + x.overdue + '</td>' + extra + '</tr>';
-  const people = r.sec.people ? '<section class="rsec"><h3>สรุปรายคน</h3>' + (D.people.length ? '<div class="rtable-wrap"><table class="rtable">' +
+  const showPeople = r.sec.people && isAdmin();
+  const people = showPeople ? '<section class="rsec"><h3>สรุปรายคน</h3>' + (D.people.length ? '<div class="rtable-wrap"><table class="rtable">' +
     th([['ผู้รับผิดชอบ'], ['รับเข้า', 'n'], ['เสร็จ', 'n'], ['ตรงเวลา', 'n'], ['ช้า', 'n'], ['% ตรงเวลา', 'n'], ['ค้างอยู่', 'n'], ['เลยกำหนด', 'n'], ['เวลาทำงาน', 'n']]) + '<tbody>' +
     D.people.map(p => '<tr><td><span class="rwho">' + (p.name ? av(p.name) : '') + esc(p.name || 'ยังไม่มอบหมาย') + '</span></td><td class="n">' + p.recv + '</td><td class="n">' + p.done + '</td><td class="n">' + p.ok + '</td><td class="n">' + p.late + '</td><td class="n">' + pctTxt(p.pct) + '</td><td class="n">' + p.open + '</td><td class="n' + (p.overdue ? ' bad' : '') + '">' + p.overdue + '</td><td class="n">' + (p.mins ? fdur(p.mins) : '–') + '</td></tr>').join('') +
     '</tbody>' + (D.people.length > 1 ? '<tfoot>' + sumRow('รวม', T, '<td class="n">' + fdur(T.mins) + '</td>') + '</tfoot>' : '') + '</table></div>' : '<p class="rnone">ไม่มีข้อมูลในช่วงนี้</p>') + '</section>' : '';
@@ -902,7 +905,7 @@ function viewReport() {
     (kpi + people + groups + jobs + sign || '<p class="rnone">เลือกหัวข้อที่จะพิมพ์อย่างน้อย 1 หัวข้อ</p>') +
     '<footer class="rfoot">' + esc(s.company) + ' · ' + esc(s.appName) + '</footer></article>';
 
-  return topbar('สรุปรายงาน', 'เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF', '<button class="btn primary" data-act="print">' + I.print + '<span>พิมพ์รายงาน</span></button>') + controls + paper;
+  return topbar('สรุปรายงาน', isAdmin() ? 'เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF' : 'สรุปงานของคุณ เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF', '<button class="btn primary" data-act="print">' + I.print + '<span>พิมพ์รายงาน</span></button>') + controls + paper;
 }
 function setPageOrient(o) {
   let el = document.getElementById('pageStyle');
