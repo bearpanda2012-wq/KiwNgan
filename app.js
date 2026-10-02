@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.4.1';
+const APP_VERSION = '2.5.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1215,11 +1215,17 @@ const RTC_IC = {
   laser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="7.5" opacity=".55"/><path d="M12 1.5v2.5M12 20v2.5M1.5 12H4M20 12h2.5"/></svg>',
   undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   eraser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h13"/><path d="M5.6 15.6l8.5-8.5a2 2 0 0 1 2.8 0l2 2a2 2 0 0 1 0 2.8L13 18.8a3 3 0 0 1-2.1.9H8.6a2 2 0 0 1-1.4-.6l-1.6-1.6a2 2 0 0 1 0-2.9z"/><path d="M10 11l5 5"/></svg>',
+  cam: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.7l1.3-2h7l1.3 2h1.7A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="12.5" r="3.6"/></svg>',
+  flip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9a8 8 0 0 1 14-3l2 2M20 4v4h-4M20 15a8 8 0 0 1-14 3l-2-2M4 20v-4h4"/></svg>',
   pip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="15" rx="2"/><rect x="12" y="11" width="7" height="5.5" rx="1" fill="currentColor" opacity=".35"/></svg>',
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>'
 };
 const CAN_RTC = typeof RTCPeerConnection !== 'undefined';
 const CAN_SHARE = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+/* มือถือแชร์หน้าจอผ่านเว็บไม่ได้ (iOS ไม่รองรับ, Android ได้บางรุ่น) → แชร์กล้องแทน */
+const CAN_CAM = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+const srcWord = src => src === 'camera' ? 'กล้อง' : 'หน้าจอ';
 const CAN_PIP = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
 const INK_COLORS = ['#FF3B5C', '#FFB020', '#22C55E', '#3B82F6'];
 const RTC_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
@@ -1264,7 +1270,7 @@ function rtcOnSig(g) {
     case 'deny':
       if (R.prompt && R.prompt.sid === g.sid) closeRtcModal();
       if (!same) return;
-      toast(g.data && g.data.reason === 'busy' ? name + ' กำลังแชร์หน้าจออยู่กับคนอื่น' : g.data && g.data.reason === 'nocap' ? name + ' ใช้อุปกรณ์ที่แชร์หน้าจอไม่ได้ (ต้องเป็นคอมพิวเตอร์)' : g.data && g.data.reason === 'timeout' ? name + ' ไม่ได้ตอบรับ' : name + ' ปฏิเสธคำขอ', true);
+      toast(g.data && g.data.reason === 'busy' ? name + ' กำลังแชร์หน้าจออยู่กับคนอื่น' : g.data && g.data.reason === 'nocap' ? name + ' ใช้อุปกรณ์ที่แชร์หน้าจอหรือกล้องไม่ได้' : g.data && g.data.reason === 'timeout' ? name + ' ไม่ได้ตอบรับ' : name + ' ปฏิเสธคำขอ', true);
       return rtcCleanup();
     case 'bye':
       if (R.prompt && R.prompt.sid === g.sid) closeRtcModal();
@@ -1285,28 +1291,38 @@ function rtcRequest(peer, name, remote) {
   if (mode() === 'demo') setTimeout(() => { if (R.state === 'wait') rtcDemoLive(); }, 2200);
 }
 /* ---- host shares own screen (on own initiative or after a request) ---- */
-async function rtcHost(peer, name, sid, remote) {
-  if (!CAN_SHARE) { if (sid) rtcSig(peer, sid, 'deny', { reason: 'nocap' }).catch(() => {}); return toast('อุปกรณ์นี้แชร์หน้าจอไม่ได้ ใช้คอมพิวเตอร์ (Chrome / Edge) แทน', true); }
-  if (rtcBusy() && !sid) return toast('กำลังแชร์หน้าจออยู่ ปิดอันเดิมก่อน', true);
+function camStream(facing) {
+  return navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing || 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 20, max: 24 } }, audio: false });
+}
+async function rtcHost(peer, name, sid, remote, src) {
+  if (!src) src = CAN_SHARE ? 'screen' : 'camera';
+  if (src === 'screen' && !CAN_SHARE) src = 'camera';
+  if (src === 'camera' && !CAN_CAM) { if (sid) rtcSig(peer, sid, 'deny', { reason: 'nocap' }).catch(() => {}); return toast('อุปกรณ์นี้แชร์หน้าจอหรือกล้องไม่ได้', true); }
+  if (rtcBusy() && !sid) return toast('กำลังแชร์อยู่ ปิดอันเดิมก่อน', true);
   let stream;
-  try { stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 24 } }, audio: false }); }
-  catch (e) { if (sid) rtcSig(peer, sid, 'deny', { reason: 'cancel' }).catch(() => {}); return toast('ยกเลิกการแชร์หน้าจอ'); }
+  try { stream = src === 'camera' ? await camStream('environment') : await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 24 } }, audio: false }); }
+  catch (e) {
+    /* Android บางรุ่นมีปุ่มแชร์จอแต่ใช้ไม่ได้จริง → เสนอกล้องแทน */
+    if (src === 'screen' && IS_TOUCH && CAN_CAM && e && e.name !== 'NotAllowedError' && e.name !== 'AbortError') { toast('มือถือเครื่องนี้แชร์หน้าจอไม่ได้ — เปลี่ยนเป็นแชร์กล้องแทน'); return rtcHost(peer, name, sid, remote, 'camera'); }
+    if (sid) rtcSig(peer, sid, 'deny', { reason: 'cancel' }).catch(() => {});
+    return toast(src === 'camera' ? 'เปิดกล้องไม่ได้ — กดอนุญาตให้ใช้กล้องในเบราว์เซอร์ก่อน' : 'ยกเลิกการแชร์หน้าจอ', src === 'camera');
+  }
   rtcCleanup(true);
-  Object.assign(R, { sid: sid || uid('s_'), peer: peer, name: name, role: 'host', state: 'connecting', stream: stream, t0: Date.now(), rmode: !!remote, peekOpen: true });
-  const tr = stream.getVideoTracks()[0]; if (tr) { tr.onended = () => rtcHang(); try { tr.contentHint = 'detail'; } catch (e) {} }
+  Object.assign(R, { sid: sid || uid('s_'), peer: peer, name: name, role: 'host', state: 'connecting', stream: stream, t0: Date.now(), rmode: !!remote, peekOpen: true, src: src, facing: 'environment' });
+  const tr = stream.getVideoTracks()[0]; if (tr) { tr.onended = () => rtcHang(); try { tr.contentHint = src === 'camera' ? 'motion' : 'detail'; } catch (e) {} }
   renderRtc(); rtcLoop();
   if (mode() === 'demo') { setTimeout(() => { if (R.state === 'connecting') { R.state = 'live'; R.t0 = Date.now(); renderRtc(); toast(name + ' กำลังดูหน้าจอของคุณ'); inkDemo(); } }, 2000); return; }
   try {
     const pc = rtcPc(); rtcDc(pc.createDataChannel('ink')); stream.getTracks().forEach(t => pc.addTrack(t, stream));
     await pc.setLocalDescription(await pc.createOffer()); await rtcIce(pc);
-    await rtcSig(peer, R.sid, 'offer', { sdp: pc.localDescription.sdp, name: S.me });
+    await rtcSig(peer, R.sid, 'offer', { sdp: pc.localDescription.sdp, name: S.me, src: R.src });
     rtcGuard(75000, 'timeout');
   } catch (e) { rtcCleanup(); }
 }
 async function rtcAnswer(g) {
   const keep = R.sid === g.sid ? { tool: R.tool, rmode: R.rmode, color: R.color } : { color: R.color };
   rtcCleanup(true);
-  Object.assign(R, keep, { sid: g.sid, peer: sigPeer(g), name: sigName(g), role: 'view', state: 'connecting', t0: Date.now() });
+  Object.assign(R, keep, { sid: g.sid, peer: sigPeer(g), name: sigName(g), role: 'view', state: 'connecting', t0: Date.now(), src: g.data && g.data.src === 'camera' ? 'camera' : 'screen' });
   renderRtc(); rtcLoop();
   try {
     const pc = rtcPc();
@@ -1356,7 +1372,7 @@ function rtcCleanup(keepUi) {
   if (R.inkRaf) { try { (R.inkWin || window).cancelAnimationFrame(R.inkRaf); } catch (e) {} R.inkRaf = 0; }
   const pip = R.pip; R.pip = null; if (R.peek) R.peek.remove(); if (pip) { try { pip.close(); } catch (e) {} }
   inkTitle(false);
-  Object.assign(R, { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, demo: false, dc: null, tool: '', drawId: '', ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, rmode: false, nudgeT: 0, nudged: 0 });
+  Object.assign(R, { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, demo: false, dc: null, tool: '', drawId: '', ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, rmode: false, src: '', facing: '', nudgeT: 0, nudged: 0 });
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (!keepUi) renderRtc();
 }
@@ -1364,13 +1380,15 @@ function rtcCleanup(keepUi) {
 /* ---- incoming prompts ---- */
 function rtcPrompt(g, kind) {
   const peer = sigPeer(g), name = sigName(g), rem = kind === 'req' && g.data && g.data.mode === 'remote';
-  const title = rem ? name + ' ขอรีโมทหน้าจอของคุณ' : kind === 'req' ? name + ' ขอดูหน้าจอของคุณ' : name + ' ต้องการแชร์หน้าจอให้คุณดู';
-  const sub = kind === 'req' ? (!CAN_SHARE ? 'อุปกรณ์นี้แชร์หน้าจอไม่ได้ ต้องเปิดจากคอมพิวเตอร์ (Chrome / Edge)'
+  const title = rem ? name + ' ขอรีโมทหน้าจอของคุณ' : kind === 'req' ? name + ' ขอดูหน้าจอของคุณ' : name + ' ต้องการแชร์' + srcWord(g.data && g.data.src) + 'ให้คุณดู';
+  const sub = kind === 'req' ? (!CAN_SHARE ? (CAN_CAM ? 'มือถือแชร์หน้าจอผ่านเว็บไม่ได้ — กด "แชร์กล้อง" ส่องให้เขาดูแทน (เช่น ชิ้นงาน เอกสาร หรือจอเครื่องอื่น) เขาชี้/วาดบอกจุดบนภาพได้' : 'อุปกรณ์นี้แชร์หน้าจอหรือกล้องไม่ได้')
       : rem ? 'กด "แชร์หน้าจอ" แล้วเลือกจอที่จะให้ดู — เขาจะชี้และวาดบอกจุดบนจอได้ คุณเห็นตามทันทีในหน้าต่างลอย ไม่ต้องติดตั้งอะไร (เขาคลิกแทนคุณไม่ได้)'
       : 'กด "แชร์หน้าจอ" แล้วเลือกหน้าจอหรือหน้าต่างที่จะให้ดู — เขาดูและชี้บอกจุดได้ แต่ควบคุมเครื่องไม่ได้')
-    : 'กด "ดูหน้าจอ" เพื่อเปิดดู — ชี้หรือวาดบนภาพเพื่อบอกจุดให้เขาเห็นได้';
+    : 'กด "ดู' + srcWord(g.data && g.data.src) + '" เพื่อเปิดดู — ชี้หรือวาดบนภาพเพื่อบอกจุดให้เขาเห็นได้';
   const body = '';
-  const acts = '<button class="btn" data-rtc="no">ปฏิเสธ</button>' + (kind === 'req' && !CAN_SHARE ? '' : '<button class="btn primary rtc-go" data-rtc="yes">' + (kind === 'req' ? RTC_IC.cast + 'แชร์หน้าจอ' : RTC_IC.eye + 'ดูหน้าจอ') + '</button>');
+  const acts = '<button class="btn" data-rtc="no">ปฏิเสธ</button>' + (kind !== 'req' ? '<button class="btn primary rtc-go" data-rtc="yes">' + RTC_IC.eye + 'ดู' + srcWord(g.data && g.data.src) + '</button>'
+    : (CAN_SHARE ? '<button class="btn primary rtc-go" data-rtc="yes">' + RTC_IC.cast + 'แชร์หน้าจอ</button>' : '') +
+      (CAN_CAM && (!CAN_SHARE || IS_TOUCH) ? '<button class="btn ' + (CAN_SHARE ? '' : 'primary rtc-go') + '" data-rtc="yescam">' + RTC_IC.cam + 'แชร์กล้อง</button>' : ''));
   R.prompt = { sid: g.sid, peer: peer, name: name, kind: kind, g: g };
   openRtcModal('<div class="rtc-ring">' + peerAv(peer, name, 'rtc-av') + '<i></i><i></i><span class="rtc-badge ' + (rem ? 'ctl' : kind) + '">' + (rem ? RTC_IC.mouse : kind === 'req' ? RTC_IC.eye : RTC_IC.cast) + '</span></div>' +
     '<h3>' + esc(title) + '</h3><p>' + sub + '</p>' + body + '<div class="rtc-acts">' + acts + '</div>', kind);
@@ -1408,6 +1426,19 @@ async function rtcAct(a, t) {
     case 'undo': inkSendAll({ t: 'undo' }); return inkBarSync();
     case 'clear': inkSendAll({ t: 'clr' }); return inkBarSync();
     case 'pip': return rtcPip();
+    case 'yescam': if (!p) return; closeRtcModal(); return rtcHost(p.peer, p.name, p.sid, !!(p.g.data && p.g.data.mode === 'remote'), 'camera');
+    case 'sharecam': return rtcHost(t.dataset.peer, t.dataset.name, '', false, 'camera');
+    case 'flip': {
+      if (R.role !== 'host' || R.src !== 'camera') return;
+      const want = R.facing === 'user' ? 'environment' : 'user';
+      try {
+        const ns = await camStream(want), nt = ns.getVideoTracks()[0];
+        const snd = R.pc && R.pc.getSenders().find(x => x.track && x.track.kind === 'video'); if (snd) await snd.replaceTrack(nt);
+        R.stream.getTracks().forEach(x => { x.onended = null; x.stop(); }); nt.onended = () => rtcHang();
+        R.stream = ns; R.facing = want; const v = R.peek && R.peek.querySelector('video'); if (v) { v.srcObject = ns; v.play().catch(() => {}); }
+      } catch (e) { toast('สลับกล้องไม่ได้', true); }
+      return;
+    }
     case 'peek': R.peekOpen = !R.peekOpen; if (R.pip) { try { R.pip.close(); } catch (e) {} } return renderRtc();
     case 'share': return rtcHost(t.dataset.peer, t.dataset.name);
     case 'hang': return rtcHang();
@@ -1426,7 +1457,7 @@ function renderRtc() {
     if (!v) { v = document.createElement('div'); v.id = 'rtcView'; v.className = 'rtc-view'; document.body.appendChild(v); requestAnimationFrame(() => v.classList.add('in')); }
     const live = R.state === 'live';
     v.dataset.state = R.state;
-    v.innerHTML = '<div class="rtc-bar">' + peerAv(R.peer, R.name, 'rtc-mini') + '<div class="rtc-who"><b>' + (live ? 'หน้าจอของ ' : R.state === 'wait' ? 'กำลังขอดูหน้าจอของ ' : 'กำลังเชื่อมต่อกับ ') + esc(R.name) + '</b><small>' + (live ? '<i class="rtc-live">LIVE</i><span id="rtcClock">0:00</span> · <span id="rtcInkHint">' + inkHint() + '</span>' : R.state === 'wait' ? 'รอ ' + esc(R.name) + ' กดอนุญาต…' : 'กำลังเปิดภาพ…') + '</small></div>' +
+    v.innerHTML = '<div class="rtc-bar">' + peerAv(R.peer, R.name, 'rtc-mini') + '<div class="rtc-who"><b>' + (live ? srcWord(R.src) + 'ของ ' : R.state === 'wait' ? 'กำลังขอดูหน้าจอของ ' : 'กำลังเชื่อมต่อกับ ') + esc(R.name) + '</b><small>' + (live ? '<i class="rtc-live">LIVE</i><span id="rtcClock">0:00</span> · <span id="rtcInkHint">' + inkHint() + '</span>' : R.state === 'wait' ? 'รอ ' + esc(R.name) + ' กดอนุญาต…' : 'กำลังเปิดภาพ…') + '</small></div>' +
       '<div class="rtc-tools">' + (live ? inkBar() + '<button class="rtc-tb" data-rtc="fit" title="ขนาดจริง / พอดีจอ">1:1</button><button class="rtc-tb" data-rtc="full" title="เต็มจอ">' + RTC_IC.full + '</button>' : '') +
       '<button class="rtc-tb end" data-rtc="hang" title="' + (live ? 'ปิด' : 'ยกเลิก') + '">' + RTC_IC.hang + '<span>' + (live ? 'ปิด' : 'ยกเลิก') + '</span></button></div></div>' +
       '<div class="rtc-stage" id="rtcStage">' + (live || R.state === 'connecting' ? '<div class="rtc-vbox' + (R.fit ? ' actual' : '') + (R.tool ? ' drawing' : '') + '" id="rtcBox"><video id="rtcVideo" autoplay playsinline muted></video><canvas id="rtcInk"></canvas></div>' : '') +
@@ -1439,8 +1470,9 @@ function renderRtc() {
     h.classList.remove('out');
     const live = R.state === 'live';
     h.dataset.state = R.state;
-    h.innerHTML = '<span class="rtc-rec"></span>' + peerAv(R.peer, R.name, 'rtc-mini') + '<div class="rtc-who"><b>' + (live ? esc(R.name) + ' กำลังดูหน้าจอคุณ' : 'รอ ' + esc(R.name) + ' เปิดดู…') + '</b><small>' + (live ? '<span id="rtcClock">0:00</span> · ' + (R.rmode ? 'รีโมทชี้จอ' : 'ชี้บอกจุดได้') : 'แชร์หน้าจออยู่') + '</small></div>' +
-      (live ? (CAN_PIP ? '<button class="rtc-tb" data-rtc="pip" title="หน้าต่างลอยอยู่บนสุด — เห็นจุดที่เขาชี้แม้ใช้โปรแกรมอื่นอยู่">' + RTC_IC.pip + '<span>' + (R.pip ? 'ปิดหน้าต่างลอย' : 'หน้าต่างลอย') + '</span></button>' : '') +
+    h.innerHTML = '<span class="rtc-rec"></span>' + peerAv(R.peer, R.name, 'rtc-mini') + '<div class="rtc-who"><b>' + (live ? esc(R.name) + ' กำลังดู' + srcWord(R.src) + 'คุณ' : 'รอ ' + esc(R.name) + ' เปิดดู…') + '</b><small>' + (live ? '<span id="rtcClock">0:00</span> · ' + (R.src === 'camera' ? 'แชร์กล้อง' : R.rmode ? 'รีโมทชี้จอ' : 'ชี้บอกจุดได้') : 'แชร์' + srcWord(R.src) + 'อยู่') + '</small></div>' +
+      (R.src === 'camera' ? '<button class="rtc-tb" data-rtc="flip" title="สลับกล้องหน้า/หลัง">' + RTC_IC.flip + '</button>' : '') +
+      (live ? (CAN_PIP && R.src !== 'camera' ? '<button class="rtc-tb" data-rtc="pip" title="หน้าต่างลอยอยู่บนสุด — เห็นจุดที่เขาชี้แม้ใช้โปรแกรมอื่นอยู่">' + RTC_IC.pip + '<span>' + (R.pip ? 'ปิดหน้าต่างลอย' : 'หน้าต่างลอย') + '</span></button>' : '') +
         '<button class="rtc-tb' + (R.peekOpen || R.pip ? ' on' : '') + '" data-rtc="peek" title="แสดง/ซ่อนภาพจุดที่เขาชี้">' + RTC_IC.pen + '</button>' : '') +
       '<button class="rtc-tb end" data-rtc="hang">' + RTC_IC.stop + '<span>หยุดแชร์</span></button>';
   }
@@ -1457,7 +1489,8 @@ function rtcStrip() {
   if (on) return '<div class="mp-rtc on"><span class="rtc-rec"></span><span>' + (R.role === 'view' ? (R.state === 'live' ? 'กำลังดูหน้าจอของ ' : 'กำลังขอดูหน้าจอ ') : 'กำลังแชร์หน้าจอให้ ') + esc(name) + '</span><button class="btn sm danger" data-rtc="hang">' + RTC_IC.stop + 'หยุด</button></div>';
   const dp = ' data-peer="' + esc(peer) + '" data-name="' + esc(name) + '"';
   return '<div class="mp-rtc"><button data-rtc="view"' + dp + ' title="ขอดูหน้าจอของ ' + esc(name) + '">' + RTC_IC.eye + '<span>ขอดูจอ</span></button>' +
-    '<button data-rtc="share"' + dp + (CAN_SHARE ? '' : ' disabled') + ' title="' + (CAN_SHARE ? 'แชร์หน้าจอของฉันให้ ' + esc(name) + ' ดู' : 'แชร์หน้าจอได้จากคอมพิวเตอร์เท่านั้น') + '">' + RTC_IC.cast + '<span>แชร์จอฉัน</span></button>' +
+    (CAN_SHARE || !CAN_CAM ? '<button data-rtc="share"' + dp + (CAN_SHARE ? '' : ' disabled') + ' title="' + (CAN_SHARE ? 'แชร์หน้าจอของฉันให้ ' + esc(name) + ' ดู' : 'อุปกรณ์นี้แชร์หน้าจอไม่ได้') + '">' + RTC_IC.cast + '<span>แชร์จอฉัน</span></button>'
+      : '<button data-rtc="sharecam"' + dp + ' title="มือถือแชร์หน้าจอผ่านเว็บไม่ได้ — แชร์กล้องให้ ' + esc(name) + ' ดูแทน">' + RTC_IC.cam + '<span>แชร์กล้อง</span></button>') +
     '<button data-rtc="remote"' + dp + ' title="รีโมทหน้าจอของ ' + esc(name) + ': ดูจอและชี้/วาดบอกจุดให้เขาเห็น — ไม่ต้องติดตั้งอะไร">' + RTC_IC.mouse + '<span>รีโมท</span></button></div>';
 }
 
@@ -1474,6 +1507,7 @@ const PEEK_CSS = `.rtc-peek{position:fixed;right:16px;bottom:16px;z-index:115;wi
 .rtc-peek-rec{width:9px;height:9px;border-radius:50%;background:#E5484D;flex:none;animation:peekRec 1.4s infinite}
 .rtc-peek-box{position:relative;aspect-ratio:16/9;background:#0d1318;margin:0 8px;border-radius:8px}
 .rtc-peek.in-pip .rtc-peek-box{flex:1;aspect-ratio:auto}
+.rtc-peek-box video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border-radius:8px}
 .rtc-peek-box canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .rtc-peek-where{display:flex;align-items:center;gap:7px;padding:7px 12px 9px;color:#93a3b2;font-size:13px}
 .rtc-peek-where b{color:#fff}
@@ -1598,7 +1632,7 @@ function inkKick() {
 function inkFrame() {
   R.inkRaf = 0;
   const a = $('#rtcInk'); if (a) inkPaint(a, $('#rtcVideo'));
-  if (R.peek) { const c = R.peek.querySelector('canvas'); if (c) inkPaint(c, inkDims()); inkWhere(); }
+  if (R.peek) { const c = R.peek.querySelector('canvas'); if (c) inkPaint(c, R.peek.querySelector('video') || inkDims()); inkWhere(); }
   const k = R.ink, now = performance.now();
   if ((k.ptr && now - k.ptr.t < 3000) || k.rips.length || k.strokes.some(x => x.l)) inkKick();
 }
@@ -1647,17 +1681,19 @@ function inkBarSync() {
 }
 /* คนแชร์: ภาพจอตัวเอง + จุดที่อีกฝ่ายชี้ (ในหน้า หรือหน้าต่างลอยอยู่บนสุด) */
 function peekBar() {
-  return '<span class="rtc-peek-rec"></span><b>' + esc(R.name) + (R.pip ? ' ชี้บนจอคุณ' : ' เห็นจอนี้') + '</b>' +
+  return '<span class="rtc-peek-rec"></span><b>' + esc(R.name) + (R.pip ? ' ชี้บนจอคุณ' : R.src === 'camera' ? ' เห็นภาพกล้องนี้' : ' เห็นจอนี้') + '</b>' +
     (R.ink.strokes.some(x => !x.l) ? '<button data-peek="clr" title="ล้างที่เขาวาด">' + RTC_IC.eraser + '</button>' : '') +
     (R.pip ? '<button data-peek="stop" title="หยุดแชร์">' + RTC_IC.stop + 'หยุด</button>'
-      : (CAN_PIP ? '<button data-peek="pip" title="หน้าต่างลอยอยู่บนสุดของทุกโปรแกรม">' + RTC_IC.pip + 'ลอย</button>' : '') + '<button data-peek="hide" title="ซ่อน">✕</button>');
+      : (CAN_PIP && R.src !== 'camera' ? '<button data-peek="pip" title="หน้าต่างลอยอยู่บนสุดของทุกโปรแกรม">' + RTC_IC.pip + 'ลอย</button>' : '') + '<button data-peek="hide" title="ซ่อน">✕</button>');
 }
 function renderPeek() {
   const want = R.role === 'host' && R.state === 'live' && R.stream;
   if (!want) { if (R.peek) { R.peek.remove(); R.peek = null; } return; }
   if (!R.peek) {
     const el = document.createElement('div'); el.className = 'rtc-peek';
-    el.innerHTML = '<div class="rtc-peek-bar"></div><div class="rtc-peek-box"><canvas class="map"></canvas></div><div class="rtc-peek-where" id="peekWhere">รอ ' + esc(R.name) + ' ชี้…</div>';
+    const cam = R.src === 'camera';
+    el.innerHTML = '<div class="rtc-peek-bar"></div><div class="rtc-peek-box">' + (cam ? '<video autoplay playsinline muted></video><canvas></canvas>' : '<canvas class="map"></canvas>') + '</div><div class="rtc-peek-where" id="peekWhere">รอ ' + esc(R.name) + ' ชี้…</div>';
+    if (cam) { const v = el.querySelector('video'); v.srcObject = R.stream; v.addEventListener('loadedmetadata', inkKick); v.play().catch(() => {}); }
     el.addEventListener('click', e => {
       const b = e.target.closest && e.target.closest('[data-peek]'); if (!b) return;
       const a = b.dataset.peek;
@@ -1670,7 +1706,7 @@ function renderPeek() {
   R.peek.classList.toggle('in-pip', !!R.pip);
   const home = R.pip ? R.pip.document.body : R.peekOpen ? document.body : null;
   if (!home) R.peek.remove();
-  else if (R.peek.parentNode !== home) home.appendChild(R.peek);
+  else if (R.peek.parentNode !== home) { home.appendChild(R.peek); const v = R.peek.querySelector('video'); if (v) v.play().catch(() => {}); }
   inkKick();
 }
 async function rtcPip() {
