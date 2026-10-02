@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -110,10 +110,15 @@ function toast(msg, err) {
 /* ============ domain helpers ============ */
 const members = () => (S.users || []).filter(u => u.active);
 const memberBy = name => (S.users || []).find(m => m.name === name);
+function avUser(u, cls, name) {
+  name = name || (u && u.name) || '';
+  const photo = u && u.photo;
+  return '<span class="av ' + (cls || '') + (photo ? ' ph' : '') + '" style="--c:' + esc(u && u.color ? u.color : '#5B6B7A') + '" title="' + esc(name) + '">' +
+    (photo ? '<img src="' + esc(photo) + '" alt="">' : esc(initial(name))) + '</span>';
+}
 function av(name, cls) {
   if (!name) return '<span class="av empty ' + (cls || '') + '" title="ยังไม่มอบหมาย">–</span>';
-  const m = memberBy(name);
-  return '<span class="av ' + (cls || '') + '" style="--c:' + esc(m ? m.color : '#5B6B7A') + '" title="' + esc(name) + '">' + esc(initial(name)) + '</span>';
+  return avUser(memberBy(name), cls, name);
 }
 const isOpen = j => j.status !== 'done';
 const isLate = j => isOpen(j) && j.due && j.due < today();
@@ -251,7 +256,8 @@ function seedDemo() {
 const Demo = {
   db() { let d = LS.get('demo', null); if (!d || !d.jobs || !d.users) { d = seedDemo(); LS.set('demo', d); } return d; },
   save(d) { LS.set('demo', d); },
-  pub(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active }; },
+  pub(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '' }; },
+  async setPhoto(p) { const d = this.db(), me = this.me(d), id = p.userId || me.id; if (id !== me.id) this.admin(me); const u = d.users.find(x => x.id === id); if (!u) throw new Error('ไม่พบผู้ใช้'); u.photo = String(p.photo || ''); this.save(d); return { user: this.pub(u) }; },
   me(d) {
     const u = d.users.find(x => x.id === LS.get(tokenKey(), ''));
     if (!u || !u.active) { const e = new Error('กรุณาเข้าสู่ระบบ'); e.code = 'auth'; throw e; }
@@ -374,7 +380,7 @@ const Remote = {
     return data.data;
   }
 };
-['ping', 'roster', 'login', 'logout', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
+['ping', 'roster', 'login', 'logout', 'setPhoto', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -429,9 +435,9 @@ function renderLogin() {
   else if (L.adminMode) body = '<button type="button" class="back-who" data-act="adminoff">‹ กลับ</button><h2 class="login-h">ผู้ดูแลระบบ</h2>' +
     pinForm('<div class="f"><label for="adminName">ชื่อผู้ดูแล</label><input id="adminName" value="' + esc(L.adminName || '') + '" autocomplete="username"></div>');
   else if (!sel) body = '<h2 class="login-h">เข้าสู่ระบบ</h2><p class="sub">เลือกชื่อของคุณ</p>' +
-    ((L.roster || []).length ? '<div class="who-grid">' + L.roster.map(u => '<button type="button" class="who" data-who="' + esc(u.id) + '"><span class="av lg" style="--c:' + esc(u.color) + '">' + esc(initial(u.name)) + '</span><b>' + esc(u.name) + '</b><small>' + esc(u.full || 'ผู้ใช้งาน') + '</small></button>').join('') + '</div>'
+    ((L.roster || []).length ? '<div class="who-grid">' + L.roster.map(u => '<button type="button" class="who" data-who="' + esc(u.id) + '">' + avUser(u, 'lg') + '<b>' + esc(u.name) + '</b><small>' + esc(u.full || 'ผู้ใช้งาน') + '</small></button>').join('') + '</div>'
       : '<div class="empty" style="padding:20px 0"><b>ยังไม่มีผู้ใช้งาน</b>ผู้ดูแลระบบเพิ่มทีมงานได้ในหน้าตั้งค่า</div>');
-  else body = '<button type="button" class="back-who" data-who="">‹ เปลี่ยนชื่อ</button><div class="pin-head"><span class="av lg" style="--c:' + esc(sel.color) + '">' + esc(initial(sel.name)) + '</span><div><b>' + esc(sel.name) + '</b><small>ใส่ PIN 4–6 หลัก</small></div></div>' + pinForm();
+  else body = '<button type="button" class="back-who" data-who="">‹ เปลี่ยนชื่อ</button><div class="pin-head">' + avUser(sel, 'lg') + '<div><b>' + esc(sel.name) + '</b><small>ใส่ PIN 4–6 หลัก</small></div></div>' + pinForm();
 
   const showConn = L.showConn;
   $('#view').innerHTML = '<div class="login"><div class="login-card">' +
@@ -788,7 +794,9 @@ function viewSettings() {
     '<div class="settings"><nav class="snav">' + nav.map(n => '<a href="#s-' + n[0] + '">' + n[1] + '</a>').join('') + '</nav><div class="sbody">';
 
   h += '<section class="panel sec" id="s-me"><div class="panel-h"><h2>บัญชีของฉัน</h2><button class="btn sm" data-act="logout">ออกจากระบบ</button></div>' +
-    '<div class="tcard-h">' + av(S.me, 'lg') + '<div><b>' + esc(S.me) + '</b><small>' + esc((S.user && S.user.full) || '') + ' · ' + (admin ? 'แอดมิน' : 'ผู้ใช้งาน') + '</small></div></div>' +
+    '<div class="tcard-h">' + avUser(S.user, 'xl') + '<div><b>' + esc(S.me) + '</b><small>' + ((S.user && S.user.full) ? esc(S.user.full) + ' · ' : '') + (admin ? 'แอดมิน' : 'ผู้ใช้งาน') + '</small>' +
+      '<div class="top-actions" style="margin-top:8px"><label class="btn sm">' + (S.user && S.user.photo ? 'เปลี่ยนรูป' : 'ใส่รูปโปรไฟล์') + '<input type="file" accept="image/*" data-photofor="' + esc(S.user ? S.user.id : '') + '" hidden></label>' +
+      (S.user && S.user.photo ? '<button class="btn sm ghost" data-rmphoto="' + esc(S.user.id) + '">ลบรูป</button>' : '') + '</div></div></div>' +
     '<p class="help">' + (admin ? 'แก้ไขและลบได้ทุกงาน มอบหมายงาน และจัดการผู้ใช้' : 'ลงงานใหม่ แก้ไขและจับเวลางานของตัวเองได้ งานของคนอื่นดูได้อย่างเดียว') + '</p>' +
     '<div class="form-grid"><div class="f"><label for="pOld">PIN เดิม</label><input id="pOld" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password"></div><div></div>' +
     '<div class="f"><label for="pNew">PIN ใหม่ (4–6 หลัก)</label><input id="pNew" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>' +
@@ -803,7 +811,10 @@ function viewSettings() {
         '<div class="top-actions"><button class="btn primary" data-act="connect">เชื่อมต่อ</button><button class="btn sm" data-act="resetdemo">รีเซ็ตข้อมูลตัวอย่าง</button></div>') + '</section>';
 
   if (admin) {
-    const rows = S.users.map(u => '<div class="urow' + (u.active ? '' : ' off') + '" data-urow="' + esc(u.id) + '"><input type="color" value="' + esc(u.color || '#5B6B7A') + '" data-u="color" aria-label="สี">' +
+    const rows = S.users.map(u => '<div class="urow' + (u.active ? '' : ' off') + '" data-urow="' + esc(u.id) + '">' +
+      '<div class="uphoto"><label class="ph-pick" title="' + (u.photo ? 'เปลี่ยนรูป' : 'ใส่รูป') + '">' + avUser(u, 'md') + '<span class="ph-cam" aria-hidden="true">+</span><input type="file" accept="image/*" data-photofor="' + esc(u.id) + '" hidden aria-label="รูปของ ' + esc(u.name) + '"></label>' +
+      (u.photo ? '<button class="ph-x" data-rmphoto="' + esc(u.id) + '" aria-label="ลบรูปของ ' + esc(u.name) + '">×</button>' : '') + '</div>' +
+      '<input type="color" value="' + esc(u.color || '#5B6B7A') + '" data-u="color" aria-label="สี">' +
       '<input value="' + esc(u.name) + '" data-u="name" aria-label="ชื่อเล่น" placeholder="ชื่อเล่น"><input class="opt" value="' + esc(u.full || '') + '" data-u="full" aria-label="ชื่อจริง" placeholder="ชื่อจริง">' +
       '<select data-u="role" aria-label="สิทธิ์"><option value="user"' + (u.role !== 'admin' ? ' selected' : '') + '>ผู้ใช้งาน</option><option value="admin"' + (u.role === 'admin' ? ' selected' : '') + '>แอดมิน</option></select>' +
       '<label class="toggle sm"><input type="checkbox" data-u="active"' + (u.active ? ' checked' : '') + '>ใช้งาน</label>' +
@@ -812,7 +823,7 @@ function viewSettings() {
     h += '<section class="panel sec" id="s-users"><div class="panel-h"><h2>ผู้ใช้งานและสิทธิ์</h2><span class="sub">' + S.users.filter(u => u.active).length + ' คนใช้งานอยู่</span></div>' +
       '<p class="help"><b>แอดมิน</b> แก้ไขได้ทั้งหมด · <b>ผู้ใช้งาน</b> ลงงานและแก้ไขงานของตัวเองได้ ปิด "ใช้งาน" เพื่อระงับบัญชีโดยไม่ลบประวัติงาน</p>' +
       '<div class="ulist">' + rows + '</div>' +
-      '<div class="uadd"><b>เพิ่มผู้ใช้</b><div class="urow"><input type="color" id="nuColor" value="' + COLORS[S.users.length % COLORS.length] + '" aria-label="สี"><input id="nuName" placeholder="ชื่อเล่น" aria-label="ชื่อเล่น"><input id="nuFull" class="opt" placeholder="ชื่อจริง" aria-label="ชื่อจริง">' +
+      '<div class="uadd"><b>เพิ่มผู้ใช้</b><span class="sub">ใส่รูปได้หลังเพิ่มแล้ว โดยกดที่วงกลมหน้าชื่อ</span><div class="urow"><input type="color" id="nuColor" value="' + COLORS[S.users.length % COLORS.length] + '" aria-label="สี"><input id="nuName" placeholder="ชื่อเล่น" aria-label="ชื่อเล่น"><input id="nuFull" class="opt" placeholder="ชื่อจริง" aria-label="ชื่อจริง">' +
       '<select id="nuRole" aria-label="สิทธิ์"><option value="user">ผู้ใช้งาน</option><option value="admin">แอดมิน</option></select><input id="nuPin" inputmode="numeric" maxlength="6" placeholder="PIN (ว่าง = สุ่ม)" aria-label="PIN เริ่มต้น">' +
       '<div class="urow-act"><button class="btn sm primary" data-act="adduser">' + I.plus + 'เพิ่ม</button></div>' +
       (S.pinNote && S.pinNote.userId === 'new' ? '<div class="pin-note">เพิ่ม ' + esc(S.pinNote.name) + ' แล้ว PIN: <b class="mono">' + esc(S.pinNote.pin) + '</b></div>' : '') + '</div></div></section>';
@@ -984,6 +995,7 @@ document.addEventListener('click', async e => {
   if (d.pin) { const L = S.login; const an = $('#adminName'); if (an) L.adminName = an.value; if (d.pin === 'clear') L.pin = ''; else if (d.pin === 'back') L.pin = L.pin.slice(0, -1); else if (L.pin.length < 6) L.pin += d.pin; L.err = ''; return renderLogin(); }
   // user admin
   if (d.saveuser) return saveUserRow(d.saveuser);
+  if (d.rmphoto) return setPhoto(d.rmphoto, null);
   if (d.resetpin) { try { const r = await mutate(() => api().resetPin({ userId: d.resetpin })); S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
 
   // editor-scoped
@@ -1056,6 +1068,7 @@ document.addEventListener('change', e => {
   if (t.id === 'fGroup') { S.f.group = t.value; return render(); }
   if (t.id === 'fMonth') { S.f.month = t.value; return render(); }
   if (t.id === 'logoIn' && t.files && t.files[0]) return readLogo(t.files[0]);
+  if (t.dataset.photofor && t.files && t.files[0]) return setPhoto(t.dataset.photofor, t.files[0]);
   if (S.edit && t.closest('#sheetBody') && t.dataset.e) {
     readEditor();
     if (['group', 'taskType', 'received'].indexOf(t.dataset.e) >= 0) autoDue();
@@ -1084,20 +1097,33 @@ async function saveSettings() {
     S.settings = normalizeSettings(r.settings); S.draft = null; S.draftDirty = false; applyBrand(); render();
   } catch (e) {}
 }
-function readLogo(file) {
-  const rd = new FileReader();
-  rd.onload = () => {
-    const img = new Image();
+/* square-crop and shrink an image file to a small data URL */
+function squareImage(file, size, type, quality) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type)) return reject(new Error('เลือกไฟล์รูปภาพ (JPG, PNG)'));
+    const url = URL.createObjectURL(file), img = new Image();
     img.onload = () => {
-      const c = document.createElement('canvas'), n = 128; c.width = c.height = n;
+      const c = document.createElement('canvas'); c.width = c.height = size;
       const x = c.getContext('2d'), s = Math.min(img.width, img.height);
-      x.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, n, n);
-      S.draft.logo = c.toDataURL('image/png'); markDirty(); render();
+      if (type === 'image/jpeg') { x.fillStyle = '#fff'; x.fillRect(0, 0, size, size); }
+      x.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+      URL.revokeObjectURL(url); resolve(c.toDataURL(type, quality));
     };
-    img.onerror = () => toast('อ่านไฟล์รูปไม่ได้', true);
-    img.src = rd.result;
-  };
-  rd.readAsDataURL(file);
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('อ่านไฟล์รูปไม่ได้')); };
+    img.src = url;
+  });
+}
+function readLogo(file) {
+  squareImage(file, 128, 'image/png').then(d => { S.draft.logo = d; markDirty(); render(); }).catch(e => toast(e.message, true));
+}
+async function setPhoto(userId, file) {
+  try {
+    const photo = file ? await squareImage(file, 160, 'image/jpeg', 0.82) : '';
+    const r = await mutate(() => api().setPhoto({ userId: userId, photo: photo }), photo ? 'อัปเดตรูปแล้ว' : 'ลบรูปแล้ว');
+    upsert(S.users, r.user);
+    if (S.user && S.user.id === r.user.id) S.user = Object.assign({}, S.user, r.user);
+    render();
+  } catch (e) { if (e && e.message && !e.code) toast(e.message, true); }
 }
 async function connect() {
   const inp = $('#cUrl'), url = (inp ? inp.value : '').trim();

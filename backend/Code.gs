@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -28,7 +28,7 @@ const SHEETS = {
          'status', 'received', 'due', 'startedAt', 'finishedAt', 'minutes', 'note', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'],
   TimeLogs: ['id', 'jobId', 'member', 'start', 'end', 'minutes'],
   Activity: ['ts', 'jobId', 'who', 'action', 'detail'],
-  Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt'],
+  Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo'],
   Settings: ['key', 'value']
 };
 const STATUSES = ['queue', 'doing', 'review', 'hold', 'done'];
@@ -74,6 +74,7 @@ const ACTIONS = {
   deleteLog: (p, u) => withLock_(() => deleteLog_(p.logId, u)),
   activity: (p, u) => activityFor_(p.jobId).map(a => maskAct_(a, u)),
   changePin: (p, u) => withLock_(() => changePin_(u, p.oldPin, p.newPin)),
+  setPhoto: (p, u) => withLock_(() => setPhoto_(p.userId || u.id, p.photo, u)),
   // admin
   saveSettings: (p, u) => withLock_(() => { admin_(u); return saveSettings_(p.settings, u); }),
   saveUser: (p, u) => withLock_(() => { admin_(u); return saveUser_(p.user, u); }),
@@ -98,7 +99,7 @@ function hash_(salt, pin) {
 }
 function validPin_(pin) { return /^\d{4,6}$/.test(String(pin || '')); }
 function randomPin_() { return String(Math.floor(1000 + Math.random() * 9000)); }
-function publicUser_(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active }; }
+function publicUser_(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '' }; }
 
 function login_(userId, pin, name) {
   const users = readAll_('Users');
@@ -369,6 +370,21 @@ function resetPin_(userId, admin) {
   CacheService.getScriptCache().remove('fail_' + u.id);
   log_('', admin.name, 'user', 'รีเซ็ต PIN ของ ' + u.name);
   return { userId: u.id, pin: pin };
+}
+
+/** รูปโปรไฟล์: data URL ขนาดเล็ก (ย่อจากหน้าเว็บแล้ว) ผู้ใช้เปลี่ยนรูปตัวเองได้ แอดมินเปลี่ยนให้ทุกคนได้ */
+function setPhoto_(userId, photo, u) {
+  if (userId !== u.id && !isAdmin_(u)) throw new Error('เปลี่ยนได้เฉพาะรูปของตัวเอง');
+  photo = String(photo || '');
+  if (photo && !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(photo)) throw new Error('ไฟล์รูปไม่ถูกต้อง');
+  if (photo.length > 45000) throw new Error('รูปใหญ่เกินไป');
+  const row = rowOf_('Users', userId);
+  if (row < 0) throw new Error('ไม่พบผู้ใช้');
+  const target = readRow_('Users', row);
+  target.photo = photo;
+  writeRow_('Users', target, row);
+  log_('', u.name, 'user', (photo ? 'เปลี่ยนรูป ' : 'ลบรูป ') + target.name);
+  return { user: publicUser_(target) };
 }
 
 function changePin_(u, oldPin, newPin) {

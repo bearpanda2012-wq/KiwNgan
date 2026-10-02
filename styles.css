@@ -159,6 +159,10 @@ button.kpi:hover{background:var(--surface-2)}
 .lv i.on{background:var(--ink)}
 .av{width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;font:600 12px var(--f-display);color:#fff;background:var(--c,var(--queue));flex:none}
 .av.lg{width:46px;height:46px;font-size:18px}
+.av.md{width:48px;height:48px;font-size:19px}
+.av.xl{width:72px;height:72px;font-size:28px}
+.av.ph{background:var(--surface-3);overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
 .av.empty{background:var(--surface-3);color:var(--muted)}
 
 /* ---------- filters ---------- */
@@ -408,17 +412,37 @@ body.auth main{padding-block:24px}
 /* ---------- users admin ---------- */
 .ulist,.uadd{display:flex;flex-direction:column;gap:8px}
 .uadd{border-top:1px solid var(--line);padding-top:12px}
-.urow{display:grid;grid-template-columns:40px minmax(0,1fr) minmax(0,1fr) 120px auto auto;gap:8px;align-items:center}
-.uadd .urow{grid-template-columns:40px minmax(0,1fr) minmax(0,1fr) 120px 130px auto}
-.urow input,.urow select{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:38px}
-.urow input[type=color]{padding:3px;width:40px}
-.urow.off input,.urow.off select{opacity:.55}
-.urow-act{display:flex;gap:4px}
-.toggle.sm{min-height:38px;padding:6px 10px;font-size:13.5px;white-space:nowrap}
+.urow{display:grid;grid-template-columns:52px 44px minmax(0,1fr) minmax(0,1fr) auto auto;grid-template-areas:"ph nm nm fl fl fl" "ph co ro ro tg ac";gap:8px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.urow>.uphoto{grid-area:ph;align-self:start}
+.urow>[data-u=name],.urow>#nuName{grid-area:nm}
+.urow>[data-u=full],.urow>#nuFull{grid-area:fl}
+.urow>[data-u=color],.urow>#nuColor{grid-area:co}
+.urow>[data-u=role],.urow>#nuRole{grid-area:ro}
+.urow>.toggle,.urow>#nuPin{grid-area:tg}
+.urow>.urow-act{grid-area:ac}
+.uadd .urow{grid-template-columns:44px minmax(0,1fr) minmax(0,1fr) auto;grid-template-areas:"co nm fl fl" "ro ro tg ac"}
+.uadd .urow>#nuRole{grid-column:1/3}
+.urow input:not([type=checkbox]):not([type=file]),.urow select{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:38px;font:inherit;color:inherit}
+.urow input[type=color]{padding:3px;width:44px;cursor:pointer}
+.urow #nuPin{width:150px}
+.urow input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--brand)}
+.urow.off{background:var(--surface-2)}
+.urow.off input:not([type=checkbox]),.urow.off select,.urow.off .av{opacity:.55}
+.urow-act{display:flex;gap:4px;justify-content:flex-end}
+.toggle.sm{min-height:38px;padding:6px 10px;font-size:13.5px;white-space:nowrap;gap:8px}
 .pin-note{grid-column:1/-1;background:var(--urgent-soft);border-radius:8px;padding:8px 12px;font-size:13.5px}
 .pin-note b{font-size:16px;letter-spacing:.1em}
+.uphoto{position:relative;width:48px;height:48px}
+.ph-pick{display:block;position:relative;cursor:pointer;border-radius:50%}
+.ph-pick:focus-within{outline:2px solid var(--brand);outline-offset:2px}
+.ph-cam{position:absolute;right:-2px;bottom:-2px;width:20px;height:20px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font:700 14px/1 var(--f-display);border:2px solid var(--surface)}
+.ph-x{position:absolute;left:-4px;top:-4px;width:20px;height:20px;border-radius:50%;background:var(--surface-3);color:var(--ink);border:2px solid var(--surface);display:grid;place-items:center;font-size:13px;line-height:1;cursor:pointer;padding:0}
+.ph-x:hover{background:var(--late);color:#fff}
 @media (max-width:760px){
-  .urow,.uadd .urow{grid-template-columns:40px minmax(0,1fr) minmax(0,1fr);padding-bottom:10px;border-bottom:1px solid var(--line)}
-  .urow .opt{display:block}
-  .urow-act{grid-column:1/-1}
+  .urow{grid-template-columns:52px 44px minmax(0,1fr) auto;grid-template-areas:"ph nm nm nm" "ph fl fl fl" "co ro ro tg" "ac ac ac ac"}
+  .uadd .urow{grid-template-columns:44px minmax(0,1fr) auto;grid-template-areas:"co nm nm" "fl fl fl" "ro ro tg" "ac ac ac"}
+  .uadd .urow>#nuRole{grid-column:auto}
+  .urow #nuPin{width:130px}
+  .urow-act{justify-content:stretch}
+  .urow-act .btn{flex:1}
 }
