@@ -986,3 +986,8 @@ function pushForSignal_(p, u) {
     });
   } catch (e) { /* push เป็นของเสริม ห้ามทำให้การโทรล้ม */ }
 }
+/* เรียกใช้ครั้งเดียวในหน้าแก้ไข Apps Script เพื่ออนุญาตให้สคริปต์ส่งแจ้งเตือน (สิทธิ์ "เชื่อมต่อกับบริการภายนอก") */
+function authorizePush() {
+  UrlFetchApp.fetch('https://fcm.googleapis.com/', { muteHttpExceptions: true });
+  Logger.log('อนุญาตการส่งแจ้งเตือนแล้ว · public key: ' + vapid_().pub);
+}
