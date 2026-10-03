@@ -1702,3 +1702,7 @@ body.auth .msg-fab{display:none}
 .pp-row.zero .pp-n{color:var(--muted)}
 .pp-row.zero b{color:var(--muted)}
 .pp-bar em{font-style:normal;font-size:11.5px;color:var(--muted);line-height:16px;padding-left:10px;white-space:nowrap}
+/* team page, staff viewing others: chat only, presence without job details */
+.t-chat.wide{flex:1;width:auto;padding:0 14px;gap:8px}
+.now-on.busy{background:var(--doing-soft);color:var(--doing);font-weight:600}
+.busy-dot{width:8px;height:8px;border-radius:50%;background:var(--doing);animation:flash 1.2s infinite}
