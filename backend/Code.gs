@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.8.0';
+const VERSION = '1.9.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -84,7 +84,11 @@ const ACTIONS = {
   markRead: (p, u) => withLock_(() => markRead_(p.ids, u)),
   helpUpdate: (p, u) => withLock_(() => helpUpdate_(p.id, p.status, u)),
   deleteMessages: (p, u) => withLock_(() => { admin_(u); return deleteMessages_(p.ids, u); }),
-  rtcSend: (p, u) => withLock_(() => rtcSend_(p, u)),
+  rtcSend: (p, u) => { const r = withLock_(() => rtcSend_(p, u)); pushForSignal_(p, u); return r; },
+  pushKey: () => ({ key: vapid_().pub }),
+  pushSub: (p, u) => withLock_(() => pushSub_(p.sub, u)),
+  pushUnsub: (p, u) => withLock_(() => pushUnsub_(p.endpoint, u)),
+  pushInfo: (p, u) => ({ info: pushInfo_(u) }),
   rtcPoll: (p, u) => rtcPoll_(u),
   deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
   thumbs: (p, u) => thumbs_(p.ids),
@@ -870,4 +874,115 @@ function rtcPoll_(u) {
     cache.remove(key);
     return { signals: box.filter(x => Date.now() - x.ts < 120000).map(x => Object.assign(x, { data: x.data ? JSON.parse(x.data) : '' })) };
   });
+}
+
+/* =====================================================================
+   Web Push — สายเรียกเข้า / คำขอดูจอ เด้งบนเครื่องแม้ปิดแอป
+   ส่ง push แบบไม่มีเนื้อหา (ไม่ต้องเข้ารหัส) + ลงนาม VAPID (ES256 / P-256) ด้วย BigInt
+   service worker ของแอปจะถาม pushInfo เองว่าใครโทรมา แล้วแสดงการแจ้งเตือน
+   ===================================================================== */
+const EC_ = (() => {
+  const B = x => BigInt(x);
+  return {
+    p: B('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'),
+    n: B('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551'),
+    G: [B('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'), B('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5')]
+  };
+})();
+function ecMod_(a, m) { const r = a % m; return r < BigInt(0) ? r + m : r; }
+function ecInv_(a, m) {
+  let lm = BigInt(1), hm = BigInt(0), low = ecMod_(a, m), high = m;
+  while (low > BigInt(1)) { const r = high / low; const nm = hm - lm * r, nw = high - low * r; hm = lm; high = low; lm = nm; low = nw; }
+  return ecMod_(lm, m);
+}
+function ecAdd_(P, Q) {
+  const p = EC_.p;
+  if (!P) return Q; if (!Q) return P;
+  if (P[0] === Q[0]) {
+    if (ecMod_(P[1] + Q[1], p) === BigInt(0)) return null;
+    const l = ecMod_((BigInt(3) * P[0] * P[0] - BigInt(3)) * ecInv_(BigInt(2) * P[1], p), p);
+    const x = ecMod_(l * l - BigInt(2) * P[0], p); return [x, ecMod_(l * (P[0] - x) - P[1], p)];
+  }
+  const l = ecMod_((Q[1] - P[1]) * ecInv_(Q[0] - P[0], p), p);
+  const x = ecMod_(l * l - P[0] - Q[0], p); return [x, ecMod_(l * (P[0] - x) - P[1], p)];
+}
+function ecMul_(k, P) { let R = null, A = P; while (k > BigInt(0)) { if (k & BigInt(1)) R = ecAdd_(R, A); A = ecAdd_(A, A); k >>= BigInt(1); } return R; }
+function u8_(bytes) { return Array.prototype.map.call(bytes, b => b & 255); }
+function s8_(bytes) { return bytes.map(b => (b > 127 ? b - 256 : b)); }
+function big2b_(x) { const h = x.toString(16).padStart(64, '0'); const out = []; for (let i = 0; i < 64; i += 2) out.push(parseInt(h.substr(i, 2), 16)); return out; }
+function b2big_(b) { return BigInt('0x' + (u8_(b).map(x => ('0' + x.toString(16)).slice(-2)).join('') || '0')); }
+function sha_(bytes) { return u8_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s8_(bytes))); }
+function utf8_(str) { return u8_(Utilities.newBlob(str).getBytes()); }
+function b64u_(bytes) { return Utilities.base64EncodeWebSafe(s8_(bytes)).replace(/=+$/, ''); }
+function rnd_() { return sha_(utf8_(Utilities.getUuid() + Utilities.getUuid() + Date.now() + Math.random())); }
+function vapid_() {
+  const props = PropertiesService.getScriptProperties();
+  let v = null; try { v = JSON.parse(props.getProperty('VAPID') || 'null'); } catch (e) { v = null; }
+  if (v && v.d && v.pub) return v;
+  const d = ecMod_(b2big_(rnd_()), EC_.n - BigInt(1)) + BigInt(1), Q = ecMul_(d, EC_.G);
+  v = { d: d.toString(16), pub: b64u_([4].concat(big2b_(Q[0]), big2b_(Q[1]))) };
+  props.setProperty('VAPID', JSON.stringify(v));
+  return v;
+}
+function es256_(input, dHex) {
+  const d = BigInt('0x' + dHex), n = EC_.n, e = b2big_(sha_(utf8_(input)));
+  for (let i = 0; i < 8; i++) {
+    const k = ecMod_(b2big_(sha_(big2b_(d).concat(big2b_(e), rnd_()))), n - BigInt(1)) + BigInt(1);
+    const r = ecMod_(ecMul_(k, EC_.G)[0], n); if (r === BigInt(0)) continue;
+    const s = ecMod_(ecInv_(k, n) * (e + r * d), n); if (s === BigInt(0)) continue;
+    return b64u_(big2b_(r).concat(big2b_(s)));
+  }
+  throw new Error('sign failed');
+}
+function vapidAuth_(endpoint) {
+  const aud = endpoint.match(/^https:\/\/[^/]+/)[0], cache = CacheService.getScriptCache(), ck = 'vj:' + aud;
+  const hit = cache.get(ck); if (hit) return hit;
+  const v = vapid_(), now = Math.floor(Date.now() / 1000);
+  const h = b64u_(utf8_(JSON.stringify({ typ: 'JWT', alg: 'ES256' }))), c = b64u_(utf8_(JSON.stringify({ aud: aud, exp: now + 12 * 3600, sub: 'mailto:kiwngan@users.noreply.github.com' })));
+  const jwt = h + '.' + c + '.' + es256_(h + '.' + c, v.d), auth = 'vapid t=' + jwt + ', k=' + v.pub;
+  cache.put(ck, auth, 6 * 3600);
+  return auth;
+}
+const PUSH_HOST_ = /^https:\/\/([a-z0-9-]+\.)*(googleapis\.com|mozilla\.com|mozaws\.net|push\.apple\.com|notify\.windows\.com)\//i;
+function pushKeyOf_(u) { return 'PUSH_' + u.id; }
+function pushList_(u) { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(pushKeyOf_(u)) || '[]'); } catch (e) { return []; } }
+function pushSave_(u, list) { const pr = PropertiesService.getScriptProperties(); if (list.length) pr.setProperty(pushKeyOf_(u), JSON.stringify(list)); else pr.deleteProperty(pushKeyOf_(u)); }
+function pushSub_(sub, u) {
+  const ep = String(sub && sub.endpoint || '');
+  if (!PUSH_HOST_.test(ep) || ep.length > 900) throw new Error('ลงทะเบียนการแจ้งเตือนไม่ได้');
+  const list = pushList_(u).filter(x => x.e !== ep);
+  list.push({ e: ep, t: Date.now() });
+  pushSave_(u, list.slice(-6)); // สูงสุด 6 เครื่องต่อคน
+  return { ok: true, devices: Math.min(list.length, 6) };
+}
+function pushUnsub_(ep, u) { pushSave_(u, pushList_(u).filter(x => x.e !== String(ep || ''))); return { ok: true }; }
+function pushInfo_(u) { try { return JSON.parse(CacheService.getScriptCache().get('pinfo:' + u.name) || 'null'); } catch (e) { return null; } }
+function pushTo_(names, info) {
+  const users = readAll_('Users').filter(x => x.active), cache = CacheService.getScriptCache();
+  names.forEach(n => {
+    const ru = users.find(x => x.name === n); if (!ru) return;
+    const list = pushList_(ru); if (!list.length) return;
+    cache.put('pinfo:' + n, JSON.stringify(Object.assign({}, info, { ts: Date.now() })), 120);
+    let res = [];
+    try {
+      res = UrlFetchApp.fetchAll(list.map(x => ({ url: x.e, method: 'post', muteHttpExceptions: true, payload: '', contentType: 'application/octet-stream',
+        headers: { TTL: '60', Urgency: 'high', Authorization: vapidAuth_(x.e) } })));
+    } catch (e) { return; }
+    const dead = list.filter((x, i) => res[i] && [404, 410].indexOf(res[i].getResponseCode()) >= 0).map(x => x.e);
+    if (dead.length) withLock_(() => pushSave_(ru, pushList_(ru).filter(x => dead.indexOf(x.e) < 0)));
+  });
+}
+/* ส่ง push เฉพาะสัญญาณที่ต้องเรียกคนที่อาจปิดแอปอยู่: โทรหา และขอดูจอ/รีโมท */
+function pushForSignal_(p, u) {
+  const type = String(p.type || ''), d = p.data || {};
+  const kind = type === 'offer' && d.src === 'voice' ? 'call' : type === 'req' ? (d.mode === 'remote' ? 'remote' : 'view') : type === 'offer' ? 'share' : '';
+  if (!kind) return;
+  try {
+    const to = String(p.to || ''), names = (to === 'admin' || to === ADMIN_LABEL) ? adminNames_() : [to];
+    const users = readAll_('Users');
+    names.filter(n => n !== u.name).forEach(n => {
+      const ru = users.find(x => x.name === n) || { role: 'user' };
+      pushTo_([n], { kind: kind, from: maskName_(u.name, ru), sid: String(p.sid || '') });
+    });
+  } catch (e) { /* push เป็นของเสริม ห้ามทำให้การโทรล้ม */ }
 }

@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.7.1';
+const CACHE = 'kiwngan-v2.8.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -20,4 +20,39 @@ self.addEventListener('fetch', e => {
       return res;
     }).catch(() => caches.match(e.request).then(r => r || caches.match('index.html')))
   );
+});
+
+/* ---------- push: สายเรียกเข้า / ขอดูจอ (เด้งแม้ปิดแอป) ----------
+   push มาแบบไม่มีเนื้อหา → ถามเซิร์ฟเวอร์ว่าใครเรียก แล้วแสดงการแจ้งเตือนทุกครั้ง */
+const PUSH_TEXT = {
+  call: f => ['📞 ' + f + ' กำลังโทรหาคุณ', 'แตะเพื่อเปิดแอปแล้วกด "รับสาย"'],
+  remote: f => ['🖱️ ' + f + ' ขอรีโมทหน้าจอของคุณ', 'แตะเพื่อเปิดแอปแล้วตอบรับ'],
+  view: f => ['🖥️ ' + f + ' ขอดูหน้าจอของคุณ', 'แตะเพื่อเปิดแอปแล้วตอบรับ'],
+  share: f => ['🖥️ ' + f + ' ต้องการแชร์หน้าจอให้คุณดู', 'แตะเพื่อเปิดดู']
+};
+self.addEventListener('push', e => {
+  e.waitUntil((async () => {
+    let info = null;
+    try {
+      const m = await (await caches.open('kiwngan-meta')).match('/__meta');
+      if (m) {
+        const meta = await m.json();
+        const r = await fetch(meta.api, { method: 'POST', body: JSON.stringify({ token: meta.token, action: 'pushInfo', payload: {} }), redirect: 'follow' });
+        const j = await r.json(); info = j && j.ok && j.data ? j.data.info : null;
+      }
+    } catch (x) { info = null; }
+    const k = info && PUSH_TEXT[info.kind] ? info.kind : 'call', t = PUSH_TEXT[k](info && info.from ? info.from : 'มีคน');
+    await self.registration.showNotification(t[0], {
+      body: t[1], tag: 'kiwngan-' + k, renotify: true, requireInteraction: k === 'call',
+      vibrate: k === 'call' ? [500, 250, 500, 250, 500, 250, 500] : [200, 100, 200],
+      icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './?from=push#' + k }
+    });
+  })());
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    for (const c of cs) { if (c.url.indexOf(self.registration.scope) === 0 && 'focus' in c) return c.focus(); }
+    return self.clients.openWindow((e.notification.data && e.notification.data.url) || './');
+  }));
 });

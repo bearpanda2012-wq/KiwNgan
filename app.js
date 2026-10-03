@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.7.1';
+const APP_VERSION = '2.8.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -508,7 +508,7 @@ const Remote = {
     return data.data;
   }
 };
-['ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
+['ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -690,7 +690,7 @@ async function doLogin() {
 }
 async function logout() {
   try { await api().logout({}); } catch (e) {}
-  stopMsgPolling(); LS.del(tokenKey()); S.jobs = []; S.logs = []; S.users = []; S.login.userId = ''; S.login.adminMode = false; showLogin();
+  stopMsgPolling(); pushMetaClear(); LS.del(tokenKey()); S.jobs = []; S.logs = []; S.users = []; S.login.userId = ''; S.login.adminMode = false; showLogin();
 }
 
 async function mutate(fn, okMsg) {
@@ -1027,7 +1027,7 @@ async function pollMessages(first) {
 function startMsgPolling() {
   if (M.timer) return;
   M.list = []; M.since = ''; M.loaded = false; M.seen = {};
-  pollMessages(true); rtcLoop();
+  pollMessages(true); rtcLoop(); pushBoot();
   M.timer = setInterval(() => { if (document.visibilityState === 'visible' || 'Notification' in window && Notification.permission === 'granted') pollMessages(); }, 20000);
 }
 function stopMsgPolling() { rtcStop(); clearInterval(M.timer); M.timer = null; M.list = []; M.open = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); renderMsgFab(); }
@@ -1225,6 +1225,7 @@ const RTC_IC = {
   laser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="7.5" opacity=".55"/><path d="M12 1.5v2.5M12 20v2.5M1.5 12H4M20 12h2.5"/></svg>',
   undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   eraser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h13"/><path d="M5.6 15.6l8.5-8.5a2 2 0 0 1 2.8 0l2 2a2 2 0 0 1 0 2.8L13 18.8a3 3 0 0 1-2.1.9H8.6a2 2 0 0 1-1.4-.6l-1.6-1.6a2 2 0 0 1 0-2.9z"/><path d="M10 11l5 5"/></svg>',
+  phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3.5l1.7 4.3-2.2 1.4a11 11 0 0 0 6.3 6.3l1.4-2.2L20 15.5V19a1.5 1.5 0 0 1-1.6 1.5A16.5 16.5 0 0 1 3.5 5.6 1.5 1.5 0 0 1 5 4z"/></svg>',
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
   micOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 9.5V6a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 4.6 2.5M5.5 11a6.5 6.5 0 0 0 10.6 5M18.5 11a6.4 6.4 0 0 1-.5 2.5M12 17.5V21M3 3l18 18"/></svg>',
   spk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
@@ -1277,19 +1278,20 @@ function rtcOnSig(g) {
     case 'offer':
       if (same && R.role === 'view' && R.state === 'wait') return void rtcAnswer(g);
       if (rtcBusy()) return void rtcSig(peer, g.sid, 'deny', { reason: 'busy' }).catch(() => {});
-      return rtcPrompt(g, 'offer');
+      return g.data && g.data.src === 'voice' ? callPrompt(g) : rtcPrompt(g, 'offer');
     case 'answer':
       if (same && R.role === 'host' && R.pc) R.pc.setRemoteDescription({ type: 'answer', sdp: g.data.sdp }).catch(() => rtcFail());
       return;
     case 'deny':
       if (R.prompt && R.prompt.sid === g.sid) closeRtcModal();
       if (!same) return;
+      if (R.src === 'voice') { toast(g.data && g.data.reason === 'busy' ? name + ' ติดสายอยู่' : name + ' ไม่รับสาย', true); return rtcCleanup(); }
       toast(g.data && g.data.reason === 'busy' ? name + ' กำลังแชร์หน้าจออยู่กับคนอื่น' : g.data && g.data.reason === 'nocap' ? name + ' ใช้อุปกรณ์ที่แชร์หน้าจอหรือกล้องไม่ได้' : g.data && g.data.reason === 'timeout' ? name + ' ไม่ได้ตอบรับ' : name + ' ปฏิเสธคำขอ', true);
       return rtcCleanup();
     case 'bye':
-      if (R.prompt && R.prompt.sid === g.sid) closeRtcModal();
+      if (R.prompt && R.prompt.sid === g.sid) { if (R.prompt.kind === 'call') toast('สายที่ไม่ได้รับจาก ' + name, true); closeRtcModal(); }
       if (!same) return;
-      toast(R.role === 'view' ? name + ' หยุดแชร์หน้าจอแล้ว' : name + ' ปิดหน้าจอที่ดูแล้ว');
+      toast(R.src === 'voice' ? name + ' วางสายแล้ว' : R.role === 'view' ? name + ' หยุดแชร์หน้าจอแล้ว' : name + ' ปิดหน้าจอที่ดูแล้ว');
       return rtcCleanup();
   }
 }
@@ -1338,7 +1340,7 @@ async function rtcHost(peer, name, sid, remote, src) {
 async function rtcAnswer(g) {
   const keep = R.sid === g.sid ? { tool: R.tool, rmode: R.rmode, color: R.color } : { color: R.color };
   rtcCleanup(true);
-  Object.assign(R, keep, { sid: g.sid, peer: sigPeer(g), name: sigName(g), role: 'view', state: 'connecting', t0: Date.now(), src: g.data && g.data.src === 'camera' ? 'camera' : 'screen' });
+  Object.assign(R, keep, { sid: g.sid, peer: sigPeer(g), name: sigName(g), role: 'view', state: 'connecting', t0: Date.now(), src: g.data && (g.data.src === 'camera' || g.data.src === 'voice') ? g.data.src : 'screen' });
   renderRtc(); rtcLoop();
   try {
     const pc = rtcPc();
@@ -1350,6 +1352,10 @@ async function rtcAnswer(g) {
     await pc.setRemoteDescription({ type: 'offer', sdp: g.data.sdp });
     const at = pc.getTransceivers().find(x => x.receiver && x.receiver.track && x.receiver.track.kind === 'audio');
     if (at) { try { at.direction = 'sendrecv'; } catch (e) {} R.asend = at.sender; }
+    if (R.src === 'voice' && at) {
+      try { R.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); await R.asend.replaceTrack(R.mic.getAudioTracks()[0]); R.micOn = true; }
+      catch (e) { toast('เปิดไมค์ไม่ได้ — ฟังได้อย่างเดียว กดอนุญาตไมโครโฟนแล้วกดปุ่มไมค์', true); }
+    }
     await pc.setLocalDescription(await pc.createAnswer()); await rtcIce(pc);
     await rtcSig(R.peer, R.sid, 'answer', { sdp: pc.localDescription.sdp });
     rtcGuard(30000, 'fail');
@@ -1360,7 +1366,7 @@ function rtcPc() {
   pc.onconnectionstatechange = () => {
     if (R.pc !== pc) return;
     const s = pc.connectionState;
-    if (s === 'connected') { clearTimeout(R.guard); if (R.state !== 'live') { R.state = 'live'; R.t0 = Date.now(); renderRtc(); if (R.role === 'host') { toast(R.name + ' กำลังดูหน้าจอของคุณ' + (CAN_PIP ? ' — กด "หน้าต่างลอย" เพื่อเห็นจุดที่เขาชี้ขณะใช้โปรแกรมอื่น' : '')); ping(false); } } }
+    if (s === 'connected') { clearTimeout(R.guard); if (R.state !== 'live') { R.state = 'live'; R.t0 = Date.now(); renderRtc(); ringStop(); if (R.src === 'voice') { ping(false); } else if (R.role === 'host') { toast(R.name + ' กำลังดูหน้าจอของคุณ' + (CAN_PIP ? ' — กด "หน้าต่างลอย" เพื่อเห็นจุดที่เขาชี้ขณะใช้โปรแกรมอื่น' : '')); ping(false); } } }
     else if (s === 'failed') rtcFail();
     else if (s === 'disconnected') setTimeout(() => { if (R.pc === pc && pc.connectionState === 'disconnected') { toast('การเชื่อมต่อหลุด', true); rtcHang(); } }, 6000);
   };
@@ -1378,10 +1384,15 @@ function rtcGuard(ms, why) {
   R.guard = setTimeout(() => {
     if (R.sid !== sid || R.state === 'live') return;
     if (why === 'fail') return rtcFail();
+    if (R.src === 'voice' && R.role === 'host') {
+      toast('ไม่มีผู้รับสาย — ส่งข้อความแจ้ง ' + R.name + ' แล้ว', true);
+      if (mode() !== 'demo') api().sendMessage({ to: R.peer, text: '📞 โทรหาแต่ไม่มีผู้รับสาย โทรกลับได้ที่ปุ่ม "โทร"' }).then(() => pollMessages()).catch(() => {});
+      return rtcHang();
+    }
     toast(R.name + ' ยังไม่ตอบรับ ลองใหม่อีกครั้งภายหลัง', true); rtcHang();
   }, ms);
 }
-function rtcFail() { if (!R.state) return; toast('เชื่อมต่อหน้าจอไม่สำเร็จ — สองเครื่องต้องออกอินเทอร์เน็ตได้ และเครือข่ายไม่บล็อกการเชื่อมต่อตรง', true); rtcHang(); }
+function rtcFail() { if (!R.state) return; toast((R.src === 'voice' ? 'ต่อสายไม่สำเร็จ' : 'เชื่อมต่อหน้าจอไม่สำเร็จ') + ' — สองเครื่องต้องออกอินเทอร์เน็ตได้ และเครือข่ายไม่บล็อกการเชื่อมต่อตรง', true); rtcHang(); }
 function rtcHang() { if (R.sid && R.peer && R.state) rtcSig(R.peer, R.sid, 'bye').catch(() => {}); rtcCleanup(); }
 function rtcCleanup(keepUi) {
   clearTimeout(R.guard); clearInterval(R.tick);
@@ -1392,7 +1403,7 @@ function rtcCleanup(keepUi) {
   if (R.dc) { try { R.dc.close(); } catch (e) {} }
   if (R.inkRaf) { try { (R.inkWin || window).cancelAnimationFrame(R.inkRaf); } catch (e) {} R.inkRaf = 0; }
   const pip = R.pip; R.pip = null; if (R.peek) R.peek.remove(); if (pip) { try { pip.close(); } catch (e) {} }
-  inkTitle(false); voiceStop();
+  inkTitle(false); voiceStop(); ringStop();
   Object.assign(R, { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, demo: false, dc: null, tool: '', drawId: '', ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, rmode: false, src: '', facing: '', vsender: null, flipping: false, nudgeT: 0, nudged: 0 });
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (!keepUi) renderRtc();
@@ -1426,7 +1437,7 @@ function openRtcModal(html, kind) {
   m.innerHTML = '<div class="rtc-card k-' + kind + '" role="dialog" aria-modal="true">' + html + '</div>';
   requestAnimationFrame(() => m.classList.add('in'));
 }
-function closeRtcModal() { R.prompt = null; clearTimeout(R.promptT); const m = $('#rtcModal'); if (m) { m.classList.remove('in'); setTimeout(() => { if (!m.classList.contains('in')) m.remove(); }, 260); } }
+function closeRtcModal() { if (R.ring === 'in') ringStop(); R.prompt = null; clearTimeout(R.promptT); const m = $('#rtcModal'); if (m) { m.classList.remove('in'); setTimeout(() => { if (!m.classList.contains('in')) m.remove(); }, 260); } }
 
 async function rtcAct(a, t) {
   const p = R.prompt;
@@ -1434,7 +1445,7 @@ async function rtcAct(a, t) {
     case 'yes':
       if (!p) return; voiceUnlock(); closeRtcModal();
       if (p.kind === 'req') return rtcHost(p.peer, p.name, p.sid, !!(p.g.data && p.g.data.mode === 'remote'));
-      if (p.kind === 'offer') return rtcAnswer(p.g);
+      if (p.kind === 'offer' || p.kind === 'call') { ringStop(); return rtcAnswer(p.g); }
       return;
     case 'no':
       if (!p) return; closeRtcModal();
@@ -1448,6 +1459,7 @@ async function rtcAct(a, t) {
     case 'clear': inkSendAll({ t: 'clr' }); return inkBarSync();
     case 'pip': return rtcPip();
     case 'mic': return voiceMic();
+    case 'call': voiceUnlock(); ringUnlock(); return callStart(t.dataset.peer, t.dataset.name);
     case 'spk': R.spkOff = !R.spkOff; if (R.audioEl) R.audioEl.muted = !!R.spkOff; if (!R.spkOff) voiceUnlock(); return voiceSync();
     case 'yescam': if (!p) return; voiceUnlock(); closeRtcModal(); return rtcHost(p.peer, p.name, p.sid, !!(p.g.data && p.g.data.mode === 'remote'), 'camera');
     case 'sharecam': return rtcHost(t.dataset.peer, t.dataset.name, '', false, 'camera');
@@ -1483,10 +1495,12 @@ async function rtcAct(a, t) {
 /* ---- on-screen UI ---- */
 function renderRtc() {
   let v = $('#rtcView'), h = $('#rtcHost');
-  if (R.role !== 'view' || !R.state) { if (v) { v.classList.remove('in'); setTimeout(() => { if (!R.state || R.role !== 'view') v.remove(); }, 300); } }
-  if (R.role !== 'host' || !R.state) { if (h) { h.classList.add('out'); setTimeout(() => { if (R.role !== 'host') h.remove(); }, 300); } }
+  const voice = R.src === 'voice';
+  renderCall();
+  if (R.role !== 'view' || !R.state || voice) { if (v) { v.classList.remove('in'); setTimeout(() => { if (!R.state || R.role !== 'view') v.remove(); }, 300); } }
+  if (R.role !== 'host' || !R.state || voice) { if (h) { h.classList.add('out'); setTimeout(() => { if (R.role !== 'host') h.remove(); }, 300); } }
   clearInterval(R.tick);
-  if (R.role === 'view' && R.state) {
+  if (R.role === 'view' && R.state && !voice) {
     if (!v) { v = document.createElement('div'); v.id = 'rtcView'; v.className = 'rtc-view'; document.body.appendChild(v); requestAnimationFrame(() => v.classList.add('in')); }
     const live = R.state === 'live';
     v.dataset.state = R.state;
@@ -1498,7 +1512,7 @@ function renderRtc() {
     const vid = $('#rtcVideo'); if (vid) { vid.addEventListener('resize', inkKick); vid.addEventListener('loadedmetadata', inkKick); if (R.remote) { vid.srcObject = R.remote; vid.play().catch(() => {}); } }
     inkKick();
   }
-  if (R.role === 'host' && R.state) {
+  if (R.role === 'host' && R.state && !voice) {
     if (!h) { h = document.createElement('div'); h.id = 'rtcHost'; h.className = 'rtc-host'; document.body.appendChild(h); }
     h.classList.remove('out');
     const live = R.state === 'live';
@@ -1520,15 +1534,116 @@ function renderRtc() {
 function rtcStrip() {
   if (!CAN_RTC || M.ch === 'team' || !M.ch) return '';
   const peer = peerOfCh(M.ch), name = peerNameOfCh(M.ch), on = R.state && R.peer === peer;
-  if (on) return '<div class="mp-rtc on"><span class="rtc-rec"></span><span>' + (R.role === 'view' ? (R.state === 'live' ? 'กำลังดูหน้าจอของ ' : 'กำลังขอดูหน้าจอ ') : 'กำลังแชร์หน้าจอให้ ') + esc(name) + '</span><button class="btn sm danger" data-rtc="hang">' + RTC_IC.stop + 'หยุด</button></div>';
+  if (on) return '<div class="mp-rtc on"><span class="rtc-rec"></span><span>' + (R.src === 'voice' ? (R.state === 'live' ? 'กำลังคุยสายกับ ' : 'กำลังโทรหา ') : R.role === 'view' ? (R.state === 'live' ? 'กำลังดูหน้าจอของ ' : 'กำลังขอดูหน้าจอ ') : 'กำลังแชร์หน้าจอให้ ') + esc(name) + '</span><button class="btn sm danger" data-rtc="hang">' + (R.src === 'voice' ? RTC_IC.hang + 'วางสาย' : RTC_IC.stop + 'หยุด') + '</button></div>';
   const dp = ' data-peer="' + esc(peer) + '" data-name="' + esc(name) + '"';
-  return '<div class="mp-rtc"><button data-rtc="view"' + dp + ' title="ขอดูหน้าจอของ ' + esc(name) + '">' + RTC_IC.eye + '<span>ขอดูจอ</span></button>' +
+  return '<div class="mp-rtc"><button class="mp-call" data-rtc="call"' + dp + ' title="โทรหา ' + esc(name) + ' (เสียง)">' + RTC_IC.phone + '<span>โทร</span></button><button data-rtc="view"' + dp + ' title="ขอดูหน้าจอของ ' + esc(name) + '">' + RTC_IC.eye + '<span>ขอดูจอ</span></button>' +
     (CAN_SHARE || !CAN_CAM ? '<button data-rtc="share"' + dp + (CAN_SHARE ? '' : ' disabled') + ' title="' + (CAN_SHARE ? 'แชร์หน้าจอของฉันให้ ' + esc(name) + ' ดู' : 'อุปกรณ์นี้แชร์หน้าจอไม่ได้') + '">' + RTC_IC.cast + '<span>แชร์จอฉัน</span></button>'
       : '<button data-rtc="sharecam"' + dp + ' title="มือถือแชร์หน้าจอผ่านเว็บไม่ได้ — แชร์กล้องให้ ' + esc(name) + ' ดูแทน">' + RTC_IC.cam + '<span>แชร์กล้อง</span></button>') +
     '<button data-rtc="remote"' + dp + ' title="รีโมทหน้าจอของ ' + esc(name) + ': ดูจอและชี้/วาดบอกจุดให้เขาเห็น — ไม่ต้องติดตั้งอะไร">' + RTC_IC.mouse + '<span>รีโมท</span></button></div>';
 }
 
 
+
+
+/* ============ voice calls + push (สายเรียกเข้าเด้งแม้ปิดแอป) ============ */
+const PUSH_OK = typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof window !== 'undefined' && 'PushManager' in window && 'Notification' in window;
+const IS_STANDALONE = (typeof matchMedia !== 'undefined' && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+function pushMeta() {
+  if (mode() !== 'sheet' || typeof caches === 'undefined') return;
+  const tok = LS.get(tokenKey(), ''); if (!tok) return;
+  caches.open('kiwngan-meta').then(c => c.put('/__meta', new Response(JSON.stringify({ api: S.conn.url, token: tok }), { headers: { 'Content-Type': 'application/json' } }))).catch(() => {});
+}
+function pushMetaClear() { if (typeof caches !== 'undefined') caches.open('kiwngan-meta').then(c => c.delete('/__meta')).catch(() => {}); }
+const b64uBytes = s => { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; };
+async function pushEnable(ask) {
+  if (mode() !== 'sheet') { if (ask) toast('โหมดทดลองไม่มีการแจ้งเตือนจริง', true); return false; }
+  if (!PUSH_OK) { if (ask) toast(IS_IOS && !IS_STANDALONE ? 'iPhone/iPad: ต้องติดตั้งแอปลงหน้าจอโฮมก่อน (แชร์ → เพิ่มไปยังหน้าจอโฮม) แล้วเปิดจากไอคอน จึงจะเปิดการแจ้งเตือนได้' : 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือนแบบ push', true); return false; }
+  try {
+    if (Notification.permission === 'default' && ask) await Notification.requestPermission();
+    if (Notification.permission !== 'granted') { if (ask) toast('ยังไม่ได้อนุญาตการแจ้งเตือน — เปิดได้ที่การตั้งค่าเว็บไซต์ของเบราว์เซอร์', true); return false; }
+    const reg = await navigator.serviceWorker.ready, key = (await api().pushKey({})).key;
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && LS.get('pushKey', '') && LS.get('pushKey', '') !== key) { try { await sub.unsubscribe(); } catch (e) {} sub = null; }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(key) });
+    await api().pushSub({ sub: sub.toJSON() });
+    LS.set('pushKey', key); LS.set('pushOn', true); pushMeta();
+    if (ask) toast('เปิดแจ้งเตือนสายเรียกเข้าแล้ว — มีคนโทรมาจะเด้งบนเครื่องนี้แม้ปิดแอป');
+    return true;
+  } catch (e) { if (ask) toast('เปิดการแจ้งเตือนไม่สำเร็จ: ' + (e && e.message || e), true); return false; }
+}
+async function pushDisable() {
+  try { const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); if (sub) { await api().pushUnsub({ endpoint: sub.endpoint }).catch(() => {}); await sub.unsubscribe(); } } catch (e) {}
+  LS.set('pushOn', false); toast('ปิดการแจ้งเตือนบนเครื่องนี้แล้ว');
+}
+function pushBoot() { pushMeta(); if (mode() === 'sheet' && PUSH_OK && Notification.permission === 'granted' && LS.get('pushOn', true) !== false) pushEnable(false); }
+function pushSection() {
+  const on = PUSH_OK && typeof Notification !== 'undefined' && Notification.permission === 'granted' && LS.get('pushOn', false);
+  const why = mode() !== 'sheet' ? 'ใช้ได้เมื่อเชื่อมต่อฐานข้อมูลจริง (ไม่ใช่โหมดทดลอง)'
+    : !PUSH_OK ? (IS_IOS && !IS_STANDALONE ? 'iPhone/iPad ต้องติดตั้งแอปลงหน้าจอโฮมก่อน: กดปุ่มแชร์ → "เพิ่มไปยังหน้าจอโฮม" แล้วเปิดแอปจากไอคอน' : 'เบราว์เซอร์นี้ไม่รองรับ ลองใช้ Chrome / Edge / Safari รุ่นใหม่')
+    : Notification.permission === 'denied' ? 'เบราว์เซอร์บล็อกการแจ้งเตือนของเว็บนี้ไว้ — เปิดได้ที่การตั้งค่าเว็บไซต์ (ไอคอนแม่กุญแจหน้าลิงก์)' : '';
+  return '<section class="panel sec" id="s-push"><div class="panel-h"><h2>แจ้งเตือนสายเรียกเข้า</h2>' + (on ? '<span class="push-on">' + RTC_IC.phone + 'เปิดอยู่</span>' : '') + '</div>' +
+    '<p class="help">มีคนโทรหา ขอดูจอ หรือขอรีโมท จะเด้งแจ้งเตือนบนเครื่องนี้ แม้ปิดแอปหรือล็อกหน้าจออยู่ แตะการแจ้งเตือนเพื่อเปิดแอปแล้วรับสาย — ต้องเปิดแยกในแต่ละเครื่อง</p>' +
+    (why ? '<p class="help warn">' + why + '</p>' : '') +
+    '<div class="top-actions">' + (on ? '<button class="btn" data-act="notifyperm">ลงทะเบียนเครื่องนี้ใหม่</button><button class="btn ghost" data-act="pushoff">ปิดบนเครื่องนี้</button>'
+      : '<button class="btn primary" data-act="notifyperm"' + (why && mode() !== 'sheet' ? ' disabled' : '') + '>' + RTC_IC.phone + 'เปิดแจ้งเตือนบนเครื่องนี้</button>') + '</div></section>';
+}
+
+/* ringtone (เข้า) / เสียงรอสาย (ออก) ด้วย WebAudio — ไม่ต้องมีไฟล์เสียง */
+let ACTX = null;
+function ringUnlock() { try { ACTX = ACTX || new (window.AudioContext || window.webkitAudioContext)(); if (ACTX.state === 'suspended') ACTX.resume(); } catch (e) {} }
+document.addEventListener('pointerdown', () => { if (ACTX && ACTX.state === 'suspended') ACTX.resume().catch(() => {}); }, { passive: true });
+function ringStart(kind) {
+  ringStop(); R.ring = kind;
+  const beep = (f1, f2, dur) => { try { ringUnlock(); if (!ACTX || ACTX.state !== 'running') return; const t = ACTX.currentTime, g = ACTX.createGain(); g.connect(ACTX.destination); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(kind === 'in' ? .22 : .12, t + .03); g.gain.setValueAtTime(kind === 'in' ? .22 : .12, t + dur - .05); g.gain.linearRampToValueAtTime(0, t + dur);
+    [f1, f2].filter(Boolean).forEach(f => { const o = ACTX.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(g); o.start(t); o.stop(t + dur); }); } catch (e) {} };
+  const tick = () => { if (kind === 'in') { beep(880, 1320, .35); setTimeout(() => R.ring === 'in' && beep(880, 1320, .35), 450); try { if (navigator.vibrate) navigator.vibrate([400, 200, 400]); } catch (e) {} } else beep(425, 0, 1); };
+  tick(); R.ringT = setInterval(tick, kind === 'in' ? 2200 : 4000);
+}
+function ringStop() { clearInterval(R.ringT); R.ringT = null; R.ring = ''; try { if (navigator.vibrate) navigator.vibrate(0); } catch (e) {} }
+
+async function callStart(peer, name) {
+  if (!CAN_RTC) return toast('เบราว์เซอร์นี้โทรไม่ได้', true);
+  if (rtcBusy()) return toast('กำลังใช้สายอยู่ วางสายเดิมก่อน', true);
+  if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return toast('อุปกรณ์นี้ใช้ไมโครโฟนไม่ได้', true);
+  let mic;
+  try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch (e) { return toast('เปิดไมค์ไม่ได้ — กดอนุญาตให้ใช้ไมโครโฟนก่อนโทร', true); }
+  rtcCleanup(true);
+  Object.assign(R, { sid: uid('c_'), peer: peer, name: name, role: 'host', state: 'connecting', src: 'voice', t0: Date.now(), mic: mic, micOn: true });
+  renderRtc(); rtcLoop(); ringStart('out');
+  if (mode() === 'demo') { setTimeout(() => { if (R.state === 'connecting' && R.src === 'voice') { R.state = 'live'; R.t0 = Date.now(); ringStop(); renderRtc(); ping(false); } }, 2500); return; }
+  try {
+    const pc = rtcPc(); rtcDc(pc.createDataChannel('ink'));
+    R.asend = pc.addTransceiver(mic.getAudioTracks()[0], { direction: 'sendrecv' }).sender;
+    pc.ontrack = e => { if (e.track.kind === 'audio') voicePlay(e.track); };
+    await pc.setLocalDescription(await pc.createOffer()); await rtcIce(pc);
+    await rtcSig(peer, R.sid, 'offer', { sdp: pc.localDescription.sdp, name: S.me, src: 'voice' });
+    rtcGuard(45000, 'timeout');
+  } catch (e) { rtcCleanup(); }
+}
+function callPrompt(g) {
+  const peer = sigPeer(g), name = sigName(g);
+  R.prompt = { sid: g.sid, peer: peer, name: name, kind: 'call', g: g };
+  openRtcModal('<div class="rtc-ring call">' + peerAv(peer, name, 'rtc-av') + '<i></i><i></i><i></i><span class="rtc-badge call">' + RTC_IC.phone + '</span></div>' +
+    '<h3>' + esc(name) + '</h3><p class="call-sub">กำลังโทรหาคุณ…</p>' +
+    '<div class="rtc-acts call-acts"><button class="call-btn no" data-rtc="no" aria-label="ไม่รับสาย">' + RTC_IC.hang + '<span>ไม่รับ</span></button><button class="call-btn yes" data-rtc="yes" aria-label="รับสาย">' + RTC_IC.phone + '<span>รับสาย</span></button></div>', 'call');
+  ringStart('in');
+  if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') { try { const n = new Notification('📞 ' + name + ' กำลังโทรหาคุณ', { tag: 'call' + g.sid, icon: 'icons/icon-192.png', requireInteraction: true }); n.onclick = () => window.focus(); } catch (e) {} }
+  const sid = g.sid;
+  clearTimeout(R.promptT); R.promptT = setTimeout(() => { if (R.prompt && R.prompt.sid === sid) { closeRtcModal(); toast('สายที่ไม่ได้รับจาก ' + name, true); } }, 45000);
+  rtcLoop();
+}
+function renderCall() {
+  let c = $('#rtcCall');
+  if (R.src !== 'voice' || !R.state) { if (c) { c.classList.add('out'); setTimeout(() => { if (R.src !== 'voice' || !R.state) c.remove(); }, 280); } return; }
+  if (!c) { c = document.createElement('div'); c.id = 'rtcCall'; c.className = 'rtc-call'; document.body.appendChild(c); }
+  c.classList.remove('out');
+  const live = R.state === 'live';
+  c.dataset.state = R.state;
+  c.innerHTML = '<div class="rc-ring' + (live ? ' live' : '') + '">' + peerAv(R.peer, R.name, 'rtc-mini') + '<i></i><i></i></div>' +
+    '<div class="rtc-who"><b>' + esc(R.name) + '</b><small>' + (live ? '<i class="rtc-live">ในสาย</i><span id="rtcClock">0:00</span>' : R.role === 'host' ? 'กำลังโทร…' : 'กำลังต่อสาย…') + '</small></div>' +
+    voiceBtns() + '<button class="rtc-tb end" data-rtc="hang" title="วางสาย">' + RTC_IC.hang + '<span>วางสาย</span></button>';
+}
 
 /* ---- voice: two-way talk during screen share / remote (mic off by default, toggle mic & speaker) ---- */
 function voiceUnlock() {
@@ -2252,7 +2367,7 @@ function viewTeam() {
         : '<div class="now-on busy"><span class="busy-dot"></span>กำลังทำงานอยู่</div>') : '') +
       (full ? '<div class="tstats"><div><span>งานค้าง</span><b>' + open.length + '</b></div><div><span>เลยกำหนด</span><b style="color:' + (late.length ? 'var(--late)' : 'inherit') + '">' + late.length + '</b></div><div><span>เสร็จเดือนนี้</span><b>' + doneM.length + '</b></div></div>' +
       '<div><div class="panel-h" style="margin-bottom:6px"><span class="sub">ตรงเวลา ' + (doneM.length ? pct + '%' : '–') + '</span><span class="sub">เวลาทำ ' + fdur(minsM) + ' · ยากเฉลี่ย ' + lv + '</span></div><div class="meter"><i style="width:' + pct + '%"></i></div></div>' : '') +
-      helpBox + '<div class="t-btns">' + (full ? '<button class="btn" data-memberjobs="' + esc(x.name) + '">' + (x.name === S.me ? 'ดูงานของฉัน' : 'ดูงานของ' + esc(x.name)) + '</button>' : '') + (canChat ? '<button class="btn t-chat' + (unr ? ' has' : '') + (full ? '' : ' wide') + '" data-ch="u:' + esc(x.name) + '" title="ส่งข้อความถึง ' + esc(x.name) + '">' + MSG_IC.chat + (full ? '' : '<span>ส่งข้อความ</span>') + (unr ? '<b>' + unr + '</b>' : '') + '</button>' : '<button class="btn t-sosbtn" data-act="askhelp" data-job="" title="ขอความช่วยเหลือจากทีมและ' + ADMIN_LABEL + '">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') + '</div></div>';
+      helpBox + '<div class="t-btns">' + (full ? '<button class="btn" data-memberjobs="' + esc(x.name) + '">' + (x.name === S.me ? 'ดูงานของฉัน' : 'ดูงานของ' + esc(x.name)) + '</button>' : '') + (canChat && CAN_RTC ? '<button class="btn t-call" data-rtc="call" data-peer="' + esc(x.name) + '" data-name="' + esc(x.name) + '" title="โทรหา ' + esc(x.name) + '">' + RTC_IC.phone + '</button>' : '') + (canChat ? '<button class="btn t-chat' + (unr ? ' has' : '') + (full ? '' : ' wide') + '" data-ch="u:' + esc(x.name) + '" title="ส่งข้อความถึง ' + esc(x.name) + '">' + MSG_IC.chat + (full ? '' : '<span>ส่งข้อความ</span>') + (unr ? '<b>' + unr + '</b>' : '') + '</button>' : '<button class="btn t-sosbtn" data-act="askhelp" data-job="" title="ขอความช่วยเหลือจากทีมและ' + ADMIN_LABEL + '">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') + '</div></div>';
   }).join('');
   return topbar('ทีมงาน', isLead() ? 'ภาระงานและผลงานรายคน เดือน' + monthLabel(m) : 'คุยกับเพื่อนร่วมทีม และดูผลงานของคุณ เดือน' + monthLabel(m)) + '<div class="teams">' + cards + '</div>';
 }
@@ -2403,6 +2518,7 @@ function viewSettings() {
     '<div class="f"><label for="pNew">PIN ใหม่ (4–6 หลัก)</label><input id="pNew" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>' +
     '<div class="f"><label for="pNew2">ยืนยัน PIN ใหม่</label><input id="pNew2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div></div>' +
     '<div><button class="btn" data-act="changepin">เปลี่ยน PIN</button></div></section>';
+  h += pushSection();
   h += themeSection();
 
   if (admin) h += '<section class="panel sec" id="s-conn"><div class="panel-h"><h2>ฐานข้อมูล</h2>' + (mode() === 'sheet' ? '<span class="pill s-done">Google Sheet</span>' : '<span class="pill s-hold">โหมดทดลอง</span>') + '</div>' +
@@ -2665,7 +2781,8 @@ document.addEventListener('click', async e => {
     case 'msgclearyes': { M.confirmClear = false; const ids = M.list.filter(m => chanOf(m) === M.ch).map(m => m.id); return delMsgs(ids, 'ล้างประวัติแล้ว ' + ids.length + ' ข้อความ'); }
     case 'helpoff': M.help = false; renderMsgPanel(); return;
     case 'askhelp': { const jid = d.job; closeEditor(); return openMsgPanel(null, { help: true, jobId: jid }); }
-    case 'notifyperm': try { Notification.requestPermission().then(() => renderMsgPanel()); } catch (x) {} return;
+    case 'notifyperm': pushEnable(true).then(() => { renderMsgPanel(); if (S.view === 'settings') render(); }); return;
+    case 'pushoff': pushDisable().then(() => render()); return;
     case 'editmode': if (S.edit) { S.edit.mode = 'edit'; renderEditor(); } return;
     case 'install': return installApp();
     case 'insthelp': INST.help = !INST.help; renderLogin(); if (INST.help) drawQr(); return;
