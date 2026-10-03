@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.6.4';
+const APP_VERSION = '2.7.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1225,6 +1225,10 @@ const RTC_IC = {
   laser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="7.5" opacity=".55"/><path d="M12 1.5v2.5M12 20v2.5M1.5 12H4M20 12h2.5"/></svg>',
   undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   eraser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h13"/><path d="M5.6 15.6l8.5-8.5a2 2 0 0 1 2.8 0l2 2a2 2 0 0 1 0 2.8L13 18.8a3 3 0 0 1-2.1.9H8.6a2 2 0 0 1-1.4-.6l-1.6-1.6a2 2 0 0 1 0-2.9z"/><path d="M10 11l5 5"/></svg>',
+  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
+  micOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 9.5V6a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 4.6 2.5M5.5 11a6.5 6.5 0 0 0 10.6 5M18.5 11a6.4 6.4 0 0 1-.5 2.5M12 17.5V21M3 3l18 18"/></svg>',
+  spk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+  spkOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
   cam: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.7l1.3-2h7l1.3 2h1.7A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="12.5" r="3.6"/></svg>',
   flip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9a8 8 0 0 1 14-3l2 2M20 4v4h-4M20 15a8 8 0 0 1-14 3l-2-2M4 20v-4h4"/></svg>',
   pip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="15" rx="2"/><rect x="12" y="11" width="7" height="5.5" rx="1" fill="currentColor" opacity=".35"/></svg>',
@@ -1324,6 +1328,8 @@ async function rtcHost(peer, name, sid, remote, src) {
   if (mode() === 'demo') { setTimeout(() => { if (R.state === 'connecting') { R.state = 'live'; R.t0 = Date.now(); renderRtc(); toast(name + ' กำลังดูหน้าจอของคุณ'); inkDemo(); } }, 2000); return; }
   try {
     const pc = rtcPc(); rtcDc(pc.createDataChannel('ink')); stream.getTracks().forEach(t => { const sd = pc.addTrack(t, stream); if (t.kind === 'video') R.vsender = sd; });
+    try { R.asend = pc.addTransceiver('audio', { direction: 'sendrecv' }).sender; } catch (e) {}
+    pc.ontrack = e => { if (e.track.kind === 'audio') voicePlay(e.track); };
     await pc.setLocalDescription(await pc.createOffer()); await rtcIce(pc);
     await rtcSig(peer, R.sid, 'offer', { sdp: pc.localDescription.sdp, name: S.me, src: R.src });
     rtcGuard(75000, 'timeout');
@@ -1337,8 +1343,13 @@ async function rtcAnswer(g) {
   try {
     const pc = rtcPc();
     pc.ondatachannel = e => rtcDc(e.channel);
-    pc.ontrack = e => { R.remote = e.streams[0] || new MediaStream([e.track]); const v = $('#rtcVideo'); if (v) { v.srcObject = R.remote; v.play().catch(() => {}); } };
+    pc.ontrack = e => {
+      if (e.track.kind === 'audio') return voicePlay(e.track);
+      R.remote = new MediaStream([e.track]); const v = $('#rtcVideo'); if (v) { v.srcObject = R.remote; v.play().catch(() => {}); }
+    };
     await pc.setRemoteDescription({ type: 'offer', sdp: g.data.sdp });
+    const at = pc.getTransceivers().find(x => x.receiver && x.receiver.track && x.receiver.track.kind === 'audio');
+    if (at) { try { at.direction = 'sendrecv'; } catch (e) {} R.asend = at.sender; }
     await pc.setLocalDescription(await pc.createAnswer()); await rtcIce(pc);
     await rtcSig(R.peer, R.sid, 'answer', { sdp: pc.localDescription.sdp });
     rtcGuard(30000, 'fail');
@@ -1381,7 +1392,7 @@ function rtcCleanup(keepUi) {
   if (R.dc) { try { R.dc.close(); } catch (e) {} }
   if (R.inkRaf) { try { (R.inkWin || window).cancelAnimationFrame(R.inkRaf); } catch (e) {} R.inkRaf = 0; }
   const pip = R.pip; R.pip = null; if (R.peek) R.peek.remove(); if (pip) { try { pip.close(); } catch (e) {} }
-  inkTitle(false);
+  inkTitle(false); voiceStop();
   Object.assign(R, { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, demo: false, dc: null, tool: '', drawId: '', ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, rmode: false, src: '', facing: '', vsender: null, flipping: false, nudgeT: 0, nudged: 0 });
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   if (!keepUi) renderRtc();
@@ -1421,7 +1432,7 @@ async function rtcAct(a, t) {
   const p = R.prompt;
   switch (a) {
     case 'yes':
-      if (!p) return; closeRtcModal();
+      if (!p) return; voiceUnlock(); closeRtcModal();
       if (p.kind === 'req') return rtcHost(p.peer, p.name, p.sid, !!(p.g.data && p.g.data.mode === 'remote'));
       if (p.kind === 'offer') return rtcAnswer(p.g);
       return;
@@ -1429,14 +1440,16 @@ async function rtcAct(a, t) {
       if (!p) return; closeRtcModal();
       return void rtcSig(p.peer, p.sid, 'deny', { reason: 'no' }).catch(() => {});
     case 'close': return closeRtcModal();
-    case 'view': return rtcRequest(t.dataset.peer, t.dataset.name);
-    case 'remote': return rtcRequest(t.dataset.peer, t.dataset.name, true);
+    case 'view': voiceUnlock(); return rtcRequest(t.dataset.peer, t.dataset.name);
+    case 'remote': voiceUnlock(); return rtcRequest(t.dataset.peer, t.dataset.name, true);
     case 'tool': R.tool = R.tool === t.dataset.v ? '' : t.dataset.v; if (!R.tool) inkSendAll({ t: 'pl' }); return inkBarSync();
     case 'color': R.color = t.dataset.v; if (!R.tool) R.tool = 'pen'; return inkBarSync();
     case 'undo': inkSendAll({ t: 'undo' }); return inkBarSync();
     case 'clear': inkSendAll({ t: 'clr' }); return inkBarSync();
     case 'pip': return rtcPip();
-    case 'yescam': if (!p) return; closeRtcModal(); return rtcHost(p.peer, p.name, p.sid, !!(p.g.data && p.g.data.mode === 'remote'), 'camera');
+    case 'mic': return voiceMic();
+    case 'spk': R.spkOff = !R.spkOff; if (R.audioEl) R.audioEl.muted = !!R.spkOff; if (!R.spkOff) voiceUnlock(); return voiceSync();
+    case 'yescam': if (!p) return; voiceUnlock(); closeRtcModal(); return rtcHost(p.peer, p.name, p.sid, !!(p.g.data && p.g.data.mode === 'remote'), 'camera');
     case 'sharecam': return rtcHost(t.dataset.peer, t.dataset.name, '', false, 'camera');
     case 'flip': {
       if (R.role !== 'host' || R.src !== 'camera') return;
@@ -1478,7 +1491,7 @@ function renderRtc() {
     const live = R.state === 'live';
     v.dataset.state = R.state;
     v.innerHTML = '<div class="rtc-bar">' + peerAv(R.peer, R.name, 'rtc-mini') + '<div class="rtc-who"><b>' + (live ? srcWord(R.src) + 'ของ ' : R.state === 'wait' ? 'กำลังขอดูหน้าจอของ ' : 'กำลังเชื่อมต่อกับ ') + esc(R.name) + '</b><small>' + (live ? '<i class="rtc-live">LIVE</i><span id="rtcClock">0:00</span> · <span id="rtcInkHint">' + inkHint() + '</span>' : R.state === 'wait' ? 'รอ ' + esc(R.name) + ' กดอนุญาต…' : 'กำลังเปิดภาพ…') + '</small></div>' +
-      '<div class="rtc-tools">' + (live ? inkBar() + '<button class="rtc-tb" data-rtc="fit" title="ขนาดจริง / พอดีจอ">1:1</button><button class="rtc-tb" data-rtc="full" title="เต็มจอ">' + RTC_IC.full + '</button>' : '') +
+      '<div class="rtc-tools">' + (live ? voiceBtns() + inkBar() + '<button class="rtc-tb" data-rtc="fit" title="ขนาดจริง / พอดีจอ">1:1</button><button class="rtc-tb" data-rtc="full" title="เต็มจอ">' + RTC_IC.full + '</button>' : '') +
       '<button class="rtc-tb end" data-rtc="hang" title="' + (live ? 'ปิด' : 'ยกเลิก') + '">' + RTC_IC.hang + '<span>' + (live ? 'ปิด' : 'ยกเลิก') + '</span></button></div></div>' +
       '<div class="rtc-stage" id="rtcStage">' + (live || R.state === 'connecting' ? '<div class="rtc-vbox' + (R.fit ? ' actual' : '') + (R.tool ? ' drawing' : '') + '" id="rtcBox"><video id="rtcVideo" autoplay playsinline muted></video><canvas id="rtcInk"></canvas></div>' : '') +
       (live ? '' : '<div class="rtc-waiting"><div class="rtc-ring big">' + peerAv(R.peer, R.name, 'rtc-av') + '<i></i><i></i><i></i><span class="rtc-badge req">' + RTC_IC.eye + '</span></div><b>' + (R.state === 'wait' ? 'ส่งคำขอถึง ' + esc(R.name) + ' แล้ว' : 'กำลังเชื่อมต่อ…') + '</b><small>' + (R.state === 'wait' ? 'เมื่อเขากดแชร์ ภาพหน้าจอจะขึ้นตรงนี้' : 'ใช้เวลาไม่กี่วินาที') + '</small><span class="rtc-dots"><i></i><i></i><i></i></span></div>') + '</div>';
@@ -1491,6 +1504,7 @@ function renderRtc() {
     const live = R.state === 'live';
     h.dataset.state = R.state;
     h.innerHTML = '<span class="rtc-rec"></span>' + peerAv(R.peer, R.name, 'rtc-mini') + '<div class="rtc-who"><b>' + (live ? esc(R.name) + ' กำลังดู' + srcWord(R.src) + 'คุณ' : 'รอ ' + esc(R.name) + ' เปิดดู…') + '</b><small>' + (live ? '<span id="rtcClock">0:00</span> · ' + (R.src === 'camera' ? 'แชร์กล้อง' : R.rmode ? 'รีโมทชี้จอ' : 'ชี้บอกจุดได้') : 'แชร์' + srcWord(R.src) + 'อยู่') + '</small></div>' +
+      (live ? voiceBtns() : '') +
       (R.src === 'camera' ? '<button class="rtc-tb" data-rtc="flip" title="สลับกล้องหน้า/หลัง">' + RTC_IC.flip + '</button>' : '') +
       (live ? (CAN_PIP && R.src !== 'camera' ? '<button class="rtc-tb" data-rtc="pip" title="หน้าต่างลอยอยู่บนสุด — เห็นจุดที่เขาชี้แม้ใช้โปรแกรมอื่นอยู่">' + RTC_IC.pip + '<span>' + (R.pip ? 'ปิดหน้าต่างลอย' : 'หน้าต่างลอย') + '</span></button>' : '') +
         '<button class="rtc-tb' + (R.peekOpen || R.pip ? ' on' : '') + '" data-rtc="peek" title="แสดง/ซ่อนภาพจุดที่เขาชี้">' + RTC_IC.pen + '</button>' : '') +
@@ -1514,6 +1528,47 @@ function rtcStrip() {
     '<button data-rtc="remote"' + dp + ' title="รีโมทหน้าจอของ ' + esc(name) + ': ดูจอและชี้/วาดบอกจุดให้เขาเห็น — ไม่ต้องติดตั้งอะไร">' + RTC_IC.mouse + '<span>รีโมท</span></button></div>';
 }
 
+
+
+/* ---- voice: two-way talk during screen share / remote (mic off by default, toggle mic & speaker) ---- */
+function voiceUnlock() {
+  if (!R.audioEl) { const a = document.createElement('audio'); a.autoplay = true; a.setAttribute('playsinline', ''); a.style.display = 'none'; document.body.appendChild(a); R.audioEl = a; }
+  R.audioEl.muted = !!R.spkOff; const pr = R.audioEl.play(); if (pr && pr.catch) pr.catch(() => {});
+}
+function voicePlay(track) {
+  voiceUnlock();
+  R.audioIn = new MediaStream([track]); R.audioEl.srcObject = R.audioIn;
+  const pr = R.audioEl.play(); if (pr && pr.catch) pr.catch(() => { R.audioBlocked = true; voiceSync(); });
+}
+async function voiceMic() {
+  if (!R.state) return;
+  if (R.mic) {
+    const tr = R.mic.getAudioTracks()[0]; R.micOn = !R.micOn; if (tr) tr.enabled = R.micOn;
+  } else {
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) return toast('อุปกรณ์นี้ใช้ไมโครโฟนไม่ได้', true);
+    if (mode() !== 'demo' && !R.asend) return toast('อีกฝ่ายใช้เวอร์ชันเก่า — ให้เขารีเฟรชหน้าเว็บแล้วเชื่อมต่อใหม่ ถึงจะคุยด้วยเสียงได้', true);
+    try { R.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }); }
+    catch (e) { return toast('เปิดไมค์ไม่ได้ — กดอนุญาตให้ใช้ไมโครโฟนในเบราว์เซอร์ก่อน', true); }
+    if (!R.state) { R.mic.getTracks().forEach(x => x.stop()); R.mic = null; return; }
+    const tr = R.mic.getAudioTracks()[0];
+    try { if (R.asend) await R.asend.replaceTrack(tr); } catch (e) {}
+    R.micOn = true; voiceUnlock();
+  }
+  inkSend({ t: 'mic', on: !!R.micOn });
+  toast(R.micOn ? 'เปิดไมค์แล้ว — ' + R.name + ' ได้ยินเสียงคุณ' : 'ปิดไมค์แล้ว');
+  voiceSync();
+}
+function voiceStop() {
+  if (R.mic) R.mic.getTracks().forEach(x => x.stop());
+  if (R.audioEl) { try { R.audioEl.srcObject = null; } catch (e) {} } // keep the element: iOS only lets audio play on an element unlocked by a tap
+  Object.assign(R, { mic: null, micOn: false, peerMic: false, asend: null, audioIn: null, audioBlocked: false });
+}
+function voiceBtns() {
+  return '<span class="rtc-voice" id="rtcVoice"><button class="rtc-tb mic' + (R.micOn ? ' on' : ' off') + '" data-rtc="mic" title="' + (R.micOn ? 'ปิดไมค์' : 'เปิดไมค์ คุยกับ ' + esc(R.name)) + '">' + (R.micOn ? RTC_IC.mic : RTC_IC.micOff) + '<span>' + (R.micOn ? 'ไมค์เปิด' : 'เปิดไมค์') + '</span></button>' +
+    '<button class="rtc-tb spk' + (R.spkOff ? ' off' : '') + '" data-rtc="spk" title="' + (R.spkOff ? 'เปิดเสียง' : 'ปิดเสียงอีกฝ่าย') + '">' + (R.spkOff ? RTC_IC.spkOff : RTC_IC.spk) + '</button>' +
+    (R.peerMic ? '<i class="peer-mic" title="' + esc(R.name) + ' เปิดไมค์อยู่">' + RTC_IC.mic + '</i>' : '') + '</span>';
+}
+function voiceSync() { const el = $('#rtcVoice'); if (el) el.outerHTML = voiceBtns(); else renderRtc(); }
 
 /* ---- remote pointer: ชี้ / วาดบนจอที่แชร์ ---- */
 const PEEK_CSS = `.rtc-peek{position:fixed;right:16px;bottom:16px;z-index:115;width:min(340px,calc(100vw - 32px));background:#10161c;color:#e9eef3;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px -12px rgba(0,0,0,.55),0 0 0 1px #2a343e;font:13px/1.35 Anuphan,system-ui,sans-serif;animation:peekIn .4s cubic-bezier(.3,1.4,.5,1);transition:box-shadow .3s}
@@ -1540,7 +1595,8 @@ body.pip-body{margin:0;background:#0b0f13}`;
 
 function rtcDc(ch) {
   R.dc = ch;
-  ch.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } if (m && typeof m.t === 'string') inkApply(m, true); };
+  ch.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } if (!m || typeof m.t !== 'string') return; if (m.t === 'mic') { R.peerMic = !!m.on; return voiceSync(); } inkApply(m, true); };
+  ch.onopen = () => { if (R.micOn) inkSend({ t: 'mic', on: true }); };
 }
 function inkSend(m) { if (R.dc && R.dc.readyState === 'open') { try { R.dc.send(JSON.stringify(m)); } catch (e) {} } }
 function inkSendAll(m) { inkApply(m); inkSend(m); }

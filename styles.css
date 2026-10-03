@@ -1706,3 +1706,18 @@ body.auth .msg-fab{display:none}
 .t-chat.wide{flex:1;width:auto;padding:0 14px;gap:8px}
 .now-on.busy{background:var(--doing-soft);color:var(--doing);font-weight:600}
 .busy-dot{width:8px;height:8px;border-radius:50%;background:var(--doing);animation:flash 1.2s infinite}
+
+/* voice during screen share */
+.rtc-voice{display:inline-flex;align-items:center;gap:6px;position:relative;padding-right:6px;margin-right:2px;border-right:1px solid #2c3742}
+.rtc-host .rtc-voice{border-right:0;padding-right:0;margin-right:0}
+.rtc-tb.mic.on{background:#12B76A;border-color:#12B76A;color:#fff;box-shadow:0 0 0 3px rgba(18,183,106,.28)}
+.rtc-tb.mic.on svg{animation:micPulse 1.4s ease-in-out infinite}
+.rtc-tb.mic.off svg,.rtc-tb.spk.off svg{color:#f59f9f}
+.peer-mic{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:rgba(18,183,106,.18);color:#4ade80;animation:fadeIn .3s}
+.peer-mic svg{width:15px;height:15px}
+.peer-mic::after{content:'';position:absolute;width:26px;height:26px;border-radius:50%;border:2px solid #4ade80;opacity:0;animation:ringOut 1.8s ease-out infinite}
+@keyframes micPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+@media (max-width:640px){.rtc-voice{border-right:0}}
+.rtc-host .rtc-tb[data-rtc="pip"] span{display:none}
+.rtc-host .rtc-who{min-width:0}
+.rtc-host .rtc-who b{display:block;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
