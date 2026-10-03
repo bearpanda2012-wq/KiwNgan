@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.8.0';
+const APP_VERSION = '2.9.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -508,7 +508,7 @@ const Remote = {
     return data.data;
   }
 };
-['ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
+['ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -1030,7 +1030,7 @@ function startMsgPolling() {
   pollMessages(true); rtcLoop(); pushBoot();
   M.timer = setInterval(() => { if (document.visibilityState === 'visible' || 'Notification' in window && Notification.permission === 'granted') pollMessages(); }, 20000);
 }
-function stopMsgPolling() { rtcStop(); clearInterval(M.timer); M.timer = null; M.list = []; M.open = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); renderMsgFab(); }
+function stopMsgPolling() { roomLeave(true); rtcStop(); clearInterval(M.timer); M.timer = null; M.list = []; M.open = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); renderMsgFab(); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && M.timer) pollMessages(); });
 
 async function markChanRead(ch) {
@@ -1225,6 +1225,10 @@ const RTC_IC = {
   laser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="7.5" opacity=".55"/><path d="M12 1.5v2.5M12 20v2.5M1.5 12H4M20 12h2.5"/></svg>',
   undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   eraser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h13"/><path d="M5.6 15.6l8.5-8.5a2 2 0 0 1 2.8 0l2 2a2 2 0 0 1 0 2.8L13 18.8a3 3 0 0 1-2.1.9H8.6a2 2 0 0 1-1.4-.6l-1.6-1.6a2 2 0 0 1 0-2.9z"/><path d="M10 11l5 5"/></svg>',
+  head: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4.5" height="6.5" rx="1.5"/><rect x="16.5" y="14" width="4.5" height="6.5" rx="1.5"/></svg>',
+  headOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15v-3a8 8 0 0 1 13.4-5.9M20 12v3"/><rect x="3" y="14" width="4.5" height="6.5" rx="1.5"/><rect x="16.5" y="14" width="4.5" height="6.5" rx="1.5"/><path d="M3 3l18 18"/></svg>',
+  room: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5h3.5L11 5.5v13l-4.5-4H3z"/><path d="M14.5 9a4 4 0 0 1 0 6M17 6.5a7.5 7.5 0 0 1 0 11M19.5 4a11 11 0 0 1 0 16"/></svg>',
+  expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>',
   phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3.5l1.7 4.3-2.2 1.4a11 11 0 0 0 6.3 6.3l1.4-2.2L20 15.5V19a1.5 1.5 0 0 1-1.6 1.5A16.5 16.5 0 0 1 3.5 5.6 1.5 1.5 0 0 1 5 4z"/></svg>',
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
   micOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 9.5V6a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 4.6 2.5M5.5 11a6.5 6.5 0 0 0 10.6 5M18.5 11a6.4 6.4 0 0 1-.5 2.5M12 17.5V21M3 3l18 18"/></svg>',
@@ -1245,7 +1249,7 @@ const CAN_PIP = typeof window !== 'undefined' && 'documentPictureInPicture' in w
 const INK_COLORS = ['#FF3B5C', '#FFB020', '#22C55E', '#3B82F6'];
 const RTC_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
 const R = { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, t0: 0, loop: null, tick: null, guard: null, prompt: null, dc: null, tool: '', color: INK_COLORS[0], ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, pip: null, rmode: false };
-const rtcBusy = () => !!R.state;
+const rtcBusy = () => !!R.state || (typeof V !== 'undefined' && V.on);
 const sigPeer = g => (g.fromAdmin && !isAdmin() ? 'admin' : g.from);
 const sigName = g => (g.fromAdmin && !isAdmin() ? ADMIN_LABEL : g.from);
 const peerOfCh = ch => chanTo(ch);
@@ -1259,17 +1263,18 @@ function rtcSig(to, sid, type, data) {
 function rtcLoop() {
   clearTimeout(R.loop);
   if (S.screen !== 'app' || !S.user || !CAN_RTC || mode() === 'demo') return;
-  const fast = R.state === 'wait' || R.state === 'connecting' || R.prompt;
+  const fast = R.state === 'wait' || R.state === 'connecting' || R.prompt || (V.on && Date.now() - V.since < 20000);
   R.loop = setTimeout(async () => {
-    if (document.visibilityState === 'visible' || R.state) {
-      try { const r = await api().rtcPoll({}); (r.signals || []).forEach(rtcOnSig); } catch (e) { /* offline */ }
+    if (document.visibilityState === 'visible' || R.state || V.on) {
+      try { const r = await api().rtcPoll({}); (r.signals || []).forEach(rtcOnSig); if (r.room) roomOnPoll(r.room); } catch (e) { /* offline */ }
     }
     rtcLoop();
-  }, fast ? 1200 : R.state ? 2500 : 5000);
+  }, fast ? 1200 : R.state || V.on ? 2200 : 5000);
 }
 function rtcStop() { clearTimeout(R.loop); R.loop = null; rtcCleanup(); closeRtcModal(); }
 
 function rtcOnSig(g) {
+  if (g.type === 'roff' || g.type === 'rans' || g.type === 'rbye') return roomOnSig(g);
   const peer = sigPeer(g), name = sigName(g), same = g.sid && g.sid === R.sid;
   switch (g.type) {
     case 'req':
@@ -1532,6 +1537,7 @@ function renderRtc() {
   if (M.open) renderMsgPanel();
 }
 function rtcStrip() {
+  if (CAN_RTC && M.ch === 'team') return roomStrip();
   if (!CAN_RTC || M.ch === 'team' || !M.ch) return '';
   const peer = peerOfCh(M.ch), name = peerNameOfCh(M.ch), on = R.state && R.peer === peer;
   if (on) return '<div class="mp-rtc on"><span class="rtc-rec"></span><span>' + (R.src === 'voice' ? (R.state === 'live' ? 'กำลังคุยสายกับ ' : 'กำลังโทรหา ') : R.role === 'view' ? (R.state === 'live' ? 'กำลังดูหน้าจอของ ' : 'กำลังขอดูหน้าจอ ') : 'กำลังแชร์หน้าจอให้ ') + esc(name) + '</span><button class="btn sm danger" data-rtc="hang">' + (R.src === 'voice' ? RTC_IC.hang + 'วางสาย' : RTC_IC.stop + 'หยุด') + '</button></div>';
@@ -1544,6 +1550,270 @@ function rtcStrip() {
 
 
 
+
+
+/* ============ ห้องเสียงทีม (แบบ Discord) ============
+   ทุกคนในห้องต่อตรงหากัน (mesh) — เหมาะกับทีมเล็ก ~2–8 คน
+   คนที่เข้าห้องทีหลังเป็นฝ่ายโทรหาคนที่อยู่ก่อน · เสียงและจอวิ่งตรงระหว่างเครื่อง ฐานข้อมูลเก็บแค่ใครอยู่ในห้อง */
+const V = { on: false, joining: false, since: 0, peers: {}, mic: null, muted: false, deaf: false, share: null, shareKind: '', members: [], beatT: null, view: false, focus: '', an: {}, speakT: null, known: null, speaking: {} };
+const roomKey = m => (m.admin && !isAdmin()) ? 'admin' : m.name;
+const roomIsMe = m => m.name === S.me && (!m.admin || isAdmin());
+const roomMine = () => V.members.find(roomIsMe);
+function roomNewer(m) { const me = roomMine(); if (!me) return true; return me.since > m.since || (me.since === m.since && S.me > m.name); }
+function roomOnPoll(list) {
+  const prev = V.known; V.members = list || [];
+  const names = V.members.map(m => m.name);
+  if (prev && !V.on) V.members.forEach(m => { if (prev.indexOf(m.name) < 0 && !roomIsMe(m)) toast('🔊 ' + m.name + ' เข้าห้องเสียงทีม'); });
+  V.known = names;
+  if (V.on) {
+    Object.keys(V.peers).forEach(k => { if (!V.members.some(m => roomKey(m) === k)) roomDrop(k); });
+    V.members.forEach(m => {
+      if (roomIsMe(m)) return;
+      const k = roomKey(m), P = V.peers[k];
+      if (roomNewer(m) && (!P || (P.state !== 'connected' && Date.now() - P.t > 20000))) roomOffer(k, m.name);
+    });
+    if (!roomMine() && mode() !== 'demo') roomBeat(); // ถูกตัดออกจากรายชื่อ (เน็ตสะดุด) → ส่งสัญญาณกลับเข้าห้อง
+  }
+  renderRoom();
+}
+async function roomJoin() {
+  if (V.on || V.joining) return;
+  if (!CAN_RTC) return toast('เบราว์เซอร์นี้เข้าห้องเสียงไม่ได้', true);
+  if (R.state) return toast('วางสายหรือหยุดแชร์จอก่อน แล้วค่อยเข้าห้องเสียง', true);
+  V.joining = true; ringUnlock(); renderRoom();
+  try { V.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch (e) { V.mic = null; toast('ไมค์ใช้ไม่ได้ — เข้าห้องแบบฟังอย่างเดียว', true); }
+  Object.assign(V, { on: true, joining: false, since: Date.now(), muted: !V.mic, deaf: false, peers: {} });
+  speakStart(); if (V.mic) speakWatch('__me', V.mic);
+  roomTone(true);
+  if (mode() === 'demo') { V.members = [{ name: S.me, mic: !V.muted, share: '', since: Date.now(), admin: isAdmin() }]; toast('โหมดทดลอง: ไม่มีคนอื่นในห้อง — ลองกดปุ่มต่างๆ ได้'); renderRoom(); return; }
+  try { const r = await api().room({ op: 'join', mic: !V.muted }); roomOnPoll(r.room); }
+  catch (e) { toast('เข้าห้องไม่สำเร็จ: ' + e.message, true); return roomLeave(true); }
+  clearInterval(V.beatT); V.beatT = setInterval(roomBeat, 10000);
+  rtcLoop();
+}
+function roomBeat() { if (!V.on || mode() === 'demo') return; api().room({ op: 'beat', mic: !V.muted && !!V.mic, share: V.shareKind }).then(r => roomOnPoll(r.room)).catch(() => {}); }
+function roomLeave(quiet) {
+  if (!V.on) return;
+  Object.keys(V.peers).forEach(k => { rtcSig(k, 'room', 'rbye', {}).catch(() => {}); roomDrop(k, true); });
+  [V.mic, V.share].forEach(st => { if (st) st.getTracks().forEach(t => { t.onended = null; t.stop(); }); });
+  clearInterval(V.beatT); speakStop();
+  Object.assign(V, { on: false, mic: null, share: null, shareKind: '', muted: false, deaf: false, view: false, focus: '', peers: {}, speaking: {} });
+  if (mode() !== 'demo') api().room({ op: 'leave' }).then(r => roomOnPoll(r.room)).catch(() => {});
+  else V.members = [];
+  if (!quiet) roomTone(false);
+  renderRoom();
+}
+window.addEventListener('pagehide', () => {
+  if (!V.on || mode() !== 'sheet') return;
+  try { navigator.sendBeacon(S.conn.url, JSON.stringify({ token: LS.get(tokenKey(), ''), action: 'room', payload: { op: 'leave' } })); } catch (e) {}
+});
+function roomPc(key, name) {
+  roomDrop(key, true);
+  const pc = new RTCPeerConnection({ iceServers: RTC_ICE });
+  const P = V.peers[key] = { key: key, name: name, pc: pc, video: null, audioEl: null, state: 'connecting', t: Date.now() };
+  pc.ontrack = e => {
+    if (V.peers[key] !== P) return;
+    if (e.track.kind === 'audio') {
+      const a = document.createElement('audio'); a.autoplay = true; a.setAttribute('playsinline', ''); a.style.display = 'none';
+      a.srcObject = new MediaStream([e.track]); a.muted = V.deaf; document.body.appendChild(a); a.play().catch(() => {});
+      if (P.audioEl) P.audioEl.remove(); P.audioEl = a; speakWatch(key, a.srcObject);
+    } else { P.video = new MediaStream([e.track]); roomVideos(); }
+  };
+  pc.onconnectionstatechange = () => {
+    if (V.peers[key] !== P) return;
+    P.state = pc.connectionState;
+    if (P.state === 'connected') { P.t = Date.now(); roomTone(true, true); }
+    if (P.state === 'failed') { P.t = 0; } // จะลองต่อใหม่ในรอบถัดไป
+    if (P.state === 'disconnected') setTimeout(() => { if (V.peers[key] === P && pc.connectionState === 'disconnected') { P.state = 'failed'; P.t = 0; renderRoom(); } }, 8000);
+    renderRoom();
+  };
+  return P;
+}
+async function roomTracks(P) {
+  const pc = P.pc, tx = pc.getTransceivers();
+  let a = tx.find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio'), v = tx.find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'video');
+  if (!a) a = pc.addTransceiver('audio', { direction: 'sendrecv' });
+  if (!v) v = pc.addTransceiver('video', { direction: 'sendrecv' });
+  try { a.direction = 'sendrecv'; v.direction = 'sendrecv'; } catch (e) {}
+  P.as = a.sender; P.vs = v.sender;
+  const mt = V.mic && V.mic.getAudioTracks()[0], st = V.share && V.share.getVideoTracks()[0];
+  try { await a.sender.replaceTrack(mt || null); await v.sender.replaceTrack(st || null); } catch (e) {}
+}
+async function roomOffer(key, name) {
+  const P = roomPc(key, name); P.role = 'off';
+  try {
+    await roomTracks(P); await P.pc.setLocalDescription(await P.pc.createOffer()); await rtcIce(P.pc);
+    if (V.peers[key] !== P || !V.on) return;
+    await rtcSig(key, 'room', 'roff', { sdp: P.pc.localDescription.sdp, name: S.me });
+  } catch (e) { if (V.peers[key] === P) { P.state = 'failed'; P.t = 0; } }
+  renderRoom();
+}
+async function roomAnswer(key, name, sdp) {
+  const P = roomPc(key, name); P.role = 'ans';
+  try {
+    await P.pc.setRemoteDescription({ type: 'offer', sdp: sdp }); await roomTracks(P);
+    await P.pc.setLocalDescription(await P.pc.createAnswer()); await rtcIce(P.pc);
+    if (V.peers[key] !== P || !V.on) return;
+    await rtcSig(key, 'room', 'rans', { sdp: P.pc.localDescription.sdp });
+  } catch (e) { if (V.peers[key] === P) { P.state = 'failed'; P.t = 0; } }
+  renderRoom();
+}
+function roomOnSig(g) {
+  const key = sigPeer(g), name = sigName(g);
+  if (g.type === 'rbye') { roomDrop(key); return renderRoom(); }
+  if (!V.on) { if (g.type === 'roff') rtcSig(key, 'room', 'rbye', {}).catch(() => {}); return; }
+  if (g.type === 'roff') {
+    const cur = V.peers[key], m = V.members.find(x => roomKey(x) === key);
+    if (cur && cur.role === 'off' && cur.pc.signalingState === 'have-local-offer' && m && roomNewer(m)) return; // ชนกัน: คนเข้าทีหลังเป็นฝ่ายเสนอ
+    roomAnswer(key, name, g.data && g.data.sdp);
+  } else if (g.type === 'rans') {
+    const P = V.peers[key];
+    if (P && P.pc.signalingState === 'have-local-offer') P.pc.setRemoteDescription({ type: 'answer', sdp: g.data.sdp }).catch(() => { P.state = 'failed'; P.t = 0; });
+  }
+}
+function roomDrop(key, quiet) {
+  const P = V.peers[key]; if (!P) return;
+  try { P.pc.close(); } catch (e) {}
+  if (P.audioEl) { P.audioEl.srcObject = null; P.audioEl.remove(); }
+  delete V.peers[key]; delete V.an[key]; delete V.speaking[key];
+  if (V.focus === key) V.focus = '';
+  if (!quiet) renderRoom();
+}
+async function roomMic() {
+  if (!V.on) return;
+  if (!V.mic) {
+    try { V.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+    catch (e) { return toast('เปิดไมค์ไม่ได้ — กดอนุญาตไมโครโฟนก่อน', true); }
+    const t = V.mic.getAudioTracks()[0]; Object.values(V.peers).forEach(P => { if (P.as) P.as.replaceTrack(t).catch(() => {}); });
+    speakWatch('__me', V.mic); V.muted = false;
+  } else V.muted = !V.muted;
+  if (!V.muted && V.deaf) roomDeaf(false);
+  V.mic.getAudioTracks().forEach(t => { t.enabled = !V.muted; });
+  roomBeat(); renderRoom();
+}
+function roomDeaf(on) {
+  V.deaf = on == null ? !V.deaf : on;
+  Object.values(V.peers).forEach(P => { if (P.audioEl) P.audioEl.muted = V.deaf; });
+  if (V.deaf && V.mic && !V.muted) { V.muted = true; V.mic.getAudioTracks().forEach(t => { t.enabled = false; }); roomBeat(); }
+  renderRoom();
+}
+async function roomShare() {
+  if (!V.on) return;
+  if (V.share) return roomUnshare();
+  let st, kind = CAN_SHARE ? 'screen' : 'camera';
+  try { st = kind === 'screen' ? await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 24 } }, audio: false }) : await camStream('environment'); }
+  catch (e) { if (kind === 'screen' && IS_TOUCH && CAN_CAM) { try { st = await camStream('environment'); kind = 'camera'; } catch (x) { return; } } else return; }
+  const tr = st.getVideoTracks()[0]; try { tr.contentHint = kind === 'screen' ? 'detail' : 'motion'; } catch (e) {}
+  tr.onended = () => roomUnshare();
+  V.share = st; V.shareKind = kind; V.focus = '__me'; V.view = true;
+  Object.values(V.peers).forEach(P => { if (P.vs) P.vs.replaceTrack(tr).catch(() => {}); });
+  roomBeat(); renderRoom(); toast(kind === 'screen' ? 'กำลังแชร์จอให้ทั้งห้อง' : 'กำลังแชร์กล้องให้ทั้งห้อง');
+}
+function roomUnshare() {
+  if (!V.share) return;
+  V.share.getTracks().forEach(t => { t.onended = null; t.stop(); });
+  V.share = null; V.shareKind = ''; if (V.focus === '__me') V.focus = '';
+  Object.values(V.peers).forEach(P => { if (P.vs) P.vs.replaceTrack(null).catch(() => {}); });
+  roomBeat(); renderRoom();
+}
+function roomAct(a, t) {
+  switch (a) {
+    case 'join': return roomJoin();
+    case 'leave': return roomLeave();
+    case 'mic': return roomMic();
+    case 'deaf': return roomDeaf();
+    case 'share': return roomShare();
+    case 'open': V.view = true; return renderRoom();
+    case 'close': V.view = false; return renderRoom();
+    case 'focus': V.focus = t.dataset.key || ''; return renderRoom();
+    case 'full': { const w = $('#roomStage'); if (!w) return; if (document.fullscreenElement) document.exitFullscreen(); else if (w.requestFullscreen) w.requestFullscreen().catch(() => {}); return; }
+  }
+}
+/* เสียงเข้า/ออกห้อง สั้นๆ */
+function roomTone(up, soft) {
+  try { ringUnlock(); if (!ACTX || ACTX.state !== 'running') return; const t = ACTX.currentTime, g = ACTX.createGain(); g.connect(ACTX.destination);
+    const v = soft ? .05 : .1; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .02); g.gain.linearRampToValueAtTime(0, t + .32);
+    const o = ACTX.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(up ? 520 : 780, t); o.frequency.linearRampToValueAtTime(up ? 780 : 460, t + .25); o.connect(g); o.start(t); o.stop(t + .34); } catch (e) {}
+}
+/* ใครกำลังพูด (วงเขียวรอบรูป) */
+function speakWatch(key, stream) {
+  try { ringUnlock(); if (!ACTX) return; const src = ACTX.createMediaStreamSource(stream), an = ACTX.createAnalyser(); an.fftSize = 512; src.connect(an); V.an[key] = { an: an, buf: new Uint8Array(an.fftSize), src: src }; } catch (e) {}
+}
+function speakStart() {
+  clearInterval(V.speakT);
+  V.speakT = setInterval(() => {
+    Object.keys(V.an).forEach(k => {
+      const x = V.an[k]; x.an.getByteTimeDomainData(x.buf);
+      let sum = 0; for (let i = 0; i < x.buf.length; i++) { const d = (x.buf[i] - 128) / 128; sum += d * d; }
+      if (Math.sqrt(sum / x.buf.length) > .03) x.loud = Date.now();
+      const on = Date.now() - (x.loud || 0) < 450 && !(k === '__me' && V.muted) && !(k !== '__me' && V.deaf);
+      if (!!V.speaking[k] !== on) { V.speaking[k] = on; document.querySelectorAll('[data-vkey="' + (k === '__me' ? '__me' : CSS.escape(k)) + '"]').forEach(el => el.classList.toggle('speaking', on)); }
+    });
+  }, 120);
+}
+function speakStop() { clearInterval(V.speakT); V.speakT = null; V.an = {}; }
+/* ---- UI ---- */
+function roomPeople() {
+  return V.members.map(m => { const me = roomIsMe(m), k = me ? '__me' : roomKey(m), P = V.peers[roomKey(m)];
+    return { m: m, me: me, key: k, peerKey: roomKey(m), mic: me ? (!!V.mic && !V.muted) : m.mic, share: me ? V.shareKind : m.share, state: me ? 'connected' : P ? P.state : (V.on ? 'connecting' : '') }; });
+}
+function roomAv(p, cls) {
+  return '<span class="rm-av ' + (cls || '') + (V.speaking[p.key] ? ' speaking' : '') + (p.state && p.state !== 'connected' ? ' pending' : '') + '" data-vkey="' + esc(p.key) + '" title="' + esc(p.m.name) + '">' + peerAv(p.peerKey === 'admin' ? 'admin' : p.m.name, p.m.name, 'rtc-mini') +
+    (!p.mic ? '<i class="rm-mute">' + RTC_IC.micOff + '</i>' : '') + (p.share ? '<i class="rm-share">' + (p.share === 'camera' ? RTC_IC.cam : RTC_IC.cast) + '</i>' : '') + '</span>';
+}
+function roomCard() {
+  const ppl = roomPeople();
+  return '<div class="room-card' + (V.on ? ' in' : '') + (ppl.length ? ' live' : '') + '" id="roomCard"><span class="rc-ic">' + RTC_IC.room + '</span><div class="rc-t"><b>ห้องเสียงทีม</b><small>' +
+    (ppl.length ? ppl.length + ' คนอยู่ในห้อง' + (ppl.some(p => p.share) ? ' · มีคนแชร์จอ' : '') : 'ยังไม่มีใครอยู่ในห้อง — เข้าก่อนแล้วชวนเพื่อนได้') + '</small></div>' +
+    '<div class="rc-avs">' + ppl.slice(0, 8).map(p => roomAv(p)).join('') + '</div>' +
+    (V.on ? '<button class="btn" data-room="open">' + RTC_IC.expand + '<span>เปิดห้อง</span></button>' : '<button class="btn primary rc-join" data-room="join"' + (V.joining ? ' disabled' : '') + '>' + RTC_IC.room + '<span>' + (V.joining ? 'กำลังเข้า…' : 'เข้าห้อง') + '</span></button>') + '</div>';
+}
+function roomStrip() {
+  const n = V.members.length;
+  return '<div class="mp-rtc room" id="roomStrip"><span class="rs-ic">' + RTC_IC.room + '</span><span class="rs-t"><b>ห้องเสียงทีม</b><small>' + (n ? n + ' คนอยู่ในห้อง' : 'ว่าง') + '</small></span>' +
+    (V.on ? '<button class="btn sm" data-room="open">เปิดห้อง</button>' : '<button class="btn sm primary" data-room="join">' + RTC_IC.room + 'เข้าห้อง</button>') + '</div>';
+}
+function roomBtns(big) {
+  return '<button class="rtc-tb mic' + (V.mic && !V.muted ? ' on' : ' off') + '" data-room="mic" title="' + (V.muted ? 'เปิดไมค์' : 'ปิดไมค์') + '">' + (V.mic && !V.muted ? RTC_IC.mic : RTC_IC.micOff) + (big ? '<span>' + (V.muted ? 'เปิดไมค์' : 'ไมค์เปิด') + '</span>' : '') + '</button>' +
+    '<button class="rtc-tb' + (V.deaf ? ' off' : '') + '" data-room="deaf" title="' + (V.deaf ? 'เปิดเสียงห้อง' : 'ปิดเสียงห้อง (ไม่ได้ยินใคร)') + '">' + (V.deaf ? RTC_IC.headOff : RTC_IC.head) + '</button>' +
+    (CAN_SHARE || CAN_CAM ? '<button class="rtc-tb' + (V.share ? ' on share' : '') + '" data-room="share" title="' + (V.share ? 'หยุดแชร์' : CAN_SHARE ? 'แชร์จอให้ทั้งห้อง' : 'แชร์กล้องให้ทั้งห้อง') + '">' + (CAN_SHARE ? RTC_IC.cast : RTC_IC.cam) + (big ? '<span>' + (V.share ? 'หยุดแชร์' : CAN_SHARE ? 'แชร์จอ' : 'แชร์กล้อง') + '</span>' : '') + '</button>' : '') +
+    '<button class="rtc-tb end" data-room="leave" title="ออกจากห้อง">' + RTC_IC.hang + (big ? '<span>ออกจากห้อง</span>' : '') + '</button>';
+}
+function renderRoom() {
+  const c = $('#roomCard'); if (c) c.outerHTML = roomCard();
+  const st = $('#roomStrip'); if (st) st.outerHTML = roomStrip();
+  let bar = $('#roomBar');
+  if (!V.on) { if (bar) bar.remove(); const v = $('#roomView'); if (v) v.remove(); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); return; }
+  const ppl = roomPeople(), wait = ppl.filter(p => !p.me && p.state !== 'connected').length;
+  if (!bar) { bar = document.createElement('div'); bar.id = 'roomBar'; bar.className = 'room-bar'; document.body.appendChild(bar); }
+  /* สร้าง HTML ใหม่เฉพาะเมื่อสถานะเปลี่ยน — ไม่งั้นวิดีโอที่แชร์จะกระพริบทุกครั้งที่ดึงข้อมูล */
+  const sig = JSON.stringify([ppl.map(p => [p.key, p.mic, p.share, p.state]), V.muted, V.deaf, !!V.share, V.view, V.focus, !!V.mic]);
+  if (sig === V.sig && $('#roomView') === null === !V.view) return;
+  V.sig = sig;
+  bar.innerHTML = '<button class="rb-head" data-room="open" title="เปิดห้อง"><span class="rb-ic">' + RTC_IC.room + '</span><span class="rb-t"><b>ห้องเสียงทีม</b><small>' + ppl.length + ' คน' + (wait ? ' · กำลังต่อ ' + wait : ' · เชื่อมต่อแล้ว') + '</small></span></button>' +
+    '<div class="rb-avs">' + ppl.slice(0, 6).map(p => roomAv(p, 'sm')).join('') + (ppl.length > 6 ? '<span class="rb-more">+' + (ppl.length - 6) + '</span>' : '') + '</div><div class="rb-btns">' + roomBtns(false) + '</div>';
+  let v = $('#roomView');
+  if (!V.view) { if (v) v.remove(); return; }
+  if (!v) { v = document.createElement('div'); v.id = 'roomView'; v.className = 'rtc-view room-view in'; document.body.appendChild(v); }
+  const sharers = ppl.filter(p => p.share);
+  let focus = sharers.find(p => p.key === V.focus) || sharers[0];
+  v.innerHTML = '<div class="rtc-bar"><span class="rb-ic big">' + RTC_IC.room + '</span><div class="rtc-who"><b>ห้องเสียงทีม</b><small>' + ppl.length + ' คนในห้อง' + (sharers.length ? ' · ' + esc(sharers.map(p => p.me ? 'คุณ' : p.m.name).join(', ')) + ' กำลังแชร์' : '') + '</small></div>' +
+    '<div class="rtc-tools">' + roomBtns(true) + (focus ? '<button class="rtc-tb" data-room="full" title="เต็มจอ">' + RTC_IC.full + '</button>' : '') + '<button class="rtc-tb" data-room="close" title="ย่อ (ยังอยู่ในห้อง)">✕</button></div></div>' +
+    '<div class="room-body' + (focus ? ' has-stage' : '') + '">' +
+    (focus ? '<div class="room-stage" id="roomStage"><video id="roomVid" autoplay playsinline muted></video><span class="rs-name">' + (focus.share === 'camera' ? RTC_IC.cam : RTC_IC.cast) + esc(focus.me ? 'จอของคุณ (ทุกคนในห้องเห็น)' : focus.m.name) + '</span></div>' : '') +
+    '<div class="room-tiles">' + ppl.map(p => '<div class="rm-tile' + (focus && focus.key === p.key ? ' focused' : '') + '" data-vkey="' + esc(p.key) + '"' + (p.share ? ' data-room="focus" data-key="' + esc(p.key) + '" role="button" tabindex="0"' : '') + '>' + roomAv(p, 'lg') +
+      '<b>' + esc(p.m.name) + (p.me ? ' <span class="tag rev">คุณ</span>' : '') + '</b><small>' + (p.share ? (p.share === 'camera' ? 'แชร์กล้อง · แตะเพื่อดู' : 'แชร์จอ · แตะเพื่อดู') : p.state && p.state !== 'connected' ? 'กำลังเชื่อมต่อ…' : !p.mic ? 'ปิดไมค์' : 'ในห้อง') + '</small></div>').join('') +
+    (ppl.length < 2 ? '<div class="rm-empty">' + RTC_IC.room + '<b>รอเพื่อนเข้าห้อง</b><small>คนในทีมจะเห็นว่าคุณอยู่ในห้อง ที่หน้าทีมงานและแชท "ทั้งทีม"</small></div>' : '') + '</div></div>';
+  roomVideos(focus);
+}
+function roomVideos(focus) {
+  const vid = $('#roomVid'); if (!vid) return;
+  if (!focus) { const ppl = roomPeople().filter(p => p.share); focus = ppl.find(p => p.key === V.focus) || ppl[0]; }
+  if (!focus) return;
+  const src = focus.me ? V.share : (V.peers[focus.peerKey] || {}).video;
+  if (src && vid.srcObject !== src) { vid.srcObject = src; vid.play().catch(() => {}); }
+}
 
 /* ============ voice calls + push (สายเรียกเข้าเด้งแม้ปิดแอป) ============ */
 const PUSH_OK = typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof window !== 'undefined' && 'PushManager' in window && 'Notification' in window;
@@ -2369,7 +2639,7 @@ function viewTeam() {
       '<div><div class="panel-h" style="margin-bottom:6px"><span class="sub">ตรงเวลา ' + (doneM.length ? pct + '%' : '–') + '</span><span class="sub">เวลาทำ ' + fdur(minsM) + ' · ยากเฉลี่ย ' + lv + '</span></div><div class="meter"><i style="width:' + pct + '%"></i></div></div>' : '') +
       helpBox + '<div class="t-btns">' + (full ? '<button class="btn" data-memberjobs="' + esc(x.name) + '">' + (x.name === S.me ? 'ดูงานของฉัน' : 'ดูงานของ' + esc(x.name)) + '</button>' : '') + (canChat && CAN_RTC ? '<button class="btn t-call" data-rtc="call" data-peer="' + esc(x.name) + '" data-name="' + esc(x.name) + '" title="โทรหา ' + esc(x.name) + '">' + RTC_IC.phone + '</button>' : '') + (canChat ? '<button class="btn t-chat' + (unr ? ' has' : '') + (full ? '' : ' wide') + '" data-ch="u:' + esc(x.name) + '" title="ส่งข้อความถึง ' + esc(x.name) + '">' + MSG_IC.chat + (full ? '' : '<span>ส่งข้อความ</span>') + (unr ? '<b>' + unr + '</b>' : '') + '</button>' : '<button class="btn t-sosbtn" data-act="askhelp" data-job="" title="ขอความช่วยเหลือจากทีมและ' + ADMIN_LABEL + '">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') + '</div></div>';
   }).join('');
-  return topbar('ทีมงาน', isLead() ? 'ภาระงานและผลงานรายคน เดือน' + monthLabel(m) : 'คุยกับเพื่อนร่วมทีม และดูผลงานของคุณ เดือน' + monthLabel(m)) + '<div class="teams">' + cards + '</div>';
+  return topbar('ทีมงาน', isLead() ? 'ภาระงานและผลงานรายคน เดือน' + monthLabel(m) : 'คุยกับเพื่อนร่วมทีม และดูผลงานของคุณ เดือน' + monthLabel(m)) + (CAN_RTC ? roomCard() : '') + '<div class="teams">' + cards + '</div>';
 }
 
 /* ============ render: report (printable) ============ */
@@ -2701,12 +2971,13 @@ function go(view, sec) {
 
 /* ============ events ============ */
 document.addEventListener('click', async e => {
-  const t = e.target.closest('button,[data-open],a[href^="#s-"],a[data-rtc],label.btn');
+  const t = e.target.closest('button,[data-open],[data-room],a[href^="#s-"],a[data-rtc],label.btn');
   if (!t) return;
   const d = t.dataset;
 
   if (t.tagName === 'A' && !t.dataset.rtc && t.getAttribute('href').indexOf('#s-') === 0) { e.preventDefault(); const el = document.querySelector(t.getAttribute('href')); if (el) el.scrollIntoView({ behavior: 'smooth' }); return; }
   if (d.rtc) { e.preventDefault(); return rtcAct(d.rtc, t); }
+  if (d.room) { e.preventDefault(); return roomAct(d.room, t); }
   if (d.view) return go(d.view);
   if (d.go) return go(d.go, d.sec);
   if (d.move) { e.stopPropagation(); return moveJob(d.move, d.to); }
@@ -2995,6 +3266,6 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|u
   } catch (e) {}
 })();
 try { applyTheme(); } catch (e) {}
-window.KiwNgan = { S: S, M: M, R: R, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION };
+window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION };
 load(false);
 })();

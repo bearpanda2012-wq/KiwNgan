@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.9.0';
+const VERSION = '1.10.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -89,7 +89,8 @@ const ACTIONS = {
   pushSub: (p, u) => withLock_(() => pushSub_(p.sub, u)),
   pushUnsub: (p, u) => withLock_(() => pushUnsub_(p.endpoint, u)),
   pushInfo: (p, u) => ({ info: pushInfo_(u) }),
-  rtcPoll: (p, u) => rtcPoll_(u),
+  rtcPoll: (p, u) => Object.assign(rtcPoll_(u), { room: roomView_(roomGet_(), u) }),
+  room: (p, u) => room_(p, u),
   deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
   thumbs: (p, u) => thumbs_(p.ids),
   image: (p, u) => imageFull_(p.id),
@@ -833,7 +834,7 @@ function deleteMessages_(ids, u) {
 
 /* ---------- แชร์หน้าจอ / รีโมท: ส่งสัญญาณ WebRTC ผ่าน CacheService (ไม่เขียนลงชีต)
    ภาพหน้าจอวิ่งตรงระหว่างเครื่อง (peer-to-peer) ไม่ผ่านเซิร์ฟเวอร์นี้ */
-const RTC_TYPES_ = ['req', 'offer', 'answer', 'bye', 'deny', 'ctl', 'ctlcode', 'ctlno'];
+const RTC_TYPES_ = ['req', 'offer', 'answer', 'bye', 'deny', 'ctl', 'ctlcode', 'ctlno', 'roff', 'rans', 'rbye'];
 function rtcBox_(name) { return 'rtc:' + name; }
 function rtcSend_(p, u) {
   const type = String(p.type || '');
@@ -990,4 +991,31 @@ function pushForSignal_(p, u) {
 function authorizePush() {
   UrlFetchApp.fetch('https://fcm.googleapis.com/', { muteHttpExceptions: true });
   Logger.log('อนุญาตการส่งแจ้งเตือนแล้ว · public key: ' + vapid_().pub);
+}
+
+/* =====================================================================
+   ห้องเสียงทีม (แบบ Discord) — เก็บแค่รายชื่อคนในห้องไว้ใน cache
+   เสียง/จอวิ่งตรงระหว่างเครื่อง (mesh WebRTC) ใช้ rtcSend ชนิด roff / rans / rbye
+   ===================================================================== */
+const ROOM_KEY_ = 'room:team';
+function roomGet_() {
+  let r = {};
+  try { r = JSON.parse(CacheService.getScriptCache().get(ROOM_KEY_) || '{}'); } catch (e) { r = {}; }
+  const now = Date.now(); Object.keys(r).forEach(k => { if (now - r[k].t > 35000) delete r[k]; }); // ไม่ส่งสัญญาณเกิน 35 วิ = หลุดจากห้อง
+  return r;
+}
+function roomView_(r, u) {
+  return Object.keys(r).sort((a, b) => r[a].j - r[b].j).map(n => ({ name: maskName_(n, u), admin: !!r[n].admin, mic: !!r[n].mic, share: r[n].share || '', since: r[n].j }));
+}
+function room_(p, u) {
+  return withLock_(() => {
+    const r = roomGet_(), op = String(p.op || 'beat');
+    if (op === 'leave') delete r[u.name];
+    else {
+      const was = r[u.name];
+      r[u.name] = { t: Date.now(), j: was ? was.j : Date.now(), admin: isAdmin_(u), mic: !!p.mic, share: ['screen', 'camera'].indexOf(p.share) >= 0 ? p.share : '' };
+    }
+    CacheService.getScriptCache().put(ROOM_KEY_, JSON.stringify(r), 900);
+    return { room: roomView_(r, u) };
+  });
 }
