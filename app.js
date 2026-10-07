@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.18.3';
+const APP_VERSION = '2.18.4';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1584,6 +1584,9 @@ const RTC_IC = {
 };
 const CAN_RTC = typeof RTCPeerConnection !== 'undefined';
 const CAN_SHARE = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+/* หน้าต่างเลือกจอเปิดที่แท็บ "หน้าต่าง" ก่อน: แชร์เฉพาะโปรแกรมที่ทำงาน (เช่น CAD) → หน้าต่างลอย/กรอบดูของเราไม่ติดไปในภาพ ไม่บังทั้งสองฝั่ง
+   ยังเลือก "ทั้งหน้าจอ" ได้ตามปกติ (ถ้าเลือก จะระบายทับตำแหน่งหน้าต่างลอยในภาพดูของเราแทน) */
+const SHARE_OPTS = () => ({ video: { frameRate: { ideal: 15, max: 24 }, displaySurface: 'window' }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include' });
 /* มือถือแชร์หน้าจอผ่านเว็บไม่ได้ (iOS ไม่รองรับ, Android ได้บางรุ่น) → แชร์กล้องแทน */
 const CAN_CAM = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
@@ -1686,7 +1689,8 @@ async function rtcHost(peer, name, sid, remote, src) {
   if (rtcBusy() && !sid) return toast('กำลังแชร์อยู่ ปิดอันเดิมก่อน', true);
   let stream, earlyP = null;
   try {
-    const sp = src === 'camera' ? camStream('environment') : navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 24 } }, audio: false });
+    if (src === 'screen' && !IS_TOUCH) toast('แนะนำ: เลือกแท็บ "หน้าต่าง" แล้วเลือกโปรแกรมที่ให้ดู — หน้าต่างลอยจะไม่ติดไปในภาพ');
+    const sp = src === 'camera' ? camStream('environment') : navigator.mediaDevices.getDisplayMedia(SHARE_OPTS());
     /* ห้ามเปิดหน้าต่างลอยพร้อมกับหน้าต่างเลือกจอ: หน้าต่างลอยแย่งโฟกัส ทำให้หน้าต่างเลือกจอปิดเอง = "ถูกปฏิเสธ" (เจอในแอปที่ติดตั้งบนคอม)
        ให้กดปุ่ม "หน้าต่างลอย" เองหลังแชร์แล้ว */
     stream = await sp;
@@ -2078,7 +2082,7 @@ async function roomShare() {
   if (!V.on) return;
   if (V.share) return roomUnshare();
   let st, kind = CAN_SHARE ? 'screen' : 'camera';
-  try { st = kind === 'screen' ? await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 24 } }, audio: false }) : await camStream('environment'); }
+  try { st = kind === 'screen' ? await navigator.mediaDevices.getDisplayMedia(SHARE_OPTS()) : await camStream('environment'); }
   catch (e) { if (kind === 'screen' && IS_TOUCH && CAN_CAM) { try { st = await camStream('environment'); kind = 'camera'; } catch (x) { return; } } else return; }
   const tr = st.getVideoTracks()[0]; try { tr.contentHint = kind === 'screen' ? 'detail' : 'motion'; } catch (e) {}
   tr.onended = () => roomUnshare();
