@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.12.0';
+const VERSION = '1.13.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -92,7 +92,7 @@ const ACTIONS = {
   pushSub: (p, u) => withLock_(() => pushSub_(p.sub, u)),
   pushUnsub: (p, u) => withLock_(() => pushUnsub_(p.endpoint, u)),
   pushInfo: (p, u) => ({ info: pushInfo_(u) }),
-  rtcPoll: (p, u) => Object.assign(rtcPoll_(u), { room: roomView_(roomGet_(), u), ds: stamp_('data'), ms: stamp_('msg') }),
+  rtcPoll: (p, u) => Object.assign(rtcPoll_(u, p.wait), { room: roomView_(roomGet_(), u), ds: stamp_('data'), ms: stamp_('msg') }),
   room: (p, u) => room_(p, u),
   deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
   thumbs: (p, u) => thumbs_(p.ids),
@@ -929,8 +929,11 @@ function rtcSend_(p, u) {
   });
   return { ok: true };
 }
-function rtcPoll_(u) {
+function rtcPoll_(u, wait) {
   const cache = CacheService.getScriptCache(), key = rtcBox_(u.name);
+  // ระหว่างกำลังต่อสาย/แชร์จอ หน้าเว็บขอ "รอสัญญาณ" ได้สูงสุด ~6 วิ: ตอบทันทีที่อีกฝ่ายส่งมา (เร็วกว่าถามซ้ำ ๆ)
+  const until = Date.now() + Math.min(6000, Math.max(0, Number(wait) || 0));
+  while (!cache.get(key) && Date.now() < until) Utilities.sleep(200);
   if (!cache.get(key)) return { signals: [] };
   return withLock_(() => {
     let box = [];
