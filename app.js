@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.18.0';
+const APP_VERSION = '2.18.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1687,8 +1687,8 @@ async function rtcHost(peer, name, sid, remote, src) {
   let stream, earlyP = null;
   try {
     const sp = src === 'camera' ? camStream('environment') : navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 24 } }, audio: false });
-    /* เปิดหน้าต่างลอยพร้อมกันจากการกดปุ่มเดียวกัน — คนแชร์เห็นจุดที่อีกฝ่ายชี้/วาดได้ แม้ไปทำงานในโปรแกรมอื่น */
-    if (src === 'screen' && CAN_PIP && !IS_TOUCH && !R.pip) { try { earlyP = window.documentPictureInPicture.requestWindow({ width: 360, height: 250 }).catch(() => null); } catch (x) { earlyP = null; } }
+    /* ห้ามเปิดหน้าต่างลอยพร้อมกับหน้าต่างเลือกจอ: หน้าต่างลอยแย่งโฟกัส ทำให้หน้าต่างเลือกจอปิดเอง = "ถูกปฏิเสธ" (เจอในแอปที่ติดตั้งบนคอม)
+       ให้กดปุ่ม "หน้าต่างลอย" เองหลังแชร์แล้ว */
     stream = await sp;
   }
   catch (e) {
