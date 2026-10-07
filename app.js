@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.15.0';
+const APP_VERSION = '2.16.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1279,7 +1279,7 @@ function renderMsgPanel() {
       '<div class="emo-pop" id="emoPop"' + (M.emoji ? '' : ' hidden') + '>' + (M.emoji ? emoPopHtml() : '') + '</div>' +
       '<div class="mp-row">' + (M.help ? '' : '<button type="button" class="mp-sos-btn" data-act="helpon" title="ขอความช่วยเหลือ">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') +
       '<button type="button" class="mp-emo-btn" id="emoBtn" data-act="emoji" title="ใส่อีโมจิ" aria-label="ใส่อีโมจิ" aria-pressed="' + !!M.emoji + '">😊</button>' +
-      '<textarea id="msgText" rows="1" maxlength="1000" placeholder="' + (M.help ? 'บอกว่าอยากให้ช่วยอะไร…' : 'พิมพ์ข้อความถึง ' + esc(cur.name) + '…') + '"></textarea>' +
+      '<textarea id="msgText" rows="1" autocomplete="off" maxlength="1000" placeholder="' + (M.help ? 'บอกว่าอยากให้ช่วยอะไร…' : 'พิมพ์ข้อความถึง ' + esc(cur.name) + '…') + '"></textarea>' +
       '<button type="submit" class="mp-send' + (M.help ? ' sos' : '') + '" aria-label="ส่ง"' + (M.sending ? ' disabled' : '') + '>' + MSG_IC.send + '</button></div></form>';
   const b = $('#mpBody'); if (b) b.scrollTop = b.scrollHeight;
   const nt = $('#msgText');
@@ -1289,6 +1289,8 @@ async function sendMsg() {
   const t = $('#msgText'); if (!t || M.sending) return;
   const text = t.value.trim(); if (!text) { t.focus(); return; }
   const p = M.help ? { to: M.helpTo, kind: 'help', text: text, jobId: M.jobId || '' } : { to: chanTo(M.ch), kind: 'msg', text: text };
+  if (!M.help) histPush('msg', text);
+  suggClose();
   if (!M.help) {   // ข้อความธรรมดา: ขึ้นในห้องแชททันที แล้วส่งเบื้องหลัง
     const d = new Date(), tmp = { id: uid('tmp_'), ts: isoOf(d) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()), from: S.me, to: p.to, kind: 'msg', text: text, jobId: '', status: '', helper: '', read: true, pending: true };
     M.list.push(tmp); M.seen[tmp.id] = 1; t.value = ''; t.style.height = 'auto'; M.emoji = false; renderMsgPanel();
@@ -2688,7 +2690,7 @@ function aItem(j) {
 /* ============ render: board ============ */
 function filterBar(opts, noMember) {
   const ms = members();
-  return '<div class="filters"><label class="search">' + I.search + '<input id="q" type="search" placeholder="ค้นหาเลข Job, ลูกค้า, sale, หมายเหตุ…" value="' + esc(S.f.q) + '" aria-label="ค้นหางาน"></label>' +
+  return '<div class="filters"><label class="search">' + I.search + '<input id="q" type="search" autocomplete="off" placeholder="ค้นหาเลข Job, ลูกค้า, sale, หมายเหตุ…" value="' + esc(S.f.q) + '" aria-label="ค้นหางาน"></label>' +
     (noMember ? '' : '<select class="sel" id="fMember" aria-label="ทีมงาน"><option value="all">ทุกคน</option>' + (S.me ? '<option value="__me"' + (S.f.member === '__me' ? ' selected' : '') + '>งานของฉัน (' + esc(S.me) + ')</option>' : '') +
     ms.map(x => '<option value="' + esc(x.name) + '"' + (S.f.member === x.name ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') + '<option value="__none"' + (S.f.member === '__none' ? ' selected' : '') + '>ยังไม่มอบหมาย</option></select>') +
     '<select class="sel" id="fGroup" aria-label="กลุ่มงาน"><option value="all">ทุกกลุ่มงาน</option>' + (S.settings.groups || []).map(g => '<option' + (S.f.group === g ? ' selected' : '') + '>' + esc(g) + '</option>').join('') + '</select>' +
@@ -3116,7 +3118,7 @@ function renderEditor() {
     '<div class="f"><span class="lbl">สถานะ</span>' + statusSeg + '</div>' + timer +
     '<fieldset><legend>ข้อมูลงาน</legend>' +
       '<div class="f"><label for="e-code">เลข Job</label><input id="e-code" class="mono" data-e="code" value="' + esc(j.code) + '" placeholder="เช่น R69-10012S" autocomplete="off"></div>' +
-      '<div class="f"><label for="e-title">ลูกค้า / โครงการ</label><input id="e-title" data-e="title" value="' + esc(j.title) + '" placeholder="เช่น ผนังล็อบบี้โรงแรม"></div>' +
+      '<div class="f"><label for="e-title">ลูกค้า / โครงการ</label><input id="e-title" data-e="title" autocomplete="off" value="' + esc(j.title) + '" placeholder="เช่น ผนังล็อบบี้โรงแรม"></div>' +
       '<div class="f"><label for="e-group">กลุ่มงาน</label><select id="e-group" data-e="group">' + opts(s.groups, j.group) + '</select></div>' +
       '<div class="f"><label for="e-type">รายละเอียดงาน</label><select id="e-type" data-e="taskType">' + opts(s.taskTypes.map(t => t.name), j.taskType) + '</select></div>' +
       '<div class="f"><span class="lbl">จำนวนชิ้น</span><div class="seg"><button type="button" data-eqty="single" aria-pressed="' + (j.qty !== 'multi') + '">ชิ้นเดียว</button><button type="button" data-eqty="multi" aria-pressed="' + (j.qty === 'multi') + '">หลายชิ้น / ต่างแบบ</button></div></div>' +
@@ -3132,7 +3134,7 @@ function renderEditor() {
       '<div class="f"><label for="e-due">กำหนดส่ง</label><input type="date" id="e-due" data-e="due" value="' + esc(j.due) + '">' + dueHint + '</div>' +
       (!E.isNew ? '<div class="f"><label for="e-started">เริ่มทำ</label><input type="datetime-local" id="e-started" data-e="startedAt" value="' + esc(j.startedAt) + '"></div>' +
         '<div class="f"><label for="e-finished">ปิดงาน</label><input type="datetime-local" id="e-finished" data-e="finishedAt" value="' + esc(j.finishedAt) + '"' + (j.status !== 'done' ? ' disabled' : '') + '></div>' : '') +
-      '<div class="f full"><label for="e-note">หมายเหตุ</label><textarea id="e-note" data-e="note" placeholder="เช่น เหลืออีก 1 แผ่น, รอไฟล์ลูกค้า">' + esc(j.note) + '</textarea></div>' +
+      '<div class="f full"><label for="e-note">หมายเหตุ</label><textarea id="e-note" data-e="note" autocomplete="off" placeholder="เช่น เหลืออีก 1 แผ่น, รอไฟล์ลูกค้า">' + esc(j.note) + '</textarea></div>' +
     '</fieldset>' +
     (!E.isNew ? '<div class="f"><span class="lbl">ประวัติ</span><div class="hist" id="hist">' + (E.hist ? histHtml(E.hist) : '<span>กำลังโหลด…</span>') + '</div>' +
       (live && live.updatedAt ? '<span class="hint">แก้ไขล่าสุด ' + esc(fdt(String(live.updatedAt).slice(0, 16))) + (live.updatedBy ? ' โดย ' + esc(live.updatedBy) : '') + '</span>' : '') + '</div>' : '') +
@@ -3440,6 +3442,87 @@ document.addEventListener('paste', e => {
   if (!E.isNew && !canAddImg(live)) return;
   e.preventDefault(); addEditorFiles(files);
 });
+/* ============ คำแนะนำตอนพิมพ์ (autocomplete) ============
+   พิมพ์ตัวแรกในช่องที่รองรับ → ขึ้นข้อความเดิมที่เคยใช้ให้เลือก · ↑↓ เลือก, Enter/Tab ใช้, Esc ปิด */
+const HIST_MAX = 60;
+function histGet(k) { const v = LS.get('hist:' + k, []); return Array.isArray(v) ? v : []; }
+function histPush(k, v) { v = String(v || '').trim(); if (!v || v.length > 300) return; LS.set('hist:' + k, [v].concat(histGet(k).filter(x => x !== v)).slice(0, HIST_MAX)); }
+const SUGG_HIST = { 'e-title': 'title', 'e-note': 'note', 'e-code': 'code', 'adminName': 'adminName', 'msgText': 'msg', 'q': 'search' };
+function suggStrings(lists) {
+  const seen = {}, out = [];
+  lists.forEach(list => (list || []).forEach(v => { v = String(v || '').trim(); const k = v.toLowerCase(); if (v && !seen[k]) { seen[k] = 1; out.push({ v: v }); } }));
+  return out;
+}
+const byRecent = arr => arr.slice().sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
+function suggSource(id) {
+  const jobs = byRecent(S.jobs || []).filter(j => !j.pending);
+  switch (id) {
+    case 'e-code': {
+      const map = {}; jobs.forEach(j => { const k = String(j.code).toLowerCase(); (map[k] = map[k] || []).push(j); });
+      return Object.keys(map).map(k => { const js = map[k]; return { v: js[0].code, sub: [js[0].title].concat(js.map(j => j.taskType)).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(' · '), jobs: js }; });
+    }
+    case 'e-title': return suggStrings([histGet('title'), jobs.map(j => j.title)]);
+    case 'e-note': return suggStrings([histGet('note'), jobs.map(j => j.note)]);
+    case 'msgText': return M.help ? [] : suggStrings([histGet('msg')]);
+    case 'q': return suggStrings([histGet('search'), jobs.map(j => j.code), jobs.map(j => j.title)]);
+    case 'adminName': return suggStrings([histGet('adminName')]);
+  }
+  return null;
+}
+const SG = { id: '', items: [], idx: -1 };
+function suggMatch(list, q) {
+  q = q.trim().toLowerCase(); if (!q) return [];
+  const a = [], b = [], c = [];
+  list.forEach(it => {
+    const v = it.v.toLowerCase(); if (v === q) return;
+    if (v.indexOf(q) === 0) a.push(it); else if (v.split(/[\s\-_/·,()]+/).some(w => w.indexOf(q) === 0)) b.push(it); else if (q.length > 1 && v.indexOf(q) >= 0) c.push(it);
+  });
+  return a.concat(b, c).slice(0, 8);
+}
+function suggClose() { SG.id = ''; SG.items = []; SG.idx = -1; const b = $('#suggBox'); if (b) b.hidden = true; }
+function suggOpen(el) {
+  const src = suggSource(el.id); if (!src) return suggClose();
+  const q = el.tagName === 'TEXTAREA' && el.id !== 'msgText' ? el.value : el.value;
+  const items = suggMatch(src, q);
+  if (!items.length || el.disabled || el.readOnly) return suggClose();
+  SG.id = el.id; SG.items = items; if (SG.idx >= items.length) SG.idx = -1;
+  let b = $('#suggBox'); if (!b) { b = document.createElement('div'); b.id = 'suggBox'; b.className = 'sugg'; b.setAttribute('role', 'listbox'); document.body.appendChild(b); }
+  const qq = q.trim().toLowerCase();
+  const hl = v => { const i = v.toLowerCase().indexOf(qq); return i < 0 ? esc(v) : esc(v.slice(0, i)) + '<b>' + esc(v.slice(i, i + qq.length)) + '</b>' + esc(v.slice(i + qq.length)); };
+  b.innerHTML = '<div class="sugg-h">ข้อความที่เคยใช้</div>' + items.map((it, i) => '<button type="button" class="sugg-it' + (i === SG.idx ? ' on' : '') + '" data-sg="' + i + '" role="option"><span>' + hl(it.v) + '</span>' + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</button>').join('');
+  const r = el.getBoundingClientRect(), vh = window.innerHeight;
+  b.hidden = false; b.style.width = Math.max(220, r.width) + 'px';
+  b.style.left = Math.max(8, Math.min(r.left, window.innerWidth - Math.max(220, r.width) - 8)) + 'px';
+  const h = b.offsetHeight, below = vh - r.bottom;
+  b.style.top = (below < h + 12 && r.top > h + 12 ? r.top - h - 4 : r.bottom + 4) + 'px';
+}
+function suggPick(i) {
+  const it = SG.items[i], el = $('#' + SG.id); if (!it || !el) return suggClose();
+  const id = SG.id; suggClose();
+  if (id === 'e-code' && S.edit && S.edit.isNew && it.jobs) {   // เลือกเลข Job เดิม → ดึงข้อมูลงานเดิมมาให้ (เช่น ต่อ CAM จากงาน CAD)
+    readEditor(); const j = S.edit.job, src = it.jobs[0];
+    j.code = it.v; ['title', 'group', 'sale', 'qty', 'level'].forEach(k => { if (src[k] !== undefined && src[k] !== '') j[k] = src[k]; });
+    if (!it.jobs.some(x => isCam(x))) { const cam = (S.settings.taskTypes || []).find(t => t.cat === 'cam'); if (cam) j.taskType = cam.name; }
+    autoDue(); renderEditor(); const n = $('#e-title'); if (n) n.focus();
+    return toast('ดึงข้อมูลจากงานเดิม ' + it.v + (isCam(j) ? ' · ตั้งเป็น ' + j.taskType : ''));
+  }
+  el.value = it.v; el.focus(); try { el.setSelectionRange(it.v.length, it.v.length); } catch (x) {}
+  el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+document.addEventListener('input', e => { const t = e.target; if (!t || !t.id || !(t.id in SUGG_HIST)) return; SG.idx = -1; const cur = $('#' + t.id) || t; if (document.activeElement === cur) suggOpen(cur); });
+document.addEventListener('focusin', e => { const t = e.target; if (t && t.id in SUGG_HIST && t.value) suggOpen(t); else if (SG.id && (!t || t.id !== SG.id)) suggClose(); });
+document.addEventListener('focusout', e => { if (e.target && e.target.id === SG.id) setTimeout(() => { const a = document.activeElement; if (!a || a.id !== SG.id) suggClose(); }, 120); });
+document.addEventListener('mousedown', e => { const b = e.target.closest && e.target.closest('[data-sg]'); if (b) { e.preventDefault(); suggPick(+b.dataset.sg); } }, true);
+document.addEventListener('keydown', e => {
+  if (!SG.id || !SG.items.length || !e.target || e.target.id !== SG.id) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopImmediatePropagation(); SG.idx = (SG.idx + (e.key === 'ArrowDown' ? 1 : -1) + SG.items.length + 1) % (SG.items.length + 1); if (SG.idx === SG.items.length) SG.idx = -1; return suggOpen(e.target); }
+  if ((e.key === 'Enter' || e.key === 'Tab') && SG.idx >= 0 && !e.isComposing) { e.preventDefault(); e.stopImmediatePropagation(); return suggPick(SG.idx); }
+  if (e.key === 'Escape') { e.stopImmediatePropagation(); suggClose(); }
+}, true);
+document.addEventListener('change', e => { const t = e.target; if (t && SUGG_HIST[t.id] && t.id !== 'msgText' && t.id !== 'e-code') histPush(SUGG_HIST[t.id], t.value); });
+window.addEventListener('resize', suggClose);
+document.addEventListener('scroll', e => { if (SG.id && !(e.target.closest && e.target.closest('#suggBox'))) { const el = $('#' + SG.id); if (el && document.activeElement === el) suggOpen(el); else suggClose(); } }, true);
+
 /* drag & drop on the board */
 let dragId = null;
 document.addEventListener('dragstart', e => { const c = e.target.closest && e.target.closest('.card'); if (!c) return; dragId = c.dataset.id; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (x) {} });
