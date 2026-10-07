@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.18.1';
+const APP_VERSION = '2.18.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2528,9 +2528,9 @@ function renderPeek() {
   if (!want) { if (R.peek) { R.peek.remove(); R.peek = null; } return; }
   if (!R.peek) {
     const el = document.createElement('div'); el.className = 'rtc-peek';
-    const cam = R.src === 'camera';
-    el.innerHTML = '<div class="rtc-peek-bar"></div><div class="rtc-peek-box">' + (cam ? '<video autoplay playsinline muted></video><canvas></canvas>' : '<canvas class="map"></canvas>') + '</div><div class="rtc-peek-where" id="peekWhere">รอ ' + esc(R.name) + ' ชี้…</div>';
-    if (cam) { const v = el.querySelector('video'); v.srcObject = R.stream; v.addEventListener('loadedmetadata', inkKick); v.play().catch(() => {}); }
+    // แสดงภาพจอ/กล้องที่กำลังแชร์ไว้ใต้เส้นที่อีกฝ่ายวาด (ทั้งในแอปและหน้าต่างลอย) จะได้รู้ว่าเขาชี้ตรงไหน
+    el.innerHTML = '<div class="rtc-peek-bar"></div><div class="rtc-peek-box"><video autoplay playsinline muted></video><canvas></canvas></div><div class="rtc-peek-where" id="peekWhere">รอ ' + esc(R.name) + ' ชี้…</div>';
+    { const v = el.querySelector('video'); v.srcObject = R.stream; v.addEventListener('loadedmetadata', inkKick); v.play().catch(() => {}); }
     el.addEventListener('click', e => {
       const b = e.target.closest && e.target.closest('[data-peek]'); if (!b) return;
       const a = b.dataset.peek;
