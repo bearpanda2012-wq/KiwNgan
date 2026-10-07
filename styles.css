@@ -1935,3 +1935,15 @@ button.card-th img{width:100%;height:100%;object-fit:cover;display:block}
 .card .qno{position:absolute;top:7px;left:5px;z-index:2;min-width:18px;height:18px;padding:0 4px;font-size:10.5px;border-radius:6px;box-shadow:0 0 0 2px var(--surface)}
 .card.has-tc .qno{box-shadow:0 0 0 2px var(--surface)}
 .card .card-top{padding-left:6px}
+
+/* v2.11.1: ปุ่มท้ายหน้าต่างงานพอดีจอทุกขนาด — ปุ่มขึ้นบรรทัดใหม่เองแทนการล้นออกขวา */
+.sheet{max-width:100vw;overflow:hidden}
+.sheet-b{overflow-x:hidden}
+.sheet-f{flex-wrap:wrap;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px))}
+.sheet-f .btn{flex:1 1 auto;min-width:0;white-space:nowrap;justify-content:center;padding-left:12px;padding-right:12px}
+.sheet-f .btn.primary{flex-basis:100%;order:9}
+#sheet.viewing .sheet-f [data-act="close"]{display:none}   /* ปิดได้จากปุ่ม ✕ ด้านบน */
+#sheet:not(.viewing) .sheet-f .btn.primary{flex-basis:auto;flex-grow:2}
+@media (max-width:420px){
+  .sheet-f .btn{font-size:13.5px;padding-left:10px;padding-right:10px}
+}
