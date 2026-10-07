@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.11.0';
+const VERSION = '1.12.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -625,8 +625,10 @@ function startTimer_(jobId, u) {
   if (row < 0) throw new Error('ไม่พบงานนี้');
   const job = readRow_('Jobs', row);
   if (!ownsJob_(u, job)) throw new Error('จับเวลาได้เฉพาะงานของตัวเอง');
-  // คนหนึ่งจับเวลาได้ทีละงาน — ปิดตัวที่ค้างก่อน
-  const closed = readAll_('TimeLogs').filter(l => !l.end && l.member === u.name).map(l => stopIn_(l.id, u).log);
+  // จับเวลาได้หลายงานพร้อมกัน (แต่ละ job แยกเวลากัน) — งานเดียวกันไม่เริ่มซ้ำ
+  const closed = [];
+  const already = readAll_('TimeLogs').find(l => !l.end && l.member === u.name && l.jobId === jobId);
+  if (already) return { log: already, job: job, closed: closed };
   const log = { id: uid_('t_'), jobId: jobId, member: u.name, start: nowIso_().slice(0, 16), end: '', minutes: 0 };
   writeRow_('TimeLogs', log, -1);
   const fresh = readRow_('Jobs', row);

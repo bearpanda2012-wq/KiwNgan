@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.11.1';
+const APP_VERSION = '2.12.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -466,7 +466,8 @@ const Demo = {
     const d = this.db(), u = this.me(d), j = d.jobs.find(x => x.id === p.jobId), closed = [];
     if (!j) throw new Error('ไม่พบงานนี้');
     if (!P.owns(u, j)) throw new Error('จับเวลาได้เฉพาะงานของตัวเอง');
-    d.logs.filter(l => !l.end && l.member === u.name).forEach(l => { this.stopIn(d, l, u); closed.push(clone(l)); });
+    const already = d.logs.find(l => !l.end && l.member === u.name && l.jobId === p.jobId);
+    if (already) return { log: this.ml(d, u, clone(already)), job: this.mj(d, u, clone(j)), closed: [] };
     const log = { id: uid('t_'), jobId: p.jobId, member: u.name, start: nowLocal(), end: '', minutes: 0 };
     d.logs.push(log);
     if (j.status === 'queue' || j.status === 'hold') { this.act(d, j.id, u.name, 'status', j.status + '→doing'); j.status = 'doing'; if (!j.startedAt) j.startedAt = log.start; }
@@ -755,15 +756,43 @@ async function moveJob(id, status) {
   S.saving--;
 }
 
-async function startTimer(jobId) {
-  const r = await mutate(() => api().startTimer({ jobId: jobId, member: S.me }), 'เริ่มจับเวลาแล้ว');
-  (r.closed || []).forEach(l => applyStop({ log: l, jobId: l.jobId }));
-  upsert(S.logs, r.log); if (r.job) upsert(S.jobs, r.job);
-  if (r.closed && r.closed.length) load(true); else render();
+/* จับเวลา: กดแล้วเริ่ม/หยุดบนจอทันที แล้วบันทึกเบื้องหลัง · จับได้หลายงานพร้อมกัน (แยกเวลาของแต่ละ job) */
+const PENDING_START = {};
+const myRunOn = jobId => S.logs.find(l => !l.end && l.jobId === jobId && l.member === S.me);
+function timerRefresh() { render(); if (S.edit) rerenderEditor(); }
+function startTimer(jobId) {
+  const j = jobById(jobId); if (!j || myRunOn(jobId)) return;
+  const tmp = { id: uid('tmp_'), jobId: jobId, member: S.me, start: nowLocal(), end: '', minutes: 0 };
+  const prevJ = clone(j);
+  S.logs.push(tmp);
+  if (j.status === 'queue' || j.status === 'hold') { j.status = 'doing'; if (!j.startedAt) j.startedAt = tmp.start; }
+  S.saving = (S.saving || 0) + 1; toast('เริ่มจับเวลา ' + j.code); timerRefresh();
+  PENDING_START[tmp.id] = (async () => {
+    let realId = null;
+    try {
+      const r = await mutate(() => api().startTimer({ jobId: jobId, member: S.me }));
+      const done = S.logs.find(l => l.id === tmp.id);
+      S.logs = S.logs.filter(l => l.id !== tmp.id);
+      upsert(S.logs, done && done.end ? Object.assign({}, r.log, { end: done.end, minutes: done.minutes }) : r.log);
+      if (r.job) { const keepMin = jobById(jobId) ? jobById(jobId).minutes : r.job.minutes; upsert(S.jobs, Object.assign({}, r.job, { minutes: keepMin })); }
+      realId = r.log.id;
+    } catch (e) { S.logs = S.logs.filter(l => l.id !== tmp.id); upsert(S.jobs, prevJ); }
+    delete PENDING_START[tmp.id]; S.saving--; timerRefresh();
+    return realId;
+  })();
 }
 async function stopTimer(logId) {
-  const r = await mutate(() => api().stopTimer({ logId: logId }), 'หยุดจับเวลาแล้ว');
-  applyStop(r); render();
+  const l = S.logs.find(x => x.id === logId); if (!l || l.end) return;
+  const prev = clone(l), j = jobById(l.jobId), prevMin = j ? j.minutes : 0;
+  l.end = nowLocal(); l.minutes = Math.max(0, Math.round((parseLocal(l.end) - parseLocal(l.start)) / 60000));
+  if (j) j.minutes = (j.minutes || 0) + l.minutes;
+  S.saving = (S.saving || 0) + 1; toast('หยุดจับเวลา ' + (j ? j.code + ' · ' : '') + fdur(l.minutes)); timerRefresh();
+  try {
+    let id = logId;
+    if (PENDING_START[logId]) { id = await PENDING_START[logId]; if (!id) { S.saving--; return timerRefresh(); } }
+    applyStop(await mutate(() => api().stopTimer({ logId: id })));
+  } catch (e) { const cur = S.logs.find(x => x.id === logId); if (cur) Object.assign(cur, prev); if (j) j.minutes = prevMin; }
+  S.saving--; timerRefresh();
 }
 
 /* ============ personal theme (per device) ============ */
@@ -960,7 +989,8 @@ if (window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches)
   document.addEventListener('mouseover', e => {
     const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open]');
     if (!el) return;
-    if (el.dataset.open === hovId) return;
+    if (el.dataset.open === hovId) { clearTimeout(hovT); hovT = null; return; }
+    if (hovId) hideHover();   // ย้ายไปการ์ดอื่น: ปิดกล่องเดิมทันที ไม่ให้บังการ์ดใบอื่น
     clearTimeout(hovT); hovT = setTimeout(() => { if (!S.edit && !S.drag) showHover(el); }, 380);
   });
   document.addEventListener('mouseout', e => {
@@ -2344,13 +2374,14 @@ function renderShell() {
   renderTimerbar();
 }
 function renderTimerbar() {
-  const r = myRunning(), el = $('#timerbar');
-  if (!r) { el.hidden = true; el.innerHTML = ''; return; }
-  const j = jobById(r.jobId);
+  const runs = S.me ? S.logs.filter(l => !l.end && l.member === S.me) : [], el = $('#timerbar');
+  if (!runs.length) { el.hidden = true; el.innerHTML = ''; return; }
   el.hidden = false;
-  el.innerHTML = '<span class="pulse"></span><button class="t-job" data-open="' + esc(r.jobId) + '">' + esc(j ? j.code : 'งาน') + '</button>' +
-    '<span class="t-clock" data-since="' + esc(r.start) + '">' + clock(Date.now() - parseLocal(r.start)) + '</span>' +
-    '<button class="btn sm" data-act="stop" data-log="' + esc(r.id) + '">' + I.stop + 'หยุด</button>';
+  el.classList.toggle('multi', runs.length > 1);
+  el.innerHTML = runs.map(r => { const j = jobById(r.jobId);
+    return '<div class="t-run"><span class="pulse"></span><button class="t-job" data-open="' + esc(r.jobId) + '">' + esc(j ? j.code : 'งาน') + '</button>' +
+      '<span class="t-clock" data-since="' + esc(r.start) + '">' + clock(Date.now() - parseLocal(r.start)) + '</span>' +
+      '<button class="btn sm" data-act="stop" data-log="' + esc(r.id) + '">' + I.stop + 'หยุด</button></div>'; }).join('');
 }
 
 function render() {
@@ -2604,6 +2635,12 @@ function tracker(j) {
     '<span class="trk-line"><i></i></span>' + FL.map((f, i) => '<span class="trk-dot' + (i <= idx ? ' on' : '') + '" style="left:' + (i / (FL.length - 1) * 100) + '%"></span>').join('') +
     '<span class="trk-rider' + (j.status === 'doing' || j.status === 'fix' ? ' go' : '') + '">' + (STI[st] || STI.queue) + '</span></div>';
 }
+function timerBtn(j, mine) {
+  if (!mine || !S.me || j.status === 'done') return '';
+  const r = myRunOn(j.id);
+  return r ? '<button type="button" class="tbtn on" data-act="stop" data-log="' + esc(r.id) + '" title="หยุดจับเวลา" aria-label="หยุดจับเวลา">' + I.stop + '</button>'
+    : '<button type="button" class="tbtn" data-act="start" data-job="' + esc(j.id) + '" title="เริ่มจับเวลา" aria-label="เริ่มจับเวลา">' + I.play + '</button>';
+}
 function card(j, i) {
   const di = dueInfo(j), run = runningOf(j.id), late = isLate(j), tc = typeColor(j.taskType), imgs = imgsOf(j.id);
   const nextSt = nextOf(j);
@@ -2617,7 +2654,7 @@ function card(j, i) {
     '<div class="tags">' + (j.priority === 'urgent' ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">' + STI.pen + 'แก้ไข</span>' : '') + (j.status === 'hold' ? '<span class="pill s-hold">' + STI.hold + 'พักไว้</span>' : '') +
       typeChip(j.taskType) + groupChip(j.group) + lvBars(j.level) + '</div>' +
     tracker(j) +
-    '<div class="card-foot">' + av(j.assignee) + (run ? '<span class="live" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : (mins ? '<span class="tg">' + STI.timer + fdur(mins) + '</span>' : '<span>' + esc(j.sale ? 'Sale ' + j.sale : '') + '</span>')) +
+    '<div class="card-foot">' + timerBtn(j, mine) + av(j.assignee) + (run ? '<span class="live" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : (mins ? '<span class="tg">' + STI.timer + fdur(mins) + '</span>' : '<span>' + esc(j.sale ? 'Sale ' + j.sale : '') + '</span>')) +
       '<span class="due ' + di.cls + '">' + dueIc + esc(di.text) + '</span></div></div>';
 }
 function typeLegend() {
@@ -2984,7 +3021,7 @@ function renderEditor() {
 
   let timer = '';
   if (!E.isNew && live) {
-    const run = runningOf(j.id), mine = run && run.member === S.me;
+    const run = myRunOn(j.id) || runningOf(j.id), mine = run && run.member === S.me;
     const logs = S.logs.filter(l => l.jobId === j.id).sort((a, b) => String(b.start).localeCompare(String(a.start)));
     const canStop = run && (run.member === S.me || isAdmin());
     timer = '<div class="timer-card"><div class="timer-main"><div class="clock"><span data-total="' + esc(j.id) + '">' + fdur(totalMinutes(live)) + '</span><small>' + (run ? '● ' + esc(run.member) + ' กำลังจับเวลา <span data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : 'เวลาทำงานรวม ' + logs.length + ' ครั้ง') + '</small></div>' +

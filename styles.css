@@ -1947,3 +1947,12 @@ button.card-th img{width:100%;height:100%;object-fit:cover;display:block}
 @media (max-width:420px){
   .sheet-f .btn{font-size:13.5px;padding-left:10px;padding-right:10px}
 }
+/* v2.12: ปุ่มจับเวลาบนการ์ด + แถบจับเวลาหลายงาน */
+.tbtn{flex:none;width:28px;height:28px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;background:color-mix(in oklab,var(--brand) 14%,var(--surface));color:var(--brand);transition:transform .12s,background .15s}
+.tbtn svg{width:14px;height:14px}
+.tbtn:hover{transform:scale(1.12);background:var(--brand);color:#fff}
+.tbtn.on{background:var(--late);color:#fff;box-shadow:0 0 0 0 var(--late);animation:pulse 1.6s infinite}
+.timerbar.multi{flex-wrap:wrap;gap:6px 14px}
+.timerbar .t-run{display:flex;align-items:center;gap:10px;flex:1 1 260px;min-width:0}
+.timerbar.multi .t-run+.t-run{border-left:1px solid rgba(255,255,255,.18);padding-left:14px}
+@media (max-width:700px){.timerbar.multi .t-run+.t-run{border-left:0;padding-left:0;border-top:1px solid rgba(255,255,255,.18);padding-top:6px}}
