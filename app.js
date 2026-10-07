@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.14.0';
+const APP_VERSION = '2.15.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -261,6 +261,14 @@ const typeChip = (name, cls) => name ? '<span class="tchip ' + (cls || '') + '" 
 const groupChip = (g, cls) => g ? '<span class="gchip ' + (cls || '') + '" style="--c:' + groupColor(g) + '">' + STI.layers + esc(groupShort(g)) + '</span>' : '';
 /* งาน CAM ไม่ต้องรอตรวจ: กำลังทำ → เสร็จแล้ว ทันที */
 const isCam = j => !!j && taskCat(j.taskType) === 'cam';
+/* เลข Job ซ้ำ: ทุกงานจบที่ CAM → เพิ่มงาน "ทำ CAM" ของเลขเดิมได้ (ถ้ายังไม่มีงาน CAM ของเลขนั้น) · รายละเอียดอื่นซ้ำไม่ได้ */
+function codeClash(code, taskType, jobs, skipId) {
+  const same = (jobs || []).filter(x => x.id !== skipId && String(x.code).toLowerCase() === String(code).toLowerCase());
+  if (!same.length) return '';
+  if (taskCat(taskType) !== 'cam') return 'มีเลข Job ' + code + ' อยู่แล้ว — เพิ่มซ้ำได้เฉพาะงาน "ทำ CAM" ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1';
+  if (same.some(x => taskCat(x.taskType) === 'cam')) return 'เลข Job ' + code + ' มีงาน CAM อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1';
+  return '';
+}
 const flowOf = j => isCam(j) ? ['queue', 'doing', 'done'] : FLOW;
 function nextOf(j) { const n = NEXT[j.status]; return isCam(j) && (n === 'review') ? 'done' : n; }
 function flowIdxOf(j) { const f = flowOf(j); if (f === FLOW) return flowIdx(j.status); return j.status === 'hold' ? 0 : j.status === 'done' ? 2 : j.status === 'queue' ? 0 : 1; }
@@ -444,7 +452,7 @@ const Demo = {
       if (!P.owns(u, cur)) throw new Error('แก้ไขได้เฉพาะงานของตัวเอง งานนี้เป็นของ ' + (cur.assignee || 'คนอื่น'));
       if (!P.admin(u) && job.assignee !== undefined && job.assignee !== cur.assignee && job.assignee !== u.name) throw new Error('มอบหมายงานให้คนอื่นได้เฉพาะแอดมิน');
     } else {
-      if (d.jobs.some(x => x.code.toLowerCase() === job.code.toLowerCase())) throw new Error('มีเลข Job ' + job.code + ' อยู่แล้ว');
+      { const clash = codeClash(job.code, job.taskType, d.jobs); if (clash) throw new Error(clash); }
       cur = { id: uid('j_'), createdAt: now, createdBy: u.name, minutes: 0 }; d.jobs.push(cur); delete job.id;
       if (!P.admin(u)) job.assignee = u.name;
     }
@@ -3175,7 +3183,7 @@ function readEditor() {
 async function saveEditor() {
   const j = readEditor(), err = $('#eErr');
   if (!j.code) { err.hidden = false; err.textContent = 'ใส่เลข Job ก่อนบันทึก'; $('#e-code').focus(); return; }
-  if (S.edit.isNew && S.jobs.some(x => x.code.toLowerCase() === j.code.toLowerCase())) { err.hidden = false; err.textContent = 'มีเลข Job นี้อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1'; return; }
+  if (S.edit.isNew) { const clash = codeClash(j.code, j.taskType, S.jobs); if (clash) { err.hidden = false; err.textContent = clash; return; } }
   const btn = document.querySelector('#sheetFoot [data-act="save"]'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
   const pre = Object.assign({}, j); delete pre.minutes;
   if (isCam(pre) && pre.status === 'review') { pre.status = 'done'; if (!pre.finishedAt) pre.finishedAt = nowLocal(); }

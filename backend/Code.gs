@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.14.0';
+const VERSION = '1.15.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -499,7 +499,14 @@ function saveJob_(job, u) {
       throw new Error('งานนี้ถูกแก้โดย ' + (before.updatedBy || 'คนอื่น') + ' เมื่อสักครู่ กดรีเฟรชแล้วลองอีกครั้ง');
     }
   } else {
-    if (readAll_('Jobs').some(x => x.code.toLowerCase() === data.code.toLowerCase())) throw new Error('มีเลข Job ' + data.code + ' อยู่แล้ว');
+    // เลข Job ซ้ำ: ทุกงานจบที่ CAM → เพิ่มงาน CAM ของเลขเดิมได้ถ้ายังไม่มีงาน CAM ของเลขนั้น · รายละเอียดอื่นซ้ำไม่ได้
+    const same = readAll_('Jobs').filter(x => x.code.toLowerCase() === data.code.toLowerCase());
+    if (same.length) {
+      const types = settings_().taskTypes || [];
+      const cat = t => { const f = types.find(x => x.name === t); return f ? f.cat : (/CAM$/.test(t || '') ? 'cam' : 'draw'); };
+      if (cat(data.taskType) !== 'cam') throw new Error('มีเลข Job ' + data.code + ' อยู่แล้ว — เพิ่มซ้ำได้เฉพาะงาน "ทำ CAM" ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1');
+      if (same.some(x => cat(x.taskType) === 'cam')) throw new Error('เลข Job ' + data.code + ' มีงาน CAM อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1');
+    }
     data.id = uid_('j_');
     data.createdAt = now;
     data.createdBy = u.name;
