@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.16.0';
+const APP_VERSION = '2.17.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -412,6 +412,8 @@ const Demo = {
     try { this.save(d); } catch (e) { d.images.pop(); throw new Error('พื้นที่ในโหมดทดลองเต็ม ลบรูปเก่าก่อน'); }
     return { image: { id: m.id, jobId: m.jobId, createdBy: this.mask(d, u, { n: m.createdBy }, ['n']).n, createdAt: m.createdAt, thumb: m.thumb } }; },
   async deleteImage(p) { const d = this.db(), u = this.me(d), m = (d.images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); const j = d.jobs.find(x => x.id === m.jobId); if (!P.admin(u) && m.createdBy !== u.name && !(j && P.owns(u, j))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง'); d.images = d.images.filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
+  async copyImages(p) { const d = this.db(), u = this.me(d); d.images = d.images || []; const out = d.images.filter(m => m.jobId === p.from).slice(0, IMG_MAX).map(m => Object.assign({}, m, { id: uid('i_'), jobId: p.to, createdBy: u.name, createdAt: nowLocal() })); d.images = d.images.concat(out); this.save(d); return { images: out.map(m => ({ id: m.id, jobId: m.jobId, createdBy: m.createdBy, createdAt: m.createdAt })) }; },
+  async archive() { return { jobs: [], logs: [] }; },
   async thumbs(p) { const d = this.db(), out = {}; (d.images || []).forEach(m => { if ((p.ids || []).indexOf(m.id) >= 0) out[m.id] = m.thumb; }); return { thumbs: out }; },
   async image(p) { const m = (this.db().images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); return { id: m.id, full: m.full }; },
   async setPhoto(p) { const d = this.db(), me = this.me(d), id = p.userId || me.id; if (id !== me.id) this.admin(me); const u = d.users.find(x => x.id === id); if (!u) throw new Error('ไม่พบผู้ใช้'); u.photo = String(p.photo || ''); this.save(d); return { user: this.pub(u) }; },
@@ -551,12 +553,68 @@ const Remote = {
     let data;
     try { data = await res.json(); } catch (e) { if (res && !res.ok) throw new Error('ฐานข้อมูลไม่ว่างชั่วคราว (' + res.status + ') ลองใหม่อีกครั้ง'); throw new Error('URL นี้ไม่ใช่ API ของ KiwNgan หรือยังไม่ได้ Deploy แบบ "ทุกคน"'); }
     if (!data.ok) { const e = new Error(String(data.error || 'เกิดข้อผิดพลาด').replace(/^AUTH:/, '')); e.code = data.code; throw e; }
+    if (!conn) rtAfterWrite(action);
     return data.data;
   }
 };
-['ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
+['copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
+
+/* ============ เรียลไทม์ผ่าน Supabase (ถ้าตั้งค่าไว้) ============
+   สายเปิดค้าง (WebSocket): สัญญาณโทร/แชร์จอ และ "มีข้อมูลเปลี่ยน" ถึงทุกเครื่องในเสี้ยววินาที
+   ข้อมูลงานยังอยู่ใน Google Sheet · ข้อความทุกชิ้นเข้ารหัส (AES-GCM) ด้วยกุญแจของทีม · ใช้ไม่ได้เมื่อไร กลับไปใช้ Apps Script เอง */
+const RT = { cfg: null, client: null, ch: null, ok: false, key: null, room: '', chgT: null };
+const RT_LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
+const b64e = buf => btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
+const b64d = str => Uint8Array.from(atob(str), c => c.charCodeAt(0));
+function loadLib(src) { return new Promise((res, rej) => { if (window.supabase && window.supabase.createClient) return res(); const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); }); }
+function rtStop() { try { if (RT.client && RT.ch) RT.client.removeChannel(RT.ch); } catch (e) {} Object.assign(RT, { cfg: null, ch: null, ok: false }); }
+async function rtSetup(cfg) {
+  if (!cfg || !cfg.url || !cfg.key || !cfg.secret || mode() !== 'sheet' || !(window.crypto && crypto.subtle)) return rtStop();
+  if (RT.cfg && RT.cfg.url === cfg.url && RT.cfg.secret === cfg.secret && RT.ch) return;
+  rtStop(); RT.cfg = cfg;
+  try {
+    await loadLib(RT_LIB);
+    const enc = new TextEncoder();
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode('room:' + cfg.secret)));
+    RT.room = 'kn-' + Array.from(h.slice(0, 12), x => x.toString(16).padStart(2, '0')).join('');
+    RT.key = await crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', enc.encode('key:' + cfg.secret)), 'AES-GCM', false, ['encrypt', 'decrypt']);
+    if (!RT.client) RT.client = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+    RT.ch = RT.client.channel(RT.room, { config: { broadcast: { self: false, ack: false } } });
+    RT.ch.on('broadcast', { event: 's' }, m => { rtIn(m && m.payload).catch(() => {}); });
+    RT.ch.subscribe(st => { const was = RT.ok; RT.ok = st === 'SUBSCRIBED'; if (RT.ok && !was) { rtLoop(); } });
+  } catch (e) { RT.ok = false; }
+}
+async function rtSend(obj) {
+  if (!RT.ok || !RT.key) return false;
+  try {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const c = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, RT.key, new TextEncoder().encode(JSON.stringify(obj)));
+    await RT.ch.send({ type: 'broadcast', event: 's', payload: { iv: b64e(iv), c: b64e(c) } });
+    return true;
+  } catch (e) { return false; }
+}
+async function rtIn(p) {
+  if (!p || !p.iv || !p.c || !RT.key) return;
+  let o; try { o = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(p.iv) }, RT.key, b64d(p.c)))); } catch (e) { return; }
+  if (o.k === 'sig' && o.g) {
+    const to = o.g.to, mine = to === S.me || ((to === 'admin' || to === ADMIN_LABEL) && isAdmin());
+    if (mine && o.g.from !== S.me) rtcOnSigOnce(o.g);
+  } else if (o.k === 'chg') {
+    if (o.what === 'msg') { if (M.loaded) pollMessages(); }
+    else { clearTimeout(RT.chgT); RT.chgT = setTimeout(rtDataChanged, 350); }
+  }
+}
+function rtDataChanged() {
+  if (S.screen !== 'app') return;
+  if (S.edit || S.draftDirty || S.loading || S.saving) { clearTimeout(RT.chgT); RT.chgT = setTimeout(rtDataChanged, 1500); return; }
+  load(true);
+}
+const RT_DATA = { saveJob: 1, deleteJob: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, copyImages: 1, saveSettings: 1, saveUser: 1, resetPin: 1 };
+const RT_MSG = { sendMessage: 1, markRead: 0, helpUpdate: 1, deleteMessages: 1 };
+function rtAfterWrite(action) { if (RT_DATA[action]) rtSend({ k: 'chg', what: 'data' }); else if (RT_MSG[action]) rtSend({ k: 'chg', what: 'msg' }); }
+function rtLoop() { if (typeof rtcLoop === 'function') rtcLoop(); }
 
 /* ============ state mutations ============ */
 function upsert(arr, obj) { const i = arr.findIndex(x => x.id === obj.id); if (i >= 0) arr[i] = Object.assign({}, arr[i], obj); else arr.push(obj); }
@@ -580,7 +638,11 @@ async function load(silent) {
     if (!d) throw new Error('ฐานข้อมูลตอบกลับไม่ครบ กรุณากด "ลองอีกครั้ง"');
     S.settings = normalizeSettings(d.settings);
     S.users = d.users || []; S.user = d.me; S.me = d.me.name;
+    const prevJobs = S.loaded && S.me && S.jobs && S.jobs.length ? S.jobs : null;
     S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || [];
+    if (d.rt !== undefined) rtSetup(d.rt);
+    S.archivedBefore = d.archivedBefore || '';
+    setTimeout(() => jobAlerts(prevJobs), 0);
     S.dataStamp = d.stamp || ''; S.fullAt = Date.now();
     if (!S.draftDirty) S.draft = null;
     S.sync = 'ok'; S.syncErr = ''; S.lastSync = Date.now(); S.loaded = true;
@@ -744,7 +806,7 @@ async function doLogin() {
 }
 async function logout() {
   try { await api().logout({}); } catch (e) {}
-  stopMsgPolling(); pushMetaClear(); LS.del(tokenKey()); S.jobs = []; S.logs = []; S.users = []; S.login.userId = ''; S.login.adminMode = false; showLogin();
+  stopMsgPolling(); rtStop(); pushMetaClear(); LS.del(tokenKey()); S.jobs = []; S.logs = []; S.users = []; S.login.userId = ''; S.login.adminMode = false; showLogin();
 }
 
 async function mutate(fn, okMsg) {
@@ -760,6 +822,37 @@ async function saveJob(job, msg) {
   upsert(S.jobs, r.job); render(); return r.job;
 }
 
+/* ============ งานต่อ CAM ============
+   ทุกงานจบที่ CAM: งานเขียนแบบ (CAD/แบบผลิต/…) เสร็จ → ถามว่าจะเปิดงาน CAM ต่อไหม แล้วสร้างให้ในคลิกเดียว */
+const camType = () => (S.settings.taskTypes || []).find(t => t.cat === 'cam');
+function camFollowNeeded(j) {
+  return !!j && !isCam(j) && !!camType() && j.status === 'done' && !S.jobs.some(x => x.id !== j.id && String(x.code).toLowerCase() === String(j.code).toLowerCase() && isCam(x));
+}
+function offerCam(j) {
+  if (!camFollowNeeded(j)) return;
+  let box = $('#askBox'); if (!box) { box = document.createElement('div'); box.id = 'askBox'; box.className = 'ask-wrap'; document.body.appendChild(box); }
+  const imgs = imgsOf(j.id).length;
+  box.innerHTML = '<div class="ask" role="dialog" aria-label="สร้างงาน CAM ต่อ"><span class="ask-ic">' + STI.done + '</span><div class="ask-b"><b>' + esc(j.code) + ' เสร็จแล้ว — เปิดงาน CAM ต่อเลยไหม?</b>' +
+    '<small>' + esc([j.title, groupShort(j.group)].filter(Boolean).join(' · ')) + (imgs ? ' · ใช้รูปเดิม ' + imgs + ' รูป' : '') + '</small>' +
+    '<div class="ask-act"><button class="btn sm primary" data-camyes="' + esc(j.id) + '">' + I.plus + 'สร้างงาน ' + esc(camType().name) + '</button><button class="btn sm" data-camno="1">ไม่ต้อง</button></div></div></div>';
+  box.classList.add('show'); ping(false);
+  clearTimeout(offerCam.t); offerCam.t = setTimeout(() => box.classList.remove('show'), 20000);
+}
+async function createCamFrom(id) {
+  const src = jobById(id); const box = $('#askBox'); if (box) box.classList.remove('show');
+  if (!src || !camFollowNeeded(src)) return toast('มีงาน CAM ของเลขนี้แล้ว', true);
+  const t = camType(), job = { code: src.code, title: src.title, group: src.group, taskType: t.name, qty: src.qty, level: src.level, sale: src.sale, priority: src.priority, revision: false,
+    assignee: isAdmin() ? (src.assignee || S.me) : S.me, status: 'queue', received: today(), due: '', startedAt: '', finishedAt: '', note: '' };
+  const sg = suggestDue(job); if (sg) job.due = sg.date;
+  const tmpId = uid('tmp_'); S.jobs.push(Object.assign({}, job, { id: tmpId, minutes: 0, pending: true, createdBy: S.me })); render();
+  S.saving = (S.saving || 0) + 1;
+  try {
+    const r = await mutate(() => api().saveJob({ job: job }), 'สร้างงาน CAM ' + src.code + ' แล้ว');
+    S.jobs = S.jobs.filter(x => x.id !== tmpId); upsert(S.jobs, r.job); render();
+    if (imgsOf(src.id).length) { try { const c = await api().copyImages({ from: src.id, to: r.job.id }); S.images = (S.images || []).concat(c.images || []); render(); } catch (e) {} }
+  } catch (e) { S.jobs = S.jobs.filter(x => x.id !== tmpId); render(); }
+  S.saving--;
+}
 async function moveJob(id, status) {
   const j = jobById(id); if (!j) return;
   if (isCam(j) && status === 'review') status = 'done';   // งาน CAM ข้ามขั้นรอตรวจ
@@ -776,6 +869,7 @@ async function moveJob(id, status) {
     if (status === 'done' && run) applyStop(await api().stopTimer({ logId: run.id }));
     const p = { id: j.id, code: j.code, status: status, finishedAt: j.finishedAt, startedAt: j.startedAt, baseUpdatedAt: prev.updatedAt };
     await saveJob(p, j.code + ' → ' + ST[status].label);
+    if (status === 'done') offerCam(jobById(id));
   } catch (e) { upsert(S.jobs, prev); render(); }
   S.saving--;
 }
@@ -901,7 +995,9 @@ function wantThumbs(ids) {
   }, 60);
 }
 function paintAllThumbs(root) { const ids = []; (root || document).querySelectorAll('img[data-thumb]').forEach(el => { const id = el.dataset.thumb; if (ids.indexOf(id) < 0) ids.push(id); }); if (ids.length) wantThumbs(ids); }
-const thumbImg = (m, cls) => '<img class="th ' + (cls || '') + '" data-thumb="' + esc(m.id) + '" alt="" src="' + (THUMBS[m.id] || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=') + '"' + (THUMBS[m.id] ? '' : ' loading="lazy"') + '>';
+/* รูปที่เก็บใน Google Drive โหลดจาก Google โดยตรง (เร็ว ไม่ผ่าน Apps Script) */
+const driveImg = (id, w) => 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w' + (w || 400);
+const thumbImg = (m, cls) => m.fileId ? '<img class="th ok ' + (cls || '') + '" alt="" loading="lazy" referrerpolicy="no-referrer" src="' + (THUMBS[m.id] || driveImg(m.fileId, cls === 'big' ? 800 : 400)) + '" onerror="if(!this.dataset.r){this.dataset.r=1;this.src=\'https://lh3.googleusercontent.com/d/' + esc(m.fileId) + '=w' + (cls === 'big' ? 800 : 400) + '\'}">' : '<img class="th ' + (cls || '') + '" data-thumb="' + esc(m.id) + '" alt="" src="' + (THUMBS[m.id] || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=') + '"' + (THUMBS[m.id] ? '' : ' loading="lazy"') + '>';
 function canAddImg(j) { return !!j && canEdit(j); }
 function canDelImg(m, j) { return isAdmin() || m.createdBy === S.me || (j && canEdit(j)); }
 
@@ -941,7 +1037,7 @@ async function uploadImages(jobId, files) {
       const full = await shrinkImage(f, 1800, 340000, 0.85);
       const r = await api().addImage({ jobId: jobId, thumb: thumb, full: full });
       THUMBS[r.image.id] = thumb; FULL[r.image.id] = full; saveThumbCache();
-      S.images = (S.images || []).concat([{ id: r.image.id, jobId: jobId, createdBy: r.image.createdBy, createdAt: r.image.createdAt }]); ok++;
+      S.images = (S.images || []).concat([{ id: r.image.id, jobId: jobId, createdBy: r.image.createdBy, createdAt: r.image.createdAt, fileId: r.image.fileId || '' }]); ok++;
     } catch (e) { toast(e.message || 'อัปโหลดรูปไม่สำเร็จ', true); }
     S.uploading--; rerenderEditor(); render();
   }
@@ -965,11 +1061,12 @@ async function drawLightbox() {
   box.innerHTML = '<div class="lb-top"><span class="lb-t"><b class="mono">' + esc(j ? j.code : '') + '</b> · รูป ' + (L.i + 1) + '/' + list.length + '<small>' + esc(m.createdBy || '') + ' · ' + esc(fdt(String(m.createdAt).slice(0, 16))) + '</small></span>' +
     (canDelImg(m, j) ? '<button class="lb-btn" data-lbdel="' + esc(m.id) + '" title="ลบรูป">' + I.trash + '</button>' : '') + '<button class="lb-btn" data-lb="close" aria-label="ปิด">✕</button></div>' +
     '<div class="lb-stage">' + (list.length > 1 ? '<button class="lb-nav prev" data-lb="prev" aria-label="ก่อนหน้า">‹</button>' : '') +
-    '<img id="lbImg" alt="" src="' + (FULL[m.id] || THUMBS[m.id] || '') + '" class="' + (FULL[m.id] ? 'ok' : 'blur') + '">' + (FULL[m.id] ? '' : '<span class="lb-load"><span class="spin-dot"></span></span>') +
+    (m.fileId ? '<img id="lbImg" alt="" referrerpolicy="no-referrer" src="' + driveImg(m.fileId, 2000) + '" class="ok">' :
+    '<img id="lbImg" alt="" src="' + (FULL[m.id] || THUMBS[m.id] || '') + '" class="' + (FULL[m.id] ? 'ok' : 'blur') + '">' + (FULL[m.id] ? '' : '<span class="lb-load"><span class="spin-dot"></span></span>')) +
     (list.length > 1 ? '<button class="lb-nav next" data-lb="next" aria-label="ถัดไป">›</button>' : '') + '</div>' +
     '<div class="lb-strip">' + list.map((x, k) => '<button data-lbgo="' + k + '" class="' + (k === L.i ? 'on' : '') + '">' + thumbImg(x) + '</button>').join('') + '</div>';
   box.classList.add('open'); paintAllThumbs(box);
-  if (!FULL[m.id]) {
+  if (!FULL[m.id] && !m.fileId) {
     try { const r = await api().image({ id: m.id }); FULL[m.id] = r.full; if (S.lb && imgsOf(S.lb.jobId)[S.lb.i] && imgsOf(S.lb.jobId)[S.lb.i].id === m.id) drawLightbox(); } catch (e) { toast(e.message, true); }
   }
 }
@@ -1347,6 +1444,42 @@ function notifyMsg(m) {
     try { const n = new Notification(help ? who + ' ขอความช่วยเหลือ' : who, { body: m.text, tag: m.id, icon: 'icons/icon-192.png' }); n.onclick = () => { window.focus(); openMsgPanel(chanOf(m)); }; } catch (e) {}
   }
 }
+/* แจ้งเตือนงาน: มอบหมายให้ / ถูกส่งกลับไปแก้ / ใกล้ถึงกำหนด */
+function jobNotify(kind, title, body, jobId) {
+  let stack = $('#ntfStack'); if (!stack) { stack = document.createElement('div'); stack.id = 'ntfStack'; stack.className = 'ntf-stack'; document.body.appendChild(stack); }
+  const ic = kind === 'fix' ? STI.fix : kind === 'due' ? STI.hourglass : STI.layers;
+  const el = document.createElement('div'); el.className = 'ntf job-' + kind;
+  el.innerHTML = '<span class="ntf-ic">' + ic + '</span><div class="ntf-b"><b>' + esc(title) + '</b><p>' + esc(body) + '</p>' +
+    (jobId ? '<div class="ntf-act"><button class="btn sm primary" data-open="' + esc(jobId) + '">เปิดงาน</button></div>' : '') + '</div>' +
+    '<button class="ntf-x" data-ntfx="1" aria-label="ปิด">✕</button><i class="ntf-bar"></i>';
+  stack.prepend(el); requestAnimationFrame(() => el.classList.add('in'));
+  while (stack.children.length > 4) stack.lastChild.remove();
+  setTimeout(() => dismissNtf(el), 12000); ping(kind !== 'due');
+  if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
+    try { const n = new Notification(title, { body: body, tag: 'job-' + kind + (jobId || ''), icon: 'icons/icon-192.png' }); n.onclick = () => { window.focus(); if (jobId) openEditor(jobId); }; } catch (e) {}
+  }
+}
+function jobAlerts(prev) {
+  if (!S.me || S.screen !== 'app') return;
+  if (prev) {
+    const pm = {}; prev.forEach(j => { pm[j.id] = j; });
+    S.jobs.forEach(j => {
+      const p = pm[j.id], by = j.updatedBy || j.createdBy;
+      if (j.assignee !== S.me || by === S.me || j.status === 'done') return;
+      if (!p || p.assignee !== S.me) jobNotify('assign', 'งานใหม่มอบหมายให้คุณ · ' + j.code, [j.title, j.taskType, j.due ? 'ส่ง ' + fd(j.due) : ''].filter(Boolean).join(' · '), j.id);
+      else if (j.status === 'fix' && p.status !== 'fix') jobNotify('fix', 'ถูกส่งกลับไปแก้ไข · ' + j.code, (by ? by + ' ส่งกลับมา' : 'ตรวจแล้วต้องแก้') + (j.note ? ' · ' + j.note : ''), j.id);
+    });
+  }
+  const key = 'dueNote:' + S.me, t = today();
+  if (LS.get(key, '') !== t) {
+    const tm = addDays(t, 1), mine = S.jobs.filter(j => j.assignee === S.me && isOpen(j) && j.due && j.due <= tm);
+    LS.set(key, t);
+    if (mine.length) {
+      const late = mine.filter(isLate).length;
+      jobNotify('due', 'งานของคุณใกล้ถึงกำหนด ' + mine.length + ' งาน', (late ? 'เลยกำหนดแล้ว ' + late + ' งาน · ' : '') + mine.slice(0, 4).map(j => j.code).join(', ') + (mine.length > 4 ? ' …' : ''), mine.length === 1 ? mine[0].id : '');
+    }
+  }
+}
 function dismissNtf(el) { if (!el || !el.isConnected) return; el.classList.remove('in'); el.classList.add('out'); setTimeout(() => el.remove(), 350); }
 function dropNotice(mid) { document.querySelectorAll('.ntf[data-mid="' + mid + '"]').forEach(dismissNtf); }
 let audioCtx = null;
@@ -1409,7 +1542,9 @@ const peerAv = (peer, name, cls) => peer === 'admin' ? '<span class="av ' + (cls
 
 function rtcSig(to, sid, type, data) {
   if (mode() === 'demo') return Promise.resolve({});
-  return api().rtcSend({ id: uid('r_'), to: to, sid: sid, type: type, data: data || '' }).catch(e => { toast(e.message, true); throw e; });
+  const id = uid('r_');
+  rtSend({ k: 'sig', g: { id: id, to: to, sid: sid, type: type, from: isAdmin() ? 'admin' : S.me, fromAdmin: isAdmin(), data: data || '', ts: Date.now() } });   // ทางด่วน (ถ้ามี)
+  return api().rtcSend({ id: id, to: to, sid: sid, type: type, data: data || '' }).catch(e => { toast(e.message, true); throw e; });   // ทางหลัก + แจ้งเตือนเครื่องที่ปิดแอป
 }
 /* รับสัญญาณครั้งเดียวต่อรหัส (คำขอสำรองอาจได้สัญญาณชุดเดียวกัน) แล้วจดไว้เพื่อยืนยันกับเซิร์ฟเวอร์รอบถัดไป */
 const SIG_SEEN = {}, SIG_ACK = [];
@@ -1434,7 +1569,7 @@ function rtcLoop() {
       catch (e) { ack.forEach(id => { if (SIG_ACK.indexOf(id) < 0) SIG_ACK.push(id); }); /* offline: ยืนยันใหม่รอบหน้า */ }
     }
     if (R.loopGen === my) rtcLoop();
-  }, fast ? 60 : R.state || V.on ? 2000 : 2500);
+  }, fast ? 60 : R.state || V.on ? 2000 : RT.ok ? 8000 : 2500);
 }
 /* สัญญาณเบา ๆ ทุก 5 วิบอกว่างาน/ข้อความเปลี่ยนไหม → ดึงเฉพาะตอนมีการเปลี่ยนแปลง (อัปเดตเกือบทันที) */
 function stampCheck(r) {
@@ -2033,8 +2168,8 @@ function pushSection() {
   const why = mode() !== 'sheet' ? 'ใช้ได้เมื่อเชื่อมต่อฐานข้อมูลจริง (ไม่ใช่โหมดทดลอง)'
     : !PUSH_OK ? (IS_IOS && !IS_STANDALONE ? 'iPhone/iPad ต้องติดตั้งแอปลงหน้าจอโฮมก่อน: กดปุ่มแชร์ → "เพิ่มไปยังหน้าจอโฮม" แล้วเปิดแอปจากไอคอน' : 'เบราว์เซอร์นี้ไม่รองรับ ลองใช้ Chrome / Edge / Safari รุ่นใหม่')
     : Notification.permission === 'denied' ? 'เบราว์เซอร์บล็อกการแจ้งเตือนของเว็บนี้ไว้ — เปิดได้ที่การตั้งค่าเว็บไซต์ (ไอคอนแม่กุญแจหน้าลิงก์)' : '';
-  return '<section class="panel sec" id="s-push"><div class="panel-h"><h2>แจ้งเตือนสายเรียกเข้า</h2>' + (on ? '<span class="push-on">' + RTC_IC.phone + 'เปิดอยู่</span>' : '') + '</div>' +
-    '<p class="help">มีคนโทรหา ขอดูจอ หรือขอรีโมท จะเด้งแจ้งเตือนบนเครื่องนี้ แม้ปิดแอปหรือล็อกหน้าจออยู่ แตะการแจ้งเตือนเพื่อเปิดแอปแล้วรับสาย — ต้องเปิดแยกในแต่ละเครื่อง</p>' +
+  return '<section class="panel sec" id="s-push"><div class="panel-h"><h2>แจ้งเตือนบนเครื่อง</h2>' + (on ? '<span class="push-on">' + RTC_IC.phone + 'เปิดอยู่</span>' : '') + '</div>' +
+    '<p class="help">มีคนโทรหา ขอดูจอ มีงานใหม่มอบหมายให้ งานถูกส่งกลับไปแก้ และงานใกล้ถึงกำหนด (08:00 วันทำงาน) จะเด้งแจ้งเตือนบนเครื่องนี้ แม้ปิดแอปหรือล็อกหน้าจออยู่ แตะการแจ้งเตือนเพื่อเปิดแอปแล้วรับสาย — ต้องเปิดแยกในแต่ละเครื่อง</p>' +
     (why ? '<p class="help warn">' + why + '</p>' : '') +
     '<div class="top-actions">' + (on ? '<button class="btn" data-act="notifyperm">ลงทะเบียนเครื่องนี้ใหม่</button><button class="btn ghost" data-act="pushoff">ปิดบนเครื่องนี้</button>'
       : '<button class="btn primary" data-act="notifyperm"' + (why && mode() !== 'sheet' ? ' disabled' : '') + '>' + RTC_IC.phone + 'เปิดแจ้งเตือนบนเครื่องนี้</button>') + '</div></section>';
@@ -2875,16 +3010,33 @@ function rangeLabel(r) { return r.from === r.to ? fdFull(r.from) : fdFull(r.from
 function logMinutes(l) { return l.end ? (+l.minutes || 0) : Math.max(0, (Date.now() - parseLocal(l.start)) / 60000); }
 const inR = (iso, r) => !!iso && iso >= r.from && iso <= r.to;
 
+/* รายงานย้อนหลังเกินช่วงที่เก็บถาวร: โหลดงานเก่าจากไฟล์เก็บถาวรมารวม (ครั้งเดียวต่อการเปิดแอป) */
+const needArch = r => !!(S.archivedBefore && r.from < S.archivedBefore);
+function reportPool(r) {
+  if (!needArch(r)) return S.jobs;
+  if (!S.arch && !S.archLoading && mode() === 'sheet') {
+    S.archLoading = true;
+    api().archive({}).then(a => { S.arch = a; }).catch(e => { S.arch = { jobs: [], logs: [] }; toast('โหลดงานเก่าไม่สำเร็จ: ' + e.message, true); }).then(() => { S.archLoading = false; render(); });
+  }
+  if (!S.arch) return S.jobs;
+  const have = {}; S.jobs.forEach(j => { have[j.id] = 1; });
+  return S.jobs.concat((S.arch.jobs || []).filter(j => !have[j.id]));
+}
+function reportLogs(r) {
+  if (!needArch(r) || !S.arch) return S.logs;
+  const have = {}; S.logs.forEach(l => { have[l.id] = 1; });
+  return S.logs.concat((S.arch.logs || []).filter(l => !have[l.id]));
+}
 function reportData() {
   const r = reportState();
   if (!isLead()) r.member = S.me; // staff only report on their own work; leads and admins see everyone
   const who = j => j.assignee || '';
-  const base = S.jobs.filter(j => (r.member === 'all' || (r.member === '__none' ? !j.assignee : j.assignee === r.member)) && (r.group === 'all' || j.group === r.group));
+  const base = reportPool(r).filter(j => (r.member === 'all' || (r.member === '__none' ? !j.assignee : j.assignee === r.member)) && (r.group === 'all' || j.group === r.group));
   const recv = j => inR(j.received, r), fin = j => j.status === 'done' && inR(finDate(j), r);
   const openNow = j => isOpen(j) && (!j.received || j.received <= r.to);
   const scoped = base.filter(j => r.scope === 'received' ? recv(j) : r.scope === 'done' ? fin(j) : r.scope === 'open' ? openNow(j) : (recv(j) || fin(j) || openNow(j)));
   const ids = {}; base.forEach(j => { ids[j.id] = j; });
-  const logs = S.logs.filter(l => inR((l.start || '').slice(0, 10), r) && ids[l.jobId] && (r.member === 'all' || r.member === '__none' || l.member === r.member));
+  const logs = reportLogs(r).filter(l => inR((l.start || '').slice(0, 10), r) && ids[l.jobId] && (r.member === 'all' || r.member === '__none' || l.member === r.member));
   const minsBy = (key, val) => logs.filter(l => (key === 'member' ? l.member : (ids[l.jobId] || {})[key]) === val).reduce((s, l) => s + logMinutes(l), 0);
   const stat = js => {
     const done = js.filter(fin), ok = done.filter(onTime).length, open = js.filter(openNow);
@@ -2961,7 +3113,7 @@ function viewReport() {
     (kpi + people + groups + jobs + sign || '<p class="rnone">เลือกหัวข้อที่จะพิมพ์อย่างน้อย 1 หัวข้อ</p>') +
     '<footer class="rfoot">' + esc(s.company) + ' · ' + esc(s.appName) + '</footer></article>';
 
-  return topbar('สรุปรายงาน', isLead() ? 'เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF' : 'สรุปงานของคุณ เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF', '<button class="btn primary" data-act="print">' + I.print + '<span>พิมพ์รายงาน</span></button>') + controls + paper;
+  return topbar('สรุปรายงาน', isLead() ? 'เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF' : 'สรุปงานของคุณ เลือกช่วงเวลาแล้วกดพิมพ์ หรือบันทึกเป็น PDF', '<button class="btn primary" data-act="print">' + I.print + '<span>พิมพ์รายงาน</span></button>') + controls + (S.archLoading ? '<div class="banner"><span><b>กำลังโหลดงานเก่า</b> จากไฟล์เก็บถาวร (งานที่เสร็จก่อน ' + esc(fdY(S.archivedBefore)) + ')…</span></div>' : '') + paper;
 }
 function setPageOrient(o) {
   let el = document.getElementById('pageStyle');
@@ -3195,7 +3347,7 @@ async function saveEditor() {
     if (live) Object.assign(live, pre);
     closeEditor(); render();
     S.saving = (S.saving || 0) + 1;
-    try { await saveJob(pre, 'บันทึกแล้ว'); }
+    try { await saveJob(pre, 'บันทึกแล้ว'); if (pre.status === 'done' && prev && prev.status !== 'done') offerCam(jobById(pre.id)); }
     catch (e) {
       if (prev) upsert(S.jobs, prev); render();
       if (e.code !== 'auth') { openEditor(pre.id); S.edit.job = Object.assign(draft, { baseUpdatedAt: draft.baseUpdatedAt }); S.edit.mode = 'edit'; S.edit.dueTouched = true; renderEditor(); const er = $('#eErr'); if (er) { er.hidden = false; er.textContent = 'ยังไม่ได้บันทึก: ' + e.message; } }
@@ -3296,6 +3448,8 @@ document.addEventListener('click', async e => {
   if (d.helpdone) return helpUpdate(d.helpdone, 'done');
   if (d.ntfopen) { dismissNtf(t.closest('.ntf')); return openMsgPanel(d.ntfopen); }
   if (d.ntfx) return dismissNtf(t.closest('.ntf'));
+  if (d.camyes) return createCamFrom(d.camyes);
+  if (d.camno) { const b = $('#askBox'); if (b) b.classList.remove('show'); return; }
   if (d.emo) { e.preventDefault(); return emoInsert(d.emo); }
   if (d.emotab) { M.emoTab = d.emotab; const pop = $('#emoPop'); if (pop) pop.innerHTML = emoPopHtml(); return; }
   if (d.act === 'emoji') { e.preventDefault(); return emoToggle(); }

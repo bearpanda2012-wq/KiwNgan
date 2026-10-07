@@ -17,9 +17,14 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.15.0';
+const VERSION = '1.16.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
+// เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
+const RT_URL = '';
+const RT_KEY = '';
+const ARCHIVE_MONTHS = 12;   // งานที่เสร็จนานกว่านี้ย้ายไปไฟล์เก็บถาวร (ทุกวันที่ 1)
+const BACKUP_DAYS = 30;      // เก็บไฟล์สำรองย้อนหลังกี่วัน
 const SESSION_DAYS = 30;
 const MAX_PIN_FAILS = 5;
 
@@ -31,7 +36,7 @@ const SHEETS = {
   Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo'],
   Settings: ['key', 'value'],
   Messages: ['id', 'ts', 'from', 'fromRole', 'to', 'kind', 'text', 'jobId', 'status', 'helper', 'readBy'],
-  Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7']
+  Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'fileId']
 };
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
 const STATUSES = ['queue', 'doing', 'review', 'fix', 'hold', 'done'];
@@ -95,6 +100,8 @@ const ACTIONS = {
   rtcPoll: (p, u) => Object.assign(rtcPoll_(u, p.wait, p.ack), { room: roomView_(roomGet_(), u), ds: stamp_('data'), ms: stamp_('msg') }),
   room: (p, u) => room_(p, u),
   deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
+  copyImages: (p, u) => withLock_(() => copyImages_(p.from, p.to, u)),
+  archive: (p, u) => archiveRead_(u),
   thumbs: (p, u) => thumbs_(p.ids),
   image: (p, u) => imageFull_(p.id),
   // admin
@@ -105,7 +112,7 @@ const ACTIONS = {
 
 /* ===== ความเร็ว: ตัวบอกเวอร์ชันข้อมูล (stamp) ใน cache
    หน้าเว็บส่ง stamp ล่าสุดมาด้วย ถ้าไม่มีอะไรเปลี่ยนจะตอบกลับทันทีโดยไม่ต้องอ่านชีต ===== */
-const DATA_ACTIONS_ = { saveJob: 1, deleteJob: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, resetPin: 1 };
+const DATA_ACTIONS_ = { copyImages: 1, saveJob: 1, deleteJob: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, resetPin: 1 };
 const MSG_ACTIONS_ = { sendMessage: 1, markRead: 1, helpUpdate: 1, deleteMessages: 1 };
 function stamp_(kind) {
   const c = CacheService.getScriptCache(), k = 'stamp:' + kind;
@@ -468,7 +475,9 @@ function bootstrap_(u, stamp) {
     users: allUsers.filter(x => isAdmin_(u) || x.role !== 'admin').map(publicUser_),
     jobs: readAll_('Jobs').map(j => maskJob_(j, u)), logs: logs.map(l => maskLog_(l, u)),
     images: imageMeta_().map(m => Object.assign(m, { createdBy: maskName_(m.createdBy, u) })),
-    me: publicUser_(meFull), serverTime: nowIso_(), version: VERSION
+    me: publicUser_(meFull), serverTime: nowIso_(), version: VERSION,
+    rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY, secret: rtSecret_() } : null,
+    archivedBefore: PropertiesService.getScriptProperties().getProperty('ARCHIVED_BEFORE') || ''
   };
 }
 
@@ -518,6 +527,7 @@ function saveJob_(job, u) {
   if (merged.status !== 'done') merged.finishedAt = '';
   if ((merged.status === 'doing' || merged.status === 'review' || merged.status === 'fix') && !merged.startedAt) merged.startedAt = now.slice(0, 16);
   writeRow_('Jobs', merged, row);
+  notifyJob_(before, merged, u);
 
   if (!before) log_(merged.id, u.name, 'create', merged.code);
   else if (before.status !== merged.status) log_(merged.id, u.name, 'status', before.status + '→' + merged.status);
@@ -545,8 +555,11 @@ function deleteJob_(id, u) {
   // ลบรูปของงานนี้
   const ish = sheet_('Images'), ilast = ish.getLastRow();
   if (ilast >= 2) {
-    const jids = ish.getRange(2, 2, ilast - 1, 1).getDisplayValues();
-    for (let i = jids.length - 1; i >= 0; i--) if (jids[i][0] === id) ish.deleteRow(i + 2);
+    const jids = ish.getRange(2, 2, ilast - 1, 1).getDisplayValues(), fids = ish.getRange(2, IMG_FILE_COL_, ilast - 1, 1).getDisplayValues();
+    const gone = [];
+    for (let i = jids.length - 1; i >= 0; i--) if (jids[i][0] === id) { if (fids[i][0]) gone.push(fids[i][0]); ish.deleteRow(i + 2); }
+    const still = imageMeta_().map(m => m.fileId);
+    gone.filter(f => still.indexOf(f) < 0).forEach(f => { try { DriveApp.getFileById(f).setTrashed(true); } catch (e) {} });
   }
   log_(id, u.name, 'delete', job.code);
   return { id: id };
@@ -557,8 +570,10 @@ const IMG_RE_ = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/;
 function imageMeta_() {
   const sh = sheet_('Images'), last = sh.getLastRow();
   if (last < 2) return [];
-  return sh.getRange(2, 1, last - 1, 4).getDisplayValues().filter(r => r[0]).map(r => ({ id: r[0], jobId: r[1], createdBy: r[2], createdAt: r[3] }));
+  const meta = sh.getRange(2, 1, last - 1, 4).getDisplayValues(), fid = sh.getRange(2, IMG_FILE_COL_, last - 1, 1).getDisplayValues();
+  return meta.map((r, i) => ({ id: r[0], jobId: r[1], createdBy: r[2], createdAt: r[3], fileId: fid[i][0] || '' })).filter(m => m.id);
 }
+const IMG_FILE_COL_ = SHEETS.Images.indexOf('fileId') + 1;
 function addImage_(p, u) {
   const jr = rowOf_('Jobs', p.jobId);
   if (jr < 0) throw new Error('ไม่พบงานนี้');
@@ -570,10 +585,13 @@ function addImage_(p, u) {
   if (full.length > IMG_CELL * IMG_PARTS) throw new Error('รูปใหญ่เกินไป');
   if (imageMeta_().filter(m => m.jobId === p.jobId).length >= IMG_MAX_PER_JOB) throw new Error('ใส่รูปได้สูงสุด ' + IMG_MAX_PER_JOB + ' รูปต่องาน');
   const img = { id: uid_('i_'), jobId: p.jobId, createdBy: u.name, createdAt: nowIso_(), thumb: thumb };
-  for (let i = 0; i < IMG_PARTS; i++) img['f' + i] = full.slice(i * IMG_CELL, (i + 1) * IMG_CELL);
+  let fileId = '';
+  try { fileId = saveImageFile_(full, job.code, img.id); } catch (e) { fileId = ''; }
+  if (fileId) { img.fileId = fileId; img.thumb = ''; }   // เก็บรูปใน Google Drive (โฟลเดอร์ รูปงาน/เลข Job) · ชีตเก็บแค่รหัสไฟล์
+  else for (let i = 0; i < IMG_PARTS; i++) img['f' + i] = full.slice(i * IMG_CELL, (i + 1) * IMG_CELL);   // สำรอง: เก็บในชีตแบบเดิม
   writeRow_('Images', img, -1);
   log_(p.jobId, u.name, 'image', 'เพิ่มรูป');
-  return { image: { id: img.id, jobId: img.jobId, createdBy: maskName_(img.createdBy, u), createdAt: img.createdAt, thumb: thumb } };
+  return { image: { id: img.id, jobId: img.jobId, createdBy: maskName_(img.createdBy, u), createdAt: img.createdAt, thumb: thumb, fileId: fileId } };
 }
 function deleteImage_(id, u) {
   const row = rowOf_('Images', id);
@@ -581,7 +599,9 @@ function deleteImage_(id, u) {
   const meta = sheet_('Images').getRange(row, 1, 1, 4).getDisplayValues()[0];
   const jr = rowOf_('Jobs', meta[1]), job = jr > 0 ? readRow_('Jobs', jr) : null;
   if (!isAdmin_(u) && meta[2] !== u.name && !(job && ownsJob_(u, job))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง');
+  const fid = sheet_('Images').getRange(row, IMG_FILE_COL_).getDisplayValue();
   sheet_('Images').deleteRow(row);
+  if (fid && !imageMeta_().some(m => m.fileId === fid)) { try { DriveApp.getFileById(fid).setTrashed(true); } catch (e) {} }   // ไฟล์ที่งานอื่นไม่ได้ใช้ร่วม → ถังขยะ (กู้คืนได้ 30 วัน)
   log_(meta[1], u.name, 'image', 'ลบรูป');
   return { id: id, jobId: meta[1] };
 }
@@ -1101,4 +1121,203 @@ function room_(p, u) {
     CacheService.getScriptCache().put(ROOM_KEY_, JSON.stringify(r), 900);
     return { room: roomView_(r, u) };
   });
+}
+
+
+/* =====================================================================
+   v1.16 — โฟลเดอร์โปรเจกต์ใน Google Drive, รูปงานใน Drive, งานต่อ CAM,
+   เก็บถาวรงานเก่า, สำรองข้อมูลทุกคืน, แจ้งเตือนงาน, เรียลไทม์ (Supabase)
+   ===================================================================== */
+const DF_ = { images: 'รูปงาน', backup: 'สำรองข้อมูล (อัตโนมัติ)', archive: 'เก็บถาวร (งานเก่า)', docs: 'เอกสาร / ไฟล์งานอื่นๆ' };
+/** โฟลเดอร์หลักของโปรเจกต์ = โฟลเดอร์ที่ชีตฐานข้อมูลอยู่ (ถ้าชีตอยู่หน้าแรกของไดรฟ์ จะสร้างโฟลเดอร์ใหม่แล้วย้ายชีตเข้าไป) */
+function driveRoot_() {
+  const props = PropertiesService.getScriptProperties(), id = props.getProperty('DRIVE_ROOT');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
+  const file = DriveApp.getFileById(ss_().getId()), parents = file.getParents();
+  let root = parents.hasNext() ? parents.next() : null;
+  if (!root || root.getId() === DriveApp.getRootFolder().getId()) {
+    root = DriveApp.createFolder('KiwNgan – ' + (settings_().company || 'คิวงาน'));
+    file.moveTo(root);
+  }
+  props.setProperty('DRIVE_ROOT', root.getId());
+  return root;
+}
+function driveFolder_(key) {
+  const props = PropertiesService.getScriptProperties(), pk = 'DF_' + key, id = props.getProperty(pk);
+  if (id) { try { const f = DriveApp.getFolderById(id); if (!f.isTrashed()) return f; } catch (e) {} }
+  const root = driveRoot_(), it = root.getFoldersByName(DF_[key]);
+  const f = it.hasNext() ? it.next() : root.createFolder(DF_[key]);
+  props.setProperty(pk, f.getId());
+  return f;
+}
+function subFolder_(parent, name) { const it = parent.getFoldersByName(name); return it.hasNext() ? it.next() : parent.createFolder(name); }
+const safeName_ = s => String(s || 'ไม่มีเลข').replace(/[\\/:*?"<>|#]+/g, '-').slice(0, 80);
+/** บันทึกรูปลง Drive: รูปงาน/<เลข Job>/<รหัสรูป>.jpg — แชร์แบบ "ทุกคนที่มีลิงก์ดูได้" เพื่อให้แอปโหลดรูปจาก Google โดยตรง (เร็ว ไม่ผ่าน Apps Script) */
+function saveImageFile_(dataUrl, code, imgId) {
+  const m = String(dataUrl).match(/^data:image\/(jpeg|png|webp);base64,(.+)$/); if (!m) return '';
+  const blob = Utilities.newBlob(Utilities.base64Decode(m[2]), 'image/' + m[1], safeName_(code) + '_' + imgId + '.' + (m[1] === 'jpeg' ? 'jpg' : m[1]));
+  const f = subFolder_(driveFolder_('images'), safeName_(code)).createFile(blob);
+  try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  return f.getId();
+}
+/** งานต่อ CAM: ใช้รูปชุดเดียวกับงานเดิม (อ้างไฟล์ใน Drive เดิม ไม่สร้างซ้ำ) */
+function copyImages_(from, to, u) {
+  const tr = rowOf_('Jobs', to); if (tr < 0) throw new Error('ไม่พบงานปลายทาง');
+  if (!ownsJob_(u, readRow_('Jobs', tr))) throw new Error('เพิ่มรูปได้เฉพาะงานของตัวเอง');
+  const sh = sheet_('Images'), last = sh.getLastRow(); if (last < 2) return { images: [] };
+  const head = SHEETS.Images, vals = sh.getRange(2, 1, last - 1, head.length).getValues();
+  const have = vals.filter(r => r[1] === to).length, out = [];
+  vals.filter(r => r[1] === from).slice(0, Math.max(0, IMG_MAX_PER_JOB - have)).forEach(r => {
+    const o = {}; head.forEach((h, i) => { o[h] = r[i]; });
+    o.id = uid_('i_'); o.jobId = to; o.createdBy = u.name; o.createdAt = nowIso_();
+    writeRow_('Images', o, -1);
+    out.push({ id: o.id, jobId: to, createdBy: maskName_(u.name, u), createdAt: o.createdAt, fileId: String(o.fileId || '') });
+  });
+  if (out.length) log_(to, u.name, 'image', 'ใช้รูปจากงานเดิม ' + out.length + ' รูป');
+  return { images: out };
+}
+/** ย้ายรูปเก่าที่เก็บในชีตไป Drive (เรียกซ้ำได้ ทำต่อจากที่ค้าง · จำกัดเวลา ~4.5 นาที/รอบ) */
+function migrateImagesToDrive() {
+  const sh = sheet_('Images'), head = SHEETS.Images, last = sh.getLastRow(), t0 = Date.now();
+  if (last < 2) return Logger.log('ไม่มีรูปในชีต');
+  const ids = sh.getRange(2, 1, last - 1, 2).getDisplayValues(), fids = sh.getRange(2, IMG_FILE_COL_, last - 1, 1).getDisplayValues();
+  const jobs = {}; readAll_('Jobs').forEach(j => { jobs[j.id] = j.code; });
+  let moved = 0, left = 0;
+  for (let i = 0; i < ids.length; i++) {
+    if (fids[i][0] || !ids[i][0]) continue;
+    if (Date.now() - t0 > 270000) { left++; continue; }
+    const row = i + 2, parts = sh.getRange(row, 6, 1, IMG_PARTS).getValues()[0].map(String).join('');
+    if (!parts) continue;
+    const fid = saveImageFile_(parts, jobs[ids[i][1]] || 'ไม่มีงาน', ids[i][0]);
+    if (!fid) continue;
+    sh.getRange(row, IMG_FILE_COL_).setNumberFormat('@').setValue(fid);
+    sh.getRange(row, 6, 1, IMG_PARTS).clearContent();   // เอาข้อมูลรูปออกจากชีต → ชีตเล็กลง โหลดเร็วขึ้น
+    moved++;
+  }
+  bump_('data');
+  Logger.log('ย้ายรูปไป Drive แล้ว ' + moved + ' รูป' + (left ? ' · เหลืออีก ' + left + ' รูป กดเรียกใช้ซ้ำอีกครั้ง' : ' · ครบแล้ว'));
+}
+
+/* ---------- เก็บถาวรงานเก่า: ไฟล์แยกในโฟลเดอร์ "เก็บถาวร (งานเก่า)" ---------- */
+function archiveSs_() {
+  const props = PropertiesService.getScriptProperties(), id = props.getProperty('ARCHIVE_ID');
+  if (id) { try { return SpreadsheetApp.openById(id); } catch (e) {} }
+  const folder = driveFolder_('archive'), name = 'KiwNgan – เก็บถาวร ' + (settings_().company || '');
+  const it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+  let file = null; while (it.hasNext()) { const f = it.next(); if (/เก็บถาวร/.test(f.getName())) { file = f; break; } }
+  const ss = file ? SpreadsheetApp.openById(file.getId()) : SpreadsheetApp.create(name);
+  if (!file) DriveApp.getFileById(ss.getId()).moveTo(folder);
+  props.setProperty('ARCHIVE_ID', ss.getId());
+  return ss;
+}
+function archSheet_(ss, name) {
+  const head = SHEETS[name]; let sh = ss.getSheetByName(name);
+  if (!sh) { sh = ss.insertSheet(name); sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold'); sh.setFrozenRows(1); }
+  return sh;
+}
+/** ย้ายแถวที่ keep() คืนค่า false ไปไฟล์เก็บถาวร แล้วเขียนแถวที่เหลือกลับ (เร็วกว่าลบทีละแถว) */
+function moveRows_(name, aSs, isOld, cols) {
+  const sh = sheet_(name), head = SHEETS[name], last = sh.getLastRow(); if (last < 2) return 0;
+  const n = cols || head.length, rng = sh.getRange(2, 1, last - 1, n), vals = rng.getDisplayValues();   // ทุกช่องเป็นข้อความอยู่แล้ว
+  const keep = [], old = [];
+  vals.forEach(r => (r[0] !== '' && isOld(r) ? old : keep).push(r));
+  if (!old.length) return 0;
+  const ash = archSheet_(aSs, name);
+  ash.getRange(ash.getLastRow() + 1, 1, old.length, n).setNumberFormat('@').setValues(old);
+  rng.clearContent();
+  if (keep.length) sh.getRange(2, 1, keep.length, n).setNumberFormat('@').setValues(keep);
+  return old.length;
+}
+function archiveOld(months) {
+  months = Number(months) || ARCHIVE_MONTHS;
+  const cut = new Date(); cut.setMonth(cut.getMonth() - months);
+  const cutoff = Utilities.formatDate(cut, tz_(), 'yyyy-MM-dd');
+  return withLock_(() => {
+    const aSs = archiveSs_(), H = SHEETS.Jobs, iSt = H.indexOf('status'), iFin = H.indexOf('finishedAt');
+    const oldJobs = {};
+    readAll_('Jobs').forEach(j => { if (j.status === 'done' && j.finishedAt && j.finishedAt.slice(0, 10) < cutoff) oldJobs[j.id] = 1; });
+    const n = {
+      jobs: moveRows_('Jobs', aSs, r => r[iSt] === 'done' && String(r[iFin]).slice(0, 10) < cutoff && String(r[iFin]) !== ''),
+      logs: moveRows_('TimeLogs', aSs, r => oldJobs[r[1]]),
+      images: moveRows_('Images', aSs, r => oldJobs[r[1]]),
+      activity: moveRows_('Activity', aSs, r => String(r[0]).slice(0, 10) < cutoff),
+      messages: moveRows_('Messages', aSs, r => String(r[1]).slice(0, 10) < cutoff)
+    };
+    const props = PropertiesService.getScriptProperties(), prev = props.getProperty('ARCHIVED_BEFORE') || '';
+    if (n.jobs && cutoff > prev) props.setProperty('ARCHIVED_BEFORE', cutoff);
+    bump_('data'); bump_('msg');
+    Logger.log('เก็บถาวรงานที่เสร็จก่อน ' + cutoff + ': ' + JSON.stringify(n));
+    return n;
+  });
+}
+/** หน้ารายงานขอดูงานเก่า: งานและเวลาทำงานจากไฟล์เก็บถาวร */
+function archiveRead_(u) {
+  const id = PropertiesService.getScriptProperties().getProperty('ARCHIVE_ID'); if (!id) return { jobs: [], logs: [] };
+  const ss = SpreadsheetApp.openById(id);
+  const read = name => { const sh = ss.getSheetByName(name); if (!sh || sh.getLastRow() < 2) return []; const head = SHEETS[name]; return sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getDisplayValues().filter(r => r[0]).map(r => toObj_(name, head, r)); };
+  return { jobs: read('Jobs').map(j => maskJob_(j, u)), logs: read('TimeLogs').map(l => maskLog_(l, u)) };
+}
+
+/* ---------- สำรองข้อมูลทุกคืน (เก็บย้อนหลัง BACKUP_DAYS วัน) ---------- */
+function backupNow() {
+  const folder = driveFolder_('backup'), stamp = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd HHmm');
+  DriveApp.getFileById(ss_().getId()).makeCopy('สำรอง KiwNgan ' + stamp, folder);
+  const limit = Date.now() - BACKUP_DAYS * 864e5, it = folder.getFiles();
+  while (it.hasNext()) { const f = it.next(); if (f.getDateCreated().getTime() < limit) f.setTrashed(true); }
+  Logger.log('สำรองข้อมูลแล้ว: สำรอง KiwNgan ' + stamp);
+}
+
+/* ---------- งานกลางคืน + แจ้งเตือนตอนเช้า (ตั้งเวลาด้วย installTriggers) ---------- */
+function nightly() {
+  try { backupNow(); } catch (e) { Logger.log('สำรองไม่สำเร็จ: ' + e); }
+  try { rtKeepAlive_(); } catch (e) {}
+  if (new Date().getDate() === 1) { try { archiveOld(); } catch (e) { Logger.log('เก็บถาวรไม่สำเร็จ: ' + e); } }
+  try { cleanSessions_(PropertiesService.getScriptProperties()); } catch (e) {}
+}
+function morningReminders() {
+  const d = new Date().getDay(); if (d === 0 || d === 6) return;   // ไม่เตือนเสาร์-อาทิตย์
+  const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd'), tm = Utilities.formatDate(new Date(Date.now() + 864e5), tz_(), 'yyyy-MM-dd');
+  const by = {};
+  readAll_('Jobs').forEach(j => { if (j.status !== 'done' && j.assignee && j.due && j.due <= tm) (by[j.assignee] = by[j.assignee] || []).push(j); });
+  Object.keys(by).forEach(n => {
+    const js = by[n], late = js.filter(j => j.due < today).length;
+    try { pushTo_([n], { kind: 'due', from: '', code: js.map(j => j.code).slice(0, 3).join(', '), count: js.length, late: late }); } catch (e) {}
+  });
+}
+/** เรียกครั้งเดียวในหน้าแก้ไข Apps Script: ตั้งเวลาสำรองข้อมูลทุกคืน (02:00) และแจ้งเตือนงานใกล้กำหนดตอนเช้า (08:00) */
+function installTriggers() {
+  ScriptApp.getProjectTriggers().forEach(t => { if (['nightly', 'morningReminders'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('nightly').timeBased().everyDays(1).atHour(2).inTimezone(tz_()).create();
+  ScriptApp.newTrigger('morningReminders').timeBased().everyDays(1).atHour(8).inTimezone(tz_()).create();
+  driveRoot_(); ['images', 'backup', 'archive', 'docs'].forEach(driveFolder_); archiveSs_();
+  Logger.log('ตั้งเวลาแล้ว: สำรองข้อมูล 02:00 ทุกคืน · แจ้งเตือนงานใกล้กำหนด 08:00 (จ-ศ) · โฟลเดอร์: ' + driveRoot_().getUrl());
+}
+/** ตั้งค่าทั้งหมดในครั้งเดียว: โฟลเดอร์ Drive + ตั้งเวลา + สำรองครั้งแรก + ย้ายรูปเก่าไป Drive */
+function setupAll() {
+  installTriggers();
+  backupNow();
+  migrateImagesToDrive();
+}
+
+/* ---------- แจ้งเตือนงาน (push ถึงเครื่องแม้ปิดแอป) ---------- */
+function notifyJob_(before, after, u) {
+  try {
+    if (after.assignee && after.assignee !== u.name && (!before || before.assignee !== after.assignee) && after.status !== 'done')
+      pushTo_([after.assignee], { kind: 'assign', from: maskName_(u.name, { role: 'user' }), code: after.code, title: after.title || '' });
+    else if (before && after.status === 'fix' && before.status !== 'fix' && after.assignee && after.assignee !== u.name)
+      pushTo_([after.assignee], { kind: 'fix', from: maskName_(u.name, { role: 'user' }), code: after.code, title: after.title || '' });
+  } catch (e) { /* แจ้งเตือนเป็นของเสริม */ }
+}
+
+/* ---------- เรียลไทม์ (Supabase) ---------- */
+function rtSecret_() {
+  const props = PropertiesService.getScriptProperties();
+  let s = props.getProperty('RT_SECRET');
+  if (!s) { s = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''); props.setProperty('RT_SECRET', s); }
+  return s;
+}
+/** โปรเจกต์ Supabase ฟรีจะถูกพักถ้าไม่มีการใช้งาน 1 สัปดาห์ → เรียกเบา ๆ ทุกคืนกันไว้ */
+function rtKeepAlive_() {
+  if (!RT_URL || !RT_KEY) return;
+  UrlFetchApp.fetch(RT_URL + '/rest/v1/', { headers: { apikey: RT_KEY }, muteHttpExceptions: true });
 }

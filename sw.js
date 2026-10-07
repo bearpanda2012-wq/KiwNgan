@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.16.0';
+const CACHE = 'kiwngan-v2.17.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -28,7 +28,10 @@ const PUSH_TEXT = {
   call: f => ['📞 ' + f + ' กำลังโทรหาคุณ', 'แตะเพื่อเปิดแอปแล้วกด "รับสาย"'],
   remote: f => ['🖱️ ' + f + ' ขอรีโมทหน้าจอของคุณ', 'แตะเพื่อเปิดแอปแล้วตอบรับ'],
   view: f => ['🖥️ ' + f + ' ขอดูหน้าจอของคุณ', 'แตะเพื่อเปิดแอปแล้วตอบรับ'],
-  share: f => ['🖥️ ' + f + ' ต้องการแชร์หน้าจอให้คุณดู', 'แตะเพื่อเปิดดู']
+  share: f => ['🖥️ ' + f + ' ต้องการแชร์หน้าจอให้คุณดู', 'แตะเพื่อเปิดดู'],
+  assign: (f, i) => ['📋 งานใหม่มอบหมายให้คุณ · ' + (i.code || ''), (i.title ? i.title + ' · ' : '') + 'จาก ' + f],
+  fix: (f, i) => ['🔧 ถูกส่งกลับไปแก้ไข · ' + (i.code || ''), (i.title ? i.title + ' · ' : '') + f + ' ส่งกลับมา'],
+  due: (f, i) => ['⏳ งานใกล้ถึงกำหนด ' + (i.count || '') + ' งาน', (i.late ? 'เลยกำหนดแล้ว ' + i.late + ' งาน · ' : '') + (i.code || '')]
 };
 self.addEventListener('push', e => {
   e.waitUntil((async () => {
@@ -41,9 +44,9 @@ self.addEventListener('push', e => {
         const j = await r.json(); info = j && j.ok && j.data ? j.data.info : null;
       }
     } catch (x) { info = null; }
-    const k = info && PUSH_TEXT[info.kind] ? info.kind : 'call', t = PUSH_TEXT[k](info && info.from ? info.from : 'มีคน');
+    const k = info && PUSH_TEXT[info.kind] ? info.kind : 'call', t = PUSH_TEXT[k](info && info.from ? info.from : 'มีคน', info || {});
     await self.registration.showNotification(t[0], {
-      body: t[1], tag: 'kiwngan-' + k, renotify: true, requireInteraction: k === 'call',
+      body: t[1], tag: 'kiwngan-' + k + (info && info.code ? '-' + info.code : ''), renotify: true, requireInteraction: k === 'call',
       vibrate: k === 'call' ? [500, 250, 500, 250, 500, 250, 500] : [200, 100, 200],
       icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './?from=push#' + k }
     });
