@@ -1858,3 +1858,80 @@ body.auth .msg-fab{display:none}
   .room-view .rtc-tools{gap:4px}
 }
 @media print{.room-bar,.room-view{display:none!important}}
+
+/* ===== v2.10: สีรายละเอียดงาน/กลุ่มงาน, ลำดับงาน, รูปใน hover, ลากรูปในฟอร์ม, อีโมจิ ===== */
+.tchip,.gchip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;line-height:1.5;padding:1px 8px;border-radius:999px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.tchip{color:#fff;background:var(--c)}
+.tchip::before{content:"";width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.85);flex:none}
+.gchip{color:color-mix(in oklab,var(--c) 78%,var(--ink));background:color-mix(in oklab,var(--c) 14%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--c) 35%,transparent)}
+.gchip svg{width:12px;height:12px;opacity:.85}
+.tchip.sm{font-size:11px;padding:0 7px}
+.hv-chips{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
+.card.has-tc{background:linear-gradient(180deg,color-mix(in oklab,var(--tc) 9%,var(--surface)),var(--surface) 46%);overflow:hidden}
+.card.has-tc::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--tc)}
+.card.has-tc.ro{background:linear-gradient(180deg,color-mix(in oklab,var(--tc) 7%,var(--surface)),color-mix(in oklab,var(--surface) 82%,var(--surface-3)) 46%)}
+.row.has-tc:not(.is-late):not(.is-urgent){border-left-color:var(--tc)}
+.qno{flex:none;display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 5px;border-radius:7px;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--ink);background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);align-self:center}
+.card.has-tc .qno{color:#fff;background:var(--tc);box-shadow:none}
+.row .code .qno{margin-right:6px;min-width:20px;height:20px;font-size:11px}
+.row.has-tc .qno{color:#fff;background:var(--tc);box-shadow:none}
+.tlegend{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 12px;font-size:12px;color:var(--muted)}
+.tl-h{font-weight:600;margin-right:2px}
+.tl-note{display:inline-flex;align-items:center;gap:4px;margin-left:6px}
+.tl-note svg{width:14px;height:14px;color:var(--done,#16a34a)}
+button.card-th{padding:0;border:0;cursor:zoom-in;background:var(--surface-2);transition:transform .15s}
+button.card-th:hover{transform:scale(1.12)}
+button.card-th img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* hover card: รูปเด่นด้านบน กดดูได้ */
+.hovercard{width:340px;max-height:calc(100vh - 16px);overflow:auto}
+.hovercard.show{pointer-events:auto}
+.hv-hero{display:flex;flex-direction:column;gap:6px;margin:-14px -14px 0}
+.hv-main{position:relative;display:block;padding:0;border:0;cursor:zoom-in;border-radius:16px 16px 0 0;overflow:hidden;background:var(--surface-2);aspect-ratio:4/3}
+.hv-main img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s}
+.hv-main:hover img{transform:scale(1.04)}
+.hv-zoom{position:absolute;left:10px;bottom:10px;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#fff;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)}
+.hv-zoom svg{width:13px;height:13px}
+.hv-cnt{position:absolute;right:10px;top:10px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#fff;padding:3px 8px;border-radius:999px;background:rgba(0,0,0,.55)}
+.hv-cnt svg{width:13px;height:13px}
+.hv-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:0 14px;position:relative}
+.hv-strip button{padding:0;border:0;border-radius:8px;overflow:hidden;cursor:zoom-in;aspect-ratio:1;background:var(--surface-2)}
+.hv-strip img{width:100%;height:100%;object-fit:cover;display:block}
+.hv-strip .more{position:absolute;right:18px;bottom:4px;font-size:11px;font-weight:700;padding:2px 6px;border-radius:7px;background:rgba(0,0,0,.6);color:#fff}
+.hovercard.has-img::before{display:none}
+
+/* ลากรูปลงฟอร์มเพิ่มงาน */
+.dz-fs{grid-template-columns:minmax(0,1fr)}
+.dz-fs legend small{font-weight:500;color:var(--muted);margin-left:4px}
+.dropzone{display:flex;align-items:center;gap:12px;padding:16px;border-radius:14px;border:2px dashed color-mix(in oklab,var(--brand) 45%,var(--line));background:color-mix(in oklab,var(--brand) 5%,var(--surface));color:var(--brand);cursor:pointer;transition:background .15s,border-color .15s,transform .15s}
+.dropzone:hover,.dropzone.over,#sheet.file-over .dropzone{background:color-mix(in oklab,var(--brand) 13%,var(--surface));border-color:var(--brand)}
+.dropzone.over,#sheet.file-over .dropzone{transform:scale(1.01)}
+.dropzone.has{padding:11px 14px}
+.dz-ic{flex:none;display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:color-mix(in oklab,var(--brand) 14%,var(--surface))}
+.dz-ic svg{width:22px;height:22px}
+.dz-t{display:flex;flex-direction:column;min-width:0}
+.dz-t b{font-size:14px}
+.dz-t small{font-size:12px;color:var(--muted)}
+.dz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px}
+.dz-it{position:relative;aspect-ratio:1;border-radius:11px;overflow:hidden;background:var(--surface-2);padding:0;border:0;cursor:zoom-in;display:grid;place-items:center}
+.dz-it img{width:100%;height:100%;object-fit:cover;display:block}
+.dz-it.pend{cursor:default}
+.dz-x{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:11px;cursor:pointer;display:grid;place-items:center}
+.dz-x:hover{background:var(--late)}
+#sheet.file-over{outline:3px dashed var(--brand);outline-offset:-8px}
+
+/* อีโมจิในข้อความ */
+.mp-emo-btn{flex:none;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);font-size:20px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:transform .15s,background .15s}
+.mp-emo-btn:hover,.mp-emo-btn[aria-pressed=true]{background:color-mix(in oklab,var(--brand) 12%,var(--surface));transform:scale(1.06)}
+.emo-pop{border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:0 14px 34px -14px rgba(10,20,30,.35);overflow:hidden}
+.emo-pop[hidden]{display:none}
+.emo-tabs{display:flex;gap:2px;padding:5px 6px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.emo-tabs button{border:0;background:none;font-size:18px;padding:4px 8px;border-radius:8px;cursor:pointer;opacity:.6}
+.emo-tabs button[aria-pressed=true]{opacity:1;background:var(--surface)}
+.emo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(36px,1fr));gap:2px;padding:6px;max-height:176px;overflow:auto}
+.emo-grid button{border:0;background:none;font-size:22px;line-height:1;padding:6px 0;border-radius:8px;cursor:pointer}
+.emo-grid button:hover{background:var(--surface-2);transform:scale(1.15)}
+@media print{.tlegend{display:none}}
+.card .qno{position:absolute;top:7px;left:5px;z-index:2;min-width:18px;height:18px;padding:0 4px;font-size:10.5px;border-radius:6px;box-shadow:0 0 0 2px var(--surface)}
+.card.has-tc .qno{box-shadow:0 0 0 2px var(--surface)}
+.card .card-top{padding-left:6px}

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.9.0';
+const APP_VERSION = '2.10.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -243,6 +243,27 @@ function dueInfo(j) {
   return { cls: '', text: 'ส่ง ' + fd(j.due) };
 }
 function taskCat(name) { const t = (S.settings.taskTypes || []).find(x => x.name === name); return t ? t.cat : (/CAM$/.test(name || '') ? 'cam' : 'draw'); }
+/* สีแยกตามรายละเอียดงาน (CAD/CAM/…) และกลุ่มงาน (2D/3D/…) — ตั้งสีรายละเอียดงานเองได้ในหน้าตั้งค่า */
+const TYPE_COLORS = ['#2563EB', '#EA580C', '#9333EA', '#059669', '#CA8A04', '#DB2777', '#0891B2', '#65A30D'];
+const GROUP_COLORS = ['#0EA5E9', '#8B5CF6', '#F43F5E', '#10B981', '#F59E0B', '#6366F1', '#14B8A6', '#A855F7'];
+function typeColor(name) {
+  if (!name) return '';
+  const list = S.settings.taskTypes || [], i = list.findIndex(x => x.name === name);
+  if (i < 0) return '#64748B';
+  return /^#[0-9a-f]{6}$/i.test(list[i].color || '') ? list[i].color : TYPE_COLORS[i % TYPE_COLORS.length];
+}
+function groupColor(g) {
+  if (!g) return '';
+  const i = (S.settings.groups || []).indexOf(g);
+  return i < 0 ? '#64748B' : GROUP_COLORS[i % GROUP_COLORS.length];
+}
+const typeChip = (name, cls) => name ? '<span class="tchip ' + (cls || '') + '" style="--c:' + typeColor(name) + '">' + esc(name) + '</span>' : '';
+const groupChip = (g, cls) => g ? '<span class="gchip ' + (cls || '') + '" style="--c:' + groupColor(g) + '">' + STI.layers + esc(groupShort(g)) + '</span>' : '';
+/* งาน CAM ไม่ต้องรอตรวจ: กำลังทำ → เสร็จแล้ว ทันที */
+const isCam = j => !!j && taskCat(j.taskType) === 'cam';
+const flowOf = j => isCam(j) ? ['queue', 'doing', 'done'] : FLOW;
+function nextOf(j) { const n = NEXT[j.status]; return isCam(j) && (n === 'review') ? 'done' : n; }
+function flowIdxOf(j) { const f = flowOf(j); if (f === FLOW) return flowIdx(j.status); return j.status === 'hold' ? 0 : j.status === 'done' ? 2 : j.status === 'queue' ? 0 : 1; }
 function suggestDue(j) {
   if (!j.received || !j.group || !j.taskType) return null;
   const row = (S.settings.sla || {})[j.group]; if (!row) return null;
@@ -707,7 +728,9 @@ async function saveJob(job, msg) {
 }
 
 async function moveJob(id, status) {
-  const j = jobById(id); if (!j || j.status === status) return;
+  const j = jobById(id); if (!j) return;
+  if (isCam(j) && status === 'review') status = 'done';   // งาน CAM ข้ามขั้นรอตรวจ
+  if (j.status === status) return;
   if (!canEdit(j)) { toast('เปลี่ยนสถานะได้เฉพาะงานของตัวเอง งานนี้เป็นของ ' + (j.assignee || 'คนอื่น'), true); return; }
   const prev = clone(j);
   j.status = status;
@@ -841,12 +864,13 @@ function shrinkImage(file, maxSide, maxLen, q0) {
     img.src = url;
   });
 }
+function rerenderEditor() { if (!S.edit) return; if (S.edit.mode === 'edit' && document.querySelector('#sheetBody [data-e]')) readEditor(); renderEditor(); }
 async function uploadImages(jobId, files) {
   const j = jobById(jobId); if (!canAddImg(j)) return toast('เพิ่มรูปได้เฉพาะงานของตัวเอง', true);
   const room = IMG_MAX - imgsOf(jobId).length;
   files = Array.from(files || []).slice(0, Math.max(0, room));
   if (!files.length) return toast('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน', true);
-  S.uploading = (S.uploading || 0) + files.length; if (S.edit) renderEditor();
+  S.uploading = (S.uploading || 0) + files.length; rerenderEditor();
   let ok = 0;
   for (const f of files) {
     try {
@@ -856,15 +880,16 @@ async function uploadImages(jobId, files) {
       THUMBS[r.image.id] = thumb; FULL[r.image.id] = full; saveThumbCache();
       S.images = (S.images || []).concat([{ id: r.image.id, jobId: jobId, createdBy: r.image.createdBy, createdAt: r.image.createdAt }]); ok++;
     } catch (e) { toast(e.message || 'อัปโหลดรูปไม่สำเร็จ', true); }
-    S.uploading--; if (S.edit) renderEditor(); render();
+    S.uploading--; rerenderEditor(); render();
   }
   if (ok) toast('เพิ่มรูปแล้ว ' + ok + ' รูป');
 }
 async function deleteImage(id) {
-  try { await mutate(() => api().deleteImage({ id: id }), 'ลบรูปแล้ว'); S.images = (S.images || []).filter(m => m.id !== id); delete THUMBS[id]; saveThumbCache(); closeLightbox(); if (S.edit) renderEditor(); render(); } catch (e) {}
+  try { await mutate(() => api().deleteImage({ id: id }), 'ลบรูปแล้ว'); S.images = (S.images || []).filter(m => m.id !== id); delete THUMBS[id]; saveThumbCache(); closeLightbox(); rerenderEditor(); render(); } catch (e) {}
 }
 // full-screen viewer
 function openLightbox(jobId, id) {
+  hideHover();
   const list = imgsOf(jobId); let i = Math.max(0, list.findIndex(m => m.id === id));
   S.lb = { jobId: jobId, i: i }; drawLightbox();
 }
@@ -892,30 +917,35 @@ let hovT = null, hovId = null, hovEl = null;
 function jobInfoHtml(j, compact) {
   const di = dueInfo(j), run = runningOf(j.id), mins = totalMinutes(j), st = isLate(j) ? 'late' : j.status;
   const imgs = imgsOf(j.id);
-  return '<div class="hv-head">' + stBadge(j, 'lg') + '<div><b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '–') + '</small></div></div>' +
+  const hero = imgs.length ? '<div class="hv-hero"><button type="button" class="hv-main" data-lbopen="' + esc(imgs[0].id) + '" data-lbjob="' + esc(j.id) + '" title="กดดูรูปเต็มจอ">' + thumbImg(imgs[0], 'big') + '<span class="hv-zoom">' + I.search + 'กดดูรูป</span>' + (imgs.length > 1 ? '<span class="hv-cnt">' + STI.camera + imgs.length + '</span>' : '') + '</button>' +
+    (imgs.length > 1 ? '<div class="hv-strip">' + imgs.slice(1, 6).map(m => '<button type="button" data-lbopen="' + esc(m.id) + '" data-lbjob="' + esc(j.id) + '">' + thumbImg(m) + '</button>').join('') + (imgs.length > 6 ? '<span class="more">+' + (imgs.length - 6) + '</span>' : '') + '</div>' : '') + '</div>' : '';
+  return hero + '<div class="hv-head">' + stBadge(j, 'lg') + '<div><b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '–') + '</small></div></div>' +
     '<div class="hv-grid">' +
       '<span>สถานะ</span><b>' + stPill(j) + '</b>' +
       '<span>ผู้รับผิดชอบ</span><b class="hv-who">' + av(j.assignee) + esc(j.assignee || 'ยังไม่มอบหมาย') + '</b>' +
-      '<span>กลุ่ม / งาน</span><b>' + esc([groupShort(j.group), j.taskType].filter(Boolean).join(' · ') || '–') + '</b>' +
+      '<span>กลุ่ม / งาน</span><b class="hv-chips">' + (typeChip(j.taskType) + groupChip(j.group) || '–') + '</b>' +
       '<span>กำหนดส่ง</span><b class="' + (di.cls === 'late' ? 'bad' : '') + '">' + esc(di.text) + (j.due && j.status !== 'done' ? ' · ' + fdY(j.due) : '') + '</b>' +
       '<span>เวลาทำงาน</span><b>' + (run ? '<span class="live" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : (mins ? fdur(mins) : '–')) + '</b>' +
       (j.sale ? '<span>Sale</span><b>' + esc(j.sale) + '</b>' : '') +
     '</div>' +
     (j.note && !compact ? '<p class="hv-note">' + esc(j.note) + '</p>' : '') +
-    (imgs.length ? '<div class="hv-imgs">' + imgs.slice(0, 4).map(m => thumbImg(m)).join('') + (imgs.length > 4 ? '<span class="more">+' + (imgs.length - 4) + '</span>' : '') + '</div>' : '<div class="hv-noimg">' + DECO.palette.replace('palette', '') + 'ยังไม่มีรูปงาน</div>');
+    (imgs.length ? '' : '<div class="hv-noimg">' + DECO.palette.replace('palette', '') + 'ยังไม่มีรูปงาน</div>');
 }
 function showHover(el) {
   const j = jobById(el.dataset.open); if (!j) return;
   let h = $('#hovercard'); if (!h) { h = document.createElement('div'); h.id = 'hovercard'; h.className = 'hovercard'; h.setAttribute('role', 'tooltip'); document.body.appendChild(h); }
-  h.className = 'hovercard ' + (ST[isLate(j) ? 'late' : j.status] ? 's-' + (isLate(j) ? 'late' : j.status) : '');
+  h.className = 'hovercard ' + (ST[isLate(j) ? 'late' : j.status] ? 's-' + (isLate(j) ? 'late' : j.status) : '') + (imgsOf(j.id).length ? ' has-img' : '');
   h.innerHTML = jobInfoHtml(j, false);
-  const r = el.getBoundingClientRect(), W = 320, vw = window.innerWidth, vh = window.innerHeight;
+  if (!h.dataset.wired) { h.dataset.wired = '1'; h.addEventListener('mouseenter', () => { clearTimeout(hovT); hovT = null; }); h.addEventListener('mouseleave', e => { if (!(hovEl && e.relatedTarget && hovEl.contains(e.relatedTarget))) hideHoverSoon(); }); }
+  const r = el.getBoundingClientRect(), W = h.offsetWidth || 340, vw = window.innerWidth, vh = window.innerHeight;
   let x = r.right + 12; if (x + W > vw - 8) x = Math.max(8, r.left - W - 12);
   h.style.left = x + 'px'; h.style.top = '0px'; h.classList.add('show');
   const hh = h.offsetHeight; let y = r.top + r.height / 2 - hh / 2; y = Math.max(8, Math.min(vh - hh - 8, y));
   h.style.top = y + 'px'; hovId = j.id; hovEl = el; paintAllThumbs(h);
 }
 function hideHover() { clearTimeout(hovT); hovT = null; hovId = null; hovEl = null; const h = $('#hovercard'); if (h) h.classList.remove('show'); }
+function hideHoverSoon() { clearTimeout(hovT); hovT = setTimeout(hideHover, 260); }
+const inHover = el => !!(el && el.closest && el.closest('#hovercard'));
 if (window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches) {
   document.addEventListener('mouseover', e => {
     const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open]');
@@ -925,10 +955,12 @@ if (window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches)
   });
   document.addEventListener('mouseout', e => {
     const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open]');
-    if (el && (!e.relatedTarget || !el.contains(e.relatedTarget))) hideHover();
+    if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;
+    if (inHover(e.relatedTarget)) { clearTimeout(hovT); hovT = null; return; }   // เลื่อนเมาส์เข้าไปในการ์ดสรุป → ค้างไว้ให้กดดูรูปได้
+    if (hovId) hideHoverSoon(); else hideHover();
   });
-  document.addEventListener('scroll', () => { if (hovEl && hovEl.isConnected && hovEl.matches(':hover')) showHover(hovEl); else if (hovId) hideHover(); }, true);
-  document.addEventListener('mousedown', hideHover, true);
+  document.addEventListener('scroll', e => { if (inHover(e.target)) return; const h = $('#hovercard'); if (h && h.matches(':hover')) return; if (hovEl && hovEl.isConnected && hovEl.matches(':hover')) showHover(hovEl); else if (hovId) hideHover(); }, true);
+  document.addEventListener('mousedown', e => { if (!inHover(e.target)) hideHover(); }, true);
 }
 
 /* animated status badge */
@@ -941,17 +973,17 @@ function stBadge(j, size) {
 /* job detail (view mode inside the side sheet) */
 function renderDetail(E, j, live, ro, timer) {
   const jj = live || j, imgs = imgsOf(jj.id), di = dueInfo(jj), st = isLate(jj) ? 'late' : jj.status;
-  const idx = flowIdx(jj.status);
-  const steps = '<div class="dt-steps">' + FLOW.map((f, i) => '<div class="dt-step ' + ST[f].cls + (i < idx ? ' past' : i === idx ? ' now' : '') + '"><span class="dt-dot">' + STI[f] + '</span><small>' + ST[f].label + '</small></div>' + (i < FLOW.length - 1 ? '<span class="dt-line' + (i < idx ? ' on' : '') + '"></span>' : '')).join('') + '</div>';
-  const nextSt = NEXT[jj.status];
+  const idx = flowIdxOf(jj), FL = flowOf(jj);
+  const steps = '<div class="dt-steps">' + FL.map((f, i) => '<div class="dt-step ' + ST[f].cls + (i < idx ? ' past' : i === idx ? ' now' : '') + '"><span class="dt-dot">' + STI[f] + '</span><small>' + ST[f].label + '</small></div>' + (i < FL.length - 1 ? '<span class="dt-line' + (i < idx ? ' on' : '') + '"></span>' : '')).join('') + '</div>';
+  const nextSt = nextOf(jj);
   const gallery = '<section class="dt-sec"><div class="dt-h"><b>' + DECO.palette.replace('palette', '') + 'รูปงาน</b><span class="sub">' + imgs.length + '/' + IMG_MAX + '</span></div>' +
     '<div class="gal">' + imgs.map(m => '<button type="button" class="gal-it" data-lbopen="' + esc(m.id) + '" data-lbjob="' + esc(jj.id) + '">' + thumbImg(m) + '</button>').join('') +
       Array.from({ length: S.uploading || 0 }).map(() => '<span class="gal-it up"><span class="spin-dot dark"></span><small>กำลังอัปโหลด</small></span>').join('') +
-      (canAddImg(jj) && imgs.length < IMG_MAX ? '<label class="gal-add"><input type="file" accept="image/*" multiple data-imgjob="' + esc(jj.id) + '" hidden><span class="ga-ic">' + I.plus + '</span><small>เพิ่มรูป</small></label>' : '') +
+      (canAddImg(jj) && imgs.length < IMG_MAX ? '<label class="gal-add"><input type="file" accept="image/*" multiple data-imgjob="' + esc(jj.id) + '" hidden><span class="ga-ic">' + I.plus + '</span><small>เพิ่มรูป<br>หรือลากมาวาง</small></label>' : '') +
       (!imgs.length && !canAddImg(jj) ? '<span class="sub">ยังไม่มีรูป</span>' : '') +
     '</div></section>';
   $('#sheetBody').innerHTML =
-    '<div class="dt-hero s-' + st + '">' + stBadge(jj, 'xl') + '<div class="dt-hero-t"><span class="eyebrow">' + esc(isLate(jj) ? 'เลยกำหนด · ' + di.text : (ST[jj.status] || ST.queue).label) + '</span><b>' + esc(jj.title || jj.code) + '</b><small>' + esc([groupShort(jj.group), jj.taskType].filter(Boolean).join(' · ')) + '</small></div>' +
+    '<div class="dt-hero s-' + st + '">' + stBadge(jj, 'xl') + '<div class="dt-hero-t"><span class="eyebrow">' + esc(isLate(jj) ? 'เลยกำหนด · ' + di.text : (ST[jj.status] || ST.queue).label) + '</span><b>' + esc(jj.title || jj.code) + '</b><small class="hv-chips">' + typeChip(jj.taskType) + groupChip(jj.group) + '</small></div>' +
       (jj.priority === 'urgent' ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '</div>' +
     steps + gallery + timer +
     '<section class="dt-sec"><div class="dt-h"><b>' + DECO.info + 'ข้อมูลงาน</b></div><div class="hv-grid dt-grid">' +
@@ -968,7 +1000,7 @@ function renderDetail(E, j, live, ro, timer) {
   $('#sheetFoot').innerHTML = '<button class="btn" data-act="close" type="button">ปิด</button>' +
     '<button class="btn" type="button" data-act="askhelp" data-job="' + esc(jj.id) + '">' + MSG_IC.sos + 'ขอช่วย</button>' +
     (!ro && jj.status === 'review' ? '<button class="btn" type="button" data-move="' + esc(jj.id) + '" data-to="fix">' + STI.fix + 'ส่งกลับไปแก้ไข</button>' : '') +
-    (!ro && nextSt ? '<button class="btn" type="button" data-move="' + esc(jj.id) + '" data-to="' + nextSt + '">' + (STI[nextSt] || '') + (jj.status === 'review' ? 'ตรวจผ่าน → เสร็จแล้ว' : jj.status === 'fix' ? 'แก้เสร็จ → ส่งตรวจ' : 'เลื่อนเป็น ' + ST[nextSt].label) + '</button>' : '') +
+    (!ro && nextSt ? '<button class="btn" type="button" data-move="' + esc(jj.id) + '" data-to="' + nextSt + '">' + (STI[nextSt] || '') + (jj.status === 'review' ? 'ตรวจผ่าน → เสร็จแล้ว' : isCam(jj) && nextSt === 'done' ? 'งาน CAM เสร็จ → เสร็จแล้ว' : jj.status === 'fix' ? 'แก้เสร็จ → ส่งตรวจ' : 'เลื่อนเป็น ' + ST[nextSt].label) + '</button>' : '') +
     (!ro ? '<button class="btn primary" data-act="editmode" type="button">' + I.settings + 'แก้ไขข้อมูล</button>' : '');
   paintAllThumbs($('#sheetBody'));
 }
@@ -1114,7 +1146,37 @@ function helpCard(m) {
     '<p>' + esc(m.text) + '</p>' + (j ? '<button class="hc-job" data-open="' + esc(j.id) + '">' + stBadge(j) + '<b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '') + '</small></button>' : '') +
     (canTake || canClose ? '<div class="hc-act">' + (canTake ? '<button class="btn sm primary" data-helptake="' + esc(m.id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + (canClose ? '<button class="btn sm" data-helpdone="' + esc(m.id) + '">' + STI.done + 'ปิดคำขอ</button>' : '') + '</div>' : '') + '</div>';
 }
+const EMO = [
+  ['😀', 'หน้า', '😀😁😂🤣😊😍🥰😘😎🤩🥳😅😆😉🙂🙃😇🤔🤨😐😑😶🙄😏😴😪😮😲😳🥺😢😭😤😡🤯😱😬🤗🤭🫡🤐😷🤒🤕😵‍💫🥱'],
+  ['👍', 'มือ', '👍👎👌✌️🤞🤟🤘👏🙌🙏💪👋🤝✍️👉👈👆👇☝️✋🫶❤️🧡💛💚💙💜🖤💯'],
+  ['🛠️', 'งาน', '✅☑️❌⭕⚠️⛔🚫🔥⚡⏰⏳⌛📅📌📍📎📐📏✏️🖊️📝📋📁📂🗂️📦🚚🏭🏗️🔧🔨🛠️⚙️🪚🔩🧰💻🖥️🖨️📷🎨🧱🪵💡🔍📞💬📢🎯🏆🎉🚀'],
+  ['☕', 'อื่นๆ', '☕🍵🍜🍚🍕🍔🍰🍺🥤🌞🌧️⛈️🌈⭐✨🌙🎂🎁🐻🐼🐶🐱🍀🌸']
+];
+const emoSplit = str => (typeof Intl !== 'undefined' && Intl.Segmenter) ? Array.from(new Intl.Segmenter('th', { granularity: 'grapheme' }).segment(str), x => x.segment) : Array.from(str.match(/\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic}\uFE0F?)*|./gu) || []);
+function emoRecent() { const r = LS.get('emoRecent', []); return Array.isArray(r) ? r.slice(0, 16) : []; }
+function emoPopHtml() {
+  const tab = M.emoTab || (emoRecent().length ? 'recent' : '0');
+  const list = tab === 'recent' ? emoRecent() : emoSplit(EMO[+tab][2]);
+  return '<div class="emo-tabs">' + (emoRecent().length ? '<button type="button" data-emotab="recent" aria-pressed="' + (tab === 'recent') + '" title="ใช้ล่าสุด">🕘</button>' : '') +
+    EMO.map((c, i) => '<button type="button" data-emotab="' + i + '" aria-pressed="' + (tab === String(i)) + '" title="' + c[1] + '">' + c[0] + '</button>').join('') + '</div>' +
+    '<div class="emo-grid">' + list.map(x => '<button type="button" data-emo="' + esc(x) + '">' + x + '</button>').join('') + '</div>';
+}
+function emoInsert(ch) {
+  const t = $('#msgText'); if (!t) return;
+  const a = t.selectionStart != null ? t.selectionStart : t.value.length, b = t.selectionEnd != null ? t.selectionEnd : a;
+  t.value = t.value.slice(0, a) + ch + t.value.slice(b); const pos = a + ch.length;
+  t.focus(); try { t.setSelectionRange(pos, pos); } catch (x) {}
+  t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px';
+  LS.set('emoRecent', [ch].concat(emoRecent().filter(x => x !== ch)).slice(0, 16));
+}
+function emoToggle(force) {
+  const pop = $('#emoPop'); if (!pop) return;
+  M.emoji = force != null ? force : !M.emoji;
+  if (M.emoji) pop.innerHTML = emoPopHtml();
+  pop.hidden = !M.emoji; const b = $('#emoBtn'); if (b) b.setAttribute('aria-pressed', M.emoji);
+}
 function renderMsgPanel() {
+  const oldT = $('#msgText'), draft = oldT ? { v: oldT.value, a: oldT.selectionStart, b: oldT.selectionEnd, f: document.activeElement === oldT } : null;
   let p = $('#msgPanel');
   if (!p) { p = document.createElement('aside'); p.id = 'msgPanel'; p.className = 'msg-panel'; p.setAttribute('aria-label', 'ข้อความ'); document.body.appendChild(p); }
   const chans = chanList(); if (!chans.some(c => c.id === M.ch)) M.ch = 'team';
@@ -1144,10 +1206,14 @@ function renderMsgPanel() {
     (helps.length && M.ch !== 'team' ? '<button class="mp-sosbar" data-ch="team">' + MSG_IC.sos + helps.length + ' คำขอความช่วยเหลือรอคนช่วย · ดู</button>' : '') +
     '<div class="mp-body" id="mpBody">' + body + '</div>' +
     '<form class="mp-compose' + (M.help ? ' helping' : '') + '" id="msgForm">' + helpForm +
+      '<div class="emo-pop" id="emoPop"' + (M.emoji ? '' : ' hidden') + '>' + (M.emoji ? emoPopHtml() : '') + '</div>' +
       '<div class="mp-row">' + (M.help ? '' : '<button type="button" class="mp-sos-btn" data-act="helpon" title="ขอความช่วยเหลือ">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') +
+      '<button type="button" class="mp-emo-btn" id="emoBtn" data-act="emoji" title="ใส่อีโมจิ" aria-label="ใส่อีโมจิ" aria-pressed="' + !!M.emoji + '">😊</button>' +
       '<textarea id="msgText" rows="1" maxlength="1000" placeholder="' + (M.help ? 'บอกว่าอยากให้ช่วยอะไร…' : 'พิมพ์ข้อความถึง ' + esc(cur.name) + '…') + '"></textarea>' +
       '<button type="submit" class="mp-send' + (M.help ? ' sos' : '') + '" aria-label="ส่ง"' + (M.sending ? ' disabled' : '') + '>' + MSG_IC.send + '</button></div></form>';
   const b = $('#mpBody'); if (b) b.scrollTop = b.scrollHeight;
+  const nt = $('#msgText');
+  if (nt && draft && draft.v) { nt.value = draft.v; nt.style.height = 'auto'; nt.style.height = Math.min(140, nt.scrollHeight) + 'px'; if (draft.f) { nt.focus(); try { nt.setSelectionRange(draft.a, draft.b); } catch (x) {} } }
 }
 async function sendMsg() {
   const t = $('#msgText'); if (!t || M.sending) return;
@@ -1156,7 +1222,7 @@ async function sendMsg() {
   M.sending = true;
   try {
     const r = await api().sendMessage(p);
-    M.list.push(r.message); M.seen[r.message.id] = 1;
+    M.list.push(r.message); M.seen[r.message.id] = 1; t.value = ''; { const c = $('#msgText'); if (c) c.value = ''; } M.emoji = false;
     if (M.help) { M.ch = chanOf(r.message); M.help = false; M.jobId = ''; toast('ส่งคำขอความช่วยเหลือแล้ว'); }
     M.sending = false; renderMsgPanel(); renderMsgFab();
   } catch (e) { M.sending = false; toast(e.message, true); }
@@ -2513,27 +2579,32 @@ function matchBase(j, anyMember) {
 }
 function tracker(j) {
   // delivery-style progress: รอคิว → ทำ → ตรวจ → เสร็จ
-  const idx = flowIdx(j.status), pct = idx / (FLOW.length - 1) * 100;
+  const FL = flowOf(j), idx = flowIdxOf(j), pct = idx / (FL.length - 1) * 100;
   const st = j.status === 'hold' ? 'hold' : j.status;
   return '<div class="trk ' + (ST[st] || ST.queue).cls + (j.status === 'done' ? ' fin' : '') + '" style="--p:' + pct + '%" title="' + esc((ST[st] || ST.queue).label) + '">' +
-    '<span class="trk-line"><i></i></span>' + FLOW.map((f, i) => '<span class="trk-dot' + (i <= idx ? ' on' : '') + '" style="left:' + (i / (FLOW.length - 1) * 100) + '%"></span>').join('') +
+    '<span class="trk-line"><i></i></span>' + FL.map((f, i) => '<span class="trk-dot' + (i <= idx ? ' on' : '') + '" style="left:' + (i / (FL.length - 1) * 100) + '%"></span>').join('') +
     '<span class="trk-rider' + (j.status === 'doing' || j.status === 'fix' ? ' go' : '') + '">' + (STI[st] || STI.queue) + '</span></div>';
 }
-function card(j) {
-  const di = dueInfo(j), run = runningOf(j.id), late = isLate(j);
-  const nextSt = NEXT[j.status];
+function card(j, i) {
+  const di = dueInfo(j), run = runningOf(j.id), late = isLate(j), tc = typeColor(j.taskType), imgs = imgsOf(j.id);
+  const nextSt = nextOf(j);
   const mins = totalMinutes(j);
   const mine = canEdit(j);
   const dueIc = di.cls === 'late' ? STI.fire : di.cls === 'soon' ? STI.hourglass : j.status === 'done' ? STI.done : STI.calendar;
-  return '<div class="card' + (late ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + (mine ? '' : ' ro') + '" draggable="' + mine + '" data-id="' + esc(j.id) + '" data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
-    '<div class="card-top">' + stBadge(j) + '<div class="code">' + esc(j.code) + '</div>' + (imgsOf(j.id).length ? '<span class="card-th">' + thumbImg(imgsOf(j.id)[0]) + (imgsOf(j.id).length > 1 ? '<b>' + imgsOf(j.id).length + '</b>' : '') + '</span>' : '') +
+  return '<div class="card' + (tc ? ' has-tc' : '') + (late ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + (mine ? '' : ' ro') + '"' + (tc ? ' style="--tc:' + tc + '"' : '') + ' draggable="' + mine + '" data-id="' + esc(j.id) + '" data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
+    '<div class="card-top">' + (i >= 0 ? '<span class="qno" title="ลำดับที่ ' + (i + 1) + '">' + (i + 1) + '</span>' : '') + stBadge(j) + '<div class="code">' + esc(j.code) + '</div>' + (imgs.length ? '<button type="button" class="card-th" data-lbopen="' + esc(imgs[0].id) + '" data-lbjob="' + esc(j.id) + '" title="ดูรูป" aria-label="ดูรูปงาน">' + thumbImg(imgs[0]) + (imgs.length > 1 ? '<b>' + imgs.length + '</b>' : '') + '</button>' : '') +
     (nextSt && mine ? '<button class="adv" data-move="' + esc(j.id) + '" data-to="' + nextSt + '" title="เลื่อนเป็น ' + ST[nextSt].label + '" aria-label="เลื่อนเป็น ' + ST[nextSt].label + '">' + I.next + '</button>' : '') + '</div>' +
     (j.title ? '<div class="title">' + esc(j.title) + '</div>' : '') +
     '<div class="tags">' + (j.priority === 'urgent' ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">' + STI.pen + 'แก้ไข</span>' : '') + (j.status === 'hold' ? '<span class="pill s-hold">' + STI.hold + 'พักไว้</span>' : '') +
-      '<span class="tg">' + STI.layers + esc(groupShort(j.group) || '–') + '</span>' + lvBars(j.level) + '<span class="tg">' + esc(j.taskType || '') + '</span></div>' +
+      typeChip(j.taskType) + groupChip(j.group) + lvBars(j.level) + '</div>' +
     tracker(j) +
     '<div class="card-foot">' + av(j.assignee) + (run ? '<span class="live" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : (mins ? '<span class="tg">' + STI.timer + fdur(mins) + '</span>' : '<span>' + esc(j.sale ? 'Sale ' + j.sale : '') + '</span>')) +
       '<span class="due ' + di.cls + '">' + dueIc + esc(di.text) + '</span></div></div>';
+}
+function typeLegend() {
+  const ts = (S.settings.taskTypes || []).filter(t => t.name); if (!ts.length) return '';
+  return '<div class="tlegend"><span class="tl-h">สีรายละเอียดงาน</span>' + ts.map(t => typeChip(t.name, 'sm')).join('') +
+    (ts.some(t => t.cat === 'cam') ? '<span class="tl-note">' + STI.done + 'งาน CAM ทำเสร็จแล้วไป "เสร็จแล้ว" ทันที ไม่ต้องรอตรวจ</span>' : '') + '</div>';
 }
 function viewBoard() {
   const q = S.f.quick || 'all', t = today();
@@ -2560,7 +2631,7 @@ function viewBoard() {
     .filter(x => x[0] !== 'mine' || (S.me && isLead()))
     .map(x => '<button class="qchip' + (x[3] ? ' q-' + x[3] : '') + '" data-quick="' + x[0] + '" aria-pressed="' + (q === x[0]) + '"><span class="qi">' + x[2] + '</span>' + x[1] + (x[0] !== 'all' ? '<b>' + qn(x[0]) + '</b>' : '') + '</button>').join('') + '</div>';
   return topbar('บอร์ดงาน', (isAdmin() ? 'ลากการ์ดเพื่อเปลี่ยนสถานะ หรือกดลูกศรเพื่อเลื่อนไปขั้นถัดไป' : isLead() ? 'ลากหรือกดลูกศรบนการ์ดของคุณเพื่อเปลี่ยนสถานะ งานของคนอื่นดูได้อย่างเดียว' : 'งานของ' + esc(S.me) + ' · ลากหรือกดลูกศรบนการ์ดเพื่อเปลี่ยนสถานะ') + (hold.length ? ' · พักไว้ ' + hold.length + ' งาน (อยู่ในช่องรอคิว)' : '')) +
-    flow + filterBar('', !isLead()) + quick + '<div class="board-scroll"><div class="board">' + colHtml + '</div></div>';
+    flow + filterBar('', !isLead()) + quick + typeLegend() + '<div class="board-scroll"><div class="board">' + colHtml + '</div></div>';
 }
 
 /* ============ render: list ============ */
@@ -2588,11 +2659,11 @@ function viewList() {
   const months = {}; pool.forEach(j => { if (finDate(j)) months[finDate(j).slice(0, 7)] = 1; }); if (S.f.month) months[S.f.month] = 1;
   const monthSel = S.f.status === 'done' ? '<select class="sel" id="fMonth" aria-label="เดือนที่เสร็จ"><option value="">ทุกเดือน</option>' + Object.keys(months).sort().reverse().map(m => '<option value="' + m + '"' + (S.f.month === m ? ' selected' : '') + '>' + monthLabel(m) + '</option>').join('') + '</select>' : '';
   const rows = listRows();
-  const body = rows.length ? rows.map(j => {
-    const di = dueInfo(j), run = runningOf(j.id), mins = totalMinutes(j);
-    return '<div class="row' + (isLate(j) ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + '" data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
-      '<div class="cell c-main"><div class="code">' + stBadge(j) + esc(j.code) + (imgsOf(j.id).length ? '<span class="img-chip">' + STI.camera + imgsOf(j.id).length + '</span>' : '') + '</div><div class="meta">' + (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">แก้ไข</span>' : '') +
-        (j.title ? '<span>' + esc(j.title) + '</span>' : '') + '<span>' + esc(groupShort(j.group)) + '</span>' + lvBars(j.level) + '<span>' + esc(j.taskType) + '</span></div></div>' +
+  const body = rows.length ? rows.map((j, i) => {
+    const di = dueInfo(j), run = runningOf(j.id), mins = totalMinutes(j), tc = typeColor(j.taskType);
+    return '<div class="row' + (tc ? ' has-tc' : '') + (isLate(j) ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + '"' + (tc ? ' style="--tc:' + tc + '"' : '') + ' data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
+      '<div class="cell c-main"><div class="code"><span class="qno">' + (i + 1) + '</span>' + stBadge(j) + esc(j.code) + (imgsOf(j.id).length ? '<span class="img-chip">' + STI.camera + imgsOf(j.id).length + '</span>' : '') + '</div><div class="meta">' + (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">แก้ไข</span>' : '') +
+        typeChip(j.taskType) + groupChip(j.group) + (j.title ? '<span>' + esc(j.title) + '</span>' : '') + lvBars(j.level) + '</div></div>' +
       '<div class="cell c-who"><span class="who">' + av(j.assignee) + '<span>' + esc(j.assignee || 'ยังไม่มอบหมาย') + '<small>Sale ' + esc(j.sale || '–') + '</small></span></span></div>' +
       '<div class="cell c-time">' + (run ? '<span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : '<span class="tnum">' + (mins ? fdur(mins) : '–') + '</span>') + '<small>เริ่ม ' + fdt(j.startedAt) + '</small></div>' +
       '<div class="cell">รับ ' + fd(j.received) + '<small>' + esc(j.taskType || '') + '</small></div>' +
@@ -2819,7 +2890,7 @@ function viewSettings() {
       (S.pinNote && S.pinNote.userId === 'new' ? '<div class="pin-note">เพิ่ม ' + esc(S.pinNote.name) + ' แล้ว PIN: <b class="mono">' + esc(S.pinNote.pin) + '</b></div>' : '') + '</div></div></section>';
 
     const simpleRows = key => d[key].map((x, i) => '<div class="erow two"><input value="' + esc(x) + '" data-d="' + key + '.' + i + '" aria-label="ชื่อ"><button class="icon-btn" data-del="' + key + '.' + i + '" aria-label="ลบ">' + I.trash + '</button></div>').join('');
-    const typeRows = d.taskTypes.map((x, i) => '<div class="erow three"><input value="' + esc(x.name) + '" data-d="taskTypes.' + i + '.name" aria-label="ชื่องาน"><select data-d="taskTypes.' + i + '.cat" aria-label="ประเภท"><option value="draw"' + (x.cat !== 'cam' ? ' selected' : '') + '>งานเขียนแบบ</option><option value="cam"' + (x.cat === 'cam' ? ' selected' : '') + '>งาน CAM</option></select><button class="icon-btn" data-del="taskTypes.' + i + '" aria-label="ลบ">' + I.trash + '</button></div>').join('');
+    const typeRows = d.taskTypes.map((x, i) => '<div class="erow"><input type="color" value="' + esc(/^#[0-9a-f]{6}$/i.test(x.color || '') ? x.color : TYPE_COLORS[i % TYPE_COLORS.length]) + '" data-d="taskTypes.' + i + '.color" aria-label="สีของงานนี้" title="สีที่แสดงบนการ์ด"><input value="' + esc(x.name) + '" data-d="taskTypes.' + i + '.name" aria-label="ชื่องาน"><select data-d="taskTypes.' + i + '.cat" aria-label="ประเภท"><option value="draw"' + (x.cat !== 'cam' ? ' selected' : '') + '>งานเขียนแบบ</option><option value="cam"' + (x.cat === 'cam' ? ' selected' : '') + '>งาน CAM</option></select><button class="icon-btn" data-del="taskTypes.' + i + '" aria-label="ลบ">' + I.trash + '</button></div>').join('');
     const levelRows = d.levels.map((x, i) => '<div class="erow two"><input value="' + esc(x.label) + '" data-d="levels.' + i + '.label" aria-label="ระดับ ' + x.level + '"><span class="tag rev">ระดับ ' + x.level + '</span></div>').join('');
     const slaRows = d.groups.map(g => {
       const r = (d.sla[g] = d.sla[g] || { cam: [1, 2], draw: [2, 3] });
@@ -2871,7 +2942,7 @@ function openEditor(id) {
   if (S.edit.isNew) setTimeout(() => { const el = $('#e-code'); if (el) el.focus(); }, 260);
   if (j) api().activity({ jobId: j.id }).then(h => { if (S.edit && S.edit.job.id === j.id) { S.edit.hist = h; const el = $('#hist'); if (el) el.innerHTML = histHtml(h); } }).catch(() => {});
 }
-function closeEditor() { S.edit = null; $('#sheet').classList.remove('open'); $('#scrim').classList.remove('open'); }
+function closeEditor() { dropPending(S.edit); S.edit = null; $('#sheet').classList.remove('open'); $('#scrim').classList.remove('open'); }
 function opts(list, val, ph, labelFn) {
   const arr = (list || []).slice(); if (val && arr.indexOf(val) < 0) arr.unshift(val);
   return '<option value="">' + (ph || 'เลือก') + '</option>' + arr.map(x => '<option value="' + esc(x) + '"' + (x === val ? ' selected' : '') + '>' + esc(labelFn ? labelFn(x) : x) + '</option>').join('');
@@ -2922,6 +2993,7 @@ function renderEditor() {
       '<label class="toggle"><input type="checkbox" data-e="priority"' + (j.priority === 'urgent' ? ' checked' : '') + ' style="accent-color:var(--urgent)"><span><b>งานด่วน</b></span></label>' +
       '<label class="toggle"><input type="checkbox" data-e="revision"' + (j.revision ? ' checked' : '') + ' style="accent-color:var(--review)"><span><b>งานแก้ไข</b></span></label>' +
     '</fieldset>' +
+    editorImgs(E, live, ro) +
     '<fieldset><legend>กำหนดเวลา</legend>' +
       '<div class="f"><label for="e-received">วันที่รับงาน</label><input type="date" id="e-received" data-e="received" value="' + esc(j.received) + '"></div>' +
       '<div class="f"><label for="e-due">กำหนดส่ง</label><input type="date" id="e-due" data-e="due" value="' + esc(j.due) + '">' + dueHint + '</div>' +
@@ -2938,6 +3010,33 @@ function renderEditor() {
   if (ro) document.querySelectorAll('#sheetBody input, #sheetBody select, #sheetBody textarea, #sheetBody .seg button, #sheetBody .hint button').forEach(el => { el.disabled = true; });
   else if (!isAdmin()) { const a = $('#e-assignee'); if (a) { a.disabled = true; a.title = 'มอบหมายงานให้คนอื่นได้เฉพาะแอดมิน'; } }
 }
+/* รูปงานในฟอร์ม: ลากรูปมาวาง / วางจากคลิปบอร์ด / เลือกไฟล์ — งานใหม่จะอัปโหลดหลังกดเพิ่มงาน */
+function editorImgs(E, live, ro) {
+  const pend = E.pending || [], have = live ? imgsOf(live.id) : [], room = IMG_MAX - have.length - pend.length - (live ? (S.uploading || 0) : 0);
+  const canAdd = !ro && (E.isNew || canAddImg(live));
+  if (!canAdd && !have.length) return '';
+  const tiles = have.map(m => '<button type="button" class="dz-it" data-lbopen="' + esc(m.id) + '" data-lbjob="' + esc(live.id) + '">' + thumbImg(m) + '</button>').join('') +
+    (live ? Array.from({ length: S.uploading || 0 }).map(() => '<span class="dz-it up"><span class="spin-dot dark"></span></span>').join('') : '') +
+    pend.map(p => '<span class="dz-it pend"><img src="' + p.url + '" alt=""><button type="button" class="dz-x" data-pendx="' + esc(p.id) + '" aria-label="เอารูปนี้ออก">✕</button></span>').join('');
+  return '<fieldset class="dz-fs"><legend>รูปงาน <small>' + (have.length + pend.length) + '/' + IMG_MAX + '</small></legend>' +
+    (canAdd ? '<label class="dropzone' + (have.length || pend.length ? ' has' : '') + '" id="eDrop"><input type="file" accept="image/*" multiple id="eImgIn" hidden' + (room <= 0 ? ' disabled' : '') + '>' +
+      '<span class="dz-ic">' + STI.camera + '</span><span class="dz-t"><b>' + (room > 0 ? 'ลากรูปมาวางที่นี่' : 'ครบ ' + IMG_MAX + ' รูปแล้ว') + '</b><small>' + (room > 0 ? 'หรือกดเพื่อเลือกรูป · วางรูปที่คัดลอกไว้ (Ctrl+V) ได้' : 'ลบรูปเดิมก่อนถ้าต้องการเพิ่ม') + '</small></span></label>' : '') +
+    (tiles ? '<div class="dz-grid">' + tiles + '</div>' : '') +
+    (E.isNew && pend.length ? '<span class="hint">รูปจะอัปโหลดอัตโนมัติหลังกด "เพิ่มงาน"</span>' : '') + '</fieldset>';
+}
+function addEditorFiles(files) {
+  const E = S.edit; if (!E) return;
+  files = Array.from(files || []).filter(f => /^image\//.test(f.type));
+  if (!files.length) return toast('เลือกไฟล์รูปภาพ (JPG, PNG)', true);
+  if (E.mode === 'edit') readEditor();
+  if (!E.isNew) { const live = jobById(E.job.id); if (live) uploadImages(live.id, files); return; }
+  E.pending = E.pending || [];
+  const room = IMG_MAX - E.pending.length; if (room <= 0) return toast('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน', true);
+  if (files.length > room) toast('ใส่ได้อีก ' + room + ' รูป (สูงสุด ' + IMG_MAX + ' รูปต่องาน)', true);
+  files.slice(0, room).forEach(f => E.pending.push({ id: uid('p_'), file: f, url: URL.createObjectURL(f) }));
+  renderEditor();
+}
+function dropPending(E) { (E && E.pending || []).forEach(p => { try { URL.revokeObjectURL(p.url); } catch (x) {} }); }
 function readEditor() {
   const j = S.edit.job;
   document.querySelectorAll('#sheetBody [data-e]').forEach(el => {
@@ -2955,9 +3054,12 @@ async function saveEditor() {
   const btn = document.querySelector('#sheetFoot [data-act="save"]'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
   try {
     const payload = Object.assign({}, j); delete payload.minutes;
+    if (isCam(payload) && payload.status === 'review') { payload.status = 'done'; if (!payload.finishedAt) payload.finishedAt = nowLocal(); }
     if (payload.status === 'done' && runningOf(payload.id)) applyStop(await api().stopTimer({ logId: runningOf(payload.id).id }));
-    await saveJob(payload, S.edit.isNew ? 'เพิ่มงาน ' + j.code + ' แล้ว' : 'บันทึกแล้ว');
+    const files = S.edit.isNew ? (S.edit.pending || []).map(p => p.file) : [];
+    const saved = await saveJob(payload, S.edit.isNew ? 'เพิ่มงาน ' + j.code + ' แล้ว' + (files.length ? ' · กำลังอัปโหลดรูป ' + files.length + ' รูป' : '') : 'บันทึกแล้ว');
     closeEditor(); render();
+    if (files.length && saved && saved.id) uploadImages(saved.id, files);
   } catch (e) { err.hidden = false; err.textContent = e.message; btn.disabled = false; btn.textContent = 'บันทึก'; }
 }
 
@@ -3005,7 +3107,7 @@ document.addEventListener('click', async e => {
   if (d.resetpin) { S.pinEdit = ''; try { const r = await mutate(() => api().resetPin({ userId: d.resetpin })); S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
 
   // editor-scoped
-  if (d.est && S.edit) { readEditor(); S.edit.job.status = d.est; if (d.est === 'done' && !S.edit.job.finishedAt) S.edit.job.finishedAt = nowLocal(); if (d.est !== 'done') S.edit.job.finishedAt = ''; return renderEditor(); }
+  if (d.est && S.edit) { readEditor(); S.edit.job.status = isCam(S.edit.job) && d.est === 'review' ? 'done' : d.est; if (S.edit.job.status !== d.est) toast('งาน CAM ไม่ต้องรอตรวจ — ตั้งเป็นเสร็จแล้ว'); if (S.edit.job.status === 'done' && !S.edit.job.finishedAt) S.edit.job.finishedAt = nowLocal(); if (S.edit.job.status !== 'done') S.edit.job.finishedAt = ''; return renderEditor(); }
   if (d.eqty && S.edit) { readEditor(); S.edit.job.qty = d.eqty; autoDue(); return renderEditor(); }
   if (d.elv && S.edit) { readEditor(); S.edit.job.level = +d.elv === +S.edit.job.level ? '' : +d.elv; return renderEditor(); }
   if (d.dellog) { try { const r = await mutate(() => api().deleteLog({ logId: d.dellog }), 'ลบรายการเวลาแล้ว'); S.logs = S.logs.filter(l => l.id !== d.dellog); const j = jobById(r.jobId); if (j) j.minutes = r.minutes; render(); } catch (x) {} return; }
@@ -3024,6 +3126,10 @@ document.addEventListener('click', async e => {
   if (d.helpdone) return helpUpdate(d.helpdone, 'done');
   if (d.ntfopen) { dismissNtf(t.closest('.ntf')); return openMsgPanel(d.ntfopen); }
   if (d.ntfx) return dismissNtf(t.closest('.ntf'));
+  if (d.emo) { e.preventDefault(); return emoInsert(d.emo); }
+  if (d.emotab) { M.emoTab = d.emotab; const pop = $('#emoPop'); if (pop) pop.innerHTML = emoPopHtml(); return; }
+  if (d.act === 'emoji') { e.preventDefault(); return emoToggle(); }
+  if (d.pendx && S.edit) { const E = S.edit; if (E.mode === 'edit') readEditor(); const p = (E.pending || []).find(x => x.id === d.pendx); if (p) URL.revokeObjectURL(p.url); E.pending = (E.pending || []).filter(x => x.id !== d.pendx); return renderEditor(); }
   if (d.lbopen) return openLightbox(d.lbjob, d.lbopen);
   if (d.lbgo !== undefined) { S.lb.i = +d.lbgo; return drawLightbox(); }
   if (d.lb) { if (d.lb === 'close') return closeLightbox(); S.lb.i += d.lb === 'next' ? 1 : -1; return drawLightbox(); }
@@ -3128,6 +3234,7 @@ document.addEventListener('change', e => {
   if (t.id === 'logoIn' && t.files && t.files[0]) return readLogo(t.files[0]);
   if (t.id === 'bgIn' && t.files && t.files[0]) { const f = t.files[0]; t.value = ''; shrinkImage(f, 1920, 900000, 0.82).then(d => { try { localStorage.setItem('kiwngan:bgimg', d); } catch (x) { return toast('รูปใหญ่เกินไปสำหรับเครื่องนี้ ลองรูปอื่น', true); } applyTheme(); toast('ตั้งรูปพื้นหลังแล้ว'); render(); }).catch(e => toast(e.message, true)); return; }
   if (t.dataset.photofor && t.files && t.files[0]) return setPhoto(t.dataset.photofor, t.files[0]);
+  if (t.id === 'eImgIn' && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return addEditorFiles(f); }
   if (t.dataset.imgjob && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return uploadImages(t.dataset.imgjob, f); }
   if (S.edit && t.closest('#sheetBody') && t.dataset.e) {
     readEditor();
@@ -3138,6 +3245,33 @@ document.addEventListener('change', e => {
 });
 function autoDue() { const E = S.edit; if (!E || E.dueTouched) return; const sg = suggestDue(E.job); if (sg) E.job.due = sg.date; }
 
+document.addEventListener('mousedown', e => { if (M.emoji && !(e.target.closest && e.target.closest('#emoPop,#emoBtn'))) emoToggle(false); }, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && M.emoji) { emoToggle(false); e.stopPropagation(); } }, true);
+/* ลากไฟล์รูปลงหน้าเพิ่ม/แก้ไขงาน (หรือลงหน้ารายละเอียดงาน) */
+const hasFiles = e => { const dt = e.dataTransfer; return !!dt && Array.from(dt.types || []).indexOf('Files') >= 0; };
+document.addEventListener('dragover', e => {
+  if (!hasFiles(e) || !S.edit) return;
+  const sh = e.target.closest && e.target.closest('#sheet'); if (!sh) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; sh.classList.add('file-over');
+  const dz = $('#eDrop'); if (dz) dz.classList.add('over');
+});
+document.addEventListener('dragleave', e => { const sh = $('#sheet'); if (sh && (!e.relatedTarget || !sh.contains(e.relatedTarget))) { sh.classList.remove('file-over'); const dz = $('#eDrop'); if (dz) dz.classList.remove('over'); } });
+document.addEventListener('drop', e => {
+  if (!hasFiles(e) || !S.edit) return;
+  const sh = e.target.closest && e.target.closest('#sheet'); if (!sh) return;
+  e.preventDefault(); sh.classList.remove('file-over');
+  const E = S.edit, live = E.isNew ? null : jobById(E.job.id);
+  if (!E.isNew && !canAddImg(live)) return toast('เพิ่มรูปได้เฉพาะงานของตัวเอง', true);
+  addEditorFiles(e.dataTransfer.files);
+});
+document.addEventListener('paste', e => {
+  if (!S.edit || !$('#sheet').classList.contains('open')) return;
+  const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter(f => /^image\//.test(f.type));
+  if (!files.length) return;
+  const E = S.edit, live = E.isNew ? null : jobById(E.job.id);
+  if (!E.isNew && !canAddImg(live)) return;
+  e.preventDefault(); addEditorFiles(files);
+});
 /* drag & drop on the board */
 let dragId = null;
 document.addEventListener('dragstart', e => { const c = e.target.closest && e.target.closest('.card'); if (!c) return; dragId = c.dataset.id; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (x) {} });
@@ -3150,6 +3284,7 @@ async function saveSettings() {
   const d = S.draft;
   d.members = d.members.filter(m => String(m.name).trim()).map(m => Object.assign(m, { name: String(m.name).trim() }));
   ['sales', 'groups'].forEach(k => { d[k] = d[k].map(x => String(x).trim()).filter(Boolean); });
+  d.taskTypes.forEach((t, i) => { if (!/^#[0-9a-f]{6}$/i.test(t.color || '')) t.color = TYPE_COLORS[i % TYPE_COLORS.length]; });
   d.taskTypes = d.taskTypes.filter(t => String(t.name).trim());
   const names = d.members.map(m => m.name); if (new Set(names).size !== names.length) { toast('มีชื่อทีมงานซ้ำกัน', true); return; }
   try {
