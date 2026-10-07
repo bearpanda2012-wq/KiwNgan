@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.10.0';
+const APP_VERSION = '2.11.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -539,11 +539,16 @@ function applyStop(r) { if (r.log) upsert(S.logs, r.log); const j = jobById(r.jo
 
 async function load(silent) {
   if (!LS.get(tokenKey(), '')) return showLogin();
-  S.sync = 'busy'; if (!silent && S.screen === 'app') renderShell();
+  if (silent && S.loading) return;
+  S.loading = true;
+  // โหลดเงียบ: ส่ง stamp ไปด้วย ถ้าข้อมูลไม่เปลี่ยน เซิร์ฟเวอร์ตอบทันทีโดยไม่อ่านชีต (บังคับโหลดเต็มทุก 5 นาที)
+  const stamp = silent && S.dataStamp && Date.now() - (S.fullAt || 0) < 300000 ? S.dataStamp : '';
+  if (!stamp) { S.sync = 'busy'; if (!silent && S.screen === 'app') renderShell(); }
   try {
     let d = null;
     for (let i = 0; i < 3; i++) {   // Apps Script occasionally answers empty while busy/redeploying: retry quietly
-      try { d = await api().bootstrap(); } catch (x) { if (x.code === 'auth' || i === 2) throw x; d = null; }
+      try { d = await api().bootstrap(stamp ? { stamp: stamp } : {}); } catch (x) { if (x.code === 'auth' || i === 2) throw x; d = null; }
+      if (d && d.same) { S.sync = 'ok'; S.syncErr = ''; S.lastSync = Date.now(); S.loading = false; return; }
       if (d && d.me && d.settings) break;
       d = null; await new Promise(r => setTimeout(r, 1200 * (i + 1)));
     }
@@ -551,17 +556,20 @@ async function load(silent) {
     S.settings = normalizeSettings(d.settings);
     S.users = d.users || []; S.user = d.me; S.me = d.me.name;
     S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || [];
+    S.dataStamp = d.stamp || ''; S.fullAt = Date.now();
     if (!S.draftDirty) S.draft = null;
     S.sync = 'ok'; S.syncErr = ''; S.lastSync = Date.now(); S.loaded = true;
     if (S.screen !== 'app') { S.animIn = true; setTimeout(startMsgPolling, 800); }
     S.screen = 'app'; document.body.classList.remove('auth'); applyTheme();
   } catch (e) {
+    S.loading = false;
     if (e.code === 'auth') { LS.del(tokenKey()); toast(e.message, true); return showLogin(); }
     S.sync = 'err'; S.syncErr = e.message;
     if (!S.loaded) { S.settings = normalizeSettings(null); S.loaded = true; }
     if (S.screen !== 'app') { S.login.err = e.message; S.login.retry = true; return showLogin(true); }
     if (!silent) toast(e.message, true);
   }
+  S.loading = false;
   applyBrand(); render();
 }
 
@@ -733,6 +741,7 @@ async function moveJob(id, status) {
   if (j.status === status) return;
   if (!canEdit(j)) { toast('เปลี่ยนสถานะได้เฉพาะงานของตัวเอง งานนี้เป็นของ ' + (j.assignee || 'คนอื่น'), true); return; }
   const prev = clone(j);
+  S.saving = (S.saving || 0) + 1;
   j.status = status;
   if (status === 'done') j.finishedAt = nowLocal(); else j.finishedAt = '';
   if (WORKING(status) && !j.startedAt) j.startedAt = nowLocal();
@@ -743,6 +752,7 @@ async function moveJob(id, status) {
     const p = { id: j.id, code: j.code, status: status, finishedAt: j.finishedAt, startedAt: j.startedAt, baseUpdatedAt: prev.updatedAt };
     await saveJob(p, j.code + ' → ' + ST[status].label);
   } catch (e) { upsert(S.jobs, prev); render(); }
+  S.saving--;
 }
 
 async function startTimer(jobId) {
@@ -1036,9 +1046,12 @@ const unreadAll = () => M.list.filter(m => !m.read).length;
 const openHelps = () => M.list.filter(m => m.kind === 'help' && m.status === 'open' && m.from !== S.me);
 
 async function pollMessages(first) {
-  if (S.screen !== 'app' || !S.user) return;
+  if (S.screen !== 'app' || !S.user || M.polling) return;
+  M.polling = true;
   try {
-    const r = await api().messages({ since: M.since });
+    const r = await api().messages({ since: M.since, stamp: M.loaded ? M.stamp : '' });
+    if (r.same) { M.polling = false; return; }
+    if (r.stamp) M.stamp = r.stamp;
     const fresh = [];
     (r.messages || []).forEach(m => {
       const i = M.list.findIndex(x => x.id === m.id);
@@ -1055,10 +1068,11 @@ async function pollMessages(first) {
     if (sig !== M.sig) { M.sig = sig; if (!first && !S.edit && !S.lb) render(); else { renderMsgFab(); if (S.screen === 'app') { $('#nav').innerHTML = navHtml(true); $('#tabbar').innerHTML = navHtml(true); } } } else renderMsgFab();
     fresh.forEach(m => peekHead(m));
   } catch (e) { /* offline: try again next tick */ }
+  M.polling = false;
 }
 function startMsgPolling() {
   if (M.timer) return;
-  M.list = []; M.since = ''; M.loaded = false; M.seen = {};
+  M.list = []; M.since = ''; M.loaded = false; M.seen = {}; M.stamp = '';
   pollMessages(true); rtcLoop(); pushBoot();
   M.timer = setInterval(() => { if (document.visibilityState === 'visible' || 'Notification' in window && Notification.permission === 'granted') pollMessages(); }, 20000);
 }
@@ -1332,10 +1346,15 @@ function rtcLoop() {
   const fast = R.state === 'wait' || R.state === 'connecting' || R.prompt || (V.on && Date.now() - V.since < 20000);
   R.loop = setTimeout(async () => {
     if (document.visibilityState === 'visible' || R.state || V.on) {
-      try { const r = await api().rtcPoll({}); (r.signals || []).forEach(rtcOnSig); if (r.room) roomOnPoll(r.room); } catch (e) { /* offline */ }
+      try { const r = await api().rtcPoll({}); (r.signals || []).forEach(rtcOnSig); if (r.room) roomOnPoll(r.room); stampCheck(r); } catch (e) { /* offline */ }
     }
     rtcLoop();
   }, fast ? 1200 : R.state || V.on ? 2200 : 5000);
+}
+/* สัญญาณเบา ๆ ทุก 5 วิบอกว่างาน/ข้อความเปลี่ยนไหม → ดึงเฉพาะตอนมีการเปลี่ยนแปลง (อัปเดตเกือบทันที) */
+function stampCheck(r) {
+  if (r.ms && M.loaded && r.ms !== M.stamp) pollMessages();
+  if (r.ds && S.dataStamp && r.ds !== S.dataStamp && !S.edit && !S.draftDirty && !S.loading && !S.saving) load(true);
 }
 function rtcStop() { clearTimeout(R.loop); R.loop = null; rtcCleanup(); closeRtcModal(); }
 
@@ -3052,9 +3071,24 @@ async function saveEditor() {
   if (!j.code) { err.hidden = false; err.textContent = 'ใส่เลข Job ก่อนบันทึก'; $('#e-code').focus(); return; }
   if (S.edit.isNew && S.jobs.some(x => x.code.toLowerCase() === j.code.toLowerCase())) { err.hidden = false; err.textContent = 'มีเลข Job นี้อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1'; return; }
   const btn = document.querySelector('#sheetFoot [data-act="save"]'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
+  const pre = Object.assign({}, j); delete pre.minutes;
+  if (isCam(pre) && pre.status === 'review') { pre.status = 'done'; if (!pre.finishedAt) pre.finishedAt = nowLocal(); }
+  // แก้ไขงานเดิม: ปิดหน้าต่างและอัปเดตบนจอทันที แล้วบันทึกเบื้องหลัง (ถ้าไม่สำเร็จจะเปิดฟอร์มเดิมคืนให้)
+  if (!S.edit.isNew && !(pre.status === 'done' && runningOf(pre.id))) {
+    const live = jobById(pre.id), prev = live ? clone(live) : null, draft = clone(j);
+    if (live) Object.assign(live, pre);
+    closeEditor(); render();
+    S.saving = (S.saving || 0) + 1;
+    try { await saveJob(pre, 'บันทึกแล้ว'); }
+    catch (e) {
+      if (prev) upsert(S.jobs, prev); render();
+      if (e.code !== 'auth') { openEditor(pre.id); S.edit.job = Object.assign(draft, { baseUpdatedAt: draft.baseUpdatedAt }); S.edit.mode = 'edit'; S.edit.dueTouched = true; renderEditor(); const er = $('#eErr'); if (er) { er.hidden = false; er.textContent = 'ยังไม่ได้บันทึก: ' + e.message; } }
+    }
+    S.saving--;
+    return;
+  }
   try {
-    const payload = Object.assign({}, j); delete payload.minutes;
-    if (isCam(payload) && payload.status === 'review') { payload.status = 'done'; if (!payload.finishedAt) payload.finishedAt = nowLocal(); }
+    const payload = pre;
     if (payload.status === 'done' && runningOf(payload.id)) applyStop(await api().stopTimer({ logId: runningOf(payload.id).id }));
     const files = S.edit.isNew ? (S.edit.pending || []).map(p => p.file) : [];
     const saved = await saveJob(payload, S.edit.isNew ? 'เพิ่มงาน ' + j.code + ' แล้ว' + (files.length ? ' · กำลังอัปโหลดรูป ' + files.length + ' รูป' : '') : 'บันทึกแล้ว');

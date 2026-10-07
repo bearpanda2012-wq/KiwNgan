@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.10.0';
+const VERSION = '1.11.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -52,7 +52,10 @@ function doPost(e) {
     const fn = ACTIONS[req.action];
     if (!fn) throw new Error('ไม่รู้จักคำสั่ง ' + req.action);
     const user = auth_(req.token);
-    return json_({ ok: true, data: fn(req.payload || {}, user) });
+    const data = fn(req.payload || {}, user);
+    if (DATA_ACTIONS_[req.action]) bump_('data');
+    if (MSG_ACTIONS_[req.action]) bump_('msg');
+    return json_({ ok: true, data: data });
   } catch (err) {
     const msg = String(err && err.message || err);
     return json_({ ok: false, error: msg, code: msg.indexOf('AUTH:') === 0 ? 'auth' : undefined });
@@ -67,9 +70,9 @@ const PUBLIC = {
 };
 
 const ACTIONS = {
-  me: (p, u) => ({ user: publicUser_(u) }),
+  me: (p, u) => ({ user: publicUser_(readAll_('Users').find(x => x.id === u.id) || u) }),
   logout: (p, u) => { logout_(u.token); return {}; },
-  bootstrap: (p, u) => bootstrap_(u),
+  bootstrap: (p, u) => bootstrap_(u, p.stamp),
   saveJob: (p, u) => withLock_(() => { const r = saveJob_(p.job, u); return { job: maskJob_(r.job, u) }; }),
   deleteJob: (p, u) => withLock_(() => deleteJob_(p.id, u)),
   startTimer: (p, u) => withLock_(() => { const r = startTimer_(p.jobId, u); return { log: maskLog_(r.log, u), job: maskJob_(r.job, u), closed: r.closed.map(l => maskLog_(l, u)) }; }),
@@ -79,7 +82,7 @@ const ACTIONS = {
   changePin: (p, u) => withLock_(() => changePin_(u, p.oldPin, p.newPin)),
   setPhoto: (p, u) => withLock_(() => setPhoto_(p.userId || u.id, p.photo, u)),
   addImage: (p, u) => withLock_(() => addImage_(p, u)),
-  messages: (p, u) => messages_(u, p.since),
+  messages: (p, u) => messages_(u, p.since, p.stamp),
   sendMessage: (p, u) => withLock_(() => sendMessage_(p, u)),
   markRead: (p, u) => withLock_(() => markRead_(p.ids, u)),
   helpUpdate: (p, u) => withLock_(() => helpUpdate_(p.id, p.status, u)),
@@ -89,7 +92,7 @@ const ACTIONS = {
   pushSub: (p, u) => withLock_(() => pushSub_(p.sub, u)),
   pushUnsub: (p, u) => withLock_(() => pushUnsub_(p.endpoint, u)),
   pushInfo: (p, u) => ({ info: pushInfo_(u) }),
-  rtcPoll: (p, u) => Object.assign(rtcPoll_(u), { room: roomView_(roomGet_(), u) }),
+  rtcPoll: (p, u) => Object.assign(rtcPoll_(u), { room: roomView_(roomGet_(), u), ds: stamp_('data'), ms: stamp_('msg') }),
   room: (p, u) => room_(p, u),
   deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
   thumbs: (p, u) => thumbs_(p.ids),
@@ -99,6 +102,27 @@ const ACTIONS = {
   saveUser: (p, u) => withLock_(() => { admin_(u); return saveUser_(p.user, u); }),
   resetPin: (p, u) => withLock_(() => { admin_(u); return resetPin_(p.userId, u, p.pin); })
 };
+
+/* ===== ความเร็ว: ตัวบอกเวอร์ชันข้อมูล (stamp) ใน cache
+   หน้าเว็บส่ง stamp ล่าสุดมาด้วย ถ้าไม่มีอะไรเปลี่ยนจะตอบกลับทันทีโดยไม่ต้องอ่านชีต ===== */
+const DATA_ACTIONS_ = { saveJob: 1, deleteJob: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, resetPin: 1 };
+const MSG_ACTIONS_ = { sendMessage: 1, markRead: 1, helpUpdate: 1, deleteMessages: 1 };
+function stamp_(kind) {
+  const c = CacheService.getScriptCache(), k = 'stamp:' + kind;
+  let v = c.get(k);
+  if (!v) { v = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); c.put(k, v, 21600); }
+  return v;
+}
+function bump_(kind) { try { CacheService.getScriptCache().put('stamp:' + kind, Date.now().toString(36) + Math.random().toString(36).slice(2, 6), 21600); } catch (e) {} }
+/* ผู้ใช้แบบย่อ (ไม่มีรูป/รหัส) เก็บใน cache — ทุกคำขอต้องตรวจผู้ใช้ จึงไม่ต้องอ่านชีต Users ทุกครั้ง */
+function usersLite_() {
+  const c = CacheService.getScriptCache();
+  try { const hit = c.get('users:lite'); if (hit) return JSON.parse(hit); } catch (e) {}
+  const list = readAll_('Users').map(u => ({ id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active }));
+  try { c.put('users:lite', JSON.stringify(list), 600); } catch (e) {}
+  return list;
+}
+function usersBust_() { try { CacheService.getScriptCache().remove('users:lite'); } catch (e) {} ADMIN_NAMES_ = null; }
 
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
@@ -147,8 +171,9 @@ function auth_(token) {
   if (!raw) throw new Error('AUTH:หมดเวลาการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่');
   const s = JSON.parse(raw);
   if (s.exp < Date.now()) { PropertiesService.getScriptProperties().deleteProperty('S_' + token); throw new Error('AUTH:หมดเวลาการเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่'); }
-  const u = readAll_('Users').find(x => x.id === s.uid);
-  if (!u || !u.active) throw new Error('AUTH:บัญชีนี้ถูกปิดใช้งาน');
+  const u0 = usersLite_().find(x => x.id === s.uid);
+  if (!u0 || !u0.active) throw new Error('AUTH:บัญชีนี้ถูกปิดใช้งาน');
+  const u = Object.assign({}, u0);
   u.token = token;
   return u;
 }
@@ -180,7 +205,7 @@ const ownsJob_ = (u, j) => isAdmin_(u) || j.assignee === u.name || j.createdBy =
 const ADMIN_LABEL = 'ผู้ดูแลระบบ';
 let ADMIN_NAMES_ = null;
 function adminNames_() {
-  if (!ADMIN_NAMES_) ADMIN_NAMES_ = readAll_('Users').filter(x => x.role === 'admin').map(x => x.name);
+  if (!ADMIN_NAMES_) ADMIN_NAMES_ = usersLite_().filter(x => x.role === 'admin').map(x => x.name);
   return ADMIN_NAMES_;
 }
 function maskName_(n, viewer) { return !isAdmin_(viewer) && n && adminNames_().indexOf(n) >= 0 ? ADMIN_LABEL : n; }
@@ -207,7 +232,12 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || 'Asia/Bangkok'; }
 function nowIso_() { return Utilities.formatDate(new Date(), tz_(), "yyyy-MM-dd'T'HH:mm:ss"); }
 function uid_(p) { return (p || '') + Utilities.getUuid().replace(/-/g, '').slice(0, 10); }
 
+const SH_ = {};
 function sheet_(name) {
+  if (SH_[name]) return SH_[name];
+  return (SH_[name] = sheetOpen_(name));
+}
+function sheetOpen_(name) {
   let sh = ss_().getSheetByName(name);
   const head = SHEETS[name];
   if (!sh) {
@@ -267,6 +297,7 @@ function writeRow_(name, obj, row) {
   const vals = [head.map(h => obj[h] === undefined || obj[h] === null ? '' : String(obj[h]))];
   const r = row > 0 ? row : sh.getLastRow() + 1;
   sh.getRange(r, 1, 1, head.length).setNumberFormat('@').setValues(vals);
+  if (name === 'Users') usersBust_();
   return r;
 }
 
@@ -286,6 +317,7 @@ function getSetting_(key) {
 }
 
 function setSetting_(key, value) {
+  if (key === 'config') { try { CacheService.getScriptCache().remove('cfg'); } catch (e) {} }
   const sh = sheet_('Settings');
   const last = sh.getLastRow();
   if (last >= 2) {
@@ -298,7 +330,9 @@ function setSetting_(key, value) {
 }
 
 function settings_() {
-  const raw = getSetting_('config');
+  const c = CacheService.getScriptCache();
+  let raw = c.get('cfg');
+  if (raw == null) { raw = getSetting_('config') || ''; if (raw.length < 95000) try { c.put('cfg', raw, 600); } catch (e) {} }
   const s = raw ? JSON.parse(raw) : defaultSettings_();
   delete s.members;
   return s;
@@ -313,6 +347,7 @@ function saveSettings_(settings, u) {
   if (!settings || typeof settings !== 'object') throw new Error('ข้อมูลตั้งค่าไม่ถูกต้อง');
   delete settings.members; delete settings.teamKey;
   setSetting_('config', JSON.stringify(settings));
+  try { CacheService.getScriptCache().remove('cfg'); } catch (e) {}
   log_('', u.name, 'settings', 'แก้ไขการตั้งค่า');
   return { settings: settings };
 }
@@ -421,15 +456,19 @@ function changePin_(u, oldPin, newPin) {
 
 /* ======================= Jobs ======================= */
 
-function bootstrap_(u) {
+function bootstrap_(u, stamp) {
+  const st = stamp_('data');
+  if (stamp && stamp === st) return { same: true, stamp: st, serverTime: nowIso_() };
   const cutoff = Utilities.formatDate(new Date(Date.now() - 120 * 864e5), tz_(), 'yyyy-MM-dd');
   const logs = readAll_('TimeLogs').filter(l => !l.end || l.start >= cutoff);
+  const allUsers = readAll_('Users'), meFull = allUsers.find(x => x.id === u.id) || u;
   return {
+    stamp: st,
     settings: settings_(),
-    users: readAll_('Users').filter(x => isAdmin_(u) || x.role !== 'admin').map(publicUser_),
+    users: allUsers.filter(x => isAdmin_(u) || x.role !== 'admin').map(publicUser_),
     jobs: readAll_('Jobs').map(j => maskJob_(j, u)), logs: logs.map(l => maskLog_(l, u)),
     images: imageMeta_().map(m => Object.assign(m, { createdBy: maskName_(m.createdBy, u) })),
-    me: publicUser_(u), serverTime: nowIso_(), version: VERSION
+    me: publicUser_(meFull), serverTime: nowIso_(), version: VERSION
   };
 }
 
@@ -541,17 +580,37 @@ function deleteImage_(id, u) {
 }
 function thumbs_(ids) {
   ids = (ids || []).slice(0, 60).map(String);
-  const sh = sheet_('Images'), last = sh.getLastRow(), out = {};
-  if (last < 2 || !ids.length) return { thumbs: out };
-  const all = sh.getRange(2, 1, last - 1, 1).getDisplayValues();
-  all.forEach((r, i) => { if (ids.indexOf(r[0]) >= 0) out[r[0]] = sh.getRange(i + 2, 5).getDisplayValue(); });
+  const out = {}, c = CacheService.getScriptCache();
+  if (!ids.length) return { thumbs: out };
+  const hit = c.getAll(ids.map(id => 'th:' + id));
+  ids.forEach(id => { if (hit['th:' + id]) out[id] = hit['th:' + id]; });
+  const need = ids.filter(id => !out[id]);
+  if (!need.length) return { thumbs: out };
+  const sh = sheet_('Images'), last = sh.getLastRow();
+  if (last < 2) return { thumbs: out };
+  const all = sh.getRange(2, 1, last - 1, 1).getValues(), rows = [];
+  all.forEach((r, i) => { if (need.indexOf(String(r[0])) >= 0) rows.push(i + 2); });
+  if (!rows.length) return { thumbs: out };
+  const lo = Math.min.apply(null, rows), hi = Math.max.apply(null, rows), put = {};
+  if (hi - lo + 1 <= rows.length * 3 + 10) {   // อ่านช่วงเดียวรวด แทนการอ่านทีละช่อง
+    const vals = sh.getRange(lo, 1, hi - lo + 1, 5).getValues();
+    vals.forEach(v => { const id = String(v[0]); if (need.indexOf(id) >= 0) { out[id] = String(v[4]); put['th:' + id] = out[id]; } });
+  } else rows.forEach(r => { const v = sh.getRange(r, 1, 1, 5).getValues()[0]; out[String(v[0])] = String(v[4]); put['th:' + v[0]] = String(v[4]); });
+  try { c.putAll(put, 21600); } catch (e) {}
   return { thumbs: out };
 }
 function imageFull_(id) {
+  const c = CacheService.getScriptCache(), keys = []; for (let i = 0; i < IMG_PARTS; i++) keys.push('fi:' + id + ':' + i);
+  const hit = c.getAll(keys.concat(['fi:' + id + ':n']));
+  const n = Number(hit['fi:' + id + ':n'] || 0);
+  if (n && keys.slice(0, n).every(k => hit[k] != null)) return { id: id, full: keys.slice(0, n).map(k => hit[k]).join('') };
   const row = rowOf_('Images', id);
   if (row < 0) throw new Error('ไม่พบรูปนี้');
-  const parts = sheet_('Images').getRange(row, 6, 1, IMG_PARTS).getDisplayValues()[0];
-  return { id: id, full: parts.join('') };
+  const parts = sheet_('Images').getRange(row, 6, 1, IMG_PARTS).getValues()[0].map(String);
+  const full = parts.join(''), put = {}, used = parts.filter(x => x).length;
+  parts.slice(0, used).forEach((x, i) => { put[keys[i]] = x; }); put['fi:' + id + ':n'] = String(used);
+  try { c.putAll(put, 21600); } catch (e) {}
+  return { id: id, full: full };
 }
 
 function recalcMinutes_(jobId) {
@@ -760,19 +819,21 @@ function maskMsg_(m, u) {
   if (!isAdmin_(u)) { o.from = maskName_(o.from, u); o.helper = maskName_(o.helper, u); if (adminNames_().indexOf(o.to) >= 0) o.to = 'admin'; }
   return o;
 }
-function messages_(u, since) {
+function messages_(u, since, stamp) {
+  const st = stamp_('msg');
+  if (stamp && stamp === st) return { same: true, stamp: st, serverTime: nowIso_() };
   const cutoff = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), tz_(), "yyyy-MM-dd'T'HH:mm:ss");
   const s = String(since || '');
   const vis = readAll_('Messages').filter(m => msgVisible_(m, u) && m.ts >= cutoff);
   const list = vis.filter(m => !s || m.ts > s || (m.kind === 'help' && m.status !== 'done'));
-  return { messages: list.slice(-400).map(m => maskMsg_(m, u)), ids: vis.map(m => m.id), serverTime: nowIso_() };
+  return { messages: list.slice(-400).map(m => maskMsg_(m, u)), ids: vis.map(m => m.id), serverTime: nowIso_(), stamp: st };
 }
 function sendMessage_(p, u) {
   const text = String(p.text || '').trim().slice(0, 1000);
   if (!text) throw new Error('พิมพ์ข้อความก่อนส่ง');
   let to = String(p.to || 'team');
   if (to !== 'team' && to !== 'admin') {
-    const target = readAll_('Users').find(x => x.name === to && x.active);
+    const target = usersLite_().find(x => x.name === to && x.active);
     if (!target) throw new Error('ไม่พบผู้รับ');
     if (target.role === 'admin' && !isAdmin_(u)) to = 'admin';
   }
@@ -839,7 +900,7 @@ function rtcBox_(name) { return 'rtc:' + name; }
 function rtcSend_(p, u) {
   const type = String(p.type || '');
   if (RTC_TYPES_.indexOf(type) < 0) throw new Error('คำสั่งแชร์หน้าจอไม่ถูกต้อง');
-  const to = String(p.to || ''), users = readAll_('Users').filter(x => x.active);
+  const to = String(p.to || ''), users = usersLite_().filter(x => x.active);
   let targets;
   if (to === 'admin' || to === ADMIN_LABEL) targets = adminNames_();
   else {
@@ -959,7 +1020,7 @@ function pushSub_(sub, u) {
 function pushUnsub_(ep, u) { pushSave_(u, pushList_(u).filter(x => x.e !== String(ep || ''))); return { ok: true }; }
 function pushInfo_(u) { try { return JSON.parse(CacheService.getScriptCache().get('pinfo:' + u.name) || 'null'); } catch (e) { return null; } }
 function pushTo_(names, info) {
-  const users = readAll_('Users').filter(x => x.active), cache = CacheService.getScriptCache();
+  const users = usersLite_().filter(x => x.active), cache = CacheService.getScriptCache();
   names.forEach(n => {
     const ru = users.find(x => x.name === n); if (!ru) return;
     const list = pushList_(ru); if (!list.length) return;
@@ -980,7 +1041,7 @@ function pushForSignal_(p, u) {
   if (!kind) return;
   try {
     const to = String(p.to || ''), names = (to === 'admin' || to === ADMIN_LABEL) ? adminNames_() : [to];
-    const users = readAll_('Users');
+    const users = usersLite_();
     names.filter(n => n !== u.name).forEach(n => {
       const ru = users.find(x => x.name === n) || { role: 'user' };
       pushTo_([n], { kind: kind, from: maskName_(u.name, ru), sid: String(p.sid || '') });
