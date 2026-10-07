@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.13.0';
+const APP_VERSION = '2.14.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -517,8 +517,24 @@ const Demo = {
   async resetPin(p) { const d = this.db(); this.admin(this.me(d)); const u = d.users.find(x => x.id === p.userId); if (!u) throw new Error('ไม่พบผู้ใช้'); if (p.pin && !/^\d{4,6}$/.test(p.pin)) throw new Error('PIN ต้องเป็นตัวเลข 4–6 หลัก'); u.pin = p.pin ? String(p.pin) : String(Math.floor(1000 + Math.random() * 9000)); this.save(d); return { userId: u.id, pin: u.pin }; },
 };
 
+/* ประตู Apps Script ของ Google บางครั้งค้าง 10–20 วิ (โค้ดเราทำงานเสร็จใน ~0.5 วิ) แต่ถ้าส่งคำขอซ้ำมักได้คำตอบใน 1–2 วิ
+   → คำขอที่ส่งซ้ำได้ปลอดภัย (อ่านข้อมูล / สัญญาณที่มีรหัสกันซ้ำ) จะส่ง "สำรอง" อีกชุดถ้ายังไม่ตอบ แล้วใช้คำตอบที่มาก่อน */
+const HEDGE = { ping: 4000, roster: 4000, bootstrap: 6000, messages: 3500, thumbs: 4500, image: 6000, activity: 4500, pushInfo: 4000, rtcPoll: 3500, rtcSend: 3000, stopTimer: 5000, markRead: 5000 };
 const Remote = {
-  async call(action, payload, conn) {
+  call(action, payload, conn) {
+    const h = HEDGE[action];
+    if (!h || conn) return Remote.once(action, payload, conn);
+    const wait = 0;   // รอสัญญาณแบบ long-poll ก็ส่งสำรองได้เลย: ทั้งสองคำขอรอสัญญาณชุดเดียวกัน ใช้อันที่ตอบก่อน
+    return new Promise((resolve, reject) => {
+      let settled = false, fails = 0, tries = 0, t2 = null, t3 = null;
+      const go = () => { tries++; Remote.once(action, payload).then(r => { if (settled) { if (action === 'rtcPoll' && r && r.signals && r.signals.length) (r.signals || []).forEach(rtcOnSigOnce); return; } settled = true; clearTimeout(t2); clearTimeout(t3); resolve(r); },
+        e => { fails++; if (settled) return; if (e.code === 'auth' || fails >= tries && tries >= 3) { settled = true; clearTimeout(t2); clearTimeout(t3); reject(e); } else if (fails >= tries) { clearTimeout(t2); go(); } }); };
+      go();
+      t2 = setTimeout(() => { if (!settled) go(); }, wait + h);            // ส่งสำรองครั้งที่ 2
+      t3 = setTimeout(() => { if (!settled) go(); }, wait + h * 2.5);      // ยังเงียบอีก ส่งครั้งที่ 3
+    });
+  },
+  async once(action, payload, conn) {
     const c = conn || S.conn;
     let res;
     try {
@@ -1383,7 +1399,17 @@ const peerAv = (peer, name, cls) => peer === 'admin' ? '<span class="av ' + (cls
 
 function rtcSig(to, sid, type, data) {
   if (mode() === 'demo') return Promise.resolve({});
-  return api().rtcSend({ to: to, sid: sid, type: type, data: data || '' }).catch(e => { toast(e.message, true); throw e; });
+  return api().rtcSend({ id: uid('r_'), to: to, sid: sid, type: type, data: data || '' }).catch(e => { toast(e.message, true); throw e; });
+}
+/* รับสัญญาณครั้งเดียวต่อรหัส (คำขอสำรองอาจได้สัญญาณชุดเดียวกัน) แล้วจดไว้เพื่อยืนยันกับเซิร์ฟเวอร์รอบถัดไป */
+const SIG_SEEN = {}, SIG_ACK = [];
+function rtcOnSigOnce(g) {
+  if (!g || !g.id) return rtcOnSig(g);
+  if (SIG_ACK.indexOf(g.id) < 0) SIG_ACK.push(g.id);
+  if (SIG_SEEN[g.id]) return;
+  const now = Date.now(); SIG_SEEN[g.id] = now;
+  Object.keys(SIG_SEEN).forEach(k => { if (now - SIG_SEEN[k] > 300000) delete SIG_SEEN[k]; });
+  rtcOnSig(g);
 }
 function rtcLoop() {
   clearTimeout(R.loop);
@@ -1393,7 +1419,9 @@ function rtcLoop() {
   const my = R.loopGen = (R.loopGen || 0) + 1;
   R.loop = setTimeout(async () => {
     if (document.visibilityState === 'visible' || R.state || V.on) {
-      try { const r = await api().rtcPoll(fast ? { wait: 6000 } : {}); (r.signals || []).forEach(rtcOnSig); if (r.room) roomOnPoll(r.room); stampCheck(r); } catch (e) { /* offline */ }
+      const ack = SIG_ACK.splice(0, 100);
+      try { const r = await api().rtcPoll(fast ? { wait: 6000, ack: ack } : { ack: ack }); (r.signals || []).forEach(rtcOnSigOnce); if (r.room) roomOnPoll(r.room); stampCheck(r); }
+      catch (e) { ack.forEach(id => { if (SIG_ACK.indexOf(id) < 0) SIG_ACK.push(id); }); /* offline: ยืนยันใหม่รอบหน้า */ }
     }
     if (R.loopGen === my) rtcLoop();
   }, fast ? 60 : R.state || V.on ? 2000 : 2500);

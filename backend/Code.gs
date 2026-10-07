@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.13.0';
+const VERSION = '1.14.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 const SESSION_DAYS = 30;
@@ -87,12 +87,12 @@ const ACTIONS = {
   markRead: (p, u) => withLock_(() => markRead_(p.ids, u)),
   helpUpdate: (p, u) => withLock_(() => helpUpdate_(p.id, p.status, u)),
   deleteMessages: (p, u) => withLock_(() => { admin_(u); return deleteMessages_(p.ids, u); }),
-  rtcSend: (p, u) => { const r = withLock_(() => rtcSend_(p, u)); pushForSignal_(p, u); return r; },
+  rtcSend: (p, u) => { const r = withLock_(() => rtcSend_(p, u)); if (!r.dup) pushForSignal_(p, u); return r; },
   pushKey: () => ({ key: vapid_().pub }),
   pushSub: (p, u) => withLock_(() => pushSub_(p.sub, u)),
   pushUnsub: (p, u) => withLock_(() => pushUnsub_(p.endpoint, u)),
   pushInfo: (p, u) => ({ info: pushInfo_(u) }),
-  rtcPoll: (p, u) => Object.assign(rtcPoll_(u, p.wait), { room: roomView_(roomGet_(), u), ds: stamp_('data'), ms: stamp_('msg') }),
+  rtcPoll: (p, u) => Object.assign(rtcPoll_(u, p.wait, p.ack), { room: roomView_(roomGet_(), u), ds: stamp_('data'), ms: stamp_('msg') }),
   room: (p, u) => room_(p, u),
   deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
   thumbs: (p, u) => thumbs_(p.ids),
@@ -916,31 +916,41 @@ function rtcSend_(p, u) {
   const data = JSON.stringify(p.data == null ? '' : p.data);
   if (data.length > 60000) throw new Error('ข้อมูลใหญ่เกินไป');
   const cache = CacheService.getScriptCache();
+  let dup = false;
   targets.forEach(n => {
     const ru = users.find(x => x.name === n) || { role: 'user' };
-    const sig = { id: uid_('r_'), sid: String(p.sid || '').slice(0, 40), type: type, from: maskName_(u.name, ru), fromAdmin: isAdmin_(u), data: data, ts: Date.now() };
+    const sid0 = /^[A-Za-z0-9_]{4,40}$/.test(String(p.id || '')) ? String(p.id) : uid_('r_');
+    const sig = { id: sid0, sid: String(p.sid || '').slice(0, 40), type: type, from: maskName_(u.name, ru), fromAdmin: isAdmin_(u), data: data, ts: Date.now() };
     let box = [];
     try { box = JSON.parse(cache.get(rtcBox_(n)) || '[]'); } catch (e) { box = []; }
     box = box.filter(x => Date.now() - x.ts < 120000);
+    if (box.some(x => x.id === sig.id)) { dup = true; return; }   // คำขอซ้ำ (ส่งสำรองตอนเน็ตช้า) ไม่ใส่ซ้ำ
     box.push(sig);
     let raw = JSON.stringify(box);
     while (raw.length > 90000 && box.length > 1) { box.shift(); raw = JSON.stringify(box); }
     cache.put(rtcBox_(n), raw, 180);
   });
-  return { ok: true };
+  return { ok: true, dup: dup };
 }
-function rtcPoll_(u, wait) {
+function rtcPoll_(u, wait, ack) {
   const cache = CacheService.getScriptCache(), key = rtcBox_(u.name);
-  // ระหว่างกำลังต่อสาย/แชร์จอ หน้าเว็บขอ "รอสัญญาณ" ได้สูงสุด ~6 วิ: ตอบทันทีที่อีกฝ่ายส่งมา (เร็วกว่าถามซ้ำ ๆ)
-  const until = Date.now() + Math.min(6000, Math.max(0, Number(wait) || 0));
-  while (!cache.get(key) && Date.now() < until) Utilities.sleep(200);
-  if (!cache.get(key)) return { signals: [] };
-  return withLock_(() => {
-    let box = [];
-    try { box = JSON.parse(cache.get(key) || '[]'); } catch (e) { box = []; }
-    cache.remove(key);
-    return { signals: box.filter(x => Date.now() - x.ts < 120000).map(x => Object.assign(x, { data: x.data ? JSON.parse(x.data) : '' })) };
+  const read = () => { try { return JSON.parse(cache.get(key) || '[]'); } catch (e) { return []; } };
+  const out = box => ({ signals: box.filter(x => Date.now() - x.ts < 120000).map(x => Object.assign({}, x, { data: x.data ? JSON.parse(x.data) : '' })) });
+  if (!Array.isArray(ack)) {   // หน้าเว็บรุ่นเก่า: รับแล้วลบทันที
+    if (!cache.get(key)) return { signals: [] };
+    return withLock_(() => { const box = read(); cache.remove(key); return out(box); });
+  }
+  // รุ่นใหม่: สัญญาณอยู่จนกว่าหน้าเว็บยืนยันว่าได้รับแล้ว (ack) — คำขอที่ค้าง/ส่งซ้ำตอนเน็ตช้าจึงไม่ทำสัญญาณหาย
+  const acked = ack.slice(0, 100).map(String);
+  if (acked.length && cache.get(key)) withLock_(() => {
+    const box = read(), keep = box.filter(x => acked.indexOf(x.id) < 0 && Date.now() - x.ts < 120000);
+    if (keep.length !== box.length) { if (keep.length) cache.put(key, JSON.stringify(keep), 180); else cache.remove(key); }
   });
+  // ระหว่างกำลังต่อสาย/แชร์จอ หน้าเว็บขอ "รอสัญญาณ" ได้สูงสุด ~6 วิ: ตอบทันทีที่อีกฝ่ายส่งมา
+  const until = Date.now() + Math.min(6000, Math.max(0, Number(wait) || 0));
+  let box = read();
+  while (!box.length && Date.now() < until) { Utilities.sleep(200); box = read(); }
+  return out(box);
 }
 
 /* =====================================================================
