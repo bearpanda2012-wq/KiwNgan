@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.16.0';
+const VERSION = '1.17.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -53,25 +53,50 @@ function doPost(e) {
   try { req = JSON.parse(e.postData && e.postData.contents || '{}'); }
   catch (err) { return json_({ ok: false, error: 'คำขอไม่ถูกต้อง' }); }
   try {
-    if (PUBLIC[req.action]) return json_({ ok: true, data: PUBLIC[req.action](req.payload || {}) });
+    if (PUBLIC[req.action]) return reply_(req, { ok: true, data: PUBLIC[req.action](req.payload || {}) });
     const fn = ACTIONS[req.action];
     if (!fn) throw new Error('ไม่รู้จักคำสั่ง ' + req.action);
     const user = auth_(req.token);
     const data = fn(req.payload || {}, user);
     if (DATA_ACTIONS_[req.action]) bump_('data');
     if (MSG_ACTIONS_[req.action]) bump_('msg');
-    return json_({ ok: true, data: data });
+    return reply_(req, { ok: true, data: data });
   } catch (err) {
     const msg = String(err && err.message || err);
-    return json_({ ok: false, error: msg, code: msg.indexOf('AUTH:') === 0 ? 'auth' : undefined });
+    return reply_(req, { ok: false, error: msg, code: msg.indexOf('AUTH:') === 0 ? 'auth' : undefined });
   }
+}
+
+/** ตอบกลับ 2 ทาง: ทาง HTTP ปกติ + ส่งตรงถึงเครื่องที่ขอผ่าน Supabase Realtime (ถ้าเครื่องนั้นเปิด "กล่องรับ" ไว้)
+ *  เหตุผล: ประตู googleusercontent ของ Google ชอบค้าง 5–30 วิ ทั้งที่โค้ดเราทำเสร็จใน ~1 วิ
+ *  ชื่อกล่องรับสุ่ม 24 ตัว (เดาไม่ได้) และใช้ครั้งต่อการเปิดแอปหนึ่งครั้ง */
+function reply_(req, obj) {
+  const text = JSON.stringify(obj);
+  if (req && req.ri && req.rid && RT_URL && RT_KEY && /^kn-i-[a-z0-9]{16,40}$/.test(String(req.ri))) {
+    try { rtReply_(String(req.ri), String(req.rid).slice(0, 40), text); } catch (e) {}
+  }
+  return ContentService.createTextOutput(text).setMimeType(ContentService.MimeType.JSON);
+}
+
+function rtReply_(topic, rid, text) {
+  const size = 60000, n = Math.max(1, Math.ceil(text.length / size)), reqs = [];
+  if (n > 40) return;   // ใหญ่มากผิดปกติ ใช้ทาง HTTP อย่างเดียว
+  for (let i = 0; i < n; i++) {
+    reqs.push({
+      url: RT_URL + '/realtime/v1/api/broadcast', method: 'post', contentType: 'application/json',
+      headers: { apikey: RT_KEY }, muteHttpExceptions: true,
+      payload: JSON.stringify({ messages: [{ topic: topic, event: 'r', payload: { rid: rid, i: i, n: n, d: text.slice(i * size, (i + 1) * size) } }] })
+    });
+  }
+  if (reqs.length === 1) UrlFetchApp.fetch(reqs[0].url, reqs[0]); else UrlFetchApp.fetchAll(reqs);
 }
 
 const PUBLIC = {
   ping: () => ({ version: VERSION, app: 'KiwNgan', brand: publicBrand_() }),
   // แอดมินไม่แสดงในรายชื่อหน้าเข้าสู่ระบบ (เข้าทางลิงก์ "ผู้ดูแลระบบ" ด้วยชื่อ + PIN)
-  roster: () => ({ users: readAll_('Users').filter(u => u.active && u.role !== 'admin').map(publicUser_), brand: publicBrand_() }),
-  login: p => withLock_(() => login_(p.userId, p.pin, p.name))
+  roster: () => ({ users: readAll_('Users').filter(u => u.active && u.role !== 'admin').map(publicUser_), brand: publicBrand_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null }),
+  // ไม่ล็อก: เข้าสู่ระบบแค่เขียน Script Property 1 ค่า · ส่งข้อมูลเริ่มต้นกลับไปด้วยเลย ไม่ต้องเรียก bootstrap อีกรอบ
+  login: p => login_(p.userId, p.pin, p.name)
 };
 
 const ACTIONS = {
@@ -164,12 +189,13 @@ function login_(userId, pin, name) {
     throw new Error('PIN ไม่ถูกต้อง' + (fails + 1 >= MAX_PIN_FAILS ? ' (ล็อก 10 นาที)' : ' (เหลือ ' + (MAX_PIN_FAILS - fails - 1) + ' ครั้ง)'));
   }
   cache.remove(fk);
-  const props = PropertiesService.getScriptProperties();
-  cleanSessions_(props);
+  const props = PropertiesService.getScriptProperties();   // ล้าง session หมดอายุทำทุกคืนใน nightly()
   const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '').slice(0, 8);
   props.setProperty('S_' + token, JSON.stringify({ uid: u.id, exp: Date.now() + SESSION_DAYS * 864e5 }));
   log_('', u.name, 'login', '');
-  return { token: token, user: publicUser_(u) };
+  let boot = null;
+  try { boot = bootstrap_(Object.assign({}, u, { token: token })); } catch (e) {}
+  return { token: token, user: publicUser_(u), boot: boot };
 }
 
 function auth_(token) {

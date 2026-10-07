@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.17.0';
+const APP_VERSION = '2.18.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -546,12 +546,28 @@ const Remote = {
   },
   async once(action, payload, conn) {
     const c = conn || S.conn;
-    let res;
-    try {
-      res = await fetch(c.url, { method: 'POST', body: JSON.stringify({ token: conn ? '' : LS.get(tokenKey(), ''), action: action, payload: payload || {} }), redirect: 'follow' });
-    } catch (e) { throw new Error('ติดต่อฐานข้อมูลไม่ได้ ตรวจอินเทอร์เน็ตหรือ URL ของ Apps Script'); }
+    const body = { token: conn ? '' : LS.get(tokenKey(), ''), action: action, payload: payload || {} };
+    // ทางด่วน: เซิร์ฟเวอร์ส่งคำตอบตรงมาที่ "กล่องรับ" ของเครื่องนี้ (Supabase) ไม่ต้องรอประตู googleusercontent ที่ชอบค้าง
+    if (!IB.ready && (IB.ch || IB.starting) && !conn) { const t0 = Date.now(); while (!IB.ready && (IB.ch || IB.starting) && Date.now() - t0 < 1500) await new Promise(r => setTimeout(r, 50)); }   // กล่องรับกำลังเชื่อม รอแป๊บเดียวคุ้มกว่า
+    const ib = IB.ready && !conn ? ibWait() : null;
+    if (ib) { body.ri = IB.topic; body.rid = ib.rid; }
+    const ac = ib && window.AbortController ? new AbortController() : null;
+    const viaHttp = (async () => {
+      let res;
+      try { res = await fetch(c.url, { method: 'POST', body: JSON.stringify(body), redirect: 'follow', signal: ac ? ac.signal : undefined }); }
+      catch (e) { if (ac && ac.signal.aborted) return null; throw new Error('ติดต่อฐานข้อมูลไม่ได้ ตรวจอินเทอร์เน็ตหรือ URL ของ Apps Script'); }
+      try { return await res.json(); }
+      catch (e) { if (ac && ac.signal.aborted) return null; if (res && !res.ok) throw new Error('ฐานข้อมูลไม่ว่างชั่วคราว (' + res.status + ') ลองใหม่อีกครั้ง'); throw new Error('URL นี้ไม่ใช่ API ของ KiwNgan หรือยังไม่ได้ Deploy แบบ "ทุกคน"'); }
+    })();
     let data;
-    try { data = await res.json(); } catch (e) { if (res && !res.ok) throw new Error('ฐานข้อมูลไม่ว่างชั่วคราว (' + res.status + ') ลองใหม่อีกครั้ง'); throw new Error('URL นี้ไม่ใช่ API ของ KiwNgan หรือยังไม่ได้ Deploy แบบ "ทุกคน"'); }
+    if (ib) {
+      try {
+        data = await new Promise((resolve, reject) => {
+          ib.p.then(t => { let d = null; try { d = JSON.parse(t); } catch (e) {} if (d) { resolve(d); if (ac) ac.abort(); } });
+          viaHttp.then(d => { if (d) resolve(d); }, e => setTimeout(() => reject(e), 4000));
+        });
+      } finally { ib.cancel(); }
+    } else data = await viaHttp;
     if (!data.ok) { const e = new Error(String(data.error || 'เกิดข้อผิดพลาด').replace(/^AUTH:/, '')); e.code = data.code; throw e; }
     if (!conn) rtAfterWrite(action);
     return data.data;
@@ -569,6 +585,40 @@ const RT_LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/su
 const b64e = buf => btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
 const b64d = str => Uint8Array.from(atob(str), c => c.charCodeAt(0));
 function loadLib(src) { return new Promise((res, rej) => { if (window.supabase && window.supabase.createClient) return res(); const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); }); }
+const SB = { c: null, url: '' };
+function sbClient(url, key) {
+  if (!SB.c || SB.url !== url) { SB.c = window.supabase.createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }); SB.url = url; }
+  return SB.c;
+}
+/* กล่องรับคำตอบส่วนตัวของเครื่องนี้ (ชื่อสุ่ม เปลี่ยนทุกครั้งที่เปิดแอป) */
+const IB = { ready: false, starting: false, topic: '', url: '', ch: null, pend: {} };
+function ibRand(n) { const a = crypto.getRandomValues(new Uint8Array(n)); return Array.from(a, x => 'abcdefghijklmnopqrstuvwxyz0123456789'[x % 36]).join(''); }
+async function ibStart(cfg) {
+  if (!cfg || !cfg.url || !cfg.key || mode() !== 'sheet' || !(window.crypto && crypto.getRandomValues)) return;
+  LS.set('rtpub', { url: cfg.url, key: cfg.key });
+  if (IB.ch && IB.url === cfg.url) return;
+  IB.starting = true; setTimeout(() => { IB.starting = false; }, 4000);
+  try {
+    await loadLib(RT_LIB);
+    if (IB.ch && IB.url === cfg.url) return;
+    IB.url = cfg.url; IB.topic = 'kn-i-' + ibRand(24); IB.ready = false;
+    IB.ch = sbClient(cfg.url, cfg.key).channel(IB.topic, { config: { broadcast: { self: false, ack: false } } });
+    IB.ch.on('broadcast', { event: 'r' }, m => ibIn(m && m.payload));
+    IB.ch.subscribe(st => { IB.ready = st === 'SUBSCRIBED'; IB.starting = false; });
+  } catch (e) { IB.ready = false; IB.starting = false; }
+}
+function ibIn(p) {
+  if (!p || !p.rid) return;
+  const w = IB.pend[p.rid]; if (!w) return;
+  if (w.parts[p.i] === undefined) { w.parts[p.i] = String(p.d || ''); w.got++; }
+  if (w.got >= (p.n || 1)) { delete IB.pend[p.rid]; w.resolve(w.parts.join('')); }
+}
+function ibWait() {
+  const rid = ibRand(16); let resolve;
+  const p = new Promise(r => { resolve = r; });
+  IB.pend[rid] = { parts: [], got: 0, resolve: resolve };
+  return { rid: rid, p: p, cancel: () => { delete IB.pend[rid]; } };
+}
 function rtStop() { try { if (RT.client && RT.ch) RT.client.removeChannel(RT.ch); } catch (e) {} Object.assign(RT, { cfg: null, ch: null, ok: false }); }
 async function rtSetup(cfg) {
   if (!cfg || !cfg.url || !cfg.key || !cfg.secret || mode() !== 'sheet' || !(window.crypto && crypto.subtle)) return rtStop();
@@ -580,7 +630,7 @@ async function rtSetup(cfg) {
     const h = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode('room:' + cfg.secret)));
     RT.room = 'kn-' + Array.from(h.slice(0, 12), x => x.toString(16).padStart(2, '0')).join('');
     RT.key = await crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', enc.encode('key:' + cfg.secret)), 'AES-GCM', false, ['encrypt', 'decrypt']);
-    if (!RT.client) RT.client = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+    if (!RT.client) RT.client = sbClient(cfg.url, cfg.key);
     RT.ch = RT.client.channel(RT.room, { config: { broadcast: { self: false, ack: false } } });
     RT.ch.on('broadcast', { event: 's' }, m => { rtIn(m && m.payload).catch(() => {}); });
     RT.ch.subscribe(st => { const was = RT.ok; RT.ok = st === 'SUBSCRIBED'; if (RT.ok && !was) { rtLoop(); } });
@@ -620,7 +670,7 @@ function rtLoop() { if (typeof rtcLoop === 'function') rtcLoop(); }
 function upsert(arr, obj) { const i = arr.findIndex(x => x.id === obj.id); if (i >= 0) arr[i] = Object.assign({}, arr[i], obj); else arr.push(obj); }
 function applyStop(r) { if (r.log) upsert(S.logs, r.log); const j = jobById(r.jobId); if (j && r.minutes != null) j.minutes = r.minutes; }
 
-async function load(silent) {
+async function load(silent, boot) {
   if (!LS.get(tokenKey(), '')) return showLogin();
   if (silent && S.loading) return;
   S.loading = true;
@@ -630,7 +680,7 @@ async function load(silent) {
   try {
     let d = null;
     for (let i = 0; i < 3; i++) {   // Apps Script occasionally answers empty while busy/redeploying: retry quietly
-      try { d = await api().bootstrap(stamp ? { stamp: stamp } : {}); } catch (x) { if (x.code === 'auth' || i === 2) throw x; d = null; }
+      try { d = boot && i === 0 ? boot : await api().bootstrap(stamp ? { stamp: stamp } : {}); } catch (x) { if (x.code === 'auth' || i === 2) throw x; d = null; }
       if (d && d.same) { S.sync = 'ok'; S.syncErr = ''; S.lastSync = Date.now(); S.loading = false; return; }
       if (d && d.me && d.settings) break;
       d = null; await new Promise(r => setTimeout(r, 1200 * (i + 1)));
@@ -640,7 +690,7 @@ async function load(silent) {
     S.users = d.users || []; S.user = d.me; S.me = d.me.name;
     const prevJobs = S.loaded && S.me && S.jobs && S.jobs.length ? S.jobs : null;
     S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || [];
-    if (d.rt !== undefined) rtSetup(d.rt);
+    if (d.rt !== undefined) { rtSetup(d.rt); ibStart(d.rt); }
     S.archivedBefore = d.archivedBefore || '';
     setTimeout(() => jobAlerts(prevJobs), 0);
     S.dataStamp = d.stamp || ''; S.fullAt = Date.now();
@@ -716,10 +766,19 @@ function installBlock() {
 async function showLogin(keepErr) {
   S.screen = 'login'; S.user = null; S.me = ''; closeEditor();
   document.body.classList.add('auth'); applyTheme();
-  const L = S.login; if (!keepErr) L.err = ''; L.pin = ''; L.busy = true; L.roster = null;
+  const L = S.login; if (!keepErr) L.err = ''; L.pin = '';
+  // แสดงรายชื่อที่จำไว้ทันที แล้วค่อยอัปเดตจากฐานข้อมูลเบื้องหลัง
+  const cached = mode() === 'sheet' ? LS.get('roster', null) : null;
+  L.roster = cached && cached.users ? cached.users : null; L.brand = cached && cached.brand || L.brand || null; L.busy = !L.roster;
+  if (L.roster && L.roster.length === 1 && !L.userId) L.userId = L.roster[0].id;
   renderLogin();
-  try { const r = await api().roster(); L.roster = r.users || []; L.brand = r.brand || null; if (L.brand) { S.settings = normalizeSettings(Object.assign(S.settings || {}, L.brand)); applyBrand(); } }
-  catch (e) { L.err = e.message; L.showConn = mode() === 'sheet'; }
+  if (mode() === 'sheet') ibStart(LS.get('rtpub', null));
+  try {
+    const r = await api().roster(); L.roster = r.users || []; L.brand = r.brand || null;
+    if (mode() === 'sheet') { LS.set('roster', { users: L.roster, brand: L.brand }); if (r.rt) ibStart(r.rt); }
+    if (L.brand) { S.settings = normalizeSettings(Object.assign(S.settings || {}, L.brand)); applyBrand(); }
+  }
+  catch (e) { if (!L.roster) { L.err = e.message; L.showConn = mode() === 'sheet'; } }
   L.busy = false;
   if (L.roster && L.roster.length === 1) L.userId = L.roster[0].id;
   if (L.roster && !L.roster.some(u => u.id === L.userId)) L.userId = '';
@@ -800,7 +859,7 @@ async function doLogin() {
   try {
     const r = await api().login(L.adminMode ? { name: L.adminName, pin: L.pin } : { userId: L.userId, pin: L.pin });
     LS.set(tokenKey(), r.token); L.submitting = false; L.pin = '';
-    S.loaded = false; await load(false);
+    S.loaded = false; await load(false, r.boot || null);
     if (S.user) toast('สวัสดี ' + S.user.name);
   } catch (e) { L.submitting = false; L.err = e.message; L.pin = ''; L.shake = true; try { if (navigator.vibrate) navigator.vibrate([30, 40, 30]); } catch (x) {} renderLogin(); }
 }
@@ -3807,5 +3866,6 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|u
 })();
 try { applyTheme(); } catch (e) {}
 window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION };
+if (mode() === 'sheet') ibStart(LS.get('rtpub', null));   // เปิดกล่องรับคำตอบไว้ก่อน ระหว่างรอ bootstrap ครั้งแรก
 load(false);
 })();
