@@ -45,7 +45,7 @@ const box = await viewer.locator('#rtcInk').boundingBox(); console.log('ink canv
 await viewer.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3); await viewer.mouse.down();
 await viewer.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5, { steps: 10 }); await viewer.mouse.up();
 await host.waitForTimeout(500);
-console.log('host strokes', await host.evaluate(() => R.ink.strokes.length), 'host peek in DOM', await host.evaluate(() => !!(R.peek && R.peek.isConnected)), 'peekOpen', await host.evaluate(() => R.peekOpen), 'peek video', await host.evaluate(() => { const v = R.peek && R.peek.querySelector('video'); return v ? v.videoWidth + 'x' + v.videoHeight : 'none'; }));
+console.log('host strokes', await host.evaluate(() => R.ink.strokes.length), 'host peek in DOM', await host.evaluate(() => !!(R.peek && R.peek.isConnected)), 'peekOpen', await host.evaluate(() => R.peekOpen), 'mask', await host.evaluate(() => R.maskOn), 'peek video', await host.evaluate(() => { const v = R.peek && R.peek.querySelector('video'); return v ? v.videoWidth + 'x' + v.videoHeight : 'none'; }));
 await host.screenshot({ path: new URL('out/rtc-host.png', import.meta.url).pathname }); await viewer.screenshot({ path: new URL('out/rtc-viewer.png', import.meta.url).pathname });
 await viewer.evaluate(() => T.rtcAct('hang', {})); await host.waitForTimeout(3000);
 // call test

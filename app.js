@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.18.2';
+const APP_VERSION = '2.18.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2398,6 +2398,28 @@ function inkNudge() {
     if (!R.nudged && 'Notification' in window && Notification.permission === 'granted') { R.nudged = 1; try { const n = new Notification(R.name + ' กำลังชี้บนหน้าจอคุณ', { body: 'เปิดคิวงานแล้วกด "หน้าต่างลอย" เพื่อเห็นจุดที่เขาชี้ขณะทำงาน', tag: 'ink' + R.sid, icon: 'icons/icon-192.png' }); n.onclick = () => window.focus(); } catch (e) {} }
   } else if (!R.peekOpen) { R.peekOpen = true; renderRtc(); }
 }
+/* ปิดบังตัวกรอบดูเอง (ในแอปหรือหน้าต่างลอย) ออกจากภาพจอที่แชร์ ไม่ให้เกิด "จอซ้อนจอ" ไม่รู้จบ
+   ใช้ได้เมื่อแชร์ทั้งจอ (monitor): คำนวณตำแหน่งกรอบบนจอจริง แล้วระบายทับตำแหน่งเดียวกันในภาพ */
+function peekMask(g, r) {
+  R.maskOn = false;
+  if (R.role !== 'host' || R.src !== 'screen' || !R.stream || !R.peek) return;
+  const tr = R.stream.getVideoTracks()[0], st = tr && tr.getSettings ? tr.getSettings() : {};
+  if (st.displaySurface && st.displaySurface !== 'monitor') return;
+  const w = R.pip || window, sc = w.screen || screen;
+  if (!sc || !sc.width) return;
+  let x, y, W, H;
+  if (R.pip) { x = w.screenX; y = w.screenY; W = w.outerWidth; H = w.outerHeight; }
+  else { const b = R.peek.getBoundingClientRect(); x = window.screenX + Math.max(0, (window.outerWidth - window.innerWidth) / 2) + b.left; y = window.screenY + Math.max(0, window.outerHeight - window.innerHeight) + b.top; W = b.width; H = b.height; }
+  const L = sc.left !== undefined ? sc.left : (sc.availLeft || 0), T = sc.top !== undefined ? sc.top : (sc.availTop || 0);
+  const pad = 10, kx = r.w / sc.width, ky = r.h / sc.height;
+  const mx = r.x + (x - L - pad) * kx, my = r.y + (y - T - pad) * ky, mw = (W + pad * 2) * kx, mh = (H + pad * 2) * ky;
+  if (mx > r.x + r.w || my > r.y + r.h || mx + mw < r.x || my + mh < r.y) { R.maskOn = true; return; }   // กรอบอยู่จออื่น
+  R.maskOn = true;
+  g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip();
+  g.fillStyle = '#10161c'; g.fillRect(mx, my, mw, mh);
+  g.strokeStyle = '#2c3a47'; g.lineWidth = 1; g.strokeRect(mx + .5, my + .5, mw - 1, mh - 1);
+  g.restore();
+}
 /* วาด */
 function inkFit(box, vw, vh) {
   const W = box.clientWidth, H = box.clientHeight;
@@ -2418,6 +2440,7 @@ function inkPaint(cv, vid) {
     g.stroke(); g.setLineDash([]);
     g.fillStyle = '#2a3845'; g.fillRect(r.x + 1, r.y + r.h - 7, r.w - 2, 6);
   }
+  if (vid && vid.videoWidth && cv.closest && cv.closest('.rtc-peek')) peekMask(g, r);
   const now = performance.now(), k = R.ink, lw = Math.max(2.5, r.w / 300);
   g.lineCap = g.lineJoin = 'round';
   k.strokes = k.strokes.filter(x => !(x.l && x.end && now - x.end > 1500));
@@ -2472,6 +2495,7 @@ function inkFrame() {
   if (R.peek) { const c = R.peek.querySelector('canvas'); if (c) inkPaint(c, R.peek.querySelector('video') || inkDims()); inkWhere(); }
   const k = R.ink, now = performance.now();
   if ((k.ptr && now - k.ptr.t < 3000) || k.rips.length || k.strokes.some(x => x.l)) inkKick();
+  else if (R.peek && R.maskOn) { clearTimeout(R.maskT); R.maskT = setTimeout(inkKick, 250); }   // ตามตำแหน่งกรอบเมื่อถูกลากย้าย
 }
 window.addEventListener('resize', () => inkKick());
 /* คนดู: ลาก/ชี้บนภาพ */
