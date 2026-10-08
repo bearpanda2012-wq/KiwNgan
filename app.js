@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.24.4';
+const APP_VERSION = '2.25.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -441,7 +441,7 @@ const Demo = {
   async deleteComment(p) { const d = this.db(), u = this.me(d), c = (d.comments || []).find(x => x.id === p.id); if (!c) throw new Error('ไม่พบคอมเมนต์'); if (!P.admin(u) && c.from !== u.name) throw new Error('ลบได้เฉพาะคอมเมนต์ของตัวเอง'); d.comments = d.comments.filter(x => x.id !== p.id); this.save(d); return { id: p.id, jobId: c.jobId }; },
   async saleLink(p) { const d = this.db(); this.admin(this.me(d)); if (!d.saleKey || p.reset) { d.saleKey = uid('k'); this.save(d); } return { key: d.saleKey }; },
   async saleView(p) { const d = this.db(); if (!d.saleKey || p.k !== d.saleKey) throw new Error('ลิงก์นี้ใช้ไม่ได้แล้ว ขอลิงก์ใหม่จากแอดมิน'); const since = addDays(today(), -45);
-    return { brand: (await this.ping()).brand, sales: d.settings.sales || [], sale: p.sale || '', jobs: d.jobs.filter(j => (!p.sale || j.sale === p.sale) && (j.status !== 'done' || finDate(j) >= since)).map(j => { const c = clOf(j); return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', steps: c.length ? c.filter(x => x.d).length + '/' + c.length : '' }; }) }; },
+    return { brand: (await this.ping()).brand, people: d.users.filter(u => u.active && u.role !== 'admin').map(u => ({ name: u.name, color: u.color })), sales: d.settings.sales || [], sale: p.sale || '', jobs: d.jobs.filter(j => (!p.sale || j.sale === p.sale) && (j.status !== 'done' || finDate(j) >= since)).map(j => { const c = clOf(j); return { assignee: j.assignee || '', helpers: j.helpers || '', code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', steps: c.length ? c.filter(x => x.d).length + '/' + c.length : '' }; }) }; },
   async thumbs(p) { const d = this.db(), out = {}; (d.images || []).forEach(m => { if ((p.ids || []).indexOf(m.id) >= 0) out[m.id] = m.thumb; }); return { thumbs: out }; },
   async image(p) { const m = (this.db().images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); return { id: m.id, full: m.full }; },
   async setPhoto(p) { const d = this.db(), me = this.me(d), id = p.userId || me.id; if (id !== me.id) this.admin(me); const u = d.users.find(x => x.id === id); if (!u) throw new Error('ไม่พบผู้ใช้'); u.photo = String(p.photo || ''); this.save(d); return { user: this.pub(u) }; },
@@ -1425,49 +1425,83 @@ const FIXED_HOL = [['01-01', 'วันขึ้นปีใหม่'], ['04-06
 
 /* ----- หน้า Sale (อ่านอย่างเดียว ไม่ต้องเข้าสู่ระบบ) ----- */
 const SALE_Q = (() => { try { const u = new URL(location.href); return u.searchParams.get('salek') ? { k: u.searchParams.get('salek'), sale: u.searchParams.get('sale') || '' } : null; } catch (e) { return null; } })();
+function typeColorPub(name) { const c = (S.settings && S.settings.taskTypes) ? typeColor(name) : ''; if (c) return c; let h = 0; String(name || '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) % 360; }); return /CAM/.test(name || '') ? '#E8590C' : /CAD/.test(name || '') ? '#2D5FC4' : 'hsl(' + h + ' 55% 45%)'; }
 async function salePage() {
   document.body.classList.add('auth', 'sale-mode'); applyTheme();
   const root = $('#view') || document.body;
   let last = null, lastErr = '', q = '';
-  const F = { st: 'all', status: '', sale: '', group: '', type: '', range: '' };   // ตัวกรอง
+  const F = { st: 'all', status: '', sale: '', group: '', type: '', range: '', who: '', help: '' };   // ตัวกรอง
+  const prevN = {}; let busy = false, firstAnim = true;
   const draw = (d, err) => {
     last = d; lastErr = err || '';
-    const sales = (d && d.sales) || [], sel = SALE_Q.sale, t = today(), qq = q.trim().toLowerCase();
+    if (d && Array.isArray(d.people)) S.users = d.people.map(p => Object.assign({ active: true }, p));
+    const sel = SALE_Q.sale, t = today(), qq = q.trim().toLowerCase();
     const all = (d && d.jobs) || [], uniq = k => [...new Set(all.map(j => j[k]).filter(Boolean))].sort();
+    const hs = j => String(j.helpers || '').split(',').map(x => x.trim()).filter(Boolean);
     const since = F.range === '7' ? addDays(t, -6) : F.range === '30' ? addDays(t, -29) : F.range === 'm' ? t.slice(0, 8) + '01' : '';
     const isLateJ = j => j.status !== 'done' && j.due && j.due < t;
-    const base = all.filter(j => (!qq || [j.code, j.title, j.taskType, j.group, j.note, j.sale].join(' ').toLowerCase().indexOf(qq) >= 0) &&
-      (!F.status || (F.status === 'late' ? isLateJ(j) : j.status === F.status)) && (!F.sale || j.sale === F.sale) && (!F.group || j.group === F.group) && (!F.type || j.taskType === F.type) && (!since || String(j.received || '') >= since));
-    const nAct = base.filter(j => j.status !== 'done').length, nLate = base.filter(isLateJ).length, nDone = base.filter(j => j.status === 'done').length;
-    const jobs = base.filter(j => F.st === 'all' || (F.st === 'act' ? j.status !== 'done' : F.st === 'late' ? isLateJ(j) : j.status === 'done')).slice().sort((x, y) => (x.status === 'done') - (y.status === 'done') || String(x.due || '9').localeCompare(String(y.due || '9')));
-    const row = j => { const late = j.status !== 'done' && j.due && j.due < t, fin = String(j.finishedAt || '').slice(0, 10), ok = j.status === 'done' && (!j.due || fin <= j.due);
-      return '<tr class="' + (late ? 'late' : '') + '"><td><b class="mono">' + esc(j.code) + '</b>' + (j.priority === 'urgent' ? ' <span class="tag urgent">ด่วน</span>' : '') + '<small>' + esc(j.title || '') + '</small></td><td>' + esc(j.taskType || '') + '<small>' + esc(groupShort(j.group || '')) + '</small></td>' +
-        '<td><span class="pill ' + (late ? 's-late' : (ST[j.status] || ST.queue).cls) + '">' + (late ? 'เลยกำหนด' : (ST[j.status] || ST.queue).label) + '</span>' + (j.steps ? '<small>เช็กลิสต์ ' + esc(j.steps) + '</small>' : '') + '</td>' +
-        '<td>' + fdY(j.received) + '</td><td>' + (j.status === 'done' ? '<b class="' + (ok ? 'ok' : 'bad') + '">เสร็จ ' + fdY(fin) + '</b><small>' + (ok ? 'ตรงเวลา' : 'ช้ากว่ากำหนด') + '</small>' : '<b class="' + (late ? 'bad' : '') + '">' + fdY(j.due) + '</b><small>' + esc(dueInfo(j).text) + '</small>') + '</td><td class="sp-note">' + (j.note ? esc(j.note) : '<span class="sub">–</span>') + '</td>' + (sel ? '' : '<td>' + esc(j.sale || '–') + '</td>') + '</tr>'; };
-    const b = (d && d.brand) || {};
-    root.innerHTML = '<div class="sale-page"><header class="sp-h"><div class="sp-logo">' + (b.logo ? '<img src="' + esc(b.logo) + '" alt="">' : esc(initial(b.company || 'K'))) + '</div><div><b>' + esc(b.appName || 'คิวงาน') + ' · สถานะงาน</b><small>' + esc(b.company || '') + (sel ? ' · Sale ' + esc(sel) : ' · ทุก Sale') + '</small></div>' +
-      '<button class="btn sm" data-sale-refresh="1">' + I.refresh + 'รีเฟรช</button></header>' +
-      (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="empty"><b>กำลังโหลด…</b></div>' :
-        '<div class="sp-search"><input id="spQ" type="search" placeholder="ค้นหาเลข Job, ลูกค้า, รายละเอียด, หมายเหตุ…" value="' + esc(q) + '" autocomplete="off"></div>' +
-        '<div class="sp-filters">' + (sel ? '' : '<select data-spf="sale" aria-label="Sale"><option value="">ทุก Sale</option>' + uniq('sale').map(x => '<option' + (F.sale === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select>') +
-          '<select data-spf="status" aria-label="สถานะ"><option value="">ทุกสถานะ</option>' + [['queue', 'รอคิว'], ['doing', 'กำลังทำ'], ['review', 'รอตรวจ'], ['fix', 'แก้ไข'], ['hold', 'พักไว้'], ['done', 'เสร็จแล้ว'], ['late', 'เลยกำหนด']].map(o => '<option value="' + o[0] + '"' + (F.status === o[0] ? ' selected' : '') + '>' + o[1] + ' (' + all.filter(j => o[0] === 'late' ? isLateJ(j) : j.status === o[0]).length + ')</option>').join('') + '</select>' +
-          '<select data-spf="group" aria-label="กลุ่มงาน"><option value="">ทุกกลุ่มงาน</option>' + uniq('group').map(x => '<option value="' + esc(x) + '"' + (F.group === x ? ' selected' : '') + '>' + esc(groupShort(x)) + '</option>').join('') + '</select>' +
-          '<select data-spf="type" aria-label="รายละเอียดงาน"><option value="">ทุกรายละเอียดงาน</option>' + uniq('taskType').map(x => '<option' + (F.type === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select>' +
-          '<select data-spf="range" aria-label="ช่วงวันที่รับงาน"><option value="">รับงาน: ทั้งหมด</option>' + [['7', '7 วันล่าสุด'], ['30', '30 วันล่าสุด'], ['m', 'เดือนนี้']].map(o => '<option value="' + o[0] + '"' + (F.range === o[0] ? ' selected' : '') + '>รับงาน: ' + o[1] + '</option>').join('') + '</select>' +
-          (F.st !== 'all' || F.status || F.sale || F.group || F.type || F.range || q ? '<button class="btn sm ghost" data-spclear="1">ล้างตัวกรอง</button>' : '') + '</div>' +
-        '<div class="sp-sum">' + [['all', base.length, 'ทั้งหมด', ''], ['act', nAct, 'กำลังดำเนินการ', ''], ['late', nLate, 'เลยกำหนด', 'bad'], ['done', nDone, 'เสร็จใน 45 วัน', 'ok']].map(x => '<button type="button" data-spst="' + x[0] + '" class="' + (F.st === x[0] ? 'on' : '') + '"><b class="' + x[3] + '">' + x[1] + '</b>' + x[2] + '</button>').join('') + '</div>' +
-        '<div class="sp-wrap"><table class="sp-t"><thead><tr><th>งาน</th><th>รายละเอียด</th><th>สถานะ</th><th>รับงาน</th><th>กำหนดส่ง / เสร็จ</th><th>หมายเหตุ</th>' + (sel ? '' : '<th>Sale</th>') + '</tr></thead><tbody>' + (jobs.length ? jobs.map(row).join('') : '<tr><td colspan="7" class="sub">' + (qq ? 'ไม่พบงานที่ค้นหา' : 'ยังไม่มีงาน') + '</td></tr>') + '</tbody></table></div>' +
+    const base = all.filter(j => (!qq || [j.code, j.title, j.taskType, j.group, j.note, j.sale, j.assignee, j.helpers].join(' ').toLowerCase().indexOf(qq) >= 0) &&
+      (!F.status || (F.status === 'late' ? isLateJ(j) : j.status === F.status)) && (!F.sale || j.sale === F.sale) && (!F.group || j.group === F.group) && (!F.type || j.taskType === F.type) &&
+      (!F.who || (F.who === '__none' ? !j.assignee : j.assignee === F.who)) && (!F.help || (F.help === '__any' ? hs(j).length > 0 : hs(j).includes(F.help))) && (!since || String(j.received || '') >= since));
+    const doneB = base.filter(j => j.status === 'done'), okB = doneB.filter(j => !j.due || String(j.finishedAt || '').slice(0, 10) <= j.due).length;
+    const N = { all: base.length, act: base.filter(j => j.status !== 'done').length, late: base.filter(isLateJ).length, done: doneB.length };
+    const jobs = base.filter(j => F.st === 'all' || (F.st === 'act' ? j.status !== 'done' : F.st === 'late' ? isLateJ(j) : j.status === 'done')).slice().sort((x, y) => (x.status === 'done') - (y.status === 'done') || isLateJ(y) - isLateJ(x) || String(x.due || '9').localeCompare(String(y.due || '9')));
+    const people = [...new Set(all.map(j => j.assignee).filter(Boolean))].sort(), helpersAll = [...new Set(all.flatMap(hs))].sort();
+    const opt = (v, label, cur) => '<option value="' + esc(v) + '"' + (cur === v ? ' selected' : '') + '>' + esc(label) + '</option>';
+    const fsel = (k, ic, first, opts) => '<label class="spf' + (F[k] ? ' on' : '') + '"><span class="spf-ic">' + ic + '</span><select data-spf="' + k + '">' + opt('', first, F[k]) + opts + '</select></label>';
+    const row = (j, i) => {
+      const late = isLateJ(j), fin = String(j.finishedAt || '').slice(0, 10), ok = j.status === 'done' && (!j.due || fin <= j.due), st = late ? 'late' : j.status;
+      const dd = j.due && j.status !== 'done' ? daysBetween(t, j.due) : null;
+      const badge = j.status === 'done' ? '<em class="sp-bdg ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '✓ ตรงเวลา' : 'ช้ากว่ากำหนด') + '</em>' : dd === null ? '' : '<em class="sp-bdg ' + (dd < 0 ? 'bad' : dd <= 1 ? 'warn' : '') + '">' + (dd < 0 ? 'เลย ' + (-dd) + ' วัน' : dd === 0 ? 'วันนี้' : dd === 1 ? 'พรุ่งนี้' : 'อีก ' + dd + ' วัน') + '</em>';
+      const stp = String(j.steps || '').split('/'), pct = stp.length === 2 && +stp[1] ? Math.round(+stp[0] / +stp[1] * 100) : -1;
+      const team = (j.assignee ? av(j.assignee, 'sm') + '<span class="sp-who"><b>' + esc(j.assignee) + '</b>' + (hs(j).length ? '<small>+ ' + esc(hs(j).join(', ')) + '</small>' : '') + '</span>' : '<span class="sub">ยังไม่มอบหมาย</span>');
+      return '<tr class="sp-r' + (late ? ' late' : '') + (j.status === 'done' ? ' done' : '') + (firstAnim ? ' in' : '') + '" style="--i:' + Math.min(i, 20) + '"><td><b class="mono">' + esc(j.code) + '</b>' + (j.priority === 'urgent' ? ' <span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(j.title || '') + '</small></td>' +
+        '<td><span class="sp-type" style="--tc:' + (typeColorPub(j.taskType)) + '">' + esc(j.taskType || '–') + '</span><small>' + esc(groupShort(j.group || '')) + '</small></td>' +
+        '<td class="sp-team">' + team + '</td>' +
+        '<td><span class="pill ' + (late ? 's-late' : (ST[j.status] || ST.queue).cls) + '">' + (late ? STI.fire : (STI[j.status] || '')) + (late ? 'เลยกำหนด' : (ST[j.status] || ST.queue).label) + '</span>' +
+          (pct >= 0 ? '<span class="sp-cl" title="เช็กลิสต์ ' + esc(j.steps) + '"><i style="width:' + pct + '%"></i></span><small>เช็กลิสต์ ' + esc(j.steps) + '</small>' : '') + '</td>' +
+        '<td>' + fdY(j.received) + '</td><td>' + (j.status === 'done' ? '<b class="' + (ok ? 'ok' : 'bad') + '">เสร็จ ' + fdY(fin) + '</b>' : '<b class="' + (late ? 'bad' : '') + '">' + fdY(j.due) + '</b>') + badge + '</td>' +
+        '<td class="sp-note">' + (j.note ? esc(j.note) : '<span class="sub">–</span>') + '</td>' + (sel ? '' : '<td>' + esc(j.sale || '–') + '</td>') + '</tr>';
+    };
+    const b = (d && d.brand) || {}, anyF = F.st !== 'all' || F.status || F.sale || F.group || F.type || F.range || F.who || F.help || q;
+    const cards = [['all', 'ทั้งหมด', '', I.list || STI.queue], ['act', 'กำลังดำเนินการ', 'doing', STI.doing], ['late', 'เลยกำหนด', 'bad', STI.fire], ['done', 'เสร็จใน 45 วัน', 'ok', STI.done]];
+    root.innerHTML = '<div class="sale-page"><header class="sp-h"><div class="sp-logo">' + (b.logo ? '<img src="' + esc(b.logo) + '" alt="">' : esc(initial(b.company || 'K'))) + '</div><div class="sp-ht"><b>' + esc(b.appName || 'คิวงาน') + ' · สถานะงาน</b><small>' + esc(b.company || '') + (sel ? ' · Sale ' + esc(sel) : ' · ทุก Sale') + '</small></div>' +
+      '<span class="sp-live" title="อัปเดตเองทุก 1 นาที"><i></i>สด</span><button class="btn sm sp-ref' + (busy ? ' spin' : '') + '" data-sale-refresh="1">' + I.refresh + '<span>รีเฟรช</span></button></header>' +
+      (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="sp-skel">' + '<i></i>'.repeat(6) + '</div>' :
+        '<div class="sp-sum">' + cards.map(c => '<button type="button" data-spst="' + c[0] + '" class="sp-card c-' + c[0] + (F.st === c[0] ? ' on' : '') + '"><span class="sp-ci">' + c[3] + '</span><b class="' + c[2] + '" data-n="' + N[c[0]] + '" data-k="' + c[0] + '">' + (prevN[c[0]] !== undefined ? prevN[c[0]] : 0) + '</b><span>' + c[1] + '</span>' +
+          (c[0] === 'done' && N.done ? '<small>ตรงเวลา ' + Math.round(okB / N.done * 100) + '%</small>' : c[0] === 'late' && N.act ? '<small>' + Math.round(N.late / N.act * 100) + '% ของงานค้าง</small>' : '') + '</button>').join('') + '</div>' +
+        '<div class="sp-tools"><label class="sp-search">' + I.search + '<input id="spQ" type="search" placeholder="ค้นหาเลข Job, ลูกค้า, คนทำ, หมายเหตุ…" value="' + esc(q) + '" autocomplete="off"></label>' +
+        '<div class="sp-filters">' + (sel ? '' : fsel('sale', STI.user || '฿', 'ทุก Sale', uniq('sale').map(x => opt(x, x, F.sale)).join(''))) +
+          fsel('status', STI.doing, 'ทุกสถานะ', [['queue', 'รอคิว'], ['doing', 'กำลังทำ'], ['review', 'รอตรวจ'], ['fix', 'แก้ไข'], ['hold', 'พักไว้'], ['done', 'เสร็จแล้ว'], ['late', 'เลยกำหนด']].map(o => opt(o[0], o[1] + ' (' + all.filter(j => o[0] === 'late' ? isLateJ(j) : j.status === o[0]).length + ')', F.status)).join('')) +
+          fsel('who', '👤', 'ผู้รับผิดชอบ: ทุกคน', people.map(x => opt(x, x + ' (' + all.filter(j => j.assignee === x).length + ')', F.who)).join('') + (all.some(j => !j.assignee) ? opt('__none', 'ยังไม่มอบหมาย', F.who) : '')) +
+          fsel('help', '🤝', 'ผู้ร่วมทำงาน: ทั้งหมด', opt('__any', 'มีผู้ร่วมทำงาน', F.help) + helpersAll.map(x => opt(x, x + ' (' + all.filter(j => hs(j).includes(x)).length + ')', F.help)).join('')) +
+          fsel('group', STI.layers || '▦', 'ทุกกลุ่มงาน', uniq('group').map(x => opt(x, groupShort(x), F.group)).join('')) +
+          fsel('type', '✎', 'ทุกรายละเอียดงาน', uniq('taskType').map(x => opt(x, x, F.type)).join('')) +
+          fsel('range', STI.calendar, 'รับงาน: ทั้งหมด', [['7', 'รับงาน: 7 วันล่าสุด'], ['30', 'รับงาน: 30 วันล่าสุด'], ['m', 'รับงาน: เดือนนี้']].map(o => opt(o[0], o[1], F.range)).join('')) +
+          (anyF ? '<button class="btn sm sp-clear" data-spclear="1">✕ ล้างตัวกรอง</button>' : '') + '</div></div>' +
+        '<div class="sp-count">แสดง <b>' + jobs.length + '</b> จาก ' + all.length + ' งาน</div>' +
+        '<div class="sp-wrap"><table class="sp-t"><thead><tr><th>งาน</th><th>รายละเอียด</th><th>ทีมงาน</th><th>สถานะ</th><th>รับงาน</th><th>กำหนดส่ง / เสร็จ</th><th>หมายเหตุ</th>' + (sel ? '' : '<th>Sale</th>') + '</tr></thead><tbody>' +
+          (jobs.length ? jobs.map(row).join('') : '<tr><td colspan="8"><div class="sp-empty"><span>🔍</span><b>' + (anyF ? 'ไม่พบงานตามตัวกรอง' : 'ยังไม่มีงาน') + '</b>' + (anyF ? '<button class="btn sm" data-spclear="1">ล้างตัวกรอง</button>' : '') + '</div></td></tr>') + '</tbody></table></div>' +
         '<p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · หน้านี้ดูได้อย่างเดียว</p>') + '</div>';
+    // ตัวเลขนับขึ้น
+    root.querySelectorAll('.sp-card b[data-n]').forEach(el => {
+      const to = +el.dataset.n, from = prevN[el.dataset.k] !== undefined ? prevN[el.dataset.k] : 0; prevN[el.dataset.k] = to;
+      if (from === to) { el.textContent = to; return; }
+      const t0 = performance.now(), dur = 650, step = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(from + (to - from) * e); if (k < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    });
+    if (d) firstAnim = false;
   };
   // เร็วขึ้น: แสดงข้อมูลที่จำไว้ทันที → ดึงใหม่เบื้องหลัง (ทางด่วนผ่านกล่องรับ + ส่งคำขอสำรองถ้าช้า)
   const ck = 'saleCache:' + SALE_Q.k + ':' + SALE_Q.sale;
   const go = async () => {
+    busy = true; const rb = document.querySelector('.sp-ref'); if (rb) rb.classList.add('spin');
     try {
       const q = { k: SALE_Q.k, sale: SALE_Q.sale }, d = mode() === 'sheet' ? await Remote.call('saleView', q) : await Demo.saleView(q);
       if (d && d.rt) ibStart(d.rt);
       try { LS.set(ck, d); } catch (e) {}
-      draw(d);
-    } catch (e) { if (!last) draw(null, e.message); else toast('อัปเดตไม่สำเร็จ: ' + e.message, true); }
+      busy = false; draw(d);
+    } catch (e) { busy = false; if (!last) draw(null, e.message); else { draw(last); toast('อัปเดตไม่สำเร็จ: ' + e.message, true); } }
   };
   if (mode() === 'sheet') ibStart(LS.get('rtpub', null));
   const cached = LS.get(ck, null);
@@ -1476,7 +1510,7 @@ async function salePage() {
     const c = e.target.closest && e.target.closest('[data-sale-refresh],[data-spst],[data-spclear]'); if (!c) return;
     if (c.dataset.saleRefresh) return go();
     if (c.dataset.spst) { F.st = F.st === c.dataset.spst ? 'all' : c.dataset.spst; return draw(last, lastErr); }
-    if (c.dataset.spclear) { Object.assign(F, { st: 'all', status: '', sale: '', group: '', type: '', range: '' }); q = ''; return draw(last, lastErr); }
+    if (c.dataset.spclear) { Object.assign(F, { st: 'all', status: '', sale: '', group: '', type: '', range: '', who: '', help: '' }); q = ''; return draw(last, lastErr); }
   });
   document.addEventListener('change', e => { const k = e.target && e.target.dataset && e.target.dataset.spf; if (k) { F[k] = e.target.value; draw(last, lastErr); } });
   document.addEventListener('input', e => { if (e.target && e.target.id === 'spQ') { q = e.target.value; const pos = e.target.selectionStart; draw(last, lastErr); const el = $('#spQ'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } } });

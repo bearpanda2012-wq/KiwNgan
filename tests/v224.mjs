@@ -61,6 +61,12 @@ await pg.screenshot({ path: new URL('out/v224-sale.png', import.meta.url).pathna
 await pg.click('[data-spclear]'); const nc = await cnt();
 await pg.selectOption('[data-spf="status"]', 'doing'); const nst = await cnt(); console.log('status doing rows', nst, '| options', (await pg.locator('[data-spf="status"] option').allTextContents()).join(', '));
 await pg.reload(); await pg.waitForTimeout(150); console.log('cached instant rows', await cnt());
+await pg.waitForTimeout(800); const w1 = await pg.locator('[data-spf="who"] option').nth(1).getAttribute('value'); await pg.selectOption('[data-spf="who"]', w1); const nw = await cnt();
+const exp = await pg.evaluate(w => JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k => /saleCache/.test(k)))).jobs.filter(j => j.assignee === w).length, w1);
+await pg.selectOption('[data-spf="who"]', ''); await pg.selectOption('[data-spf="help"]', '__any'); const nh = await cnt();
+console.log('who', w1, nw, 'expected', exp, '| with helpers', nh, '| team cells', await pg.locator('.sp-team .av').count());
+await pg.selectOption('[data-spf="help"]', ''); await pg.waitForTimeout(700); await pg.screenshot({ path: new URL('out/v225-sale.png', import.meta.url).pathname });
+await pg.setViewportSize({ width: 390, height: 840 }); await pg.waitForTimeout(400); await pg.screenshot({ path: new URL('out/v225-sale-m.png', import.meta.url).pathname }); await pg.setViewportSize({ width: 1300, height: 850 });
 console.log('sale filters all', n0, 'late', nl, 'done', nd, 'sale', ns, '+group', ng, 'cleared', nc);
 console.log('errors', errs.join(' | ') || 'none');
 await b.close(); srv.close();
