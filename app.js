@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.22.1';
+const APP_VERSION = '2.22.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3183,16 +3183,17 @@ function viewList() {
     const di = dueInfo(j), run = runningOf(j.id), mins = totalMinutes(j), tc = typeColor(j.taskType);
     return '<div class="row' + (tc ? ' has-tc' : '') + (isLate(j) ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + '"' + (tc ? ' style="--tc:' + tc + '"' : '') + ' data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
       '<div class="cell c-main"><div class="code"><span class="qno">' + (i + 1) + '</span>' + stBadge(j) + esc(j.code) + (imgsOf(j.id).length ? '<span class="img-chip">' + STI.camera + imgsOf(j.id).length + '</span>' : '') + '</div><div class="meta">' + (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">แก้ไข</span>' : '') +
-        typeChip(j.taskType) + groupChip(j.group) + (j.title ? '<span>' + esc(j.title) + '</span>' : '') + lvBars(j.level) + '</div>' + (j.note ? '<div class="row-note" title="' + esc(j.note) + '">' + STI.note + esc(j.note) + '</div>' : '') + '</div>' +
+        typeChip(j.taskType) + groupChip(j.group) + (j.title ? '<span>' + esc(j.title) + '</span>' : '') + lvBars(j.level) + '</div></div>' +
       '<div class="cell c-who"><span class="who">' + av(j.assignee) + '<span>' + esc(j.assignee || 'ยังไม่มอบหมาย') + '<small>Sale ' + esc(j.sale || '–') + '</small></span></span></div>' +
       '<div class="cell c-time">' + (run ? '<span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : '<span class="tnum">' + (mins ? fdur(mins) : '–') + '</span>') + '<small>เริ่ม ' + fdt(j.startedAt) + '</small></div>' +
       '<div class="cell">รับ ' + fd(j.received) + '<small>' + esc(j.taskType || '') + '</small></div>' +
       '<div class="cell c-due"><span class="' + (di.cls === 'late' ? 'tag late' : '') + '">' + esc(di.text) + '</span>' + (j.status !== 'done' && j.due ? '<small>กำหนด ' + fdY(j.due) + '</small>' : '') + '</div>' +
+      '<div class="cell c-note"' + (j.note ? ' title="' + esc(j.note) + '"' : '') + '>' + (j.note ? '<span class="note-txt">' + STI.note + '<span>' + esc(j.note) + '</span></span>' : '<span class="muted">–</span>') + '</div>' +
       '<div class="cell c-st">' + stPill(j) + '</div></div>';
   }).join('') : '<div class="empty"><b>ไม่พบงาน</b>ลองเปลี่ยนตัวกรองหรือคำค้น</div>';
   return topbar('รายการงาน', isLead() ? rows.length + ' รายการ จากทั้งหมด ' + S.jobs.length + ' งาน' : 'งานของ' + esc(S.me) + ' · ' + rows.length + ' รายการ จาก ' + pool.length + ' งาน', '<button class="btn" data-act="csv">' + I.download + '<span>ส่งออก CSV</span></button>') +
     filterBar(monthSel, !isLead()) + '<div class="chips">' + chips + '</div>' +
-    '<div class="list"><div class="lhead"><span>JOB</span><span>ผู้รับผิดชอบ</span><span>เวลาทำงาน</span><span>วันที่รับ</span><span>กำหนดส่ง</span><span>สถานะ</span></div>' + body + '</div>';
+    '<div class="list"><div class="lhead"><span>JOB</span><span>ผู้รับผิดชอบ</span><span>เวลาทำงาน</span><span>วันที่รับ</span><span>กำหนดส่ง</span><span>หมายเหตุ</span><span>สถานะ</span></div>' + body + '</div>';
 }
 function exportCsv() {
   const rows = listRows();

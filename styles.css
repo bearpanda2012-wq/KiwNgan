@@ -2098,3 +2098,14 @@ button.card-th img{width:100%;height:100%;object-fit:cover;display:block}
 .hv-notec.none{background:none;padding:0;color:var(--muted)}
 .row-note{display:flex;align-items:center;gap:5px;margin-top:3px;font-size:12px;color:var(--urgent);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row-note svg{width:13px;height:13px;flex:none}
+/* v2.22.2: คอลัมน์หมายเหตุในรายการงาน */
+.lhead,.row{grid-template-columns:minmax(0,1.6fr) minmax(0,.85fr) minmax(0,.9fr) 92px 116px minmax(0,1.1fr) 104px}
+.c-note{font-size:12.5px;min-width:0}
+.c-note .note-txt{display:flex;gap:5px;align-items:flex-start;color:var(--urgent)}
+.c-note .note-txt svg{width:13px;height:13px;flex:none;margin-top:2px}
+.c-note .note-txt span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4}
+.c-note .muted{color:var(--muted)}
+@media (max-width:960px){
+  .row>.c-note{grid-column:1/-1}
+  .row>.c-note:not([title]){display:none}
+}
