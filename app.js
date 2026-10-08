@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.20.0';
+const APP_VERSION = '2.20.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1163,7 +1163,7 @@ function showHover(el) {
   h.className = 'hovercard ' + (ST[isLate(j) ? 'late' : j.status] ? 's-' + (isLate(j) ? 'late' : j.status) : '') + (imgsOf(j.id).length ? ' has-img' : '');
   h.innerHTML = jobInfoHtml(j, false);
   if (!h.dataset.wired) { h.dataset.wired = '1'; h.addEventListener('mouseenter', () => { clearTimeout(hovT); hovT = null; }); h.addEventListener('mouseleave', e => { if (!(hovEl && e.relatedTarget && hovEl.contains(e.relatedTarget))) hideHoverSoon(); }); }
-  const r = el.getBoundingClientRect(), W = h.offsetWidth || 340, vw = window.innerWidth, vh = window.innerHeight;
+  const r = (el.classList.contains('grow') ? el.querySelector('.glab') || el : el).getBoundingClientRect(), W = h.offsetWidth || 340, vw = window.innerWidth, vh = window.innerHeight;
   let x = r.right + 12; if (x + W > vw - 8) x = Math.max(8, r.left - W - 12);
   h.style.left = x + 'px'; h.style.top = '0px'; h.classList.add('show');
   const hh = h.offsetHeight; let y = r.top + r.height / 2 - hh / 2; y = Math.max(8, Math.min(vh - hh - 8, y));
@@ -1174,14 +1174,14 @@ function hideHoverSoon() { clearTimeout(hovT); hovT = setTimeout(hideHover, 260)
 const inHover = el => !!(el && el.closest && el.closest('#hovercard'));
 if (window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches) {
   document.addEventListener('mouseover', e => {
-    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open]');
+    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open]');
     if (!el) return;
     if (el.dataset.open === hovId) { clearTimeout(hovT); hovT = null; return; }
     if (hovId) hideHover();   // ย้ายไปการ์ดอื่น: ปิดกล่องเดิมทันที ไม่ให้บังการ์ดใบอื่น
     clearTimeout(hovT); hovT = setTimeout(() => { if (!S.edit && !S.drag) showHover(el); }, 380);
   });
   document.addEventListener('mouseout', e => {
-    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open]');
+    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open]');
     if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;
     if (inHover(e.relatedTarget)) { clearTimeout(hovT); hovT = null; return; }   // เลื่อนเมาส์เข้าไปในการ์ดสรุป → ค้างไว้ให้กดดูรูปได้
     if (hovId) hideHoverSoon(); else hideHover();
@@ -2781,7 +2781,7 @@ function ganttPanel(pool) {
       let h = '';
       if (x.due && x.due >= s0) h += '<i class="gplan" style="left:' + X(s0) + '%;width:' + W(s0, addDays(x.due, 1)) + '%;--c:' + c + '"></i>';
       const actEnd = x.fin ? addDays(x.fin, 1) : (x.due && x.due < t ? addDays(x.due, 1) : addDays(t, 1));
-      h += '<i class="gact' + (x.fin ? ' fin' : '') + '" style="left:' + X(s0) + '%;width:' + W(s0, actEnd) + '%;--c:' + c + '" title="' + esc(x.j.taskType + ' · ' + fd(s0) + ' → ' + (x.fin ? 'เสร็จ ' + fd(x.fin) : 'กำหนด ' + fd(x.due))) + '"><b>' + esc(String(x.j.taskType || '').replace(/^ทำ\s*/, '')) + '</b></i>';
+      h += '<i class="gact' + (x.fin ? ' fin' : '') + '" data-open="' + esc(x.j.id) + '" style="left:' + X(s0) + '%;width:' + W(s0, actEnd) + '%;--c:' + c + '"><b>' + esc(String(x.j.taskType || '').replace(/^ทำ\s*/, '')) + '</b></i>';
       if (!x.fin && x.due && x.due < t) h += '<i class="glate" style="left:' + X(addDays(x.due, 1)) + '%;width:' + W(addDays(x.due, 1), addDays(t, 1)) + '%"></i>';
       if (x.fin) h += '<i class="gdone" style="left:' + X(addDays(x.fin, 1)) + '%" title="เสร็จ ' + esc(fd(x.fin)) + '">✓</i>';
       return h;
