@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.19.1';
+const APP_VERSION = '2.20.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2704,6 +2704,7 @@ function render() {
   else h += viewHome();
   v.innerHTML = h;
   decorate(v);
+  { const gs = v.querySelector('.gscroll'), tl = gs && gs.querySelector('.gtoday'); if (gs && tl && gs.scrollWidth > gs.clientWidth) { const tr = tl.parentNode; gs.scrollLeft = Math.max(0, tr.offsetLeft + tl.offsetLeft - gs.clientWidth * 0.6); } }   // เลื่อนไทม์ไลน์ให้เห็น "วันนี้"
   paintAllThumbs(v);
   renderMsgFab();
   if (S.animIn) {
@@ -2730,6 +2731,70 @@ function topbar(title, sub, extra) {
 }
 
 /* ============ render: home ============ */
+/* ===== ไทม์ไลน์เส้นทางงาน: เลข Job เดียวกัน = งานเดียว (CAD → CAM …) เดินตามวันที่จนถึงวันจบงาน ===== */
+function ganttPanel(pool) {
+  const t = today(), recent = addDays(t, -30);
+  if (S.gg === undefined) { S.gg = LS.get('ganttGroup', 'all'); S.ganttDone = !!LS.get('ganttDone', false); }
+  const groups = (S.settings.groups || []).slice();
+  const byCode = {};
+  pool.forEach(j => { if (!j.code) return; (byCode[j.code] = byCode[j.code] || []).push(j); });
+  let rows = Object.keys(byCode).map(code => {
+    const js = byCode[code].slice().sort((a, b) => String(a.received || a.createdAt || '').localeCompare(String(b.received || b.createdAt || '')));
+    const open = js.some(isOpen), lastFin = js.map(finDate).filter(Boolean).sort().pop() || '';
+    const segs = js.map(j => {
+      const st = String(j.received || j.createdAt || t).slice(0, 10), fin = finDate(j), due = j.due || '';
+      return { j: j, st: st, fin: fin, due: due, end: fin || (due && due > t ? due : t) };
+    });
+    const start = segs.reduce((m, x) => x.st < m ? x.st : m, segs[0].st);
+    const end = open ? segs.reduce((m, x) => { const e = x.fin || x.due || t; return e > m ? e : m; }, t) : lastFin;
+    const dueLast = segs.map(x => x.due).filter(Boolean).sort().pop() || '';
+    return { code: code, js: js, segs: segs, open: open, start: start, end: end, fin: open ? '' : lastFin, due: dueLast, group: js[js.length - 1].group || '', late: js.some(isLate) };
+  }).filter(r => r.open || (S.ganttDone && r.fin && r.fin >= recent));
+  const counts = {}; rows.forEach(r => { counts[r.group] = (counts[r.group] || 0) + 1; });
+  if (S.gg !== 'all' && !groups.includes(S.gg)) S.gg = 'all';
+  if (S.gg !== 'all') rows = rows.filter(r => r.group === S.gg);
+  rows.sort((a, b) => (b.open - a.open) || (a.open ? (a.due || '9').localeCompare(b.due || '9') : b.fin.localeCompare(a.fin)));
+  const more = rows.length > 25; if (!S.ganttAll) rows = rows.slice(0, 25);
+  const chips = '<div class="hp-chips gantt-chips"><button class="hp-chip' + (S.gg === 'all' ? ' on' : '') + '" data-gg="all">ทั้งหมด</button>' +
+    groups.filter(g => counts[g]).map(g => '<button class="hp-chip' + (S.gg === g ? ' on' : '') + '" data-gg="' + esc(g) + '"><i class="gdot" style="background:' + (groupColor(g) || '#64748B') + '"></i>' + esc(groupShort(g)) + ' <em>' + counts[g] + '</em></button>').join('') +
+    '<label class="toggle sm gdone-t"><input type="checkbox" data-act="ganttdone"' + (S.ganttDone ? ' checked' : '') + '>งานที่จบแล้ว (30 วัน)</label></div>';
+  const head = '<section class="panel gantt-p"><div class="panel-h"><div><h2>เส้นทางงาน</h2><div class="sub">รับงาน → แต่ละขั้น (CAD, CAM …) → วันจบงาน</div></div>' +
+    '<div class="legend"><span><i style="background:var(--muted);opacity:.35"></i>ช่วงกำหนดส่ง</span><span><i style="background:var(--late)"></i>เลยกำหนด</span><span><i class="lg-today"></i>วันนี้</span></div></div>' + chips;
+  if (!rows.length) return head + '<div class="empty"><b>ยังไม่มีงานในช่วงนี้</b>' + (S.gg !== 'all' ? 'ลองเลือก "ทั้งหมด"' : '') + '</div></section>';
+  let a = rows.reduce((m, r) => r.start < m ? r.start : m, t), b = rows.reduce((m, r) => r.end > m ? r.end : m, addDays(t, 3));
+  if (a < addDays(t, -60)) a = addDays(t, -60); if (b > addDays(t, 60)) b = addDays(t, 60);
+  a = addDays(a, -1); b = addDays(b, 2);
+  const span = daysBetween(a, b) + 1, X = iso => Math.max(0, Math.min(100, daysBetween(a, iso) / span * 100)), W = (x, y) => Math.max(0.6, X(y) - X(x));
+  const step = span > 70 ? 7 : span > 35 ? 3 : span > 18 ? 2 : 1;
+  let grid = '', ticks = '';
+  for (let i = 0; i < span; i++) {
+    const d = addDays(a, i), dd = parseLocal(d), wk = dd.getDay() === 0 || dd.getDay() === 6;
+    if (wk) grid += '<i class="gw" style="left:' + X(d) + '%;width:' + (100 / span) + '%"></i>';
+    const nearM = dd.getDate() !== 1 && [1, 2].some(k => k < step + 1 && parseLocal(addDays(d, k)).getDate() === 1);
+    if ((i % step === 0 && !nearM && i > 0) || dd.getDate() === 1) ticks += '<span class="gt' + (dd.getDate() === 1 ? ' m' : '') + '" style="left:' + (X(d) + 50 / span) + '%">' + (dd.getDate() === 1 || i === 0 ? dd.getDate() + ' ' + TH_M[dd.getMonth()] : dd.getDate()) + '</span>';
+  }
+  const tx = X(t) + 50 / span;
+  const rowH = r => {
+    const last = r.js.filter(isOpen).pop() || r.js[r.js.length - 1];
+    const bars = r.segs.map(x => {
+      const c = typeColor(x.j.taskType) || 'var(--brand)', s0 = x.st;
+      let h = '';
+      if (x.due && x.due >= s0) h += '<i class="gplan" style="left:' + X(s0) + '%;width:' + W(s0, addDays(x.due, 1)) + '%;--c:' + c + '"></i>';
+      const actEnd = x.fin ? addDays(x.fin, 1) : (x.due && x.due < t ? addDays(x.due, 1) : addDays(t, 1));
+      h += '<i class="gact' + (x.fin ? ' fin' : '') + '" style="left:' + X(s0) + '%;width:' + W(s0, actEnd) + '%;--c:' + c + '" title="' + esc(x.j.taskType + ' · ' + fd(s0) + ' → ' + (x.fin ? 'เสร็จ ' + fd(x.fin) : 'กำหนด ' + fd(x.due))) + '"><b>' + esc(String(x.j.taskType || '').replace(/^ทำ\s*/, '')) + '</b></i>';
+      if (!x.fin && x.due && x.due < t) h += '<i class="glate" style="left:' + X(addDays(x.due, 1)) + '%;width:' + W(addDays(x.due, 1), addDays(t, 1)) + '%"></i>';
+      if (x.fin) h += '<i class="gdone" style="left:' + X(addDays(x.fin, 1)) + '%" title="เสร็จ ' + esc(fd(x.fin)) + '">✓</i>';
+      return h;
+    }).join('');
+    const endTxt = r.open ? (r.due ? (r.late ? '<em class="late">เลย ' + fd(r.due) + '</em>' : 'จบ ' + fd(r.due)) : 'ยังไม่กำหนด') : '<em class="ok">จบแล้ว ' + fd(r.fin) + '</em>';
+    return '<div class="grow' + (r.open ? '' : ' closed') + '" data-open="' + esc(last.id) + '" role="button" tabindex="0">' +
+      '<div class="glab"><span class="gl1"><b class="mono">' + esc(r.code) + '</b>' + stPill(last) + '</span><small>' + (r.group ? '<i class="gdot" style="background:' + (groupColor(r.group) || '#64748B') + '"></i>' + esc(groupShort(r.group)) + ' · ' : '') + esc(last.title || '') + '</small></div>' +
+      '<div class="gtrack">' + bars + '</div><div class="gend">' + endTxt + '</div></div>';
+  };
+  return head + '<div class="gantt"><div class="gscroll"><div class="ghead"><div class="glab"></div><div class="gtrack">' + ticks + '</div><div class="gend"></div></div>' +
+    '<div class="gbody"><div class="ggrid"><div class="glab"></div><div class="gtrack">' + grid + '<i class="gtoday" style="left:' + tx + '%"></i></div><div class="gend"></div></div>' + rows.map(rowH).join('') + '</div></div></div>' +
+    (more ? '<div class="top-actions"><button class="btn sm ghost" data-act="ganttall">' + (S.ganttAll ? 'แสดงแค่ 25 งาน' : 'ดูทั้งหมด') + '</button></div>' : '') + '</section>';
+}
 function viewHome() {
   /* พนักงานเห็นภาพรวมเฉพาะงานตัวเอง + ตัวเลขรวมของทีม (ไม่มีชื่อ) — หัวหน้างาน/แอดมินเห็นทั้งทีม */
   const lead = isLead(), pool = listPool();
@@ -2827,7 +2892,7 @@ function viewHome() {
     '<div class="grid2">' + mine +
       '<section class="panel"><div class="panel-h"><div><h2>ต้องจัดการก่อน</h2><div class="sub">เลยกำหนด → ด่วน → ส่งภายในพรุ่งนี้</div></div><button class="btn ghost sm" data-filter-go="open">ดูทั้งหมด</button></div>' +
       (att.length ? '<div class="alist">' + att.map(aItem).join('') + '</div>' : '<div class="empty"><b>ไม่มีงานเร่งด่วน</b>คิวงานอยู่ในกำหนดทั้งหมด</div>') + '</section>' +
-    '</div>' +
+    '</div>' + ganttPanel(pool) +
     '<section class="panel"><div class="panel-h"><div><h2>' + (lead ? 'งานที่เสร็จ' + (hp ? ' · ' + esc(hp === '__none' ? 'ยังไม่มอบหมาย' : hp) : ' · ทุกคน') : 'งานที่คุณทำเสร็จ') + '</h2><div class="sub">' + rangeTxt + ' · ' + span + ' วัน' + (weekly ? ' (รวมเป็นรายสัปดาห์)' : '') + ' · นับตามวันที่ปิดงาน</div></div>' + legendH + '</div>' +
       hrCtl + hpChips + '<div class="minis"><div class="mini"><span>งานเสร็จ</span><b>' + done30.length + '</b></div><div class="mini"><span>ตรงเวลา</span><b>' + (done30.length ? Math.round(ok30 / done30.length * 100) + '%' : '–') + '</b></div>' +
       '<div class="mini"><span>เวลาทำเฉลี่ย/งาน</span><b>' + (avgMin ? fdur(avgMin) : '–') + '</b></div><div class="mini"><span>รับงาน → เสร็จ เฉลี่ย</span><b>' + (leads.length ? avgLead.toFixed(1) + ' วัน' : '–') + '</b></div></div>' +
@@ -3517,6 +3582,7 @@ document.addEventListener('click', async e => {
   if (d.insttab) { INST.tab = d.insttab; renderLogin(); drawQr(); return; }
   if (d.quick) { S.f.quick = d.quick; return render(); }
   if (d.ctype) { LS.set('chartType', d.ctype); S.animIn = true; return render(); }
+  if (d.gg) { S.gg = d.gg; LS.set('ganttGroup', d.gg); return render(); }
   if (d.hperson !== undefined) { S.hp = d.hperson; LS.set('homePerson', d.hperson); return render(); }
   if (d.hpreset) { homeRange(); S.hr.preset = d.hpreset; homeRange(); saveHomeRange(); return render(); }
   if (d.saveuser) return saveUserRow(d.saveuser);
@@ -3570,6 +3636,7 @@ document.addEventListener('click', async e => {
     case 'delyes': { const id = S.edit.job.id, code = S.edit.job.code; try { await mutate(() => api().deleteJob({ id: id }), 'ลบ ' + code + ' แล้ว'); S.jobs = S.jobs.filter(j => j.id !== id); S.logs = S.logs.filter(l => l.jobId !== id); closeEditor(); render(); } catch (x) {} return; }
     case 'start': if (S.edit) readEditor(); return startTimer(d.job);
     case 'stop': if (S.edit) readEditor(); return stopTimer(d.log);
+    case 'ganttall': S.ganttAll = !S.ganttAll; return render();
     case 'refresh': return load(false).then(() => { if (S.sync === 'ok') toast('อัปเดตข้อมูลล่าสุดแล้ว'); });
     case 'csv': return exportCsv();
     case 'retryload': S.login.err = ''; S.login.retry = false; S.login.busy = true; renderLogin(); return load(false);
@@ -3641,6 +3708,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const t = e.target;
+  if (t.dataset && t.dataset.act === 'ganttdone') { S.ganttDone = t.checked; LS.set('ganttDone', t.checked); return render(); }
   if (t.id === 'fMember') { S.f.member = t.value; LS.set('fMember', t.value); return render(); }
   if (t.id === 'fGroup') { S.f.group = t.value; return render(); }
   if (t.id === 'helpTopic' && t.value) { const x = $('#msgText'); if (x) { x.value = t.value + (x.value ? ' — ' + x.value : ''); x.focus(); } t.value = ''; return; }
