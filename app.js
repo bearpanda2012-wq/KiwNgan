@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.24.0';
+const APP_VERSION = '2.24.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1308,6 +1308,24 @@ async function deleteFile(id) {
   if (S.fdelAsk !== id) { S.fdelAsk = id; toast('กดถังขยะอีกครั้งเพื่อยืนยันลบ ' + f.name); setTimeout(() => { if (S.fdelAsk === id) S.fdelAsk = ''; }, 4000); return; }
   S.fdelAsk = '';
   try { await mutate(() => api().deleteFile({ id: id }), 'ลบ ' + f.name + ' แล้ว'); S.files = S.files.filter(x => x.id !== id); refreshDetail(); render(); } catch (e) {}
+}
+/* หน้าเพิ่มงานใหม่: เช็กลิสต์ · ไฟล์งาน · คอมเมนต์แรก (บันทึกพร้อมงาน) */
+function newExtras(E) {
+  const j = E.job, c = clOf(j), tpl = clTemplate(j.taskType), pf = E.pfiles || [];
+  return '<fieldset class="nx"><legend>เช็กลิสต์</legend><div class="f full">' +
+      '<div class="cl-list">' + c.map((x, i) => '<div class="cl-it"><span class="cl-box static"></span><span><em class="clt">' + esc(x.t) + '</em></span><button type="button" class="icon-btn sm" data-ncldel="' + i + '" aria-label="ลบขั้นนี้">✕</button></div>').join('') + '</div>' +
+      '<div class="cl-add"><input id="nclNew" placeholder="เพิ่มขั้นตอน เช่น เช็กขนาด, ส่ง sale ตรวจ" autocomplete="off"><button type="button" class="btn sm" data-act="ncladd">' + I.plus + 'เพิ่ม</button>' +
+      (tpl.length && !c.length ? '<button type="button" class="btn sm primary" data-act="ncltpl">ใช้เช็กลิสต์มาตรฐานของ "' + esc(j.taskType) + '" (' + tpl.length + ' ขั้น)</button>' : '') + '</div>' +
+      (!c.length && !tpl.length ? '<span class="hint">ถ้าไม่ใส่ จะได้เช็กลิสต์มาตรฐานของรายละเอียดงานนั้นให้อัตโนมัติ (ถ้าตั้งไว้)</span>' : '') + '</div></fieldset>' +
+    '<fieldset class="nx"><legend>ไฟล์งาน</legend><div class="f full">' +
+      '<div class="flist">' + pf.map((f, i) => '<div class="frow">' + fileIc(f.name) + '<span class="fname">' + esc(f.name) + '<small>' + fsize(f.size) + ' · อัปโหลดหลังกดเพิ่มงาน</small></span><span></span><button type="button" class="icon-btn" data-pfdel="' + i + '" aria-label="เอาออก">' + I.trash + '</button></div>').join('') + '</div>' +
+      '<label class="fdrop"><input type="file" multiple data-pfile="1" hidden>' + I.plus + '<span><b>แนบไฟล์งาน</b><small>DWG, DXF, NC, PDF … ไม่เกิน ' + FILE_MAX_MB + ' MB · ลากมาวางในหน้านี้ได้</small></span></label></div></fieldset>' +
+    '<fieldset class="nx"><legend>คอมเมนต์</legend><div class="f full"><textarea id="eCmt" rows="2" placeholder="ข้อความถึงคนทำงาน เช่น ลูกค้าขอขอบมน, ใช้ไฟล์เวอร์ชันล่าสุด">' + esc(E.firstCmt || '') + '</textarea></div></fieldset>';
+}
+function addPendingFiles(files) {
+  const E = S.edit; if (!E) return;
+  const ok = Array.from(files || []).filter(f => { if (f.size > FILE_MAX_MB * 1048576) { toast(f.name + ' ใหญ่เกิน ' + FILE_MAX_MB + ' MB', true); return false; } return true; });
+  if (!ok.length) return; readEditor(); E.firstCmt = ($('#eCmt') || {}).value || E.firstCmt; E.pfiles = (E.pfiles || []).concat(ok); renderEditor();
 }
 function refreshDetail() { if (S.edit && S.edit.mode === 'view') renderEditor(); }
 
@@ -3746,7 +3764,7 @@ function renderEditor() {
       '<label class="toggle"><input type="checkbox" data-e="priority"' + (j.priority === 'urgent' ? ' checked' : '') + ' style="accent-color:var(--urgent)"><span><b>งานด่วน</b></span></label>' +
       '<label class="toggle"><input type="checkbox" data-e="revision"' + (j.revision ? ' checked' : '') + ' style="accent-color:var(--review)"><span><b>งานแก้ไข</b></span></label>' +
     '</fieldset>' +
-    editorImgs(E, live, ro) +
+    editorImgs(E, live, ro) + (E.isNew ? newExtras(E) : '') +
     '<fieldset><legend>กำหนดเวลา</legend>' +
       '<div class="f"><label for="e-received">วันที่รับงาน</label><input type="date" id="e-received" data-e="received" value="' + esc(j.received) + '"></div>' +
       '<div class="f"><label for="e-due">กำหนดส่ง</label><input type="date" id="e-due" data-e="due" value="' + esc(j.due) + '">' + dueHint + '</div>' +
@@ -3828,7 +3846,7 @@ async function saveEditor() {
   }
   // งานใหม่: ขึ้นบนบอร์ดทันที (สถานะ "กำลังบันทึก") แล้วบันทึกเบื้องหลัง — ถ้าไม่สำเร็จเปิดฟอร์มคืนพร้อมข้อมูลเดิม
   if (S.edit.isNew) {
-    const files = (S.edit.pending || []).map(p => p.file), draft = clone(j), tmpId = uid('tmp_');
+    const files = (S.edit.pending || []).map(p => p.file), docs = (S.edit.pfiles || []).slice(), cmt = (($('#eCmt') || {}).value || '').trim(), draft = clone(j), tmpId = uid('tmp_');
     S.jobs.push(Object.assign({}, pre, { id: tmpId, minutes: 0, pending: true, createdBy: S.me, assignee: isAdmin() ? pre.assignee : S.me }));
     closeEditor(); render(); toast('กำลังเพิ่มงาน ' + j.code + '…');
     S.saving = (S.saving || 0) + 1;
@@ -3836,10 +3854,12 @@ async function saveEditor() {
       const r = await mutate(() => api().saveJob({ job: pre }), 'เพิ่มงาน ' + j.code + ' แล้ว' + (files.length ? ' · กำลังอัปโหลดรูป ' + files.length + ' รูป' : ''));
       S.jobs = S.jobs.filter(x => x.id !== tmpId); upsert(S.jobs, r.job); render();
       if (files.length) uploadImages(r.job.id, files);
+      if (docs.length) uploadFiles(r.job.id, docs);
+      if (cmt) api().addComment({ jobId: r.job.id, text: cmt }).then(() => { S.cmtSelf = S.cmtSelf || {}; S.cmtSelf[r.job.id] = (S.cmtSelf[r.job.id] || 0) + 1; (S.cmtCount = S.cmtCount || {})[r.job.id] = ((S.cmtCount || {})[r.job.id] || 0) + 1; render(); }).catch(e => toast('ส่งคอมเมนต์ไม่สำเร็จ: ' + e.message, true));
     } catch (e) {
       S.jobs = S.jobs.filter(x => x.id !== tmpId); render();
       if (e.code !== 'auth') {
-        openEditor(); S.edit.job = draft; S.edit.dueTouched = true; S.edit.pending = files.map(f => ({ id: uid('p_'), file: f, url: URL.createObjectURL(f) })); renderEditor();
+        openEditor(); S.edit.job = draft; S.edit.dueTouched = true; S.edit.pending = files.map(f => ({ id: uid('p_'), file: f, url: URL.createObjectURL(f) })); S.edit.pfiles = docs; S.edit.firstCmt = cmt; renderEditor();
         const er = $('#eErr'); if (er) { er.hidden = false; er.textContent = 'ยังไม่ได้เพิ่มงาน: ' + e.message; }
       }
     }
@@ -3909,6 +3929,8 @@ document.addEventListener('click', async e => {
   // editor-scoped
   if (d.est && S.edit) { readEditor(); S.edit.job.status = isCam(S.edit.job) && d.est === 'review' ? 'done' : d.est; if (S.edit.job.status !== d.est) toast('งาน CAM ไม่ต้องรอตรวจ — ตั้งเป็นเสร็จแล้ว'); if (S.edit.job.status === 'done' && !S.edit.job.finishedAt) S.edit.job.finishedAt = nowLocal(); if (S.edit.job.status !== 'done') S.edit.job.finishedAt = ''; return renderEditor(); }
   if (d.fdel) return deleteFile(d.fdel);
+  if (d.ncldel !== undefined && S.edit) { readEditor(); S.edit.firstCmt = ($('#eCmt') || {}).value || ''; const c = clOf(S.edit.job); c.splice(+d.ncldel, 1); S.edit.job.checklist = JSON.stringify(c); return renderEditor(); }
+  if (d.pfdel !== undefined && S.edit) { readEditor(); S.edit.firstCmt = ($('#eCmt') || {}).value || ''; (S.edit.pfiles || []).splice(+d.pfdel, 1); return renderEditor(); }
   if (d.cltog !== undefined && S.edit && !t.disabled) { const id = S.edit.job.id, c = clOf(jobById(id)), x = c[+d.cltog]; if (x) { x.d = x.d ? 0 : 1; if (x.d) { x.by = S.me; x.at = nowLocal(); } else { delete x.by; delete x.at; } clSave(id, c); } return; }
   if (d.cldel !== undefined && S.edit) { const id = S.edit.job.id, c = clOf(jobById(id)); c.splice(+d.cldel, 1); clSave(id, c); return; }
   if (d.cmtdel) return delCmt(d.cmtdel);
@@ -3963,6 +3985,8 @@ document.addEventListener('click', async e => {
     case 'cladd': { const el = $('#clNew'), v = el ? el.value.trim() : ''; if (!v || !S.edit) return; const id = S.edit.job.id, c = clOf(jobById(id)); c.push({ t: v, d: 0 }); clSave(id, c); setTimeout(() => { const n = $('#clNew'); if (n) n.focus(); }, 60); return; }
     case 'cltpl': { if (!S.edit) return; const j = jobById(S.edit.job.id); return clSave(j.id, clTemplate(j.taskType)); }
     case 'cmtsend': return sendCmt();
+    case 'ncladd': { if (!S.edit) return; const el = $('#nclNew'), v = el ? el.value.trim() : ''; if (!v) return; readEditor(); S.edit.firstCmt = ($('#eCmt') || {}).value || ''; const c = clOf(S.edit.job); c.push({ t: v, d: 0 }); S.edit.job.checklist = JSON.stringify(c); renderEditor(); setTimeout(() => { const n = $('#nclNew'); if (n) n.focus(); }, 30); return; }
+    case 'ncltpl': { if (!S.edit) return; readEditor(); S.edit.firstCmt = ($('#eCmt') || {}).value || ''; S.edit.job.checklist = JSON.stringify(clTemplate(S.edit.job.taskType)); return renderEditor(); }
     case 'salelink': { try { const r = await mutate(() => api().saleLink({ reset: !!d.reset })); S.saleKey = r.key; if (d.reset) toast('สร้างลิงก์ใหม่แล้ว ลิงก์เก่าใช้ไม่ได้'); render(); } catch (x) {} return; }
     case 'copysale': { try { await navigator.clipboard.writeText(d.url); toast('คัดลอกลิงก์แล้ว'); } catch (x) { prompt('คัดลอกลิงก์นี้', d.url); } return; }
     case 'holadd': { const dd = $('#holD'), nn = $('#holN'); if (!dd || !dd.value || !S.draft) return; S.draft.holidays = (S.draft.holidays || []).filter(h => h.d !== dd.value).concat({ d: dd.value, n: (nn && nn.value.trim()) || 'วันหยุด' }).sort((a, b) => a.d.localeCompare(b.d)); markDirty(); return render(); }
@@ -4031,6 +4055,7 @@ document.addEventListener('input', e => {
     if (path === 'accent') document.documentElement.style.setProperty('--brand', v);
     return;
   }
+  if (t.id === 'eCmt' && S.edit) { S.edit.firstCmt = t.value; return; }
   if (t.dataset.cltplf !== undefined && S.draft) { S.draft.checklists = Object.assign({}, S.draft.checklists || {}); S.draft.checklists[t.dataset.cltplf] = t.value; markDirty(); return; }
   if (t.dataset.sla && S.draft) { const p = t.dataset.sla.split('|'), g = S.draft.groups[+p[0]]; const r = (S.draft.sla[g] = S.draft.sla[g] || { cam: [1, 2], draw: [2, 3] }); r[p[1]][+p[2]] = Math.max(0, +t.value || 0); markDirty(); return; }
 });
@@ -4059,6 +4084,7 @@ document.addEventListener('change', e => {
   if (t.id === 'bgIn' && t.files && t.files[0]) { const f = t.files[0]; t.value = ''; shrinkImage(f, 1920, 900000, 0.82).then(d => { try { localStorage.setItem('kiwngan:bgimg', d); } catch (x) { return toast('รูปใหญ่เกินไปสำหรับเครื่องนี้ ลองรูปอื่น', true); } applyTheme(); toast('ตั้งรูปพื้นหลังแล้ว'); render(); }).catch(e => toast(e.message, true)); return; }
   if (t.dataset.photofor && t.files && t.files[0]) return setPhoto(t.dataset.photofor, t.files[0]);
   if (t.id === 'eImgIn' && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return addEditorFiles(f); }
+  if (t.dataset.pfile && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return addPendingFiles(f); }
   if (t.dataset.filejob && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return uploadFiles(t.dataset.filejob, f); }
   if (t.dataset.imgjob && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return uploadImages(t.dataset.imgjob, f); }
   if (S.edit && t.closest('#sheetBody') && t.dataset.e) {
@@ -4075,6 +4101,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && M.emoji) {
 document.addEventListener('keydown', e => {
   const t = e.target; if (!t || !t.id) return;
   if (t.id === 'cmtText' && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendCmt(); }
+  else if (t.id === 'nclNew' && e.key === 'Enter' && !e.isComposing) { e.preventDefault(); const b = document.querySelector('[data-act="ncladd"]'); if (b) b.click(); }
   else if (t.id === 'clNew' && e.key === 'Enter' && !e.isComposing) { e.preventDefault(); const b = document.querySelector('[data-act="cladd"]'); if (b) b.click(); }
   else if ((t.id === 'holD' || t.id === 'holN') && e.key === 'Enter') { e.preventDefault(); const b = document.querySelector('[data-act="holadd"]'); if (b) b.click(); }
 });
@@ -4093,7 +4120,7 @@ document.addEventListener('drop', e => {
   e.preventDefault(); sh.classList.remove('file-over');
   const E = S.edit, live = E.isNew ? null : jobById(E.job.id);
   const all = Array.from(e.dataTransfer.files || []), toFiles = e.target.closest('.fdrop') ? all : all.filter(f => !/^image\//.test(f.type));
-  if (toFiles.length) { if (E.isNew) return toast('บันทึกงานก่อน แล้วค่อยแนบไฟล์งาน', true); if (!canEdit(live)) return toast('แนบไฟล์ได้เฉพาะงานของตัวเอง', true); uploadFiles(live.id, toFiles); }
+  if (toFiles.length) { if (E.isNew) { addPendingFiles(toFiles); if (all.length === toFiles.length) return; } else { if (!canEdit(live)) return toast('แนบไฟล์ได้เฉพาะงานของตัวเอง', true); uploadFiles(live.id, toFiles); } }
   const imgs = all.filter(f => toFiles.indexOf(f) < 0); if (!imgs.length) return;
   if (!E.isNew && !canAddImg(live)) return toast('เพิ่มรูปได้เฉพาะงานของตัวเอง', true);
   addEditorFiles(imgs);

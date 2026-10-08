@@ -4,4 +4,4 @@ set -e
 cd "$(dirname "$0")"
 export PW="${PW:-$(npm root -g)/playwright/index.mjs}"
 echo "== backend (mock Apps Script)"; node gs/dup.js ../backend/Code.gs; node gs/v116.js; node gs/deluser.js; node gs/helpers.js; node gs/v120.js
-for t in demo timer e2e sugg dupui cam admin gantt grange ghover due chat note helpers v224 fast rtc; do echo "== $t"; timeout 200 node $t.mjs; done
+for t in demo timer e2e sugg dupui cam admin gantt grange ghover due chat note helpers v224 newx fast rtc; do echo "== $t"; timeout 200 node $t.mjs; done
