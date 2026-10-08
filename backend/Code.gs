@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.17.0';
+const VERSION = '1.18.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -132,12 +132,13 @@ const ACTIONS = {
   // admin
   saveSettings: (p, u) => withLock_(() => { admin_(u); return saveSettings_(p.settings, u); }),
   saveUser: (p, u) => withLock_(() => { admin_(u); return saveUser_(p.user, u); }),
+  deleteUser: (p, u) => withLock_(() => { admin_(u); return deleteUser_(p.userId, u); }),
   resetPin: (p, u) => withLock_(() => { admin_(u); return resetPin_(p.userId, u, p.pin); })
 };
 
 /* ===== ความเร็ว: ตัวบอกเวอร์ชันข้อมูล (stamp) ใน cache
    หน้าเว็บส่ง stamp ล่าสุดมาด้วย ถ้าไม่มีอะไรเปลี่ยนจะตอบกลับทันทีโดยไม่ต้องอ่านชีต ===== */
-const DATA_ACTIONS_ = { copyImages: 1, saveJob: 1, deleteJob: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, resetPin: 1 };
+const DATA_ACTIONS_ = { copyImages: 1, saveJob: 1, deleteJob: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
 const MSG_ACTIONS_ = { sendMessage: 1, markRead: 1, helpUpdate: 1, deleteMessages: 1 };
 function stamp_(kind) {
   const c = CacheService.getScriptCache(), k = 'stamp:' + kind;
@@ -431,6 +432,20 @@ function saveUser_(data, admin) {
     log_('', admin.name, 'user', 'เพิ่มผู้ใช้ ' + name);
   }
   return { user: publicUser_(u), pin: pin };
+}
+
+/** ลบบัญชีผู้ใช้ถาวร — งานและเวลาที่เคยทำยังอยู่ (เก็บเป็นชื่อ) จึงดูย้อนหลังและสรุปรายงานได้เหมือนเดิม */
+function deleteUser_(userId, admin) {
+  const row = rowOf_('Users', userId);
+  if (row < 1) throw new Error('ไม่พบผู้ใช้นี้');
+  const u = readRow_('Users', row);
+  if (u.id === admin.id) throw new Error('ลบบัญชีตัวเองไม่ได้');
+  if (u.role === 'admin' && readAll_('Users').filter(x => x.role === 'admin' && x.active && x.id !== u.id).length < 1) throw new Error('ต้องมีแอดมินอย่างน้อย 1 คน');
+  sheet_('Users').deleteRow(row);
+  dropSessionsOf_(u.id);
+  usersBust_();
+  log_('', admin.name, 'user', 'ลบผู้ใช้ ' + u.name);
+  return { userId: u.id };
 }
 
 function renameMember_(oldName, newName) {

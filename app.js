@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.18.4';
+const APP_VERSION = '2.19.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -505,6 +505,13 @@ const Demo = {
     if (String(p.oldPin) !== String(u.pin)) throw new Error('PIN เดิมไม่ถูกต้อง');
     u.pin = String(p.newPin); this.save(d); return {};
   },
+  async deleteUser(p) {
+    const d = this.db(), me = this.me(d); this.admin(me);
+    const u = d.users.find(x => x.id === p.userId); if (!u) throw new Error('ไม่พบผู้ใช้นี้');
+    if (u.id === me.id) throw new Error('ลบบัญชีตัวเองไม่ได้');
+    if (u.role === 'admin' && !d.users.some(x => x.role === 'admin' && x.active && x.id !== u.id)) throw new Error('ต้องมีแอดมินอย่างน้อย 1 คน');
+    d.users = d.users.filter(x => x.id !== u.id); this.save(d); return { userId: u.id };
+  },
   async saveUser(p) {
     const d = this.db(), me = this.me(d), data = p.user; this.admin(me);
     const name = String(data.name || '').trim(); if (!name) throw new Error('กรุณาใส่ชื่อ');
@@ -573,7 +580,7 @@ const Remote = {
     return data.data;
   }
 };
-['copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'resetPin']
+['copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -3250,7 +3257,9 @@ function viewSettings() {
       '<input value="' + esc(u.name) + '" data-u="name" aria-label="ชื่อเล่น" placeholder="ชื่อเล่น"><input class="opt" value="' + esc(u.full || '') + '" data-u="full" aria-label="ชื่อจริง" placeholder="ชื่อจริง">' +
       '<select data-u="role" aria-label="ตำแหน่ง">' + roleOpts(u.role) + '</select>' +
       '<label class="toggle sm"><input type="checkbox" data-u="active"' + (u.active ? ' checked' : '') + '>ใช้งาน</label>' +
-      '<div class="urow-act"><button class="btn sm" data-saveuser="' + esc(u.id) + '">บันทึก</button><button class="btn sm ghost" data-pinedit="' + esc(u.id) + '">' + STI.key + 'PIN</button></div>' +
+      '<div class="urow-act"><button class="btn sm" data-saveuser="' + esc(u.id) + '">บันทึก</button><button class="btn sm ghost" data-pinedit="' + esc(u.id) + '">' + STI.key + 'PIN</button>' +
+        (u.id !== (S.user && S.user.id) ? '<button class="icon-btn sm udel" data-udel="' + esc(u.id) + '" aria-label="ลบ ' + esc(u.name) + '" title="ลบผู้ใช้">' + I.trash + '</button>' : '') + '</div>' +
+      (S.userDel === u.id ? '<div class="confirm"><span>ลบบัญชี <b>' + esc(u.name) + '</b> ถาวร? เข้าระบบไม่ได้อีก แต่งานและเวลาที่เคยทำยังอยู่ในประวัติและรายงาน (ถ้าแค่พักใช้ ให้ปิด "ใช้งาน" แทน)</span><button class="btn sm danger" data-udelyes="' + esc(u.id) + '">ลบผู้ใช้</button><button class="btn sm" data-udel="">ไม่ลบ</button></div>' : '') +
       (S.pinEdit === u.id ? '<div class="pin-edit"><span class="pe-ic">' + STI.key + '</span><div class="pe-b"><b>เปลี่ยน PIN ของ ' + esc(u.name) + '</b><small>ระบบเก็บ PIN แบบเข้ารหัส จึงดู PIN เดิมไม่ได้ ตั้งใหม่ได้เลย</small></div>' +
         '<input id="pinSet" inputmode="numeric" maxlength="6" placeholder="PIN ใหม่ 4–6 หลัก" autocomplete="off"><button class="btn sm primary" data-pinsave="' + esc(u.id) + '">บันทึก PIN</button><button class="btn sm" data-resetpin="' + esc(u.id) + '">สุ่มให้</button><button class="icon-btn sm" data-pinedit="" aria-label="ปิด">✕</button></div>' : '') +
       (S.pinNote && S.pinNote.userId === u.id ? '<div class="pin-note">PIN ใหม่ของ ' + esc(u.name) + ': <b class="mono">' + esc(S.pinNote.pin) + '</b> <button class="btn sm" data-copypin="' + esc(S.pinNote.pin) + '">คัดลอก</button> แจ้งเจ้าตัว ใช้เข้าระบบได้ทันที (เจ้าตัวเปลี่ยนเองได้ในหน้าตั้งค่า)</div>' : '') + '</div>').join('');
@@ -3265,10 +3274,11 @@ function viewSettings() {
     const simpleRows = key => d[key].map((x, i) => '<div class="erow two"><input value="' + esc(x) + '" data-d="' + key + '.' + i + '" aria-label="ชื่อ"><button class="icon-btn" data-del="' + key + '.' + i + '" aria-label="ลบ">' + I.trash + '</button></div>').join('');
     const typeRows = d.taskTypes.map((x, i) => '<div class="erow"><input type="color" value="' + esc(/^#[0-9a-f]{6}$/i.test(x.color || '') ? x.color : TYPE_COLORS[i % TYPE_COLORS.length]) + '" data-d="taskTypes.' + i + '.color" aria-label="สีของงานนี้" title="สีที่แสดงบนการ์ด"><input value="' + esc(x.name) + '" data-d="taskTypes.' + i + '.name" aria-label="ชื่องาน"><select data-d="taskTypes.' + i + '.cat" aria-label="ประเภท"><option value="draw"' + (x.cat !== 'cam' ? ' selected' : '') + '>งานเขียนแบบ</option><option value="cam"' + (x.cat === 'cam' ? ' selected' : '') + '>งาน CAM</option></select><button class="icon-btn" data-del="taskTypes.' + i + '" aria-label="ลบ">' + I.trash + '</button></div>').join('');
     const levelRows = d.levels.map((x, i) => '<div class="erow two"><input value="' + esc(x.label) + '" data-d="levels.' + i + '.label" aria-label="ระดับ ' + x.level + '"><span class="tag rev">ระดับ ' + x.level + '</span></div>').join('');
-    const slaRows = d.groups.map(g => {
+    const slaRows = d.groups.map((g, gi) => {
       const r = (d.sla[g] = d.sla[g] || { cam: [1, 2], draw: [2, 3] });
-      const inp = (cat, k) => '<td><input type="number" min="0" max="60" value="' + esc(r[cat][k]) + '" data-sla="' + esc(g) + '|' + cat + '|' + k + '" aria-label="' + esc(g) + ' ' + cat + '"></td>';
-      return '<tr><td>' + esc(g) + '</td>' + inp('cam', 0) + inp('cam', 1) + inp('draw', 0) + inp('draw', 1) + '</tr>';
+      const inp = (cat, k) => '<td><input type="number" min="0" max="60" value="' + esc(r[cat][k]) + '" data-sla="' + gi + '|' + cat + '|' + k + '" aria-label="' + esc(g) + ' ' + cat + '"></td>';
+      return '<tr><td><input class="sla-g" value="' + esc(g) + '" data-d="groups.' + gi + '" placeholder="ชื่อกลุ่มงาน" aria-label="ชื่อกลุ่มงาน"></td>' + inp('cam', 0) + inp('cam', 1) + inp('draw', 0) + inp('draw', 1) +
+        '<td><button class="icon-btn" data-del="groups.' + gi + '" aria-label="ลบกลุ่ม ' + esc(g) + '" title="ลบกลุ่มงานนี้">' + I.trash + '</button></td></tr>';
     }).join('');
 
     h += '<section class="panel sec" id="s-brand"><div class="panel-h"><h2>แบรนด์</h2></div><p class="help">ชื่อ สี และโลโก้ที่ทุกคนเห็น รวมถึงหน้าเข้าสู่ระบบ</p>' +
@@ -3285,7 +3295,8 @@ function viewSettings() {
       '<div class="editable"><div class="panel-h"><b>ระดับความยาก</b></div>' + levelRows + '</div></div></section>';
 
     h += '<section class="panel sec" id="s-sla"><div class="panel-h"><h2>ระยะเวลามาตรฐาน (วันทำการ)</h2></div><p class="help">ใช้คำนวณกำหนดส่งที่แนะนำตอนรับงาน จากวันที่รับงาน + จำนวนวันตามกลุ่มงานและประเภทงาน</p>' +
-      '<div class="sla-wrap"><table class="sla"><thead><tr><th>กลุ่มงาน</th><th>CAM ชิ้นเดียว</th><th>CAM หลายชิ้น</th><th>เขียนแบบ ชิ้นเดียว</th><th>เขียนแบบ หลายชิ้น</th></tr></thead><tbody>' + slaRows + '</tbody></table></div>' +
+      '<div class="sla-wrap"><table class="sla"><thead><tr><th>กลุ่มงาน</th><th>CAM ชิ้นเดียว</th><th>CAM หลายชิ้น</th><th>เขียนแบบ ชิ้นเดียว</th><th>เขียนแบบ หลายชิ้น</th><th></th></tr></thead><tbody>' + slaRows + '</tbody></table></div>' +
+      '<div class="top-actions"><button class="btn sm" data-add="groups">' + I.plus + 'เพิ่มกลุ่มงาน</button><span class="sub">แก้ชื่อหรือตัวเลขแล้วกด "บันทึกการตั้งค่า" ด้านล่าง · ใช้กับงานใหม่ งานเดิมไม่เปลี่ยน</span></div>' +
       '<label class="toggle" style="max-width:420px"><input type="checkbox" data-d="skipWeekends"' + (d.skipWeekends !== false ? ' checked' : '') + '> ไม่นับวันเสาร์-อาทิตย์</label></section>';
   }
 
@@ -3509,6 +3520,8 @@ document.addEventListener('click', async e => {
   if (d.hperson !== undefined) { S.hp = d.hperson; LS.set('homePerson', d.hperson); return render(); }
   if (d.hpreset) { homeRange(); S.hr.preset = d.hpreset; homeRange(); saveHomeRange(); return render(); }
   if (d.saveuser) return saveUserRow(d.saveuser);
+  if (d.udel !== undefined) { S.userDel = d.udel || ''; return render(); }
+  if (d.udelyes) { const id = d.udelyes, u = S.users.find(x => x.id === id); try { await mutate(() => api().deleteUser({ userId: id }), 'ลบผู้ใช้ ' + (u ? u.name : '') + ' แล้ว'); S.users = S.users.filter(x => x.id !== id); S.userDel = ''; render(); } catch (x) {} return; }
   if (d.rmphoto) return setPhoto(d.rmphoto, null);
   if (d.pinedit !== undefined) { S.pinEdit = d.pinedit; S.pinNote = null; render(); const x = $('#pinSet'); if (x) x.focus(); return; }
   if (d.copypin) { try { await navigator.clipboard.writeText(d.copypin); toast('คัดลอก PIN แล้ว'); } catch (x) {} return; }
@@ -3524,7 +3537,7 @@ document.addEventListener('click', async e => {
   // settings-scoped
   if (d.accent) { S.draft.accent = d.accent; markDirty(); document.documentElement.style.setProperty('--brand', d.accent); return render(); }
   if (d.add) { const k = d.add; if (k === 'members') S.draft.members.push({ id: uid('m_'), name: '', full: '', color: COLORS[S.draft.members.length % COLORS.length] }); else if (k === 'taskTypes') S.draft.taskTypes.push({ name: '', cat: 'draw' }); else S.draft[k].push(''); markDirty(); render(); setTimeout(() => { const ins = document.querySelectorAll('[data-d^="' + k + '."]'); const last = ins[k === 'members' ? ins.length - 2 : ins.length - 1]; if (last) last.focus(); }, 20); return; }
-  if (d.del) { const p = d.del.split('.'); S.draft[p[0]].splice(+p[1], 1); markDirty(); return render(); }
+  if (d.del) { const p = d.del.split('.'); const gone = S.draft[p[0]].splice(+p[1], 1)[0]; if (p[0] === 'groups' && S.draft.sla && gone !== undefined && !S.draft.groups.includes(gone)) delete S.draft.sla[gone]; markDirty(); return render(); }
 
   if (d.ch) { M.help = false; if (!M.open) return openMsgPanel(d.ch); M.ch = d.ch; renderMsgPanel(); return markChanRead(d.ch); }
   if (d.head) { const m = M.list.find(x => x.id === d.head); return openMsgPanel(m ? chanOf(m) : 'team'); }
@@ -3624,7 +3637,7 @@ document.addEventListener('input', e => {
     if (path === 'accent') document.documentElement.style.setProperty('--brand', v);
     return;
   }
-  if (t.dataset.sla && S.draft) { const p = t.dataset.sla.split('|'); S.draft.sla[p[0]][p[1]][+p[2]] = Math.max(0, +t.value || 0); markDirty(); return; }
+  if (t.dataset.sla && S.draft) { const p = t.dataset.sla.split('|'), g = S.draft.groups[+p[0]]; const r = (S.draft.sla[g] = S.draft.sla[g] || { cam: [1, 2], draw: [2, 3] }); r[p[1]][+p[2]] = Math.max(0, +t.value || 0); markDirty(); return; }
 });
 document.addEventListener('change', e => {
   const t = e.target;

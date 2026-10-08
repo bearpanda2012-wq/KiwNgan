@@ -1,0 +1,11 @@
+const path = require('path'); process.argv[2] = path.join(__dirname, '../../backend/Code.gs');
+const m = require('./mock.js'); const logs = []; const ol = console.log; console.log = (...a) => logs.push(a.join(' ')); m.ctx.setup(); console.log = ol;
+const pin = (logs.join('\n').match(/PIN[^0-9]*(\d{4})/) || [])[1]; const T = m.call('login', { name: 'แอดมิน', pin }).data.token;
+const nu = m.call('saveUser', { user: { name: 'ทดสอบ', role: 'user' } }, T).data;
+const T2 = m.call('login', { userId: nu.user.id, pin: nu.pin }).data.token;
+m.call('saveJob', { job: { code: 'DU-1', status: 'queue', assignee: 'ทดสอบ' } }, T);
+console.log('self delete →', m.call('deleteUser', { userId: m.call('bootstrap', {}, T).data.me.id }, T).error);
+console.log('user cannot delete →', m.call('deleteUser', { userId: nu.user.id }, T2).error);
+const r = m.call('deleteUser', { userId: nu.user.id }, T); console.log('delete ok', r.ok);
+console.log('gone from users', !m.call('bootstrap', {}, T).data.users.some(u => u.name === 'ทดสอบ'), '| job kept', m.call('bootstrap', {}, T).data.jobs.some(j => j.code === 'DU-1' && j.assignee === 'ทดสอบ'));
+console.log('old session dropped →', m.call('bootstrap', {}, T2).code);
