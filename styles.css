@@ -2207,3 +2207,11 @@ fieldset.nx textarea{width:100%;border:1px solid var(--line);border-radius:10px;
 .sp-search{margin-bottom:12px}.sp-search input{width:100%;height:42px;border:1px solid var(--line);border-radius:12px;padding:0 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .sp-note{max-width:240px;font-size:12.5px;color:var(--urgent);white-space:normal}
 .sp-t{min-width:760px}
+/* v2.24.3: ตัวกรองหน้า Sale */
+.sp-filters{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.sp-filters select{height:36px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);padding:0 10px;font:inherit;font-size:13px}
+.sp-sum button{flex:1;min-width:120px;background:var(--surface);border:0;border-radius:14px;padding:12px 14px;box-shadow:0 0 0 1px var(--line);display:flex;flex-direction:column;align-items:flex-start;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;transition:box-shadow .15s,transform .15s}
+.sp-sum button:hover{transform:translateY(-1px)}
+.sp-sum button.on{box-shadow:0 0 0 2px var(--brand);background:color-mix(in srgb,var(--brand) 6%,var(--surface))}
+.sp-sum button b{font:800 26px var(--f-display);color:var(--ink)}.sp-sum button b.bad{color:var(--late)}.sp-sum button b.ok{color:var(--done)}
+@media (max-width:640px){.sp-filters select{flex:1;min-width:140px}}

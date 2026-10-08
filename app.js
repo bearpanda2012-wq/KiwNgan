@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.24.2';
+const APP_VERSION = '2.24.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1429,10 +1429,17 @@ async function salePage() {
   document.body.classList.add('auth', 'sale-mode'); applyTheme();
   const root = $('#view') || document.body;
   let last = null, lastErr = '', q = '';
+  const F = { st: 'all', sale: '', group: '', type: '', range: '' };   // ตัวกรอง
   const draw = (d, err) => {
     last = d; lastErr = err || '';
     const sales = (d && d.sales) || [], sel = SALE_Q.sale, t = today(), qq = q.trim().toLowerCase();
-    const jobs = ((d && d.jobs) || []).filter(j => !qq || [j.code, j.title, j.taskType, j.group, j.note, j.sale].join(' ').toLowerCase().indexOf(qq) >= 0).slice().sort((x, y) => (x.status === 'done') - (y.status === 'done') || String(x.due || '9').localeCompare(String(y.due || '9')));
+    const all = (d && d.jobs) || [], uniq = k => [...new Set(all.map(j => j[k]).filter(Boolean))].sort();
+    const since = F.range === '7' ? addDays(t, -6) : F.range === '30' ? addDays(t, -29) : F.range === 'm' ? t.slice(0, 8) + '01' : '';
+    const isLateJ = j => j.status !== 'done' && j.due && j.due < t;
+    const base = all.filter(j => (!qq || [j.code, j.title, j.taskType, j.group, j.note, j.sale].join(' ').toLowerCase().indexOf(qq) >= 0) &&
+      (!F.sale || j.sale === F.sale) && (!F.group || j.group === F.group) && (!F.type || j.taskType === F.type) && (!since || String(j.received || '') >= since));
+    const nAct = base.filter(j => j.status !== 'done').length, nLate = base.filter(isLateJ).length, nDone = base.filter(j => j.status === 'done').length;
+    const jobs = base.filter(j => F.st === 'all' || (F.st === 'act' ? j.status !== 'done' : F.st === 'late' ? isLateJ(j) : j.status === 'done')).slice().sort((x, y) => (x.status === 'done') - (y.status === 'done') || String(x.due || '9').localeCompare(String(y.due || '9')));
     const row = j => { const late = j.status !== 'done' && j.due && j.due < t, fin = String(j.finishedAt || '').slice(0, 10), ok = j.status === 'done' && (!j.due || fin <= j.due);
       return '<tr class="' + (late ? 'late' : '') + '"><td><b class="mono">' + esc(j.code) + '</b>' + (j.priority === 'urgent' ? ' <span class="tag urgent">ด่วน</span>' : '') + '<small>' + esc(j.title || '') + '</small></td><td>' + esc(j.taskType || '') + '<small>' + esc(groupShort(j.group || '')) + '</small></td>' +
         '<td><span class="pill ' + (late ? 's-late' : (ST[j.status] || ST.queue).cls) + '">' + (late ? 'เลยกำหนด' : (ST[j.status] || ST.queue).label) + '</span>' + (j.steps ? '<small>เช็กลิสต์ ' + esc(j.steps) + '</small>' : '') + '</td>' +
@@ -1442,13 +1449,24 @@ async function salePage() {
       '<button class="btn sm" data-sale-refresh="1">' + I.refresh + 'รีเฟรช</button></header>' +
       (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="empty"><b>กำลังโหลด…</b></div>' :
         '<div class="sp-search"><input id="spQ" type="search" placeholder="ค้นหาเลข Job, ลูกค้า, รายละเอียด, หมายเหตุ…" value="' + esc(q) + '" autocomplete="off"></div>' +
-        '<div class="sp-sum"><span><b>' + jobs.filter(j => j.status !== 'done').length + '</b>กำลังดำเนินการ</span><span><b class="bad">' + jobs.filter(j => j.status !== 'done' && j.due && j.due < t).length + '</b>เลยกำหนด</span><span><b class="ok">' + jobs.filter(j => j.status === 'done').length + '</b>เสร็จใน 45 วัน</span></div>' +
+        '<div class="sp-filters">' + (sel ? '' : '<select data-spf="sale" aria-label="Sale"><option value="">ทุก Sale</option>' + uniq('sale').map(x => '<option' + (F.sale === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select>') +
+          '<select data-spf="group" aria-label="กลุ่มงาน"><option value="">ทุกกลุ่มงาน</option>' + uniq('group').map(x => '<option value="' + esc(x) + '"' + (F.group === x ? ' selected' : '') + '>' + esc(groupShort(x)) + '</option>').join('') + '</select>' +
+          '<select data-spf="type" aria-label="รายละเอียดงาน"><option value="">ทุกรายละเอียดงาน</option>' + uniq('taskType').map(x => '<option' + (F.type === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select>' +
+          '<select data-spf="range" aria-label="ช่วงวันที่รับงาน"><option value="">รับงาน: ทั้งหมด</option>' + [['7', '7 วันล่าสุด'], ['30', '30 วันล่าสุด'], ['m', 'เดือนนี้']].map(o => '<option value="' + o[0] + '"' + (F.range === o[0] ? ' selected' : '') + '>รับงาน: ' + o[1] + '</option>').join('') + '</select>' +
+          (F.st !== 'all' || F.sale || F.group || F.type || F.range || q ? '<button class="btn sm ghost" data-spclear="1">ล้างตัวกรอง</button>' : '') + '</div>' +
+        '<div class="sp-sum">' + [['all', base.length, 'ทั้งหมด', ''], ['act', nAct, 'กำลังดำเนินการ', ''], ['late', nLate, 'เลยกำหนด', 'bad'], ['done', nDone, 'เสร็จใน 45 วัน', 'ok']].map(x => '<button type="button" data-spst="' + x[0] + '" class="' + (F.st === x[0] ? 'on' : '') + '"><b class="' + x[3] + '">' + x[1] + '</b>' + x[2] + '</button>').join('') + '</div>' +
         '<div class="sp-wrap"><table class="sp-t"><thead><tr><th>งาน</th><th>รายละเอียด</th><th>สถานะ</th><th>รับงาน</th><th>กำหนดส่ง / เสร็จ</th><th>หมายเหตุ</th>' + (sel ? '' : '<th>Sale</th>') + '</tr></thead><tbody>' + (jobs.length ? jobs.map(row).join('') : '<tr><td colspan="7" class="sub">' + (qq ? 'ไม่พบงานที่ค้นหา' : 'ยังไม่มีงาน') + '</td></tr>') + '</tbody></table></div>' +
         '<p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · หน้านี้ดูได้อย่างเดียว</p>') + '</div>';
   };
   const go = async () => { try { const q = { k: SALE_Q.k, sale: SALE_Q.sale }, d = mode() === 'sheet' ? await Remote.call('saleView', q, S.conn) : await Demo.saleView(q); draw(d); } catch (e) { draw(null, e.message); } };
   draw(null); await go(); setInterval(go, 60000);
-  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-sale-refresh]')) go(); });
+  document.addEventListener('click', e => {
+    const c = e.target.closest && e.target.closest('[data-sale-refresh],[data-spst],[data-spclear]'); if (!c) return;
+    if (c.dataset.saleRefresh) return go();
+    if (c.dataset.spst) { F.st = F.st === c.dataset.spst ? 'all' : c.dataset.spst; return draw(last, lastErr); }
+    if (c.dataset.spclear) { Object.assign(F, { st: 'all', sale: '', group: '', type: '', range: '' }); q = ''; return draw(last, lastErr); }
+  });
+  document.addEventListener('change', e => { const k = e.target && e.target.dataset && e.target.dataset.spf; if (k) { F[k] = e.target.value; draw(last, lastErr); } });
   document.addEventListener('input', e => { if (e.target && e.target.id === 'spQ') { q = e.target.value; const pos = e.target.selectionStart; draw(last, lastErr); const el = $('#spQ'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } } });
 }
 function saleLinkUrl(key, sale) { const u = new URL(location.href); u.search = ''; u.hash = ''; u.searchParams.set('salek', key); if (sale) u.searchParams.set('sale', sale); return u.toString(); }

@@ -40,7 +40,7 @@ const after = await pg.evaluate(() => T.addWorkDays(new Date().toISOString().sli
 console.log('holidays', await pg.evaluate(() => (S.settings.holidays || []).length), '| +1 workday', before, '→', after, '| tpl', JSON.stringify(await pg.evaluate(() => S.settings.checklists)));
 // sale link
 await pg.click('[data-act="salelink"]'); await pg.waitForTimeout(400);
-const url = await pg.locator('[data-act="copysale"]').nth(1).getAttribute('data-url');
+const url = await pg.locator('[data-act="copysale"]').nth(0).getAttribute('data-url');
 console.log('sale url', url.replace(/salek=[^&]+/, 'salek=…'));
 await pg.locator('#s-salelink').screenshot({ path: new URL('out/v224-salelinks.png', import.meta.url).pathname });
 await pg.locator('#s-sla').screenshot({ path: new URL('out/v224-hol.png', import.meta.url).pathname });
@@ -52,6 +52,13 @@ await pg.goto(url); await pg.waitForTimeout(1500);
 console.log('sale page rows', await pg.locator('.sp-t tbody tr').count(), '| sidebar', await pg.evaluate(() => { const e = document.querySelector('.sidebar'); return e ? getComputedStyle(e).display : 'none'; }));
 await pg.fill('#spQ', 'R69'); await pg.waitForTimeout(200);
 console.log('sale search R69 rows', await pg.locator('.sp-t tbody tr').count(), '| note col', await pg.locator('.sp-t th:has-text("หมายเหตุ")').count(), '| notes shown', await pg.locator('.sp-note:not(:has(.sub))').count());
+const cnt = () => pg.locator('.sp-t tbody tr').count();
+const n0 = await cnt(); await pg.click('[data-spst="late"]'); const nl = await cnt(); await pg.click('[data-spst="done"]'); const nd = await cnt();
+await pg.click('[data-spst="done"]'); const sale1 = await pg.locator('[data-spf="sale"] option').nth(1).getAttribute('value') || await pg.locator('[data-spf="sale"] option').nth(1).textContent();
+await pg.selectOption('[data-spf="sale"]', { index: 1 }); const ns = await cnt();
+await pg.selectOption('[data-spf="group"]', { index: 1 }); const ng = await cnt();
 await pg.screenshot({ path: new URL('out/v224-sale.png', import.meta.url).pathname });
+await pg.click('[data-spclear]'); const nc = await cnt();
+console.log('sale filters all', n0, 'late', nl, 'done', nd, 'sale', ns, '+group', ng, 'cleared', nc);
 console.log('errors', errs.join(' | ') || 'none');
 await b.close(); srv.close();
