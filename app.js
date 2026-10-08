@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.19.0';
+const APP_VERSION = '2.19.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3296,7 +3296,7 @@ function viewSettings() {
 
     h += '<section class="panel sec" id="s-sla"><div class="panel-h"><h2>ระยะเวลามาตรฐาน (วันทำการ)</h2></div><p class="help">ใช้คำนวณกำหนดส่งที่แนะนำตอนรับงาน จากวันที่รับงาน + จำนวนวันตามกลุ่มงานและประเภทงาน</p>' +
       '<div class="sla-wrap"><table class="sla"><thead><tr><th>กลุ่มงาน</th><th>CAM ชิ้นเดียว</th><th>CAM หลายชิ้น</th><th>เขียนแบบ ชิ้นเดียว</th><th>เขียนแบบ หลายชิ้น</th><th></th></tr></thead><tbody>' + slaRows + '</tbody></table></div>' +
-      '<div class="top-actions"><button class="btn sm" data-add="groups">' + I.plus + 'เพิ่มกลุ่มงาน</button><span class="sub">แก้ชื่อหรือตัวเลขแล้วกด "บันทึกการตั้งค่า" ด้านล่าง · ใช้กับงานใหม่ งานเดิมไม่เปลี่ยน</span></div>' +
+      '<div class="top-actions"><button class="btn sm" data-add="groups">' + I.plus + 'เพิ่มกลุ่มงาน</button></div>' +
       '<label class="toggle" style="max-width:420px"><input type="checkbox" data-d="skipWeekends"' + (d.skipWeekends !== false ? ' checked' : '') + '> ไม่นับวันเสาร์-อาทิตย์</label></section>';
   }
 
