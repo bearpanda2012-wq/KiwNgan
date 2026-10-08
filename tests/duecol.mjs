@@ -1,0 +1,16 @@
+const { chromium } = await import(process.env.PW);
+import http from 'http'; import fs from 'fs'; import path from 'path';
+const root = new URL('..', import.meta.url).pathname;
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={moveJob,uploadImages,imgsOf,jobAlerts,go};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8783);
+const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1300, height: 850 } });
+const errs = []; pg.on('pageerror', e => errs.push(e.message));
+await pg.addInitScript(() => { localStorage.clear(); if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
+await pg.goto('http://127.0.0.1:8783/index.html'); await pg.waitForTimeout(600);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+console.log('due notice shown at login', await pg.locator('.ntf.job-due').count());
+await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('board'); }); await pg.waitForTimeout(600);
+const c = await pg.evaluate(() => ['today', 'tomorrow'].map(k => { const e = document.querySelector('.card-foot .due.' + k); return e ? k + ':' + getComputedStyle(e).color + '/' + getComputedStyle(e).backgroundColor : k + ':none'; }));
+console.log(c.join(' | '));
+const el = pg.locator('.card:has(.due.tomorrow)').first(); if (await el.count()) await el.screenshot({ path: new URL('out/due-tmr.png', import.meta.url).pathname });
+const el2 = pg.locator('.card:has(.due.today)').first(); if (await el2.count()) await el2.screenshot({ path: new URL('out/due-today.png', import.meta.url).pathname });
+console.log('errors', errs.join(' | ') || 'none'); await b.close(); srv.close();

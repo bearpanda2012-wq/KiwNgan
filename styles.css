@@ -2289,3 +2289,12 @@ body.sale-mode .sale-page{width:100%;min-width:0;box-sizing:border-box}
 .sp-ht{flex:1;min-width:0}.sp-ht b{white-space:normal;overflow-wrap:anywhere}
 .sp-tools,.sp-sum,.sp-wrap,.sp-h{min-width:0;max-width:100%;box-sizing:border-box}
 .sp-bdg{margin-left:6px}
+/* v2.25.1: ส่งวันนี้ (ส้มเข้ม) ต่างจาก ส่งพรุ่งนี้ (ม่วงคราม) */
+:root{--today:#D9480F;--today-soft:#FFE8D9;--tmr:#5F3DC4;--tmr-soft:#EEE8FF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--today:#FF8A4C;--today-soft:#3D2416;--tmr:#B197FC;--tmr-soft:#2A2244}}
+:root[data-theme="dark"]{--today:#FF8A4C;--today-soft:#3D2416;--tmr:#B197FC;--tmr-soft:#2A2244}
+.card-foot .due.today{color:var(--today);background:var(--today-soft);padding:2px 8px;border-radius:999px;font-weight:700}
+.card-foot .due.tomorrow{color:var(--tmr);background:var(--tmr-soft);padding:2px 8px;border-radius:999px;font-weight:700}
+.card-foot .due.tomorrow svg{animation:none}
+.tag.today{background:var(--today-soft);color:var(--today);font-weight:700}
+.tag.tomorrow{background:var(--tmr-soft);color:var(--tmr);font-weight:700}

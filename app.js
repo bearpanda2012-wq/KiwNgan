@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.25.0';
+const APP_VERSION = '2.25.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -254,8 +254,8 @@ function dueInfo(j) {
   if (!j.due) return { cls: '', text: 'ไม่มีกำหนด' };
   const d = daysBetween(today(), j.due);
   if (d < 0) return { cls: 'late', text: 'เลย ' + (-d) + ' วัน' };
-  if (d === 0) return { cls: 'soon', text: 'ส่งวันนี้' };
-  if (d === 1) return { cls: 'soon', text: 'ส่งพรุ่งนี้' };
+  if (d === 0) return { cls: 'soon today', text: 'ส่งวันนี้' };
+  if (d === 1) return { cls: 'soon tomorrow', text: 'ส่งพรุ่งนี้' };
   return { cls: '', text: 'ส่ง ' + fd(j.due) };
 }
 function taskCat(name) { const t = (S.settings.taskTypes || []).find(x => x.name === name); return t ? t.cat : (/CAM$/.test(name || '') ? 'cam' : 'draw'); }
@@ -3355,7 +3355,7 @@ function aItem(j) {
   return '<button class="aitem" data-open="' + esc(j.id) + '">' + stBadge(j) + '<span style="min-width:0"><span class="code">' + esc(j.code) + '</span> ' + (imgsOf(j.id).length ? '<span class="img-chip">' + STI.camera + imgsOf(j.id).length + '</span> ' : '') +
     (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span> ' : '') + (run ? '<span class="tag late">● จับเวลา</span>' : '') +
     '<small>' + esc([j.title, groupShort(j.group), j.taskType].filter(Boolean).join(' · ')) + '</small></span>' +
-    '<span style="text-align:right">' + stPill(j) + '<small class="' + (di.cls === 'late' ? 'tag late' : '') + '">' + esc(di.text) + '</small></span></button>';
+    '<span style="text-align:right">' + stPill(j) + '<small class="' + (di.cls === 'late' ? 'tag late' : /soon/.test(di.cls) ? 'tag ' + di.cls : '') + '">' + esc(di.text) + '</small></span></button>';
 }
 
 /* ============ render: board ============ */
@@ -3395,7 +3395,7 @@ function card(j, i) {
   const nextSt = nextOf(j);
   const mins = totalMinutes(j);
   const mine = canEdit(j) && !j.pending;
-  const dueIc = di.cls === 'late' ? STI.fire : di.cls === 'soon' ? STI.hourglass : j.status === 'done' ? STI.done : STI.calendar;
+  const dueIc = di.cls === 'late' ? STI.fire : /soon/.test(di.cls) ? STI.hourglass : j.status === 'done' ? STI.done : STI.calendar;
   return '<div class="card' + (j.pending ? ' is-pending' : '') + (tc ? ' has-tc' : '') + (late ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + (mine ? '' : ' ro') + '"' + (tc ? ' style="--tc:' + tc + '"' : '') + ' draggable="' + mine + '" data-id="' + esc(j.id) + '" data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
     '<div class="card-top">' + (i >= 0 ? '<span class="qno" title="ลำดับที่ ' + (i + 1) + '">' + (i + 1) + '</span>' : '') + stBadge(j) + '<div class="code">' + esc(j.code) + '</div>' + (imgs.length ? '<button type="button" class="card-th" data-lbopen="' + esc(imgs[0].id) + '" data-lbjob="' + esc(j.id) + '" title="ดูรูป" aria-label="ดูรูปงาน">' + thumbImg(imgs[0]) + (imgs.length > 1 ? '<b>' + imgs.length + '</b>' : '') + '</button>' : '') +
     (nextSt && mine ? '<button class="adv" data-move="' + esc(j.id) + '" data-to="' + nextSt + '" title="เลื่อนเป็น ' + ST[nextSt].label + '" aria-label="เลื่อนเป็น ' + ST[nextSt].label + '">' + I.next + '</button>' : '') + '</div>' +
@@ -3472,7 +3472,7 @@ function viewList() {
       '<div class="cell c-who"><span class="who">' + avTeam(j) + '<span>' + esc(j.assignee || 'ยังไม่มอบหมาย') + (helpersOf(j).length ? '<small class="helpers">+ ' + esc(helpersOf(j).join(', ')) + '</small>' : '') + '<small>Sale ' + esc(j.sale || '–') + '</small></span></span></div>' +
       '<div class="cell c-time">' + (run ? '<span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : '<span class="tnum">' + (mins ? fdur(mins) : '–') + '</span>') + '<small>เริ่ม ' + fdt(j.startedAt) + '</small></div>' +
       '<div class="cell">รับ ' + fd(j.received) + '<small>' + esc(j.taskType || '') + '</small></div>' +
-      '<div class="cell c-due"><span class="' + (di.cls === 'late' ? 'tag late' : '') + '">' + esc(di.text) + '</span>' + (j.status !== 'done' && j.due ? '<small>กำหนด ' + fdY(j.due) + '</small>' : '') + '</div>' +
+      '<div class="cell c-due"><span class="' + (di.cls === 'late' ? 'tag late' : /soon/.test(di.cls) ? 'tag ' + di.cls : '') + '">' + esc(di.text) + '</span>' + (j.status !== 'done' && j.due ? '<small>กำหนด ' + fdY(j.due) + '</small>' : '') + '</div>' +
       '<div class="cell c-note"' + (j.note ? ' title="' + esc(j.note) + '"' : '') + '>' + (j.note ? '<span class="note-txt">' + STI.note + '<span>' + esc(j.note) + '</span></span>' : '<span class="muted">–</span>') + '</div>' +
       '<div class="cell c-st">' + stPill(j) + '</div></div>';
   }).join('') : '<div class="empty"><b>ไม่พบงาน</b>ลองเปลี่ยนตัวกรองหรือคำค้น</div>';
