@@ -50,6 +50,8 @@ await pg.fill('#e-code', 'TPL-1'); await pg.selectOption('#e-type', 'ทำ CAD'
 console.log('new job checklist', await pg.evaluate(() => (S.jobs.find(j => j.code === 'TPL-1') || {}).checklist));
 await pg.goto(url); await pg.waitForTimeout(1500);
 console.log('sale page rows', await pg.locator('.sp-t tbody tr').count(), '| sidebar', await pg.evaluate(() => { const e = document.querySelector('.sidebar'); return e ? getComputedStyle(e).display : 'none'; }));
+await pg.fill('#spQ', 'R69'); await pg.waitForTimeout(200);
+console.log('sale search R69 rows', await pg.locator('.sp-t tbody tr').count(), '| note col', await pg.locator('.sp-t th:has-text("หมายเหตุ")').count(), '| notes shown', await pg.locator('.sp-note:not(:has(.sub))').count());
 await pg.screenshot({ path: new URL('out/v224-sale.png', import.meta.url).pathname });
 console.log('errors', errs.join(' | ') || 'none');
 await b.close(); srv.close();
