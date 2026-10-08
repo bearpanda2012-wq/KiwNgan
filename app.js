@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.21.0';
+const APP_VERSION = '2.21.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1413,6 +1413,7 @@ function renderMsgPanel() {
   let p = $('#msgPanel');
   if (!p) { p = document.createElement('aside'); p.id = 'msgPanel'; p.className = 'msg-panel'; p.setAttribute('aria-label', 'ข้อความ'); document.body.appendChild(p); }
   const chans = chanList(); if (!chans.some(c => c.id === M.ch)) M.ch = 'team';
+  p.style.setProperty('--mp-w', Math.min(560, 420 + Math.max(0, chans.length - 5) * 28) + 'px');   // คนเยอะ กล่องกว้างขึ้นเอง (ที่เหลือขึ้นบรรทัดใหม่)
   const cur = chans.find(c => c.id === M.ch);
   const list = M.list.filter(m => chanOf(m) === M.ch);
   const helps = openHelps();
@@ -1434,7 +1435,7 @@ function renderMsgPanel() {
       (isAdmin() && M.list.some(m => chanOf(m) === M.ch) ? '<button class="icon-btn" data-act="msgclear" title="ล้างประวัติห้องนี้">' + I.trash + '</button>' : '') +
       '<button class="icon-btn" data-act="msgclose" aria-label="ปิด">✕</button></div>' +
     (M.confirmClear ? '<div class="mp-confirm"><span>' + I.trash + 'ลบข้อความทั้งหมดในห้อง <b>' + esc(cur.name) + '</b> (' + M.list.filter(m => chanOf(m) === M.ch).length + ' ข้อความ)? ย้อนกลับไม่ได้</span><button class="btn sm danger" data-act="msgclearyes">ลบทั้งหมด</button><button class="btn sm" data-act="msgclearno">ยกเลิก</button></div>' : '') +
-    '<div class="mp-chans">' + chans.map(c => { const n = unreadIn(c.id); return '<button class="mp-ch' + (c.id === M.ch ? ' on' : '') + '" data-ch="' + esc(c.id) + '">' + (c.user ? avUser(c.user) : '<span class="av ch-ic">' + c.icon + '</span>') + '<span>' + esc(c.name) + '</span>' + (n ? '<b>' + n + '</b>' : '') + '</button>'; }).join('') + '</div>' +
+    '<div class="mp-chans" data-n="' + chans.length + '">' + chans.map(c => { const n = unreadIn(c.id); return '<button class="mp-ch' + (c.id === M.ch ? ' on' : '') + '" data-ch="' + esc(c.id) + '">' + (c.user ? avUser(c.user) : '<span class="av ch-ic">' + c.icon + '</span>') + '<span>' + esc(c.name) + '</span>' + (n ? '<b>' + n + '</b>' : '') + '</button>'; }).join('') + '</div>' +
     rtcStrip() +
     (helps.length && M.ch !== 'team' ? '<button class="mp-sosbar" data-ch="team">' + MSG_IC.sos + helps.length + ' คำขอความช่วยเหลือรอคนช่วย · ดู</button>' : '') +
     '<div class="mp-body" id="mpBody">' + body + '</div>' +
