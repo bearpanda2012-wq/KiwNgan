@@ -1,0 +1,17 @@
+const { chromium } = await import(process.env.PW);
+import http from 'http'; import fs from 'fs'; import path from 'path';
+const root = new URL('..', import.meta.url).pathname;
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={moveJob,uploadImages,imgsOf,jobAlerts,go};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8780);
+const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1300, height: 850 } });
+const errs = []; pg.on('pageerror', e => errs.push(e.message));
+await pg.addInitScript(() => { localStorage.clear(); if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
+await pg.goto('http://127.0.0.1:8780/index.html'); await pg.waitForTimeout(600);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+console.log('due notice shown at login', await pg.locator('.ntf.job-due').count());
+await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('list'); }); await pg.waitForTimeout(600);
+console.log('row notes', await pg.locator('.row-note').count(), '/ jobs with note', await pg.evaluate(() => S.jobs.filter(j => j.note).length));
+const row = pg.locator('.row:has(.row-note)').first(); await row.locator('.code').hover(); await pg.waitForTimeout(700);
+console.log('hover note', await pg.locator('#hovercard .hv-notec:not(.none)').count());
+await pg.screenshot({ path: new URL('out/note.png', import.meta.url).pathname });
+console.log('errors', errs.join(' | ') || 'none');
+await b.close(); srv.close();

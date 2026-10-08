@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.22.0';
+const APP_VERSION = '2.22.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -106,6 +106,7 @@ const STI = {
   done: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8l2.3 1.7 2.8-.2.9 2.7 2.3 1.6-.9 2.7.9 2.7-2.3 1.6-.9 2.7-2.8-.2L12 21.2l-2.3-1.7-2.8.2-.9-2.7-2.3-1.6.9-2.7-.9-2.7 2.3-1.6.9-2.7 2.8.2z"/><path d="M8.7 12.2l2.2 2.2 4.4-4.5"/></svg>',
   fire: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 22c-4.1 0-7-2.8-7-6.6 0-2.7 1.5-4.6 3-6.2.3 1.6 1.1 2.7 2.2 3.2-.2-3.8 1.6-6.9 4.6-9.4.2 2.8 1.4 4.6 2.8 6.2 1.4 1.6 2.4 3.4 2.4 5.9C20 19 16.4 22 12 22zm.1-2.2c1.8 0 3-1.1 3-2.8 0-1.5-.9-2.4-1.9-3.5-.3 1-1 1.7-1.9 2-.1-1.2-.6-2.1-1.4-2.8-.9 1.2-1.8 2.4-1.8 3.9 0 1.9 1.6 3.2 4 3.2z"/></svg>',
   clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12l-4 4H4z"/><path d="M16 20v-4h4M8 9h8M8 13h5"/></svg>',
   hourglass: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3h11M6.5 21h11M7.5 3c0 4.5 4.5 5.5 4.5 9s-4.5 4.5-4.5 9M16.5 3c0 4.5-4.5 5.5-4.5 9s4.5 4.5 4.5 9"/></svg>',
   timer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5M18.5 6.5l1.4-1.4"/></svg>',
   layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5" stroke-linecap="round"/></svg>',
@@ -1153,8 +1154,8 @@ function jobInfoHtml(j, compact) {
       '<span>กำหนดส่ง</span><b class="' + (di.cls === 'late' ? 'bad' : '') + '">' + esc(di.text) + (j.due && j.status !== 'done' ? ' · ' + fdY(j.due) : '') + '</b>' +
       '<span>เวลาทำงาน</span><b>' + (run ? '<span class="live" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : (mins ? fdur(mins) : '–')) + '</b>' +
       (j.sale ? '<span>Sale</span><b>' + esc(j.sale) + '</b>' : '') +
+      '<span>หมายเหตุ</span><b class="hv-notec' + (j.note ? '' : ' none') + '">' + (j.note ? esc(j.note).replace(/\n/g, '<br>') : '–') + '</b>' +
     '</div>' +
-    (j.note && !compact ? '<p class="hv-note">' + esc(j.note) + '</p>' : '') +
     (imgs.length ? '' : '<div class="hv-noimg">' + DECO.palette.replace('palette', '') + 'ยังไม่มีรูปงาน</div>');
 }
 function showHover(el) {
@@ -3182,7 +3183,7 @@ function viewList() {
     const di = dueInfo(j), run = runningOf(j.id), mins = totalMinutes(j), tc = typeColor(j.taskType);
     return '<div class="row' + (tc ? ' has-tc' : '') + (isLate(j) ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + '"' + (tc ? ' style="--tc:' + tc + '"' : '') + ' data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
       '<div class="cell c-main"><div class="code"><span class="qno">' + (i + 1) + '</span>' + stBadge(j) + esc(j.code) + (imgsOf(j.id).length ? '<span class="img-chip">' + STI.camera + imgsOf(j.id).length + '</span>' : '') + '</div><div class="meta">' + (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">แก้ไข</span>' : '') +
-        typeChip(j.taskType) + groupChip(j.group) + (j.title ? '<span>' + esc(j.title) + '</span>' : '') + lvBars(j.level) + '</div></div>' +
+        typeChip(j.taskType) + groupChip(j.group) + (j.title ? '<span>' + esc(j.title) + '</span>' : '') + lvBars(j.level) + '</div>' + (j.note ? '<div class="row-note" title="' + esc(j.note) + '">' + STI.note + esc(j.note) + '</div>' : '') + '</div>' +
       '<div class="cell c-who"><span class="who">' + av(j.assignee) + '<span>' + esc(j.assignee || 'ยังไม่มอบหมาย') + '<small>Sale ' + esc(j.sale || '–') + '</small></span></span></div>' +
       '<div class="cell c-time">' + (run ? '<span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : '<span class="tnum">' + (mins ? fdur(mins) : '–') + '</span>') + '<small>เริ่ม ' + fdt(j.startedAt) + '</small></div>' +
       '<div class="cell">รับ ' + fd(j.received) + '<small>' + esc(j.taskType || '') + '</small></div>' +
