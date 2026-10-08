@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.19.0';
+const VERSION = '1.20.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -30,14 +30,17 @@ const MAX_PIN_FAILS = 5;
 
 const SHEETS = {
   Jobs: ['id', 'code', 'title', 'group', 'taskType', 'qty', 'level', 'assignee', 'sale', 'priority', 'revision',
-         'status', 'received', 'due', 'startedAt', 'finishedAt', 'minutes', 'note', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'helpers'],
+         'status', 'received', 'due', 'startedAt', 'finishedAt', 'minutes', 'note', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'helpers', 'checklist'],
   TimeLogs: ['id', 'jobId', 'member', 'start', 'end', 'minutes'],
   Activity: ['ts', 'jobId', 'who', 'action', 'detail'],
   Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo'],
   Settings: ['key', 'value'],
   Messages: ['id', 'ts', 'from', 'fromRole', 'to', 'kind', 'text', 'jobId', 'status', 'helper', 'readBy'],
-  Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'fileId']
+  Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'fileId'],
+  Files: ['id', 'jobId', 'name', 'mime', 'size', 'fileId', 'createdBy', 'createdAt'],
+  Comments: ['id', 'jobId', 'ts', 'from', 'text']
 };
+const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
 const STATUSES = ['queue', 'doing', 'review', 'fix', 'hold', 'done'];
 const COLORS = ['#0B6B70', '#2D5FC4', '#B05A2A', '#7A4BB5', '#2B7F4A', '#B8435F', '#5B6B7A', '#A07A12'];
@@ -96,7 +99,9 @@ const PUBLIC = {
   // แอดมินไม่แสดงในรายชื่อหน้าเข้าสู่ระบบ (เข้าทางลิงก์ "ผู้ดูแลระบบ" ด้วยชื่อ + PIN)
   roster: () => ({ users: readAll_('Users').filter(u => u.active && u.role !== 'admin').map(publicUser_), brand: publicBrand_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null }),
   // ไม่ล็อก: เข้าสู่ระบบแค่เขียน Script Property 1 ค่า · ส่งข้อมูลเริ่มต้นกลับไปด้วยเลย ไม่ต้องเรียก bootstrap อีกรอบ
-  login: p => login_(p.userId, p.pin, p.name)
+  login: p => login_(p.userId, p.pin, p.name),
+  // ลิงก์ให้ Sale ดูสถานะงาน (อ่านอย่างเดียว ไม่ต้องเข้าสู่ระบบ) — ต้องมีกุญแจที่แอดมินสร้าง
+  saleView: p => saleView_(p.k, p.sale)
 };
 
 const ACTIONS = {
@@ -128,6 +133,12 @@ const ACTIONS = {
   copyImages: (p, u) => withLock_(() => copyImages_(p.from, p.to, u)),
   archive: (p, u) => archiveRead_(u),
   thumbs: (p, u) => thumbs_(p.ids),
+  addFile: (p, u) => { const r = addFile_(p, u); bump_('data'); return r; },   // อัปโหลดไฟล์ใหญ่: ไม่ล็อกระหว่างเขียน Drive
+  deleteFile: (p, u) => withLock_(() => deleteFile_(p.id, u)),
+  comments: (p, u) => ({ comments: commentsOf_(p.jobId).map(c => Object.assign(c, { from: maskName_(c.from, u) })) }),
+  addComment: (p, u) => withLock_(() => addComment_(p, u)),
+  deleteComment: (p, u) => withLock_(() => deleteComment_(p.id, u)),
+  saleLink: (p, u) => { admin_(u); return { key: saleKey_(!!p.reset) }; },
   image: (p, u) => imageFull_(p.id),
   // admin
   saveSettings: (p, u) => withLock_(() => { admin_(u); return saveSettings_(p.settings, u); }),
@@ -138,7 +149,7 @@ const ACTIONS = {
 
 /* ===== ความเร็ว: ตัวบอกเวอร์ชันข้อมูล (stamp) ใน cache
    หน้าเว็บส่ง stamp ล่าสุดมาด้วย ถ้าไม่มีอะไรเปลี่ยนจะตอบกลับทันทีโดยไม่ต้องอ่านชีต ===== */
-const DATA_ACTIONS_ = { copyImages: 1, saveJob: 1, deleteJob: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
+const DATA_ACTIONS_ = { deleteFile: 1, addComment: 1, deleteComment: 1, copyImages: 1, saveJob: 1, deleteJob: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
 const MSG_ACTIONS_ = { sendMessage: 1, markRead: 1, helpUpdate: 1, deleteMessages: 1 };
 function stamp_(kind) {
   const c = CacheService.getScriptCache(), k = 'stamp:' + kind;
@@ -407,6 +418,73 @@ function defaultSettings_() {
   };
 }
 
+/* ======================= ไฟล์งาน (DWG, DXF, NC, PDF …) ======================= */
+function addFile_(p, u) {
+  const row = rowOf_('Jobs', p.jobId); if (row < 0) throw new Error('ไม่พบงานนี้');
+  const job = readRow_('Jobs', row);
+  if (!ownsJob_(u, job)) throw new Error('แนบไฟล์ได้เฉพาะงานของตัวเอง');
+  const name = String(p.name || 'file').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 120), b64 = String(p.data || '').replace(/^data:[^,]*,/, '');
+  if (!b64) throw new Error('ไฟล์ว่าง');
+  const bytes = Utilities.base64Decode(b64);
+  if (bytes.length > FILE_MAX_MB * 1048576) throw new Error('ไฟล์ใหญ่เกิน ' + FILE_MAX_MB + ' MB');
+  const f = subFolder_(driveFolder_('files'), safeName_(job.code)).createFile(Utilities.newBlob(bytes, p.mime || 'application/octet-stream', name));
+  try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  const rec = { id: uid_('f_'), jobId: job.id, name: name, mime: String(p.mime || ''), size: String(bytes.length), fileId: f.getId(), createdBy: u.name, createdAt: nowIso_() };
+  withLock_(() => writeRow_('Files', rec, -1));
+  log_(job.id, u.name, 'file', 'แนบไฟล์ ' + name);
+  return { file: rec };
+}
+function deleteFile_(id, u) {
+  const row = rowOf_('Files', id); if (row < 0) throw new Error('ไม่พบไฟล์นี้');
+  const f = readRow_('Files', row), jr = rowOf_('Jobs', f.jobId), job = jr > 0 ? readRow_('Jobs', jr) : null;
+  if (!isAdmin_(u) && f.createdBy !== u.name && !(job && leadsJob_(u, job))) throw new Error('ลบได้เฉพาะไฟล์ที่ตัวเองแนบ หรือผู้รับผิดชอบงาน');
+  sheet_('Files').deleteRow(row);
+  try { DriveApp.getFileById(f.fileId).setTrashed(true); } catch (e) {}
+  log_(f.jobId, u.name, 'file', 'ลบไฟล์ ' + f.name);
+  return { id: id };
+}
+
+/* ======================= คอมเมนต์ในงาน ======================= */
+function commentsOf_(jobId) { return readAll_('Comments').filter(c => c.jobId === jobId).sort((a, b) => String(a.ts).localeCompare(String(b.ts))); }
+function commentCounts_() { const o = {}; readAll_('Comments').forEach(c => { o[c.jobId] = (o[c.jobId] || 0) + 1; }); return o; }
+function addComment_(p, u) {
+  const text = String(p.text || '').trim().slice(0, 2000); if (!text) throw new Error('พิมพ์ข้อความก่อน');
+  const jr = rowOf_('Jobs', p.jobId); if (jr < 0) throw new Error('ไม่พบงานนี้');
+  const job = readRow_('Jobs', jr);
+  const c = { id: uid_('c_'), jobId: job.id, ts: nowIso_(), from: u.name, text: text };
+  writeRow_('Comments', c, -1);
+  try {
+    const to = [job.assignee].concat(helpersOf_(job), [job.createdBy]).filter((n, i, a) => n && n !== u.name && a.indexOf(n) === i);
+    if (to.length) pushTo_(to, { kind: 'cmt', from: maskName_(u.name, { role: 'user' }), code: job.code, title: text.slice(0, 80) });
+  } catch (e) {}
+  return { comment: Object.assign({}, c, { from: maskName_(c.from, u) }) };
+}
+function deleteComment_(id, u) {
+  const row = rowOf_('Comments', id); if (row < 0) throw new Error('ไม่พบคอมเมนต์');
+  const c = readRow_('Comments', row);
+  if (!isAdmin_(u) && c.from !== u.name) throw new Error('ลบได้เฉพาะคอมเมนต์ของตัวเอง');
+  sheet_('Comments').deleteRow(row);
+  return { id: id, jobId: c.jobId };
+}
+
+/* ======================= ลิงก์ดูสถานะงานสำหรับ Sale ======================= */
+function saleKey_(reset) {
+  const props = PropertiesService.getScriptProperties();
+  let k = props.getProperty('SALE_KEY');
+  if (!k || reset) { k = Utilities.getUuid().replace(/-/g, '').slice(0, 24); props.setProperty('SALE_KEY', k); }
+  return k;
+}
+function saleView_(k, sale) {
+  const key = PropertiesService.getScriptProperties().getProperty('SALE_KEY');
+  if (!key || !k || String(k) !== key) throw new Error('ลิงก์นี้ใช้ไม่ได้แล้ว ขอลิงก์ใหม่จากแอดมิน');
+  const s = settings_(), since = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), tz_(), 'yyyy-MM-dd');
+  const jobs = readAll_('Jobs').filter(j => (!sale || j.sale === sale) && (j.status !== 'done' || String(j.finishedAt).slice(0, 10) >= since))
+    .map(j => { let cl = []; try { cl = JSON.parse(j.checklist || '[]'); } catch (e) {}
+      return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority,
+               steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '' }; });
+  return { brand: publicBrand_(), sales: s.sales || [], sale: sale || '', jobs: jobs, at: nowIso_() };
+}
+
 /* ======================= Users ======================= */
 
 function saveUser_(data, admin) {
@@ -527,6 +605,8 @@ function bootstrap_(u, stamp) {
     users: allUsers.filter(x => isAdmin_(u) || x.role !== 'admin').map(publicUser_),
     jobs: readAll_('Jobs').map(j => maskJob_(j, u)), logs: logs.map(l => maskLog_(l, u)),
     images: imageMeta_().map(m => Object.assign(m, { createdBy: maskName_(m.createdBy, u) })),
+    files: readAll_('Files').map(f => Object.assign(f, { createdBy: maskName_(f.createdBy, u) })),
+    cmtCount: commentCounts_(),
     me: publicUser_(meFull), serverTime: nowIso_(), version: VERSION,
     rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY, secret: rtSecret_() } : null,
     archivedBefore: PropertiesService.getScriptProperties().getProperty('ARCHIVED_BEFORE') || ''
@@ -619,6 +699,12 @@ function deleteJob_(id, u) {
     const still = imageMeta_().map(m => m.fileId);
     gone.filter(f => still.indexOf(f) < 0).forEach(f => { try { DriveApp.getFileById(f).setTrashed(true); } catch (e) {} });
   }
+  // ลบไฟล์งานและคอมเมนต์ของงานนี้
+  [['Files', true], ['Comments', false]].forEach(([nm, drive]) => {
+    const sh2 = sheet_(nm), l2 = sh2.getLastRow(); if (l2 < 2) return;
+    const H = SHEETS[nm], v = sh2.getRange(2, 1, l2 - 1, H.length).getDisplayValues();
+    for (let i = v.length - 1; i >= 0; i--) if (v[i][1] === id) { if (drive) { try { DriveApp.getFileById(v[i][H.indexOf('fileId')]).setTrashed(true); } catch (e) {} } sh2.deleteRow(i + 2); }
+  });
   log_(id, u.name, 'delete', job.code);
   return { id: id };
 }
@@ -1186,7 +1272,7 @@ function room_(p, u) {
    v1.16 — โฟลเดอร์โปรเจกต์ใน Google Drive, รูปงานใน Drive, งานต่อ CAM,
    เก็บถาวรงานเก่า, สำรองข้อมูลทุกคืน, แจ้งเตือนงาน, เรียลไทม์ (Supabase)
    ===================================================================== */
-const DF_ = { images: 'รูปงาน', backup: 'สำรองข้อมูล (อัตโนมัติ)', archive: 'เก็บถาวร (งานเก่า)', docs: 'เอกสาร / ไฟล์งานอื่นๆ' };
+const DF_ = { files: 'ไฟล์งาน', images: 'รูปงาน', backup: 'สำรองข้อมูล (อัตโนมัติ)', archive: 'เก็บถาวร (งานเก่า)', docs: 'เอกสาร / ไฟล์งานอื่นๆ' };
 /** โฟลเดอร์หลักของโปรเจกต์ = โฟลเดอร์ที่ชีตฐานข้อมูลอยู่ (ถ้าชีตอยู่หน้าแรกของไดรฟ์ จะสร้างโฟลเดอร์ใหม่แล้วย้ายชีตเข้าไป) */
 function driveRoot_() {
   const props = PropertiesService.getScriptProperties(), id = props.getProperty('DRIVE_ROOT');
@@ -1298,6 +1384,8 @@ function archiveOld(months) {
       jobs: moveRows_('Jobs', aSs, r => r[iSt] === 'done' && String(r[iFin]).slice(0, 10) < cutoff && String(r[iFin]) !== ''),
       logs: moveRows_('TimeLogs', aSs, r => oldJobs[r[1]]),
       images: moveRows_('Images', aSs, r => oldJobs[r[1]]),
+      files: moveRows_('Files', aSs, r => oldJobs[r[1]]),
+      comments: moveRows_('Comments', aSs, r => oldJobs[r[1]]),
       activity: moveRows_('Activity', aSs, r => String(r[0]).slice(0, 10) < cutoff),
       messages: moveRows_('Messages', aSs, r => String(r[1]).slice(0, 10) < cutoff)
     };

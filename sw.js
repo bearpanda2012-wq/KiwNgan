@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.23.0';
+const CACHE = 'kiwngan-v2.24.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -30,6 +30,7 @@ const PUSH_TEXT = {
   view: f => ['🖥️ ' + f + ' ขอดูหน้าจอของคุณ', 'แตะเพื่อเปิดแอปแล้วตอบรับ'],
   share: f => ['🖥️ ' + f + ' ต้องการแชร์หน้าจอให้คุณดู', 'แตะเพื่อเปิดดู'],
   assign: (f, i) => ['📋 งานใหม่มอบหมายให้คุณ · ' + (i.code || ''), (i.title ? i.title + ' · ' : '') + 'จาก ' + f],
+  cmt: (f, i) => ['💬 ' + f + ' คอมเมนต์ในงาน ' + (i.code || ''), i.title || ''],
   help: (f, i) => ['🤝 ' + f + ' ชวนคุณร่วมทำงาน · ' + (i.code || ''), (i.title || '') + ' — แตะเพื่อเปิดดูงาน'],
   fix: (f, i) => ['🔧 ถูกส่งกลับไปแก้ไข · ' + (i.code || ''), (i.title ? i.title + ' · ' : '') + f + ' ส่งกลับมา'],
   due: (f, i) => ['⏳ งานใกล้ถึงกำหนด ' + (i.count || '') + ' งาน', (i.late ? 'เลยกำหนดแล้ว ' + i.late + ' งาน · ' : '') + (i.code || '')]
