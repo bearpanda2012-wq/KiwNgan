@@ -1,0 +1,33 @@
+const { chromium } = await import(process.env.PW);
+import http from 'http'; import fs from 'fs'; import path from 'path';
+const root = new URL('..', import.meta.url).pathname;
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={moveJob,uploadImages,imgsOf,jobAlerts,go,dueAlerts};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8777);
+const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1300, height: 850 } });
+const errs = []; pg.on('pageerror', e => errs.push(e.message));
+await pg.addInitScript(() => { localStorage.clear(); if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
+await pg.goto('http://127.0.0.1:8777/index.html'); await pg.waitForTimeout(600);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+console.log('due notice shown at login', await pg.locator('.ntf.job-due').count());
+await pg.waitForTimeout(600);
+console.log('popup on login', await pg.locator('.ntf.job-due').count(), '|', (await pg.locator('.ntf.job-due b').first().textContent().catch(() => '')));
+console.log('topbar badge', await pg.locator('.top-due .badge').textContent().catch(() => 'none'));
+await pg.screenshot({ path: new URL('out/due-pop.png', import.meta.url).pathname });
+await pg.click('.ntf.job-due [data-act="dueopen"]'); await pg.waitForTimeout(500);
+console.log('panel', await pg.locator('#duePanel.show').count(), 'rows', await pg.locator('.due-row').count(), 'popup gone', await pg.locator('.ntf.job-due.in').count());
+await pg.screenshot({ path: new URL('out/due-panel.png', import.meta.url).pathname });
+// pick a day with jobs from the strip
+const chip = pg.locator('.dchip:not(.zero):not(.q):not(.late)').first(); const dd = await chip.getAttribute('data-dueday');
+await chip.click(); await pg.waitForTimeout(300);
+console.log('day', dd, 'rows', await pg.locator('.due-row').count(), 'expected', await pg.evaluate(d => S.jobs.filter(j => j.due === d && j.status !== 'done' && j.status !== 'hold').length, dd));
+// date input far ahead
+const far = await pg.evaluate(() => { const j = S.jobs.filter(j => j.status !== 'done' && j.status !== 'hold' && j.due).sort((a, b) => b.due.localeCompare(a.due))[0]; return j.due; });
+await pg.fill('[data-dueday="pick"]', far); await pg.dispatchEvent('[data-dueday="pick"]', 'change'); await pg.waitForTimeout(300);
+console.log('picked', far, 'title', await pg.locator('.due-t').textContent(), 'rows', await pg.locator('.due-row').count());
+await pg.selectOption('[data-dueahead]', '7'); await pg.waitForTimeout(300);
+console.log('ahead 7 badge', await pg.locator('.top-due .badge').textContent());
+await pg.locator('.due-row').first().click(); await pg.waitForTimeout(400);
+console.log('editor', await pg.evaluate(() => !!S.edit), 'panel closed', await pg.locator('#duePanel.show').count() === 0);
+await pg.setViewportSize({ width: 390, height: 820 }); await pg.click('[data-act="close"]').catch(() => {}); await pg.waitForTimeout(300);
+await pg.click('.top-due'); await pg.waitForTimeout(500); await pg.screenshot({ path: new URL('out/due-m.png', import.meta.url).pathname });
+console.log('errors', errs.join(' | ') || 'none');
+await b.close(); srv.close();

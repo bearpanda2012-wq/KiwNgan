@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.20.1';
+const APP_VERSION = '2.21.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1536,16 +1536,93 @@ function jobAlerts(prev) {
       else if (j.status === 'fix' && p.status !== 'fix') jobNotify('fix', 'ถูกส่งกลับไปแก้ไข · ' + j.code, (by ? by + ' ส่งกลับมา' : 'ตรวจแล้วต้องแก้') + (j.note ? ' · ' + j.note : ''), j.id);
     });
   }
-  const key = 'dueNote:' + S.me, t = today();
-  if (LS.get(key, '') !== t) {
-    const tm = addDays(t, 1), mine = S.jobs.filter(j => j.assignee === S.me && isOpen(j) && j.due && j.due <= tm);
-    LS.set(key, t);
-    if (mine.length) {
-      const late = mine.filter(isLate).length;
-      jobNotify('due', 'งานของคุณใกล้ถึงกำหนด ' + mine.length + ' งาน', (late ? 'เลยกำหนดแล้ว ' + late + ' งาน · ' : '') + mine.slice(0, 4).map(j => j.code).join(', ') + (mine.length > 4 ? ' …' : ''), mine.length === 1 ? mine[0].id : '');
-    }
+  dueAlerts();
+}
+/* เตือนงานใกล้ถึงกำหนด: เด้งค้างไว้จนกด "รับทราบ" — เลยกำหนด / ส่งวันนี้ / ส่งพรุ่งนี้
+   เตือนซ้ำเมื่อระดับเปลี่ยน (พรุ่งนี้ → วันนี้ → เลยกำหนด) และย้ำงานที่ต้องส่งวันนี้อีกครั้งหลังบ่ายสอง */
+const dueAhead = () => Math.max(1, Math.min(14, +LS.get('dueAhead', 2) || 2));        // เตือนล่วงหน้ากี่วัน (ตั้งในแผงกำหนดส่ง)
+const dueScope = () => isLead() ? LS.get('dueScope', 'all') : 'mine';                   // หัวหน้า/แอดมิน: ดูได้ทั้งทีม
+const dueJobs = () => S.jobs.filter(j => j.due && isOpen(j) && j.status !== 'hold' && (dueScope() === 'all' || j.assignee === S.me));
+function dueLevel(j) {
+  const t = today();
+  if (!j.due || !isOpen(j)) return '';
+  if (j.due < t) return 'late';
+  if (j.due === t) return new Date().getHours() >= 14 ? 'today2' : 'today';
+  if (j.due === addDays(t, 1)) return 'tomorrow';
+  if (j.due <= addDays(t, dueAhead())) return 'soon';
+  return '';
+}
+const dueCount = () => dueJobs().filter(j => dueLevel(j)).length;
+function dueAlerts() {
+  if (!S.me || S.screen !== 'app' || !S.jobs) return;
+  const key = 'dueSeen:' + S.me, seen = LS.get(key, {}) || {}, t = today(), fresh = [];
+  dueJobs().forEach(j => {
+    const lv = dueLevel(j); if (!lv) return;
+    const tag = t + '|' + lv;
+    if (seen[j.id] !== tag) fresh.push({ j: j, lv: lv });
+  });
+  if (!fresh.length) return;
+  const all = dueJobs().filter(j => dueLevel(j)).map(j => ({ j: j, lv: dueLevel(j) }));
+  const rank = { late: 0, today2: 1, today: 1, tomorrow: 2, soon: 3 };
+  all.sort((a, b) => rank[a.lv] - rank[b.lv] || String(a.j.due).localeCompare(String(b.j.due)));
+  dueNotify(all, fresh.length);
+  all.forEach(x => { seen[x.j.id] = t + '|' + x.lv; });
+  Object.keys(seen).forEach(id => { if (!all.some(x => x.j.id === id)) delete seen[id]; });
+  LS.set(key, seen);
+}
+function dueNotify(list, nNew) {
+  let stack = $('#ntfStack'); if (!stack) { stack = document.createElement('div'); stack.id = 'ntfStack'; stack.className = 'ntf-stack'; document.body.appendChild(stack); }
+  stack.querySelectorAll('.ntf.job-due').forEach(e => e.remove());
+  const late = list.filter(x => x.lv === 'late').length, tod = list.filter(x => x.lv === 'today' || x.lv === 'today2').length, tom = list.filter(x => x.lv === 'tomorrow').length;
+  const title = late ? 'มีงานเลยกำหนด ' + late + ' งาน' : tod ? 'งานที่ต้องส่งวันนี้ ' + tod + ' งาน' : tom ? 'งานที่ต้องส่งพรุ่งนี้ ' + tom + ' งาน' : 'งานใกล้ถึงกำหนด ' + list.length + ' งาน';
+  const lab = x => x.lv === 'late' ? '<em class="dl late">เลย ' + daysBetween(x.j.due, today()) + ' วัน</em>' : x.lv === 'tomorrow' ? '<em class="dl tom">พรุ่งนี้</em>' : x.lv === 'soon' ? '<em class="dl tom">' + fd(x.j.due) + '</em>' : '<em class="dl tod">วันนี้</em>';
+  const who = dueScope() === 'all';
+  const el = document.createElement('div'); el.className = 'ntf job-due sticky' + (late ? ' is-late' : '');
+  el.innerHTML = '<span class="ntf-ic">' + STI.hourglass + '</span><div class="ntf-b"><b>' + esc(title) + '</b>' +
+    '<ul class="due-list">' + list.slice(0, 6).map(x => '<li><button class="due-it" data-open="' + esc(x.j.id) + '"><span class="mono">' + esc(x.j.code) + '</span><small>' + esc((who && x.j.assignee ? x.j.assignee + ' · ' : '') + (x.j.title || x.j.taskType || '')) + '</small>' + lab(x) + '</button></li>').join('') + '</ul>' +
+    (list.length > 6 ? '<p>และอีก ' + (list.length - 6) + ' งาน</p>' : '') +
+    '<div class="ntf-act"><button class="btn sm primary" data-ntfx="1">รับทราบ</button><button class="btn sm" data-act="dueopen">ดูตามวันที่</button></div></div>' +
+    '<button class="ntf-x" data-ntfx="1" aria-label="ปิด">✕</button>';
+  stack.prepend(el); requestAnimationFrame(() => el.classList.add('in'));
+  ping(true); setTimeout(() => ping(true), 380);
+  const body = list.slice(0, 4).map(x => x.j.code + (x.lv === 'late' ? ' (เลยกำหนด)' : x.lv === 'tomorrow' ? ' (พรุ่งนี้)' : ' (วันนี้)')).join(', ');
+  if ('Notification' in window && Notification.permission === 'granted' && (document.visibilityState !== 'visible' || !document.hasFocus())) {
+    try { const n = new Notification('คิวงาน · ' + title, { body: body, tag: 'job-due', renotify: true, icon: 'icons/icon-192.png' }); n.onclick = () => { window.focus(); if (list.length === 1) openEditor(list[0].j.id); }; } catch (e) {}
   }
 }
+document.addEventListener('click', e => { if (e.target && e.target.id === 'duePanel') closeDue(); });
+/* แผงกำหนดส่ง: เลือกวันดูได้ (แถบ 14 วัน + ปฏิทิน) */
+function openDue(day) { S.dueDay = day || S.dueDay || 'soon'; document.querySelectorAll('.ntf.job-due').forEach(dismissNtf); renderDue(); }
+function closeDue() { const p = $('#duePanel'); if (p) { p.classList.remove('show'); setTimeout(() => { if (!p.classList.contains('show')) p.remove(); }, 250); } }
+function renderDue() {
+  let p = $('#duePanel');
+  if (!p) { p = document.createElement('div'); p.id = 'duePanel'; p.className = 'due-pop'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'กำหนดส่งงาน'); document.body.appendChild(p); requestAnimationFrame(() => p.classList.add('show')); }
+  const t = today(), js = dueJobs(), sel = S.dueDay || 'soon', ahead = dueAhead();
+  const late = js.filter(j => j.due < t), soon = js.filter(j => j.due >= t && j.due <= addDays(t, ahead));
+  const days = []; for (let i = 0; i < 14; i++) days.push(addDays(t, i));
+  const cnt = d => js.filter(j => j.due === d).length;
+  const DOW = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+  const list = sel === 'late' ? late : sel === 'soon' ? late.concat(soon) : js.filter(j => j.due === sel);
+  list.sort((a, b) => String(a.due).localeCompare(String(b.due)) || String(a.code).localeCompare(String(b.code)));
+  const title = sel === 'late' ? 'เลยกำหนด' : sel === 'soon' ? 'เลยกำหนด + ใกล้ถึงกำหนด (' + ahead + ' วัน)' : sel === t ? 'ส่งวันนี้ · ' + fdY(sel) : sel === addDays(t, 1) ? 'ส่งพรุ่งนี้ · ' + fdY(sel) : 'ส่งวัน' + ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสฯ', 'ศุกร์', 'เสาร์'][parseLocal(sel).getDay()] + ' ' + fdY(sel);
+  const item = j => {
+    const d = daysBetween(t, j.due);
+    const tag = d < 0 ? '<em class="dl late">เลย ' + (-d) + ' วัน</em>' : d === 0 ? '<em class="dl tod">วันนี้</em>' : d === 1 ? '<em class="dl tom">พรุ่งนี้</em>' : '<em class="dl">อีก ' + d + ' วัน</em>';
+    return '<button class="due-row" data-open="' + esc(j.id) + '">' + (j.assignee ? av(j.assignee, 'sm') : '<span class="av sm">–</span>') +
+      '<span class="dr-b"><span class="dr-1"><b class="mono">' + esc(j.code) + '</b>' + stPill(j) + '</span><small>' + esc([j.assignee, j.title, j.taskType].filter(Boolean).join(' · ')) + '</small></span>' +
+      '<span class="dr-d">' + tag + '<small>' + fd(j.due) + '</small></span></button>';
+  };
+  p.innerHTML = '<div class="due-card"><div class="due-h"><span class="due-ic">' + STI.hourglass + '</span><div><b>กำหนดส่งงาน</b><small>' + (dueScope() === 'all' ? 'ทั้งทีม' : 'งานของฉัน') + ' · เตือนล่วงหน้า ' + ahead + ' วัน</small></div><button class="icon-btn" data-act="dueclose" aria-label="ปิด">✕</button></div>' +
+    '<div class="due-opts">' + (isLead() ? '<div class="seg sm"><button data-duescope="mine" aria-pressed="' + (dueScope() === 'mine') + '">ของฉัน</button><button data-duescope="all" aria-pressed="' + (dueScope() === 'all') + '">ทั้งทีม</button></div>' : '') +
+      '<label class="due-ahead">เตือนล่วงหน้า <select data-dueahead="1">' + [1, 2, 3, 5, 7, 14].map(n => '<option value="' + n + '"' + (n === ahead ? ' selected' : '') + '>' + n + ' วัน</option>').join('') + '</select></label>' +
+      '<label class="due-pick">เลือกวัน <input type="date" data-dueday="pick" value="' + (/^\d{4}/.test(sel) ? sel : '') + '"></label></div>' +
+    '<div class="due-strip"><button class="dchip q' + (sel === 'soon' ? ' on' : '') + '" data-dueday="soon"><small>ต้องดู</small><b>' + (late.length + soon.length) + '</b></button>' +
+      '<button class="dchip late' + (sel === 'late' ? ' on' : '') + (late.length ? '' : ' zero') + '" data-dueday="late"><small>เลยกำหนด</small><b>' + late.length + '</b></button>' +
+      days.map(d => { const c = cnt(d), dd = parseLocal(d), wk = dd.getDay() === 0 || dd.getDay() === 6; return '<button class="dchip' + (sel === d ? ' on' : '') + (c ? '' : ' zero') + (wk ? ' wk' : '') + (d === t ? ' today' : '') + '" data-dueday="' + d + '"><small>' + (d === t ? 'วันนี้' : DOW[dd.getDay()]) + '</small><span>' + dd.getDate() + '</span><b>' + (c || '·') + '</b></button>'; }).join('') + '</div>' +
+    '<div class="due-t">' + esc(title) + ' <em>' + list.length + ' งาน</em></div>' +
+    '<div class="due-list2">' + (list.length ? list.map(item).join('') : '<div class="empty sm"><b>ไม่มีงานครบกำหนด</b>' + (sel === 'late' || sel === 'soon' ? 'ทุกงานอยู่ในกำหนด' : 'ในวันที่เลือก') + '</div>') + '</div></div>';
+}
+setInterval(() => { try { dueAlerts(); } catch (e) {} }, 10 * 60 * 1000);   // ข้ามวัน / เลยบ่ายสอง / เลยกำหนด ระหว่างเปิดแอปค้างไว้
 function dismissNtf(el) { if (!el || !el.isConnected) return; el.classList.remove('in'); el.classList.add('out'); setTimeout(() => el.remove(), 350); }
 function dropNotice(mid) { document.querySelectorAll('.ntf[data-mid="' + mid + '"]').forEach(dismissNtf); }
 let audioCtx = null;
@@ -2726,7 +2803,7 @@ function topbar(title, sub, extra) {
   const d = new Date();
   const hr = d.getHours(), tod = hr < 6 || hr >= 18 ? 'moon' : hr < 11 ? 'sunrise' : 'sun';
   return '<div class="topbar"><span class="hero-ic" aria-hidden="true">' + (I[S.view] || I.home) + '</span><span class="hero-dots" aria-hidden="true"><i></i><i></i><i></i></span><div><div class="eyebrow"><span class="tod ' + tod + '" aria-hidden="true">' + DECO[tod] + '</span>' + esc(s.company) + ' · วัน' + TH_D[d.getDay()] + ' ' + fdY(today()) + '</div><h1>' + title + '</h1>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
-    '<div class="top-actions">' + (extra || '') + '<button class="btn top-msg" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span></button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
+    '<div class="top-actions">' + (extra || '') + (S.me ? (n => '<button class="btn top-due' + (n ? ' has' : '') + '" data-act="dueopen" title="กำหนดส่งงาน">' + STI.hourglass + '<span>กำหนดส่ง</span>' + (n ? '<b class="badge">' + n + '</b>' : '') + '</button>')(dueCount()) : '') + '<button class="btn top-msg" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span></button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
     '<button class="btn primary new" data-act="new">' + I.plus + 'เพิ่มงาน</button></div></div>';
 }
 
@@ -3582,6 +3659,9 @@ document.addEventListener('click', async e => {
   if (d.insttab) { INST.tab = d.insttab; renderLogin(); drawQr(); return; }
   if (d.quick) { S.f.quick = d.quick; return render(); }
   if (d.ctype) { LS.set('chartType', d.ctype); S.animIn = true; return render(); }
+  if (d.dueday && d.dueday !== 'pick') { S.dueDay = d.dueday; return renderDue(); }
+  if (d.duescope) { LS.set('dueScope', d.duescope); LS.set('dueSeen:' + S.me, {}); renderDue(); return render(); }
+  if (d.open && t.closest('#duePanel')) closeDue();
   if (d.gg) { S.gg = d.gg; LS.set('ganttGroup', d.gg); return render(); }
   if (d.hperson !== undefined) { S.hp = d.hperson; LS.set('homePerson', d.hperson); return render(); }
   if (d.hpreset) { homeRange(); S.hr.preset = d.hpreset; homeRange(); saveHomeRange(); return render(); }
@@ -3641,6 +3721,8 @@ document.addEventListener('click', async e => {
     case 'csv': return exportCsv();
     case 'retryload': S.login.err = ''; S.login.retry = false; S.login.busy = true; renderLogin(); return load(false);
     case 'msgopen': return M.open ? closeMsgPanel() : openMsgPanel();
+    case 'dueopen': return $('#duePanel') && $('#duePanel').classList.contains('show') ? closeDue() : openDue();
+    case 'dueclose': return closeDue();
     case 'msgclose': return closeMsgPanel();
     case 'helpon': M.help = true; M.helpTo = M.ch === 'admin' ? 'admin' : 'team'; renderMsgPanel(); { const x = $('#msgText'); if (x) x.focus(); } return;
     case 'helpnojob': M.jobId = ''; renderMsgPanel(); return;
@@ -3677,6 +3759,7 @@ document.addEventListener('click', async e => {
 document.addEventListener('submit', e => { if (e.target.id === 'pinForm') { e.preventDefault(); doLogin(); } if (e.target.id === 'msgForm') { e.preventDefault(); sendMsg(); } });
 document.addEventListener('keydown', e => {
   if (e.target && e.target.id === 'msgText' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMsg(); return; }
+  if (e.key === 'Escape' && $('#duePanel') && !S.lb && !S.edit) { closeDue(); return; }
   if (e.key === 'Escape' && M.open && !S.lb) { closeMsgPanel(); return; }
   if (e.target && e.target.id === 'adminName' && e.key === 'Enter') { e.preventDefault(); e.target.blur(); if (S.login.pin.length >= 4) doLogin(); else { const k = $('.keypad'); if (k) { k.classList.remove('nudge'); void k.offsetWidth; k.classList.add('nudge'); } } return; }
   if (S.lb) { if (e.key === 'Escape') return closeLightbox(); if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { S.lb.i += e.key === 'ArrowRight' ? 1 : -1; return drawLightbox(); } }
@@ -3708,6 +3791,8 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const t = e.target;
+  if (t.dataset && t.dataset.dueahead) { LS.set('dueAhead', +t.value); LS.set('dueSeen:' + S.me, {}); renderDue(); return render(); }
+  if (t.dataset && t.dataset.dueday === 'pick' && t.value) { S.dueDay = t.value; return renderDue(); }
   if (t.dataset && t.dataset.act === 'ganttdone') { S.ganttDone = t.checked; LS.set('ganttDone', t.checked); return render(); }
   if (t.id === 'fMember') { S.f.member = t.value; LS.set('fMember', t.value); return render(); }
   if (t.id === 'fGroup') { S.f.group = t.value; return render(); }
