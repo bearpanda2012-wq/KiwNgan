@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.20.1';
+const VERSION = '1.20.2';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -477,12 +477,17 @@ function saleKey_(reset) {
 function saleView_(k, sale) {
   const key = PropertiesService.getScriptProperties().getProperty('SALE_KEY');
   if (!key || !k || String(k) !== key) throw new Error('ลิงก์นี้ใช้ไม่ได้แล้ว ขอลิงก์ใหม่จากแอดมิน');
+  // แคชตามเวอร์ชันข้อมูล: ข้อมูลไม่เปลี่ยน = ตอบทันทีไม่ต้องอ่านชีต
+  const cache = CacheService.getScriptCache(), ck = 'sale:' + stamp_('data') + ':' + encodeURIComponent(String(sale || '')).slice(0, 120);
+  try { const hit = cache.get(ck); if (hit) return JSON.parse(hit); } catch (e) {}
   const s = settings_(), since = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), tz_(), 'yyyy-MM-dd');
   const jobs = readAll_('Jobs').filter(j => (!sale || j.sale === sale) && (j.status !== 'done' || String(j.finishedAt).slice(0, 10) >= since))
     .map(j => { let cl = []; try { cl = JSON.parse(j.checklist || '[]'); } catch (e) {}
       return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '',
                steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '' }; });
-  return { brand: publicBrand_(), sales: s.sales || [], sale: sale || '', jobs: jobs, at: nowIso_() };
+  const out = { brand: publicBrand_(), sales: s.sales || [], sale: sale || '', jobs: jobs, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
+  try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(ck, t, 600); } catch (e) {}
+  return out;
 }
 
 /* ======================= Users ======================= */

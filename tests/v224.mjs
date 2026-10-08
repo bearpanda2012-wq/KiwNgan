@@ -59,6 +59,8 @@ await pg.selectOption('[data-spf="sale"]', { index: 1 }); const ns = await cnt()
 await pg.selectOption('[data-spf="group"]', { index: 1 }); const ng = await cnt();
 await pg.screenshot({ path: new URL('out/v224-sale.png', import.meta.url).pathname });
 await pg.click('[data-spclear]'); const nc = await cnt();
+await pg.selectOption('[data-spf="status"]', 'doing'); const nst = await cnt(); console.log('status doing rows', nst, '| options', (await pg.locator('[data-spf="status"] option').allTextContents()).join(', '));
+await pg.reload(); await pg.waitForTimeout(150); console.log('cached instant rows', await cnt());
 console.log('sale filters all', n0, 'late', nl, 'done', nd, 'sale', ns, '+group', ng, 'cleared', nc);
 console.log('errors', errs.join(' | ') || 'none');
 await b.close(); srv.close();

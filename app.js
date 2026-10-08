@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.24.3';
+const APP_VERSION = '2.24.4';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -566,7 +566,7 @@ const Demo = {
 
 /* ประตู Apps Script ของ Google บางครั้งค้าง 10–20 วิ (โค้ดเราทำงานเสร็จใน ~0.5 วิ) แต่ถ้าส่งคำขอซ้ำมักได้คำตอบใน 1–2 วิ
    → คำขอที่ส่งซ้ำได้ปลอดภัย (อ่านข้อมูล / สัญญาณที่มีรหัสกันซ้ำ) จะส่ง "สำรอง" อีกชุดถ้ายังไม่ตอบ แล้วใช้คำตอบที่มาก่อน */
-const HEDGE = { ping: 4000, roster: 4000, bootstrap: 6000, messages: 3500, thumbs: 4500, image: 6000, activity: 4500, pushInfo: 4000, rtcPoll: 3500, rtcSend: 3000, stopTimer: 5000, markRead: 5000 };
+const HEDGE = { saleView: 3500, ping: 4000, roster: 4000, bootstrap: 6000, messages: 3500, thumbs: 4500, image: 6000, activity: 4500, pushInfo: 4000, rtcPoll: 3500, rtcSend: 3000, stopTimer: 5000, markRead: 5000 };
 const Remote = {
   call(action, payload, conn) {
     const h = HEDGE[action];
@@ -1429,7 +1429,7 @@ async function salePage() {
   document.body.classList.add('auth', 'sale-mode'); applyTheme();
   const root = $('#view') || document.body;
   let last = null, lastErr = '', q = '';
-  const F = { st: 'all', sale: '', group: '', type: '', range: '' };   // ตัวกรอง
+  const F = { st: 'all', status: '', sale: '', group: '', type: '', range: '' };   // ตัวกรอง
   const draw = (d, err) => {
     last = d; lastErr = err || '';
     const sales = (d && d.sales) || [], sel = SALE_Q.sale, t = today(), qq = q.trim().toLowerCase();
@@ -1437,7 +1437,7 @@ async function salePage() {
     const since = F.range === '7' ? addDays(t, -6) : F.range === '30' ? addDays(t, -29) : F.range === 'm' ? t.slice(0, 8) + '01' : '';
     const isLateJ = j => j.status !== 'done' && j.due && j.due < t;
     const base = all.filter(j => (!qq || [j.code, j.title, j.taskType, j.group, j.note, j.sale].join(' ').toLowerCase().indexOf(qq) >= 0) &&
-      (!F.sale || j.sale === F.sale) && (!F.group || j.group === F.group) && (!F.type || j.taskType === F.type) && (!since || String(j.received || '') >= since));
+      (!F.status || (F.status === 'late' ? isLateJ(j) : j.status === F.status)) && (!F.sale || j.sale === F.sale) && (!F.group || j.group === F.group) && (!F.type || j.taskType === F.type) && (!since || String(j.received || '') >= since));
     const nAct = base.filter(j => j.status !== 'done').length, nLate = base.filter(isLateJ).length, nDone = base.filter(j => j.status === 'done').length;
     const jobs = base.filter(j => F.st === 'all' || (F.st === 'act' ? j.status !== 'done' : F.st === 'late' ? isLateJ(j) : j.status === 'done')).slice().sort((x, y) => (x.status === 'done') - (y.status === 'done') || String(x.due || '9').localeCompare(String(y.due || '9')));
     const row = j => { const late = j.status !== 'done' && j.due && j.due < t, fin = String(j.finishedAt || '').slice(0, 10), ok = j.status === 'done' && (!j.due || fin <= j.due);
@@ -1450,21 +1450,33 @@ async function salePage() {
       (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="empty"><b>กำลังโหลด…</b></div>' :
         '<div class="sp-search"><input id="spQ" type="search" placeholder="ค้นหาเลข Job, ลูกค้า, รายละเอียด, หมายเหตุ…" value="' + esc(q) + '" autocomplete="off"></div>' +
         '<div class="sp-filters">' + (sel ? '' : '<select data-spf="sale" aria-label="Sale"><option value="">ทุก Sale</option>' + uniq('sale').map(x => '<option' + (F.sale === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select>') +
+          '<select data-spf="status" aria-label="สถานะ"><option value="">ทุกสถานะ</option>' + [['queue', 'รอคิว'], ['doing', 'กำลังทำ'], ['review', 'รอตรวจ'], ['fix', 'แก้ไข'], ['hold', 'พักไว้'], ['done', 'เสร็จแล้ว'], ['late', 'เลยกำหนด']].map(o => '<option value="' + o[0] + '"' + (F.status === o[0] ? ' selected' : '') + '>' + o[1] + ' (' + all.filter(j => o[0] === 'late' ? isLateJ(j) : j.status === o[0]).length + ')</option>').join('') + '</select>' +
           '<select data-spf="group" aria-label="กลุ่มงาน"><option value="">ทุกกลุ่มงาน</option>' + uniq('group').map(x => '<option value="' + esc(x) + '"' + (F.group === x ? ' selected' : '') + '>' + esc(groupShort(x)) + '</option>').join('') + '</select>' +
           '<select data-spf="type" aria-label="รายละเอียดงาน"><option value="">ทุกรายละเอียดงาน</option>' + uniq('taskType').map(x => '<option' + (F.type === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select>' +
           '<select data-spf="range" aria-label="ช่วงวันที่รับงาน"><option value="">รับงาน: ทั้งหมด</option>' + [['7', '7 วันล่าสุด'], ['30', '30 วันล่าสุด'], ['m', 'เดือนนี้']].map(o => '<option value="' + o[0] + '"' + (F.range === o[0] ? ' selected' : '') + '>รับงาน: ' + o[1] + '</option>').join('') + '</select>' +
-          (F.st !== 'all' || F.sale || F.group || F.type || F.range || q ? '<button class="btn sm ghost" data-spclear="1">ล้างตัวกรอง</button>' : '') + '</div>' +
+          (F.st !== 'all' || F.status || F.sale || F.group || F.type || F.range || q ? '<button class="btn sm ghost" data-spclear="1">ล้างตัวกรอง</button>' : '') + '</div>' +
         '<div class="sp-sum">' + [['all', base.length, 'ทั้งหมด', ''], ['act', nAct, 'กำลังดำเนินการ', ''], ['late', nLate, 'เลยกำหนด', 'bad'], ['done', nDone, 'เสร็จใน 45 วัน', 'ok']].map(x => '<button type="button" data-spst="' + x[0] + '" class="' + (F.st === x[0] ? 'on' : '') + '"><b class="' + x[3] + '">' + x[1] + '</b>' + x[2] + '</button>').join('') + '</div>' +
         '<div class="sp-wrap"><table class="sp-t"><thead><tr><th>งาน</th><th>รายละเอียด</th><th>สถานะ</th><th>รับงาน</th><th>กำหนดส่ง / เสร็จ</th><th>หมายเหตุ</th>' + (sel ? '' : '<th>Sale</th>') + '</tr></thead><tbody>' + (jobs.length ? jobs.map(row).join('') : '<tr><td colspan="7" class="sub">' + (qq ? 'ไม่พบงานที่ค้นหา' : 'ยังไม่มีงาน') + '</td></tr>') + '</tbody></table></div>' +
         '<p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · หน้านี้ดูได้อย่างเดียว</p>') + '</div>';
   };
-  const go = async () => { try { const q = { k: SALE_Q.k, sale: SALE_Q.sale }, d = mode() === 'sheet' ? await Remote.call('saleView', q, S.conn) : await Demo.saleView(q); draw(d); } catch (e) { draw(null, e.message); } };
-  draw(null); await go(); setInterval(go, 60000);
+  // เร็วขึ้น: แสดงข้อมูลที่จำไว้ทันที → ดึงใหม่เบื้องหลัง (ทางด่วนผ่านกล่องรับ + ส่งคำขอสำรองถ้าช้า)
+  const ck = 'saleCache:' + SALE_Q.k + ':' + SALE_Q.sale;
+  const go = async () => {
+    try {
+      const q = { k: SALE_Q.k, sale: SALE_Q.sale }, d = mode() === 'sheet' ? await Remote.call('saleView', q) : await Demo.saleView(q);
+      if (d && d.rt) ibStart(d.rt);
+      try { LS.set(ck, d); } catch (e) {}
+      draw(d);
+    } catch (e) { if (!last) draw(null, e.message); else toast('อัปเดตไม่สำเร็จ: ' + e.message, true); }
+  };
+  if (mode() === 'sheet') ibStart(LS.get('rtpub', null));
+  const cached = LS.get(ck, null);
+  draw(cached && cached.jobs ? cached : null); go(); setInterval(go, 60000);
   document.addEventListener('click', e => {
     const c = e.target.closest && e.target.closest('[data-sale-refresh],[data-spst],[data-spclear]'); if (!c) return;
     if (c.dataset.saleRefresh) return go();
     if (c.dataset.spst) { F.st = F.st === c.dataset.spst ? 'all' : c.dataset.spst; return draw(last, lastErr); }
-    if (c.dataset.spclear) { Object.assign(F, { st: 'all', sale: '', group: '', type: '', range: '' }); q = ''; return draw(last, lastErr); }
+    if (c.dataset.spclear) { Object.assign(F, { st: 'all', status: '', sale: '', group: '', type: '', range: '' }); q = ''; return draw(last, lastErr); }
   });
   document.addEventListener('change', e => { const k = e.target && e.target.dataset && e.target.dataset.spf; if (k) { F[k] = e.target.value; draw(last, lastErr); } });
   document.addEventListener('input', e => { if (e.target && e.target.id === 'spQ') { q = e.target.value; const pos = e.target.selectionStart; draw(last, lastErr); const el = $('#spQ'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } } });
