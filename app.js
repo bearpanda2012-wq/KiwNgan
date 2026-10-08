@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.21.1';
+const APP_VERSION = '2.22.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2810,9 +2810,19 @@ function topbar(title, sub, extra) {
 
 /* ============ render: home ============ */
 /* ===== ไทม์ไลน์เส้นทางงาน: เลข Job เดียวกัน = งานเดียว (CAD → CAM …) เดินตามวันที่จนถึงวันจบงาน ===== */
+function ganttRange() {
+  const g = S.gr || { p: 'auto' }, t = today(), d = new Date(), iso = (y, m, dd) => isoOf(new Date(y, m, dd));
+  if (g.p === '2w') return { p: g.p, from: addDays(t, -7), to: addDays(t, 7) };
+  if (g.p === 'month') return { p: g.p, from: iso(d.getFullYear(), d.getMonth(), 1), to: iso(d.getFullYear(), d.getMonth() + 1, 0) };
+  if (g.p === 'next') return { p: g.p, from: iso(d.getFullYear(), d.getMonth() + 1, 1), to: iso(d.getFullYear(), d.getMonth() + 2, 0) };
+  if (g.p === 'last') return { p: g.p, from: iso(d.getFullYear(), d.getMonth() - 1, 1), to: iso(d.getFullYear(), d.getMonth(), 0) };
+  if (g.p === 'custom') { let f = g.from || addDays(t, -14), to = g.to || addDays(t, 14); if (to < f) { const x = f; f = to; to = x; } if (daysBetween(f, to) > 366) to = addDays(f, 366); return { p: g.p, from: f, to: to }; }
+  return { p: 'auto' };
+}
 function ganttPanel(pool) {
   const t = today(), recent = addDays(t, -30);
-  if (S.gg === undefined) { S.gg = LS.get('ganttGroup', 'all'); S.ganttDone = !!LS.get('ganttDone', false); }
+  if (S.gg === undefined) { S.gg = LS.get('ganttGroup', 'all'); S.ganttDone = !!LS.get('ganttDone', false); S.gr = LS.get('ganttRange', null) || { p: 'auto' }; }
+  const R0 = ganttRange(), rng = R0.p !== 'auto';
   const groups = (S.settings.groups || []).slice();
   const byCode = {};
   pool.forEach(j => { if (!j.code) return; (byCode[j.code] = byCode[j.code] || []).push(j); });
@@ -2827,7 +2837,7 @@ function ganttPanel(pool) {
     const end = open ? segs.reduce((m, x) => { const e = x.fin || x.due || t; return e > m ? e : m; }, t) : lastFin;
     const dueLast = segs.map(x => x.due).filter(Boolean).sort().pop() || '';
     return { code: code, js: js, segs: segs, open: open, start: start, end: end, fin: open ? '' : lastFin, due: dueLast, group: js[js.length - 1].group || '', late: js.some(isLate) };
-  }).filter(r => r.open || (S.ganttDone && r.fin && r.fin >= recent));
+  }).filter(r => rng ? (r.start <= R0.to && (r.fin || r.end) >= R0.from) : (r.open || (S.ganttDone && r.fin && r.fin >= recent)));
   const counts = {}; rows.forEach(r => { counts[r.group] = (counts[r.group] || 0) + 1; });
   if (S.gg !== 'all' && !groups.includes(S.gg)) S.gg = 'all';
   if (S.gg !== 'all') rows = rows.filter(r => r.group === S.gg);
@@ -2835,20 +2845,23 @@ function ganttPanel(pool) {
   const more = rows.length > 25; if (!S.ganttAll) rows = rows.slice(0, 25);
   const chips = '<div class="hp-chips gantt-chips"><button class="hp-chip' + (S.gg === 'all' ? ' on' : '') + '" data-gg="all">ทั้งหมด</button>' +
     groups.filter(g => counts[g]).map(g => '<button class="hp-chip' + (S.gg === g ? ' on' : '') + '" data-gg="' + esc(g) + '"><i class="gdot" style="background:' + (groupColor(g) || '#64748B') + '"></i>' + esc(groupShort(g)) + ' <em>' + counts[g] + '</em></button>').join('') +
-    '<label class="toggle sm gdone-t"><input type="checkbox" data-act="ganttdone"' + (S.ganttDone ? ' checked' : '') + '>งานที่จบแล้ว (30 วัน)</label></div>';
+    '<div class="g-range"><select data-grange="1" aria-label="ช่วงเวลา">' + [['auto', 'อัตโนมัติ (งานค้าง)'], ['2w', '± 1 สัปดาห์'], ['month', 'เดือนนี้'], ['next', 'เดือนหน้า'], ['last', 'เดือนก่อน'], ['custom', 'กำหนดเอง']].map(o => '<option value="' + o[0] + '"' + (R0.p === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>' +
+      (rng ? '<input type="date" data-gfrom="1" value="' + R0.from + '" aria-label="ตั้งแต่"><span>–</span><input type="date" data-gto="1" value="' + R0.to + '" aria-label="ถึง">'
+        : '<label class="toggle sm gdone-t"><input type="checkbox" data-act="ganttdone"' + (S.ganttDone ? ' checked' : '') + '>งานที่จบแล้ว (30 วัน)</label>') + '</div></div>';
   const head = '<section class="panel gantt-p"><div class="panel-h"><div><h2>เส้นทางงาน</h2><div class="sub">รับงาน → แต่ละขั้น (CAD, CAM …) → วันจบงาน</div></div>' +
     '<div class="legend"><span><i style="background:var(--muted);opacity:.35"></i>ช่วงกำหนดส่ง</span><span><i style="background:var(--late)"></i>เลยกำหนด</span><span><i class="lg-today"></i>วันนี้</span></div></div>' + chips;
-  if (!rows.length) return head + '<div class="empty"><b>ยังไม่มีงานในช่วงนี้</b>' + (S.gg !== 'all' ? 'ลองเลือก "ทั้งหมด"' : '') + '</div></section>';
+  if (!rows.length) return head + '<div class="empty"><b>ยังไม่มีงานในช่วงนี้</b>' + (S.gg !== 'all' ? 'ลองเลือก "ทั้งหมด"' : rng ? 'ลองเปลี่ยนช่วงวันที่' : '') + '</div></section>';
   let a = rows.reduce((m, r) => r.start < m ? r.start : m, t), b = rows.reduce((m, r) => r.end > m ? r.end : m, addDays(t, 3));
   if (a < addDays(t, -60)) a = addDays(t, -60); if (b > addDays(t, 60)) b = addDays(t, 60);
   a = addDays(a, -1); b = addDays(b, 2);
+  if (rng) { a = R0.from; b = R0.to; }
   const span = daysBetween(a, b) + 1, X = iso => Math.max(0, Math.min(100, daysBetween(a, iso) / span * 100)), W = (x, y) => Math.max(0.6, X(y) - X(x));
   const step = span > 70 ? 7 : span > 35 ? 3 : span > 18 ? 2 : 1;
   let grid = '', ticks = '';
   for (let i = 0; i < span; i++) {
     const d = addDays(a, i), dd = parseLocal(d), wk = dd.getDay() === 0 || dd.getDay() === 6;
     if (wk) grid += '<i class="gw" style="left:' + X(d) + '%;width:' + (100 / span) + '%"></i>';
-    const nearM = dd.getDate() !== 1 && [1, 2].some(k => k < step + 1 && parseLocal(addDays(d, k)).getDate() === 1);
+    const nearM = dd.getDate() !== 1 && [1, 2].some(k => k < step + 1 && i + k < span && parseLocal(addDays(d, k)).getDate() === 1);
     if ((i % step === 0 && !nearM && i > 0) || dd.getDate() === 1) ticks += '<span class="gt' + (dd.getDate() === 1 ? ' m' : '') + '" style="left:' + (X(d) + 50 / span) + '%">' + (dd.getDate() === 1 || i === 0 ? dd.getDate() + ' ' + TH_M[dd.getMonth()] : dd.getDate()) + '</span>';
   }
   const tx = X(t) + 50 / span;
@@ -2870,7 +2883,7 @@ function ganttPanel(pool) {
       '<div class="gtrack">' + bars + '</div><div class="gend">' + endTxt + '</div></div>';
   };
   return head + '<div class="gantt"><div class="gscroll"><div class="ghead"><div class="glab"></div><div class="gtrack">' + ticks + '</div><div class="gend"></div></div>' +
-    '<div class="gbody"><div class="ggrid"><div class="glab"></div><div class="gtrack">' + grid + '<i class="gtoday" style="left:' + tx + '%"></i></div><div class="gend"></div></div>' + rows.map(rowH).join('') + '</div></div></div>' +
+    '<div class="gbody"><div class="ggrid"><div class="glab"></div><div class="gtrack">' + grid + (t >= a && t <= b ? '<i class="gtoday" style="left:' + tx + '%"></i>' : '') + '</div><div class="gend"></div></div>' + rows.map(rowH).join('') + '</div></div></div>' +
     (more ? '<div class="top-actions"><button class="btn sm ghost" data-act="ganttall">' + (S.ganttAll ? 'แสดงแค่ 25 งาน' : 'ดูทั้งหมด') + '</button></div>' : '') + '</section>';
 }
 function viewHome() {
@@ -3794,6 +3807,8 @@ document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset && t.dataset.dueahead) { LS.set('dueAhead', +t.value); LS.set('dueSeen:' + S.me, {}); renderDue(); return render(); }
   if (t.dataset && t.dataset.dueday === 'pick' && t.value) { S.dueDay = t.value; return renderDue(); }
+  if (t.dataset && t.dataset.grange) { const cur = ganttRange(); S.gr = t.value === 'custom' ? { p: 'custom', from: cur.from || addDays(today(), -14), to: cur.to || addDays(today(), 14) } : { p: t.value }; LS.set('ganttRange', S.gr); return render(); }
+  if (t.dataset && (t.dataset.gfrom || t.dataset.gto) && t.value) { const cur = ganttRange(); S.gr = { p: 'custom', from: t.dataset.gfrom ? t.value : cur.from, to: t.dataset.gto ? t.value : cur.to }; LS.set('ganttRange', S.gr); return render(); }
   if (t.dataset && t.dataset.act === 'ganttdone') { S.ganttDone = t.checked; LS.set('ganttDone', t.checked); return render(); }
   if (t.id === 'fMember') { S.f.member = t.value; LS.set('fMember', t.value); return render(); }
   if (t.id === 'fGroup') { S.f.group = t.value; return render(); }

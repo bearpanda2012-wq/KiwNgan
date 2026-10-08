@@ -2087,3 +2087,9 @@ button.card-th img{width:100%;height:100%;object-fit:cover;display:block}
 .mp-ch{padding:3px 11px 3px 3px;font-size:13px}
 .mp-ch .av{width:26px;height:26px}
 .msg-panel{width:min(var(--mp-w,420px),100vw)}
+/* v2.22: เลือกช่วงวันที่ของเส้นทางงาน */
+.g-range{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.g-range select,.g-range input{height:34px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--ink);padding:0 10px;font:inherit;font-size:13px}
+.g-range span{color:var(--muted)}
+.g-range .gdone-t{margin-left:0}
+@media (max-width:640px){.g-range{margin-left:0;width:100%}.g-range input{flex:1;min-width:0}}
