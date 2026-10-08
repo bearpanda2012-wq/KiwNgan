@@ -1,0 +1,14 @@
+const path = require('path'); process.argv[2] = path.join(__dirname, '../../backend/Code.gs');
+const m = require('./mock.js'); const logs = []; const ol = console.log; console.log = (...a) => logs.push(a.join(' ')); m.ctx.setup(); console.log = ol;
+const pin = (logs.join('\n').match(/PIN[^0-9]*(\d{4})/) || [])[1]; const A = m.call('login', { name: 'แอดมิน', pin }).data.token;
+const mk = n => { const r = m.call('saveUser', { user: { name: n, role: 'user' } }, A).data; return m.call('login', { userId: r.user.id, pin: r.pin }).data.token; };
+const T1 = mk('หมี'), T2 = mk('อีฟ'), T3 = mk('พิชัย');
+const j = m.call('saveJob', { job: { code: 'H-1', status: 'queue', assignee: 'หมี' } }, A).data.job || m.call('bootstrap', {}, A).data.jobs.find(x => x.code === 'H-1');
+const id = j.id;
+console.log('owner adds helper →', m.call('saveJob', { job: { id, code: 'H-1', helpers: 'อีฟ,หมี,อีฟ' } }, T1).ok, '| stored', m.call('bootstrap', {}, A).data.jobs.find(x => x.id === id).helpers);
+console.log('helper starts timer →', m.call('startTimer', { jobId: id }, T2).ok);
+console.log('helper moves status →', m.call('saveJob', { job: { id, code: 'H-1', status: 'doing' } }, T2).ok);
+console.log('helper changes helpers →', m.call('saveJob', { job: { id, code: 'H-1', helpers: 'อีฟ,พิชัย' } }, T2).error);
+console.log('outsider edits →', m.call('saveJob', { job: { id, code: 'H-1', status: 'review' } }, T3).error);
+m.call('saveUser', { user: { id: m.call('bootstrap', {}, A).data.users.find(u => u.name === 'อีฟ').id, name: 'อีฟวี่', role: 'user' } }, A);
+console.log('rename carried →', m.call('bootstrap', {}, A).data.jobs.find(x => x.id === id).helpers);

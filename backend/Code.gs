@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.18.0';
+const VERSION = '1.19.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -30,7 +30,7 @@ const MAX_PIN_FAILS = 5;
 
 const SHEETS = {
   Jobs: ['id', 'code', 'title', 'group', 'taskType', 'qty', 'level', 'assignee', 'sale', 'priority', 'revision',
-         'status', 'received', 'due', 'startedAt', 'finishedAt', 'minutes', 'note', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'],
+         'status', 'received', 'due', 'startedAt', 'finishedAt', 'minutes', 'note', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'helpers'],
   TimeLogs: ['id', 'jobId', 'member', 'start', 'end', 'minutes'],
   Activity: ['ts', 'jobId', 'who', 'action', 'detail'],
   Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo'],
@@ -233,7 +233,10 @@ function dropSessionsOf_(uid) {
 function admin_(u) { if (u.role !== 'admin') throw new Error('เฉพาะแอดมินเท่านั้น'); }
 const isAdmin_ = u => u.role === 'admin';
 const ROLE_ = r => r === 'admin' || r === 'lead' ? r : 'user'; // admin = ผู้ดูแลระบบ, lead = หัวหน้างาน, user = พนักงาน
-const ownsJob_ = (u, j) => isAdmin_(u) || j.assignee === u.name || j.createdBy === u.name;
+/* ผู้ร่วมทำงาน: เก็บเป็นชื่อคั่นด้วยจุลภาค "หมี,อีฟ" — ทำงาน/จับเวลา/เปลี่ยนสถานะได้เหมือนผู้รับผิดชอบ */
+const helpersOf_ = j => String((j && j.helpers) || '').split(',').map(x => x.trim()).filter(Boolean);
+const leadsJob_ = (u, j) => isAdmin_(u) || j.assignee === u.name || j.createdBy === u.name;
+const ownsJob_ = (u, j) => leadsJob_(u, j) || helpersOf_(j).indexOf(u.name) >= 0;
 
 /* ซ่อนชื่อแอดมินจากผู้ใช้งานทั่วไป */
 const ADMIN_LABEL = 'ผู้ดูแลระบบ';
@@ -247,6 +250,7 @@ function maskJob_(j, viewer) {
   if (isAdmin_(viewer) || !j) return j;
   const o = Object.assign({}, j);
   ['assignee', 'createdBy', 'updatedBy'].forEach(k => { o[k] = maskName_(o[k], viewer); });
+  if (o.helpers) o.helpers = helpersOf_(o).map(n => maskName_(n, viewer)).join(',');
   return o;
 }
 function maskLog_(l, viewer) { return isAdmin_(viewer) || !l ? l : Object.assign({}, l, { member: maskName_(l.member, viewer) }); }
@@ -460,6 +464,13 @@ function renameMember_(oldName, newName) {
       if (changed) rng.setValues(vals);
     });
   });
+  // ผู้ร่วมทำงาน (รายชื่อคั่นจุลภาค)
+  const jsh = sheet_('Jobs'), hcol = SHEETS.Jobs.indexOf('helpers') + 1, jl = jsh.getLastRow();
+  if (jl >= 2) {
+    const rng = jsh.getRange(2, hcol, jl - 1, 1), vals = rng.getValues(); let ch = false;
+    vals.forEach(r => { const a = String(r[0] || '').split(',').map(x => x.trim()); if (a.indexOf(oldName) >= 0) { r[0] = a.map(x => x === oldName ? newName : x).join(','); ch = true; } });
+    if (ch) rng.setValues(vals);
+  }
 }
 
 function resetPin_(userId, admin, wanted) {
@@ -545,6 +556,11 @@ function saveJob_(job, u) {
     if (!isAdmin_(u) && data.assignee !== undefined && data.assignee !== before.assignee && data.assignee !== u.name) {
       throw new Error('มอบหมายงานให้คนอื่นได้เฉพาะแอดมิน');
     }
+    if (data.helpers !== undefined) {
+      // ผู้ใช้ทั่วไปเห็นชื่อแอดมินเป็น "ผู้ดูแลระบบ" → แปลงกลับเป็นชื่อเดิมก่อนบันทึก
+      if (!isAdmin_(u)) { const adm = helpersOf_(before).filter(n => adminNames_().indexOf(n) >= 0); data.helpers = helpersOf_(data).map(n => n === ADMIN_LABEL ? adm.shift() || '' : n).filter(Boolean).join(','); }
+      if (helpersOf_(data).join(',') !== helpersOf_(before).join(',') && !leadsJob_(u, before)) throw new Error('เพิ่ม/ลบผู้ร่วมทำงานได้เฉพาะผู้รับผิดชอบงานหรือแอดมิน');
+    }
     if (job.baseUpdatedAt && before.updatedAt && job.baseUpdatedAt !== before.updatedAt) {
       throw new Error('งานนี้ถูกแก้โดย ' + (before.updatedBy || 'คนอื่น') + ' เมื่อสักครู่ กดรีเฟรชแล้วลองอีกครั้ง');
     }
@@ -564,6 +580,7 @@ function saveJob_(job, u) {
   }
 
   const merged = Object.assign({}, before || { minutes: 0 }, data, { updatedAt: now, updatedBy: u.name });
+  merged.helpers = helpersOf_(merged).filter((n, i, a) => n !== merged.assignee && a.indexOf(n) === i).join(',');
   if (merged.status === 'done' && !merged.finishedAt) merged.finishedAt = now.slice(0, 16);
   if (merged.status !== 'done') merged.finishedAt = '';
   if ((merged.status === 'doing' || merged.status === 'review' || merged.status === 'fix') && !merged.startedAt) merged.startedAt = now.slice(0, 16);
@@ -1347,6 +1364,8 @@ function notifyJob_(before, after, u) {
       pushTo_([after.assignee], { kind: 'assign', from: maskName_(u.name, { role: 'user' }), code: after.code, title: after.title || '' });
     else if (before && after.status === 'fix' && before.status !== 'fix' && after.assignee && after.assignee !== u.name)
       pushTo_([after.assignee], { kind: 'fix', from: maskName_(u.name, { role: 'user' }), code: after.code, title: after.title || '' });
+    const added = helpersOf_(after).filter(n => n !== u.name && helpersOf_(before).indexOf(n) < 0);
+    if (added.length && after.status !== 'done') pushTo_(added, { kind: 'help', from: maskName_(u.name, { role: 'user' }), code: after.code, title: after.title || '' });
   } catch (e) { /* แจ้งเตือนเป็นของเสริม */ }
 }
 
