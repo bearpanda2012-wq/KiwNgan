@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.41.0';
+const APP_VERSION = '2.42.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1875,6 +1875,13 @@ function openMsgPanel(ch, opts) {
   hideHover(); renderMsgPanel(); markChanRead(M.ch);
   requestAnimationFrame(() => { $('#msgPanel').classList.add('open'); const t = $('#msgText'); if (t && matchMedia('(pointer:fine)').matches) t.focus(); });
 }
+/* คลิกพื้นที่นอกกล่องข้อความ → ซ่อนกล่อง (ยกเว้นหน้าต่างที่เปิดจากในแชท เช่น ดูรูป สายโทร แชร์จอ) */
+document.addEventListener('mousedown', e => {
+  if (!M.open) return; const p = $('#msgPanel'), t = e.target;
+  if (!p || !t || !t.closest || p.contains(t)) return;
+  if (t.closest('#imgView, #lightbox, #hovercard, #rtcModal, #rtcView, #rtcHost, #rtcCall, #roomView, .rtc-peek, .toast, #chatHeads, [data-act="msgopen"], .modal, #sheet, #pModal, .ntf')) return;
+  closeMsgPanel();
+}, true);
 function closeMsgPanel() { M.open = false; M.help = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); renderChatHeads(); }
 function msgTime(ts) { const t = String(ts); return t.slice(0, 10) === today() ? t.slice(11, 16) : fd(t.slice(0, 10)) + ' ' + t.slice(11, 16); }
 function helpCard(m) {
@@ -2224,7 +2231,7 @@ const srcWord = src => src === 'camera' ? 'กล้อง' : 'หน้าจ�
 const CAN_PIP = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
 const INK_COLORS = ['#FF3B5C', '#FFB020', '#22C55E', '#3B82F6'];
 const RTC_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
-const R = { sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, t0: 0, loop: null, tick: null, guard: null, prompt: null, dc: null, tool: '', color: INK_COLORS[0], ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, pip: null, rmode: false };
+const R = { spkOff: !!LS.get('spkOff', 0), sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, t0: 0, loop: null, tick: null, guard: null, prompt: null, dc: null, tool: '', color: INK_COLORS[0], ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, pip: null, rmode: false };
 const rtcBusy = () => !!R.state || (typeof V !== 'undefined' && V.on);
 const sigPeer = g => (g.fromAdmin && !isAdmin() ? 'admin' : g.from);
 const sigName = g => (g.fromAdmin && !isAdmin() ? ADMIN_LABEL : g.from);
@@ -2475,7 +2482,7 @@ async function rtcAct(a, t) {
     case 'pip': return rtcPip();
     case 'mic': return voiceMic();
     case 'call': voiceUnlock(); ringUnlock(); return callStart(t.dataset.peer, t.dataset.name);
-    case 'spk': R.spkOff = !R.spkOff; if (R.audioEl) R.audioEl.muted = !!R.spkOff; if (!R.spkOff) voiceUnlock(); return voiceSync();
+    case 'spk': R.spkOff = !R.spkOff; LS.set('spkOff', R.spkOff ? 1 : 0); if (R.audioEl) R.audioEl.muted = !!R.spkOff; if (!R.spkOff) voiceUnlock(); return voiceSync();
     case 'yescam': if (!p) return; voiceUnlock(); closeRtcModal(); return rtcHost(p.peer, p.name, p.sid, !!(p.g.data && p.g.data.mode === 'remote'), 'camera');
     case 'sharecam': return rtcHost(t.dataset.peer, t.dataset.name, '', false, 'camera');
     case 'flip': {
@@ -2550,12 +2557,12 @@ function rtcStrip() {
   if (CAN_RTC && M.ch === 'team') return roomStrip();
   if (!CAN_RTC || M.ch === 'team' || !M.ch) return '';
   const peer = peerOfCh(M.ch), name = peerNameOfCh(M.ch), on = R.state && R.peer === peer;
-  if (on) return '<div class="mp-rtc on"><span class="rtc-rec"></span><span>' + (R.src === 'voice' ? (R.state === 'live' ? 'กำลังคุยสายกับ ' : 'กำลังโทรหา ') : R.role === 'view' ? (R.state === 'live' ? 'กำลังดูหน้าจอของ ' : 'กำลังขอดูหน้าจอ ') : 'กำลังแชร์หน้าจอให้ ') + esc(name) + '</span><button class="btn sm danger" data-rtc="hang">' + (R.src === 'voice' ? RTC_IC.hang + 'วางสาย' : RTC_IC.stop + 'หยุด') + '</button></div>';
+  if (on) return '<div class="mp-rtc on"><span class="rtc-rec"></span><span>' + (R.src === 'voice' ? (R.state === 'live' ? 'กำลังคุยสายกับ ' : 'กำลังโทรหา ') : R.role === 'view' ? (R.state === 'live' ? 'กำลังดูหน้าจอของ ' : 'กำลังขอดูหน้าจอ ') : 'กำลังแชร์หน้าจอให้ ') + esc(name) + '</span>' + (R.src === 'voice' && R.state === 'live' ? '<button class="mp-vbtn' + (R.micOn ? ' on' : ' off') + '" data-rtc="mic" title="' + (R.micOn ? 'ปิดไมค์' : 'เปิดไมค์') + '">' + (R.micOn ? RTC_IC.mic : RTC_IC.micOff) + '</button><button class="mp-vbtn' + (R.spkOff ? ' off' : ' on') + '" data-rtc="spk" title="' + (R.spkOff ? 'เปิดลำโพง' : 'ปิดลำโพง') + '">' + (R.spkOff ? RTC_IC.spkOff : RTC_IC.spk) + '</button>' : '') + '<button class="btn sm danger" data-rtc="hang">' + (R.src === 'voice' ? RTC_IC.hang + 'วางสาย' : RTC_IC.stop + 'หยุด') + '</button></div>';
   const dp = ' data-peer="' + esc(peer) + '" data-name="' + esc(name) + '"';
   return '<div class="mp-rtc"><button class="mp-call" data-rtc="call"' + dp + ' title="โทรหา ' + esc(name) + ' (เสียง)">' + RTC_IC.phone + '<span>โทร</span></button><button data-rtc="view"' + dp + ' title="ขอดูหน้าจอของ ' + esc(name) + '">' + RTC_IC.eye + '<span>ขอดูจอ</span></button>' +
     (CAN_SHARE || !CAN_CAM ? '<button data-rtc="share"' + dp + (CAN_SHARE ? '' : ' disabled') + ' title="' + (CAN_SHARE ? 'แชร์หน้าจอของฉันให้ ' + esc(name) + ' ดู' : 'อุปกรณ์นี้แชร์หน้าจอไม่ได้') + '">' + RTC_IC.cast + '<span>แชร์จอฉัน</span></button>'
       : '<button data-rtc="sharecam"' + dp + ' title="มือถือแชร์หน้าจอผ่านเว็บไม่ได้ — แชร์กล้องให้ ' + esc(name) + ' ดูแทน">' + RTC_IC.cam + '<span>แชร์กล้อง</span></button>') +
-    '<button data-rtc="remote"' + dp + ' title="รีโมทหน้าจอของ ' + esc(name) + ': ดูจอและชี้/วาดบอกจุดให้เขาเห็น — ไม่ต้องติดตั้งอะไร">' + RTC_IC.mouse + '<span>รีโมท</span></button></div>';
+    '</div>';
 }
 
 
@@ -2960,10 +2967,10 @@ function voiceStop() {
 }
 function voiceBtns() {
   return '<span class="rtc-voice" id="rtcVoice"><button class="rtc-tb mic' + (R.micOn ? ' on' : ' off') + '" data-rtc="mic" title="' + (R.micOn ? 'ปิดไมค์' : 'เปิดไมค์ คุยกับ ' + esc(R.name)) + '">' + (R.micOn ? RTC_IC.mic : RTC_IC.micOff) + '<span>' + (R.micOn ? 'ไมค์เปิด' : 'เปิดไมค์') + '</span></button>' +
-    '<button class="rtc-tb spk' + (R.spkOff ? ' off' : '') + '" data-rtc="spk" title="' + (R.spkOff ? 'เปิดเสียง' : 'ปิดเสียงอีกฝ่าย') + '">' + (R.spkOff ? RTC_IC.spkOff : RTC_IC.spk) + '</button>' +
+    '<button class="rtc-tb spk' + (R.spkOff ? ' off' : '') + '" data-rtc="spk" title="' + (R.spkOff ? 'เปิดลำโพง (ได้ยินเสียงอีกฝ่าย)' : 'ปิดลำโพง — คุยต่อได้ ไมค์ยังเปิดอยู่') + '">' + (R.spkOff ? RTC_IC.spkOff : RTC_IC.spk) + '<span>' + (R.spkOff ? 'ลำโพงปิด' : 'ลำโพง') + '</span></button>' +
     (R.peerMic ? '<i class="peer-mic" title="' + esc(R.name) + ' เปิดไมค์อยู่">' + RTC_IC.mic + '</i>' : '') + '</span>';
 }
-function voiceSync() { const el = $('#rtcVoice'); if (el) el.outerHTML = voiceBtns(); else renderRtc(); }
+function voiceSync() { const el = $('#rtcVoice'); if (el) el.outerHTML = voiceBtns(); else renderRtc(); if (M.open && $('#msgPanel .mp-rtc.on')) renderMsgPanel(); }
 
 /* ---- remote pointer: ชี้ / วาดบนจอที่แชร์ ---- */
 const PEEK_CSS = `.pip-wait{font:500 14px system-ui,sans-serif;color:#cfe;padding:28px 18px;text-align:center;line-height:1.6}.pip-wait small{color:#8aa;font-size:12px}.rtc-peek{position:fixed;right:16px;bottom:16px;z-index:115;width:min(340px,calc(100vw - 32px));background:#10161c;color:#e9eef3;border-radius:16px;overflow:hidden;box-shadow:0 18px 50px -12px rgba(0,0,0,.55),0 0 0 1px #2a343e;font:13px/1.35 Anuphan,system-ui,sans-serif;animation:peekIn .4s cubic-bezier(.3,1.4,.5,1);transition:box-shadow .3s}

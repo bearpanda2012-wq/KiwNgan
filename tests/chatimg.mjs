@@ -44,5 +44,10 @@ eq('image viewer opens', await pg.locator('#imgView.open img').count(), 1);
 await pg.screenshot({ path: out + 'chat-view.png' });
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
 eq('viewer closes', await pg.locator('#imgView.open').count(), 0);
+// ไม่มีปุ่มรีโมท + คลิกนอกกล่องข้อความแล้วกล่องซ่อน
+await pg.evaluate(() => { const c = document.querySelector('#msgPanel .mp-ch:not(.on)'); c && c.click(); }); await pg.waitForTimeout(300);
+eq('no remote button', await pg.locator('#msgPanel [data-rtc="remote"]').count(), 0);
+await pg.mouse.click(400, 500); await pg.waitForTimeout(300);
+eq('click outside hides panel', await pg.locator('#msgPanel.open').count(), 0);
 console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.join(' | ') || 'none');
 await b.close(); srv.close(); if (bad || errs.length) process.exit(1);

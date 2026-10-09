@@ -2904,3 +2904,8 @@ a.hv-main{display:block;position:relative;color:inherit;text-decoration:none}
 .pc-notetx{display:flex;gap:5px;align-items:flex-start;margin:6px 0 2px;padding:6px 8px;border-radius:9px;font-size:12.5px;color:var(--urgent);background:color-mix(in oklab,var(--urgent) 8%,var(--surface));line-height:1.4}
 .pc-notetx svg{width:13px;height:13px;flex:none;margin-top:2px}
 .pc-notetx span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* v2.42: ปุ่มไมค์/ลำโพงในแถบสายของกล่องข้อความ */
+.mp-vbtn{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;flex:none}
+.mp-vbtn svg{width:17px;height:17px}
+.mp-vbtn.off{color:var(--late);background:var(--late-soft);border-color:color-mix(in oklab,var(--late) 30%,transparent)}
+.mp-vbtn.on{color:var(--done)}
