@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.32.0';
+const APP_VERSION = '2.33.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1577,7 +1577,7 @@ async function salePage() {
     root.innerHTML = '<div class="sale-page"><header class="sp-h"><div class="sp-logo">' + (b.logo ? '<img src="' + esc(b.logo) + '" alt="">' : esc(initial(b.company || 'K'))) + '</div><div class="sp-ht"><b>' + esc(b.appName || 'คิวงาน') + ' · สถานะงาน</b><small>' + esc(b.company || '') + (sel ? ' · Sale ' + esc(sel) : ' · ทุก Sale') + '</small></div>' +
       (LS.get('saleKey', '') === SALE_Q.k ? '<a class="btn sm ghost sp-back" href="' + esc(location.pathname) + '">‹ หน้าเข้าสู่ระบบ</a>' : '') +
       '<span class="sp-live" title="อัปเดตเองทุก 1 นาที"><i></i>สด</span><button class="btn sm sp-ref' + (busy ? ' spin' : '') + '" data-sale-refresh="1">' + I.refresh + '<span>รีเฟรช</span></button></header>' +
-      (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="sp-skel">' + '<i></i>'.repeat(6) + '</div>' :
+      (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="sp-skel">' + '<i></i>'.repeat(6) + '</div>' : saleTabs() + (SF.v === 'flow' ? '<div class="sf-wrap">' + saleFlowHtml(d, sel) + '</div><p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · กดที่งานเพื่อดูรายละเอียด · หน้านี้ดูได้อย่างเดียว</p>' :
         '<div class="sp-sum">' + cards.map(c => '<button type="button" data-spst="' + c[0] + '" class="sp-card c-' + c[0] + (F.st === c[0] ? ' on' : '') + '"><span class="sp-ci">' + c[3] + '</span><b class="' + c[2] + '" data-n="' + N[c[0]] + '" data-k="' + c[0] + '">' + (prevN[c[0]] !== undefined ? prevN[c[0]] : 0) + '</b><span>' + c[1] + '</span>' +
           (c[0] === 'done' && N.done ? '<small>ตรงเวลา ' + Math.round(okB / N.done * 100) + '%</small>' : c[0] === 'late' && N.act ? '<small>' + Math.round(N.late / N.act * 100) + '% ของงานค้าง</small>' : '') + '</button>').join('') + '</div>' + pstrip +
         '<div class="sp-tools"><label class="sp-search">' + I.search + '<input id="spQ" type="search" placeholder="ค้นหาเลข Job, ลูกค้า, คนทำ, หมายเหตุ…" value="' + esc(q) + '" autocomplete="off"></label>' +
@@ -1593,7 +1593,7 @@ async function salePage() {
         '<div class="sp-count">แสดง <b>' + jobs.length + '</b> จาก ' + all.length + ' งาน</div>' +
         '<div class="sp-wrap"><table class="sp-t"><thead><tr><th>งาน</th><th>รายละเอียด</th><th>ทีมงาน</th><th>สถานะ</th><th>รับงาน</th><th>กำหนดส่ง / เสร็จ</th><th>หมายเหตุ</th>' + (sel ? '' : '<th>Sale</th>') + '</tr></thead><tbody>' +
           (jobs.length ? jobs.map(row).join('') : '<tr><td colspan="8"><div class="sp-empty"><span>🔍</span><b>' + (anyF ? 'ไม่พบงานตามตัวกรอง' : 'ยังไม่มีงาน') + '</b>' + (anyF ? '<button class="btn sm" data-spclear="1">ล้างตัวกรอง</button>' : '') + '</div></td></tr>') + '</tbody></table></div>' +
-        '<p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · หน้านี้ดูได้อย่างเดียว</p>') + '</div>';
+        '<p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · หน้านี้ดูได้อย่างเดียว</p>')) + '</div>';
     // ตัวเลขนับขึ้น
     root.querySelectorAll('.sp-card b[data-n]').forEach(el => {
       const to = +el.dataset.n, from = prevN[el.dataset.k] !== undefined ? prevN[el.dataset.k] : 0; prevN[el.dataset.k] = to;
@@ -1618,13 +1618,17 @@ async function salePage() {
   const cached = LS.get(ck, null);
   draw(cached && cached.jobs ? cached : null); go(); setInterval(go, 60000);
   document.addEventListener('click', e => {
-    const c = e.target.closest && e.target.closest('[data-sale-refresh],[data-spst],[data-spclear],[data-spprod]'); if (!c) return;
+    const c = e.target.closest && e.target.closest('[data-sale-refresh],[data-spst],[data-spclear],[data-spprod],[data-sfview],[data-sfstep],[data-sfopen]'); if (!c) return;
+    if (c.dataset.sfview) { SF.v = c.dataset.sfview; SF.anim = true; LS.set('saleView', SF.v); return draw(last, lastErr); }
+    if (c.dataset.sfstep) { SF.step = SF.step === c.dataset.sfstep && c.dataset.sfstep !== 'all' ? 'all' : c.dataset.sfstep; SF.anim = true; return draw(last, lastErr); }
+    if (c.dataset.sfopen) { const k = c.dataset.sfopen; SF.open[k] = !SF.open[k]; return draw(last, lastErr); }
     if (c.dataset.spprod) { F.prod = F.prod === c.dataset.spprod ? '' : c.dataset.spprod; return draw(last, lastErr); }
     if (c.dataset.saleRefresh) return go();
     if (c.dataset.spst) { F.st = F.st === c.dataset.spst ? 'all' : c.dataset.spst; return draw(last, lastErr); }
     if (c.dataset.spclear) { Object.assign(F, { st: 'all', status: '', sale: '', group: '', type: '', range: '', who: '', help: '', prod: '' }); q = ''; return draw(last, lastErr); }
   });
-  document.addEventListener('change', e => { const k = e.target && e.target.dataset && e.target.dataset.spf; if (k) { F[k] = e.target.value; draw(last, lastErr); } });
+  document.addEventListener('change', e => { if (e.target && e.target.dataset && e.target.dataset.sfsale) { SF.sale = e.target.value; SF.anim = true; return draw(last, lastErr); } const k = e.target && e.target.dataset && e.target.dataset.spf; if (k) { F[k] = e.target.value; draw(last, lastErr); } });
+  document.addEventListener('input', e => { if (e.target && e.target.id === 'sfQ') { SF.q = e.target.value; const pos = e.target.selectionStart; draw(last, lastErr); const el = $('#sfQ'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } } });
   document.addEventListener('input', e => { if (e.target && e.target.id === 'spQ') { q = e.target.value; const pos = e.target.selectionStart; draw(last, lastErr); const el = $('#spQ'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } } });
 }
 function saleLinkUrl(key, sale) { const u = new URL(location.href); u.search = ''; u.hash = ''; u.searchParams.set('salek', key); if (sale) u.searchParams.set('sale', sale); return u.toString(); }
@@ -4427,6 +4431,67 @@ async function saleSubmit() {
     LS.set('saleKey', r.key); location.href = saleLinkUrl(r.key, '');
   } catch (e) { L.saleBusy = false; L.saleErr = e.message; renderLogin(); const x = $('#salePin'); if (x) x.focus(); }
 }
+
+/* ===== หน้า Sale: มุมมอง "ภาพรวมสถานะ" แบบเดียวกับหน้าภาพรวมบริษัท (1 เลข Job = 1 แถว เดินตั้งแต่ฝ่ายแบบจนส่งลูกค้า) ===== */
+const SF = { v: LS.get('saleView', 'flow'), step: 'all', q: '', sale: '', open: {}, anim: true };
+function saleRows(d) {
+  const t = today(), by = {}, key = c => String(c || '').trim().toLowerCase();
+  (d.jobs || []).forEach(j => { const k = key(j.code); if (k) (by[k] = by[k] || { code: j.code, jobs: [], prod: null }).jobs.push(j); });
+  (d.prods || []).forEach(p => { const k = key(p.code); const r = by[k] || (by[k] = { code: p.code, jobs: [], prod: null }); if (!r.prod || (r.prod.stage === 'shipped' && p.stage !== 'shipped')) r.prod = p; });
+  return Object.values(by).map(r => {
+    const p = r.prod, open = r.jobs.filter(j => j.status !== 'done'), ref = p || r.jobs[0] || {};
+    let step, sub, info = '', late = false, due = '';
+    if (p && p.stage !== 'shipped') {
+      step = p.stage; const ms = (p.machines || []).filter(m => m && m.m);
+      sub = p.stage === 'machine' ? ms.map(m => (m.d ? '✓ ' : '') + m.m).join(' · ') : PSTG[p.stage].sub;
+      info = p.stage === 'ready' ? 'พร้อมส่งตั้งแต่ ' + fd(p.finishedAt) : 'เข้าผลิต ' + fd(p.enteredAt);
+    } else if (open.length) {
+      const o = open.slice().sort((a, b) => ['doing', 'fix', 'review', 'queue', 'hold'].indexOf(a.status) - ['doing', 'fix', 'review', 'queue', 'hold'].indexOf(b.status))[0];
+      step = 'design'; sub = (o.taskType || 'ออกแบบ') + ' · ' + (ST[o.status] || ST.queue).label;
+      due = open.map(j => j.due).filter(Boolean).sort()[0] || ''; late = !!due && due < t;
+    } else if (p) { step = 'shipped'; sub = 'ส่งถึงลูกค้าแล้ว'; info = 'ส่งแล้ว ' + fd(p.shippedAt); }
+    else { const fin = r.jobs.map(j => String(j.finishedAt || '').slice(0, 10)).sort().pop() || ''; step = 'ddone'; sub = 'ออกแบบเสร็จ · รอเข้าผลิต'; info = 'เสร็จ ' + fd(fin); var old = fin < addDays(t, -14); }
+    return { code: r.code, title: ref.title || (r.jobs.find(j => j.title) || {}).title || '', sale: ref.sale || (r.jobs.find(j => j.sale) || {}).sale || '', group: ref.group || (r.jobs[0] || {}).group || '',
+      step: step, sub: sub, info: info, late: late, due: due, prod: p, old: step === 'ddone' && !!old, jobs: r.jobs, urgent: r.jobs.some(j => j.priority === 'urgent' && j.status !== 'done') };
+  });
+}
+function saleFlowHtml(d, sel) {
+  const t = today(), all = saleRows(d).filter(r => !SF.sale || r.sale === SF.sale), qq = SF.q.trim().toLowerCase();
+  const n = k => all.filter(r => k === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === k).length;
+  const live = all.filter(r => r.step !== 'shipped' && !r.old), late = all.filter(r => r.late).length;
+  const tile = (s, i) => '<button type="button" class="co-step d-' + s.dept + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" data-sfstep="' + s.k + '" aria-pressed="' + (SF.step === s.k) + '"><span class="flow-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><b>' + n(s.k) + '</b><span>' + s.label + '</span><small>' + esc(s.sub || '') + '</small></button>' + (i < CO_STEPS.length - 1 ? '<span class="co-arrow" aria-hidden="true"></span>' : '');
+  const pipe = '<div class="co-pipe"><div class="co-depts"><span class="dl d-d">' + PIC.design + 'ฝ่ายแบบ</span><span class="dl d-p">' + PIC.machine + 'ฝ่ายผลิต</span><span class="dl d-s">' + PIC.ready + 'ส่งมอบ</span></div><div class="co-steps">' + CO_STEPS.map(tile).join('') + '</div></div>';
+  const kpis = '<div class="co-kpis"><button type="button" class="kpi" data-sfstep="all"><span>งานที่ยังไม่ส่ง</span><b>' + live.length + '</b><small>เลข Job ที่อยู่ระหว่างทำ</small></button>' +
+    '<button type="button" class="kpi k-late" data-sfstep="late"><span>เลยกำหนด (ฝ่ายแบบ)</span><b>' + late + '</b><small>ควรติดตามกับทีม</small></button>' +
+    '<button type="button" class="kpi k-done" data-sfstep="shipped"><span>ส่งแล้ว</span><b>' + n('shipped') + '</b><small>ปิดงานถึงลูกค้า (60 วันล่าสุด)</small></button></div>';
+  let list = all.filter(r => (SF.step === 'all' ? r.step !== 'shipped' && !r.old : SF.step === 'late' ? r.late : SF.step === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === SF.step) &&
+    (!qq || [r.code, r.title, r.sale, r.group, r.sub].join(' ').toLowerCase().indexOf(qq) >= 0));
+  list.sort((a, b) => (b.late - a.late) || (coIdx(b.step) - coIdx(a.step)) || String(a.due || '9').localeCompare(String(b.due || '9')));
+  const sales = [...new Set(saleRows(d).map(r => r.sale).filter(Boolean))].sort();
+  const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
+  const dueTxt = r => { if (!r.due) return r.info; const dd = daysBetween(t, r.due); return 'กำหนดส่งแบบ ' + fd(r.due) + (dd < 0 ? ' · เลย ' + (-dd) + ' วัน' : dd === 0 ? ' · วันนี้' : dd === 1 ? ' · พรุ่งนี้' : ''); };
+  const detail = r => '<div class="sf-det">' + (r.jobs.length ? '<div class="sf-jobs">' + r.jobs.map(j => '<div class="sf-job"><span class="sp-type" style="--tc:' + typeColorPub(j.taskType) + '">' + esc(j.taskType || 'งาน') + '</span>' +
+      '<span class="pill ' + (ST[j.status] || ST.queue).cls + '">' + (ST[j.status] || ST.queue).label + '</span><span class="sf-who">' + (j.assignee ? av(j.assignee, 'sm') + esc(j.assignee) : 'ยังไม่มอบหมาย') + '</span>' +
+      '<small>' + (j.status === 'done' ? 'เสร็จ ' + fd(String(j.finishedAt).slice(0, 10)) : j.due ? 'กำหนด ' + fd(j.due) : '') + (j.steps ? ' · เช็กลิสต์ ' + esc(j.steps) : '') + '</small></div>').join('') + '</div>' : '') +
+    (r.prod ? '<div class="sf-prod ' + PSTG[r.prod.stage].cls + '">' + PIC.machine + '<b>ฝ่ายผลิต: ' + PSTG[r.prod.stage].label + '</b>' + ((r.prod.machines || []).length ? '<span>' + (r.prod.machines || []).map(m => '<i class="' + (m.d ? 'on' : '') + '">' + (m.d ? '✓ ' : '') + esc(m.m) + '</i>').join('') + '</span>' : '') +
+      '<small>' + [r.prod.paint === 'no' ? 'ไม่ทำสี' : '', r.prod.assy === 'no' ? 'ไม่ประกอบ' : '', r.prod.enteredAt ? 'เข้าผลิต ' + fd(r.prod.enteredAt) : '', r.prod.shippedAt ? 'ส่งแล้ว ' + fd(r.prod.shippedAt) : ''].filter(Boolean).join(' · ') + '</small></div>' : '') +
+    ((r.jobs.find(j => j.note) || {}).note ? '<p class="sf-note">' + STI.note + esc(r.jobs.find(j => j.note).note) + '</p>' : '') + '</div>';
+  const rows = list.length ? '<div class="co-list sf-list">' + list.slice(0, 300).map((r, k) => { const op = !!SF.open[r.code];
+      return '<div class="sf-item' + (op ? ' open' : '') + '"><button type="button" class="co-row co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + (SF.anim ? ' in' : '') + '" style="--i:' + Math.min(k, 24) + '" data-sfopen="' + esc(r.code) + '" aria-expanded="' + op + '">' +
+        '<span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' +
+        '<span class="co-mid">' + coTrack(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
+        '<span class="co-meta">' + (sel ? '' : '<small>' + esc(r.sale ? 'Sale ' + r.sale : '') + '</small>') + '<small class="' + (r.late ? 'late' : '') + '">' + (r.late ? STI.fire : STI.calendar) + esc(dueTxt(r)) + '</small><span class="sf-chev">' + I.next + '</span></span></button>' +
+        (op ? detail(r) : '') + '</div>'; }).join('') + '</div>'
+    : '<div class="sp-empty"><span>🔍</span><b>ไม่มีงานในมุมมองนี้</b><button class="btn sm" data-sfstep="all">ดูทั้งหมด</button></div>';
+  const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง', live.length], ['late', 'เลยกำหนด', late], ['shipped', 'ส่งแล้ว', n('shipped')]].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-sfstep="' + x[0] + '" aria-pressed="' + (SF.step === x[0]) + '">' + x[1] + '<b>' + x[2] + '</b></button>').join('') +
+    (['all', 'late', 'shipped'].indexOf(SF.step) < 0 ? '<button class="qchip" data-sfstep="all" aria-pressed="true">' + esc(SF.step === 'design' ? 'ฝ่ายแบบ' : PSTG[SF.step].label) + ' ✕</button>' : '') + '</div>';
+  const tools = '<div class="sp-tools"><label class="sp-search">' + I.search + '<input id="sfQ" type="search" placeholder="ค้นหาเลข Job, ชื่อลูกค้า…" value="' + esc(SF.q) + '" autocomplete="off"></label>' +
+    (sel ? '' : '<div class="sp-filters"><label class="spf' + (SF.sale ? ' on' : '') + '"><span class="spf-ic">' + STI.user + '</span><select data-sfsale="1"><option value="">ทุก Sale</option>' + sales.map(x => '<option' + (SF.sale === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select></label></div>') + '</div>';
+  const legend = '<div class="co-legend"><span><i class="d-d"></i>ฝ่ายแบบ</span><span><i class="d-p"></i>ฝ่ายผลิต</span><span><i class="d-s"></i>ส่งมอบ</span><span><i class="now"></i>ตอนนี้อยู่ที่</span><span><i class="now late"></i>เลยกำหนด</span></div>';
+  SF.anim = false;
+  return pipe + kpis + '<section class="panel sf-panel"><div class="panel-h"><h2>งานตามเลข Job</h2>' + legend + '</div>' + tools + chips + rows + '</section>';
+}
+const saleTabs = () => '<div class="sf-tabs" role="tablist"><button type="button" role="tab" data-sfview="flow" aria-selected="' + (SF.v === 'flow') + '">' + I.flow + 'ภาพรวมสถานะ</button><button type="button" role="tab" data-sfview="table" aria-selected="' + (SF.v !== 'flow') + '">' + I.list + 'ตารางงานฝ่ายแบบ</button></div>';
 
 /* ============ events ============ */
 document.addEventListener('click', async e => {
