@@ -3210,3 +3210,25 @@ html,body{overflow-x:hidden}
 .sp-card:hover{transform:translateY(-3px);box-shadow:0 16px 30px -18px var(--k)!important}
 .sp-card.on{box-shadow:0 0 0 2px var(--k),0 16px 30px -18px var(--k)!important}
 .sp-card.c-late b{animation:none}
+/* v2.53: ขั้นตอนผลิตในหน้ารายละเอียด — อยู่บรรทัดเดียว 8 ขั้น + เส้นเชื่อม + แอนิเมชันส่งต่องานไปขั้นปัจจุบัน */
+.pm-steps{grid-template-columns:repeat(8,minmax(0,1fr));gap:0;padding:4px 0 2px}
+.pm-step{position:relative;padding:4px 2px;font-size:11px;cursor:pointer}
+.pm-step small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;position:relative;z-index:1}
+.pm-step span{position:relative;z-index:1;box-shadow:0 0 0 3px var(--surface)}
+.pm-step:not(:first-child)::before{content:"";position:absolute;top:19px;left:calc(-50% + 17px);right:calc(50% + 17px);height:4px;border-radius:4px;background:var(--surface-3);z-index:0}
+.pm-step.past::before,.pm-step.now::before{background:linear-gradient(90deg,color-mix(in oklab,var(--s) 45%,var(--surface-3)),var(--s));background-size:200% 100%}
+.pm-step.now:not(:first-child)::before{background:repeating-linear-gradient(90deg,var(--s) 0 8px,color-mix(in oklab,var(--s) 35%,var(--surface)) 8px 14px);background-size:28px 100%;animation:pmFlow .7s linear infinite}
+.pm-step.now:not(:first-child)::after{content:"";position:absolute;top:15px;left:calc(-50% + 17px);width:12px;height:12px;border-radius:50%;background:var(--s);box-shadow:0 0 0 3px color-mix(in oklab,var(--s) 25%,transparent),0 0 14px var(--s);z-index:0;animation:pmHand 1.8s cubic-bezier(.5,0,.3,1) infinite}
+.pm-step.past span{background:var(--s);color:#fff;opacity:.85}
+.pm-step.past span svg{display:none}
+.pm-step.past span::after{content:"✓";font:800 15px/1 var(--f-display);color:#fff}
+.pm-step.now span{width:40px;height:40px;margin-top:-3px;animation:pmPop .55s cubic-bezier(.3,1.7,.5,1) both,pmPulse 2s ease-in-out .6s infinite}
+.pm-step.now span svg{width:20px;height:20px;animation:bob 1.6s ease-in-out infinite}
+.pm-step.skip::before{background:repeating-linear-gradient(90deg,var(--surface-3) 0 4px,transparent 4px 8px)!important;animation:none!important}
+.pm-step.skip::after{display:none}
+@keyframes pmFlow{to{background-position:28px 0}}
+@keyframes pmHand{0%{left:calc(-50% + 17px);transform:scale(.5);opacity:0}15%{opacity:1;transform:scale(1)}85%{opacity:1;transform:scale(1)}100%{left:calc(50% - 29px);transform:scale(.6);opacity:0}}
+@keyframes pmPop{0%{transform:scale(.4)}70%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes pmPulse{0%,100%{box-shadow:0 0 0 3px var(--surface),0 0 0 5px color-mix(in oklab,var(--s) 30%,transparent)}50%{box-shadow:0 0 0 3px var(--surface),0 0 0 10px color-mix(in oklab,var(--s) 0%,transparent)}}
+@media (max-width:560px){.pm-step small{font-size:9.5px}.pm-step span{width:28px;height:28px}.pm-step.now span{width:32px;height:32px}.pm-step:not(:first-child)::before{top:16px;left:calc(-50% + 14px);right:calc(50% + 14px)}.pm-step.now:not(:first-child)::after{top:12px;left:calc(-50% + 14px)}}
+@media (prefers-reduced-motion:reduce){.pm-step.now span,.pm-step.now span svg,.pm-step.now::before,.pm-step.now::after{animation:none!important}}

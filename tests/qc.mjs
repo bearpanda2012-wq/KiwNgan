@@ -18,6 +18,8 @@ eq('job lands in QC column', await pg.evaluate(id => S.prods.find(p => p.id === 
 eq('QC column on board', await pg.locator('.pboard .col.p-qc, .pboard [data-col="qc"], .pboard .p-qc').count() > 0, true);
 await pg.click('.pcard[data-popen="' + id + '"] [data-pqc]'); await pg.waitForTimeout(500);
 eq('QC section open', await pg.locator('#pModal .qc-box').count(), 1);
+await pg.locator('#pModal .pm-steps').screenshot({ path: out + 'pm-steps.png' });
+eq('stepper one row', await pg.evaluate(() => { const s = [...document.querySelectorAll('#pModal .pm-step')]; return new Set(s.map(e => Math.round(e.getBoundingClientRect().top))).size; }), 1);
 eq('no paint item when paint skipped', await pg.locator('#pModal .qc-it', { hasText: 'สีตรงตามตัวอย่าง' }).count(), 0);
 eq('pass disabled until all ticked', await pg.locator('#pModal [data-qcpass]').isDisabled(), true);
 // ไม่ผ่าน
