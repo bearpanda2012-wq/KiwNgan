@@ -2365,7 +2365,7 @@ body.sale-mode .sale-page{width:100%;min-width:0;box-sizing:border-box}
 .pm-sum{display:flex;flex-wrap:wrap;gap:4px;padding:0 4px}
 .pm-sum span{font-size:11.5px;border-radius:999px;padding:1px 8px;background:var(--surface);color:var(--muted)}
 .pm-sum span.on{color:var(--p-mach);background:color-mix(in oklab,var(--p-mach) 12%,var(--surface));font-weight:600}
-.pm-chips .pm-h{font-size:12.5px;color:var(--muted);align-self:center;margin-right:2px}
+.pm-chips .pm-lbl{font-size:12.5px;color:var(--muted);align-self:center;margin-right:2px}
 .pm-chips .qchip[aria-pressed="true"]{--q:var(--p-mach)}
 .pship{display:flex;flex-direction:column;gap:4px}
 .pship-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;border:0;background:var(--surface);border-radius:8px;padding:6px 9px;text-align:left;font-size:12.5px}
@@ -2757,3 +2757,70 @@ body.pm-open{overflow:hidden}
 }
 @media (prefers-reduced-motion:reduce){.co-bub svg,.rt-dot.now,.rt-dot.now svg,.rt-dot.now::before,.rt-dot.now::after,.rt-line i::after{animation:none!important}}
 .co-mid>small .pill{display:none}
+
+/* v2.37: แถวงานมีรายละเอียดแบบการ์ดบอร์ดงาน + จัดหน้ามือถือให้เป็นระเบียบ */
+.co-row{grid-template-columns:auto minmax(150px,1fr) minmax(0,2.2fr) auto;grid-template-areas:"bub code mid meta" "bub x mid meta";row-gap:6px}
+.co-row>.co-bub{grid-area:bub}.co-row>.co-code{grid-area:code;align-self:end}.co-row>.co-x{grid-area:x;align-self:start}.co-row>.co-mid{grid-area:mid}.co-row>.co-meta{grid-area:meta}
+.co-x{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:0}
+.co-x>*{flex:none;max-width:100%}
+.co-x .pill{font-size:11px;padding:0 7px;line-height:1.6}
+.co-who{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;color:var(--ink-2,var(--ink));max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.co-who .av{width:18px;height:18px;font-size:10px;flex:none}
+.co-cl{position:relative;display:inline-flex;align-items:center;font-size:11px;font-weight:700;color:var(--muted);padding:0 7px 0 6px;border-radius:999px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);line-height:1.6;overflow:hidden}
+.co-cl i{position:absolute;left:0;top:0;bottom:0;width:var(--w);background:color-mix(in oklab,var(--done) 22%,transparent)}
+.co-cl::before{content:"✓";margin-right:3px;position:relative}
+.co-cl.full{color:var(--done)}
+.co-mc{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:0 7px;border-radius:999px;line-height:1.6;color:var(--p-mach);background:color-mix(in oklab,var(--p-mach) 12%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--p-mach) 30%,transparent)}
+.co-mc svg{width:11px;height:11px}
+.co-mc.on{color:var(--done);background:color-mix(in oklab,var(--done) 12%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--done) 30%,transparent)}
+.co-sk,.co-sale{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--muted);padding:0 7px;border-radius:999px;background:var(--surface-2);line-height:1.6}
+.co-sale svg{width:11px;height:11px}
+.co-code small{max-width:100%}
+@media (max-width:640px){
+  .co-row{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"bub code meta" "x x x" "mid mid mid";gap:8px 10px;padding:12px 12px 10px 10px;align-items:center}
+  .co-row>.co-code{align-self:center}
+  .co-code b{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .co-code small{font-size:12px}
+  .co-row>.co-meta{flex-direction:column;align-items:flex-end;justify-content:center;gap:4px;flex-wrap:nowrap}
+  .co-meta small{font-size:11.5px}
+  .co-row .sf-chev{display:none}
+  .sf-date{gap:6px;padding:3px 8px 3px 3px;border-radius:10px}
+  .sf-date .sf-cal{transform:scale(.88);transform-origin:center}
+  .sf-date .sf-dl small{font-size:10.5px}
+  .sf-date .sf-dl em{font-size:11.5px}
+  .co-row .rt{margin:4px 14px 18px}
+  .co-mid>small{font-size:12px}
+  .co-x{padding-left:2px}
+}
+@media (max-width:380px){.co-bub{width:34px;height:34px}.co-bub svg{width:17px;height:17px}.sf-date .sf-dl small{display:none}}
+@media (max-width:640px){
+  .flow.pflow{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .flow.pflow .flow-step{min-width:0}
+  .pm-chips .pm-lbl{flex-basis:100%;margin:0 0 2px}
+  .co-row .rt{margin:4px 22px 18px}
+}
+/* v2.37: รายการงานบนมือถือเป็นการ์ดอ่านง่าย (ก่อนหน้านี้คอลัมน์ทับกัน) */
+@media (max-width:760px){
+  .lhead,.row{grid-template-columns:minmax(0,1fr) auto}
+  .row{grid-template-areas:"main st" "who due" "note note";gap:8px 12px;padding:12px 14px}
+  .row>.c-main{grid-area:main}.row>.c-st{grid-area:st}
+  .row>.c-who{display:block;grid-area:who}
+  .row>.c-who .who>span>small{display:inline;margin-left:6px}
+  .row>.c-time,.row>.cell:nth-child(4){display:none}
+  .row>.c-due{grid-area:due;justify-self:end;text-align:right}
+  .row>.c-note{grid-area:note}
+  .row .c-main .meta{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+}
+/* v2.37: หัวแชตลอยบนมือถือ = วงกลมรูปคน + ตัวเลข ไม่บังเนื้อหา */
+@media (max-width:760px){
+  .chat-heads{right:18px;bottom:calc(146px + env(safe-area-inset-bottom,0px));gap:10px}
+  .ch-head{padding:0;gap:0;border-radius:50%;background:none;box-shadow:none;max-width:none}
+  .ch-head .av{width:46px;height:46px;box-shadow:0 0 0 3px var(--surface),0 10px 22px -8px rgba(0,0,0,.45)}
+  .ch-head.help{box-shadow:none}
+  .ch-head.help .av{box-shadow:0 0 0 3px var(--urgent),0 10px 22px -8px var(--urgent)}
+  .ch-head.help::before{border-radius:50%}
+  .ch-head .hd-name{display:none}
+  .ch-head .hd-n{position:absolute;top:-4px;right:-6px;margin:0}
+  .ch-head .hd-sos{left:auto;right:-4px;bottom:-4px}
+  .ch-head:hover{transform:none}
+}

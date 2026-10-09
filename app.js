@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.36.0';
+const APP_VERSION = '2.37.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1708,7 +1708,15 @@ async function markChanRead(ch) {
 }
 
 /* floating launcher */
+/* ตัวเลขข้อความที่ยังไม่อ่าน บนไอคอนแอป (ทาสก์บาร์คอม / หน้าจอโฮมมือถือ) และบนชื่อแท็บ */
+let lastBadge = -1;
+function appBadge(n) {
+  n = Math.max(0, n | 0);
+  if (n !== lastBadge) try { lastBadge = n; if (navigator.setAppBadge) { (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {}); } } catch (e) {}
+  const t = document.title.replace(/^\(\d+\+?\)\s*/, ''); document.title = (n ? '(' + (n > 99 ? '99+' : n) + ') ' : '') + t;
+}
 function renderMsgFab() {
+  appBadge(S.screen === 'app' && S.user ? unreadAll() : 0);
   let b = $('#msgFab');
   if (b) b.remove();
   if (S.screen !== 'app' || !S.user) { renderChatHeads(); return; }
@@ -2877,6 +2885,7 @@ function inkApply(m, remote) {
 function inkTitle(on) {
   const base = (S.settings && S.settings.appName) || 'KiwNgan คิวงาน';
   document.title = on ? '✏️ ' + R.name + ' กำลังชี้บนจอคุณ' : base;
+  if (!on) appBadge(lastBadge);
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && /^✏️/.test(document.title)) inkTitle(false); });
 /* คนแชร์ไม่ได้ดูหน้าคิวงานอยู่ → เตือนให้เห็นว่ามีคนชี้ */
@@ -3128,7 +3137,7 @@ function rtcDemoLive() {
 function applyBrand() {
   const s = S.settings || defaultSettings();
   document.documentElement.style.setProperty('--brand', /^#[0-9a-f]{6}$/i.test(s.accent) ? s.accent : '#0B6B70');
-  document.title = s.appName || 'KiwNgan คิวงาน';
+  document.title = s.appName || 'KiwNgan คิวงาน'; if (lastBadge > 0) appBadge(lastBadge);
   applyTheme();
 }
 function brandMark(s) {
@@ -4245,7 +4254,7 @@ function viewProd() {
   }).join('');
   const cnt = st => open.filter(p => p.stage === st).length;
   const flow = '<div class="flow pflow">' + PCOLS.map((st, i) => '<div class="flow-step ' + PSTG[st].cls + '"><span class="flow-ic ic-' + st + '">' + PIC[st] + '</span><div><b>' + cnt(st) + '</b><small>' + PSTG[st].label + '</small></div></div>' + (i < PCOLS.length - 1 ? '<span class="flow-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '')).join('') + '</div>';
-  const chips = '<div class="qchips pm-chips"><span class="pm-h">ดูเฉพาะเครื่อง</span>' + [['all', 'ทุกเครื่อง']].concat(machinesList().map(m => [m, m])).map(x => {
+  const chips = '<div class="qchips pm-chips"><span class="pm-lbl">ดูเฉพาะเครื่อง</span>' + [['all', 'ทุกเครื่อง']].concat(machinesList().map(m => [m, m])).map(x => {
     const n = x[0] === 'all' ? open.filter(p => p.stage === 'machine').length : open.filter(p => inMachine(p, x[0])).length;
     return '<button class="qchip" data-pm="' + esc(x[0]) + '" aria-pressed="' + (F === x[0]) + '"><span class="qi">' + (x[0] === 'all' ? STI.all : PIC.machine) + '</span>' + esc(x[1]) + '<b>' + n + '</b></button>'; }).join('') + '</div>';
   const search = '<div class="filters"><label class="search">' + I.search + '<input id="pq" type="search" autocomplete="off" placeholder="ค้นหาเลข Job, ชื่องาน, sale…" value="' + esc(S.pq || '') + '" aria-label="ค้นหางานผลิต"></label></div>';
@@ -4296,6 +4305,33 @@ function coRoute(r) {
       (cls === 'now' ? '<span class="rt-lbl" style="left:' + (k / n * 100) + '%">' + esc(st.label) + '</span>' : '');
   }).join('') + '</div>';
 }
+/* ชิปรายละเอียดแบบการ์ดบอร์ดงาน: รายละเอียดงาน · สถานะ · คนทำ · เช็กลิสต์ · กลุ่มงาน · เครื่อง · Sale */
+function coX(r, o) {
+  o = o || {};
+  const ord = ['doing', 'fix', 'review', 'queue', 'hold'], open = r.jobs.filter(j => j.status !== 'done');
+  const cur = open.slice().sort((a, b) => ord.indexOf(a.status) - ord.indexOf(b.status))[0] || r.jobs.slice().sort((a, b) => String(b.finishedAt || '').localeCompare(String(a.finishedAt || '')))[0];
+  const tc = n => n ? '<span class="tchip sm" style="--c:' + typeColorPub(n) + '">' + esc(n) + '</span>' : '';
+  const gc = g => g ? '<span class="gchip sm" style="--c:' + (S.settings && S.settings.groups ? groupColor(g) : '#0EA5E9') + '">' + STI.layers + esc(groupShort(g)) + '</span>' : '';
+  const ms = p => (Array.isArray(p.machines) ? p.machines.filter(x => x && x.m) : pms(p));
+  let h = '';
+  if (r.prod && r.step !== 'design' && r.step !== 'ddone') {
+    const m = ms(r.prod);
+    h += m.map(x => '<span class="co-mc' + (x.d ? ' on' : '') + '">' + (x.d ? '✓ ' : PIC.machine) + esc(x.m) + '</span>').join('');
+    if (r.prod.paint === 'no') h += '<span class="co-sk">ไม่ทำสี</span>';
+    if (r.prod.assy === 'no') h += '<span class="co-sk">ไม่ประกอบ</span>';
+    if (cur && !m.length) h += tc(cur.taskType);
+  } else if (cur) {
+    h += tc(cur.taskType);
+    if (cur.status !== 'done') h += '<span class="pill ' + (ST[cur.status] || ST.queue).cls + '">' + (ST[cur.status] || ST.queue).label + '</span>';
+    if (cur.assignee) h += '<span class="co-who">' + av(cur.assignee, 'sm') + esc(cur.assignee) + '</span>';
+    const st = cur.steps || (cur.checklist ? (c => c.length ? c.filter(x => x.d).length + '/' + c.length : '')(clOf(cur)) : '');
+    if (st) { const a = st.split('/'), full = a[0] === a[1]; h += '<span class="co-cl' + (full ? ' full' : '') + '" title="เช็กลิสต์ ' + esc(st) + '"><i style="--w:' + Math.round(+a[0] / (+a[1] || 1) * 100) + '%"></i>' + esc(st) + '</span>'; }
+    if (open.length > 1) h += '<span class="co-sk">+' + (open.length - 1) + ' งาน</span>';
+  }
+  h += gc(r.group);
+  if (o.sale !== false && r.sale) h += '<span class="co-sale">' + STI.user + esc(r.sale) + '</span>';
+  return h ? '<span class="co-x">' + h + '</span>' : '';
+}
 function coTrack(r) {
   const i = coIdx(r.step), n = CO_STEPS.length;
   return '<div class="co-trk" aria-label="' + esc(r.step === 'shipped' ? 'ส่งแล้ว' : (CO_STEPS[i] || {}).label || '') + '">' + CO_STEPS.map((s, k) =>
@@ -4320,9 +4356,9 @@ function viewFlow() {
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
   const hovJob = r => { const o = r.jobs.filter(j => j.status !== 'done'); return (o[0] || r.jobs.slice().sort((a, b) => String(finDate(b)).localeCompare(String(finDate(a))))[0] || {}).id || ''; };
   const table = list.length ? '<div class="co-list">' + list.slice(0, 200).map((r, k) => '<button type="button" class="co-row ' + coStg(r) + ' co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + '" style="--i:' + Math.min(k, 24) + '" data-coopen="' + esc(r.code) + '"' + (hovJob(r) ? ' data-hov="' + esc(hovJob(r)) + '"' : '') + '>' +
-      '<span class="co-bub flow-ic ic-' + coIc(r) + '">' + PIC[coIc(r)] + '</span><span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' +
+      '<span class="co-bub flow-ic ic-' + coIc(r) + '">' + PIC[coIc(r)] + '</span><span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' + coX(r) +
       '<span class="co-mid">' + coRoute(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
-      '<span class="co-meta"><small>' + esc(r.sale ? 'Sale ' + r.sale : '') + '</small><small class="' + (r.late ? 'late' : '') + '">' + (r.since && r.step !== 'shipped' ? (r.late ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(Math.max(0, daysBetween(String(r.since).slice(0, 10), today()))) : '') + '</small></span></button>').join('') + '</div>' +
+      '<span class="co-meta"><small class="' + (r.late ? 'late' : '') + '">' + (r.since && r.step !== 'shipped' ? (r.late ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(Math.max(0, daysBetween(String(r.since).slice(0, 10), today()))) : '') + '</small></span></button>').join('') + '</div>' +
       (list.length > 200 ? '<div class="col-more">แสดง 200 จาก ' + list.length + ' รายการ ใช้ช่องค้นหาเพื่อหางานอื่น</div>' : '')
     : '<div class="empty" style="padding:28px 0"><b>ไม่มีงานในมุมมองนี้</b>ลองเลือก "ทั้งหมดที่ยังไม่ส่ง"</div>';
   const search = '<div class="filters"><label class="search">' + I.search + '<input id="cq" type="search" autocomplete="off" placeholder="ค้นหาเลข Job, ชื่องาน, sale…" value="' + esc(S.cq || '') + '" aria-label="ค้นหางาน"></label></div>';
@@ -4497,9 +4533,9 @@ function saleFlowHtml(d, sel) {
     ((r.jobs.find(j => j.note) || {}).note ? '<p class="sf-note">' + STI.note + esc(r.jobs.find(j => j.note).note) + '</p>' : '') + '</div>';
   const rows = list.length ? '<div class="co-list sf-list">' + list.slice(0, 300).map((r, k) => { const op = !!SF.open[r.code];
       return '<div class="sf-item' + (op ? ' open' : '') + '"><button type="button" class="co-row ' + coStg(r) + ' co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + (SF.anim ? ' in' : '') + '" style="--i:' + Math.min(k, 24) + '" data-sfopen="' + esc(r.code) + '" aria-expanded="' + op + '">' +
-        '<span class="co-bub flow-ic ic-' + coIc(r) + '">' + PIC[coIc(r)] + '</span><span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' +
+        '<span class="co-bub flow-ic ic-' + coIc(r) + '">' + PIC[coIc(r)] + '</span><span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' + coX(r, { sale: !sel }) +
         '<span class="co-mid">' + coRoute(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
-        '<span class="co-meta">' + (sel ? '' : '<small>' + esc(r.sale ? 'Sale ' + r.sale : '') + '</small>') + dateBox(r) + '<span class="sf-chev">' + I.next + '</span></span></button>' +
+        '<span class="co-meta">' + dateBox(r) + '<span class="sf-chev">' + I.next + '</span></span></button>' +
         (op ? detail(r) : '') + '</div>'; }).join('') + '</div>'
     : '<div class="sp-empty"><span>🔍</span><b>ไม่มีงานในมุมมองนี้</b><button class="btn sm" data-sfstep="all">ดูทั้งหมด</button></div>';
   const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง', live.length], ['late', 'เลยกำหนด', late], ['shipped', 'ส่งแล้ว', n('shipped')]].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-sfstep="' + x[0] + '" aria-pressed="' + (SF.step === x[0]) + '">' + x[1] + '<b>' + x[2] + '</b></button>').join('') +
