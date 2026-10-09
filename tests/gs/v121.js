@@ -27,13 +27,17 @@ r = m.call('prodSave', { prod: { id: P1.id, machines: [{ m: 'Laser', d: '2026-10
 eq('1 of 2 done stays on machine', r.stage, 'machine');
 r = m.call('prodSave', { prod: { id: P1.id, machines: [{ m: 'Laser', d: '2026-10-09T10:00' }, { m: 'Punching', d: '2026-10-09T11:00' }] } }, PR).data.prod;
 eq('all machines done → ทำสี', r.stage, 'paint');
+r = m.call('prodSave', { prod: { id: P1.id, stage: 'assemble' } }, PR).data.prod; eq('ทำสี → ประกอบติดตั้ง', r.stage, 'assemble');
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'pack' } }, PR).data.prod; eq('→ แพ็ค', r.stage, 'pack');
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'ready' } }, PR).data.prod; eq('→ พร้อมส่ง has finishedAt', [r.stage, !!r.finishedAt], ['ready', true]);
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'shipped' } }, PR).data.prod; eq('→ ส่งแล้ว', [r.stage, !!r.shippedAt], ['shipped', true]);
-eq('history kept', JSON.parse(r.history).map(h => h.s), ['wait', 'machine', 'machine', 'paint', 'pack', 'ready', 'shipped']);
+eq('history kept', JSON.parse(r.history).map(h => h.s), ['wait', 'machine', 'machine', 'paint', 'assemble', 'pack', 'ready', 'shipped']);
 // ข้ามทำสี
-r = m.call('prodSave', { prod: { code: 'P-2', paint: 'no', stage: 'machine', machines: [{ m: 'Router', d: '2026-10-09T09:00' }] } }, A).data.prod;
-eq('manual add + no paint + all done → แพ็ค', [r.code, r.stage, r.paint], ['P-2', 'pack', 'no']);
+r = m.call('prodSave', { prod: { code: 'P-3', paint: 'no', stage: 'machine', machines: [{ m: 'Laser', d: '2026-10-09T09:00' }] } }, A).data.prod;
+eq('no paint → ข้ามไปประกอบ', r.stage, 'assemble');
+m.call('prodDelete', { id: r.id }, A);
+r = m.call('prodSave', { prod: { code: 'P-2', paint: 'no', assy: 'no', stage: 'machine', machines: [{ m: 'Router', d: '2026-10-09T09:00' }] } }, A).data.prod;
+eq('manual add + no paint + no assembly + all done → แพ็ค', [r.code, r.stage, r.paint, r.assy], ['P-2', 'pack', 'no', 'no']);
 eq('duplicate active code', m.call('prodSave', { prod: { code: 'p-2' } }, A).error, 'เลข Job p-2 อยู่ในฝ่ายผลิตแล้ว');
 eq('stale write blocked', !!m.call('prodSave', { prod: { id: r.id, stage: 'ready', baseUpdatedAt: '2000-01-01' } }, PR).error, true);
 eq('prod role cannot add design job', m.call('saveJob', { job: { code: 'X-9', taskType: 'ทำ CAD' } }, PR).error, 'ฝ่ายผลิตเพิ่มงานของฝ่ายแบบไม่ได้');

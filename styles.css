@@ -2300,12 +2300,12 @@ body.sale-mode .sale-page{width:100%;min-width:0;box-sizing:border-box}
 .tag.tomorrow{background:var(--tmr-soft);color:var(--tmr);font-weight:700}
 
 /* =================== ฝ่ายผลิต + ภาพรวมบริษัท (v2.26) =================== */
-:root{--p-wait:#5E6B78;--p-mach:#D2650C;--p-paint:#C0396B;--p-pack:#8A5A12;--p-ready:#1F8A55;--p-ship:#0B6B70}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--p-wait:#A3AFBB;--p-mach:#F59A4C;--p-paint:#F07AA6;--p-pack:#D9A85A;--p-ready:#5CC488;--p-ship:#4FC1C6}}
-:root[data-theme="dark"]{--p-wait:#A3AFBB;--p-mach:#F59A4C;--p-paint:#F07AA6;--p-pack:#D9A85A;--p-ready:#5CC488;--p-ship:#4FC1C6}
-.p-wait{--s:var(--p-wait)}.p-machine{--s:var(--p-mach)}.p-paint{--s:var(--p-paint)}.p-pack{--s:var(--p-pack)}.p-ready{--s:var(--p-ready)}.p-shipped{--s:var(--p-ship)}
-.p-wait,.p-machine,.p-paint,.p-pack,.p-ready,.p-shipped{--s-soft:color-mix(in oklab,var(--s) 14%,var(--surface))}
-.ic-wait{--ic:var(--p-wait)}.ic-machine{--ic:var(--p-mach)}.ic-paint{--ic:var(--p-paint)}.ic-pack{--ic:var(--p-pack)}.ic-ready{--ic:var(--p-ready)}.ic-shipped{--ic:var(--p-ship)}.ic-design{--ic:var(--doing)}
+:root{--p-wait:#5E6B78;--p-mach:#D2650C;--p-paint:#C0396B;--p-assy:#4F46B8;--p-pack:#8A5A12;--p-ready:#1F8A55;--p-ship:#0B6B70}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--p-wait:#A3AFBB;--p-mach:#F59A4C;--p-paint:#F07AA6;--p-assy:#A49CF2;--p-pack:#D9A85A;--p-ready:#5CC488;--p-ship:#4FC1C6}}
+:root[data-theme="dark"]{--p-wait:#A3AFBB;--p-mach:#F59A4C;--p-paint:#F07AA6;--p-assy:#A49CF2;--p-pack:#D9A85A;--p-ready:#5CC488;--p-ship:#4FC1C6}
+.p-wait{--s:var(--p-wait)}.p-machine{--s:var(--p-mach)}.p-paint{--s:var(--p-paint)}.p-assemble{--s:var(--p-assy)}.p-pack{--s:var(--p-pack)}.p-ready{--s:var(--p-ready)}.p-shipped{--s:var(--p-ship)}
+.p-wait,.p-machine,.p-paint,.p-assemble,.p-pack,.p-ready,.p-shipped{--s-soft:color-mix(in oklab,var(--s) 14%,var(--surface))}
+.ic-wait{--ic:var(--p-wait)}.ic-machine{--ic:var(--p-mach)}.ic-paint{--ic:var(--p-paint)}.ic-assemble{--ic:var(--p-assy)}.ic-pack{--ic:var(--p-pack)}.ic-ready{--ic:var(--p-ready)}.ic-shipped{--ic:var(--p-ship)}.ic-design{--ic:var(--doing)}
 .flow-ic.ic-machine svg,.col-ic.ic-machine svg{animation:bob 1.6s ease-in-out infinite}
 .flow-ic.ic-ready svg,.col-ic.ic-ready svg{animation:ride 2.4s ease-in-out infinite}
 .r-prod{--rc:#B8435F}
@@ -2379,7 +2379,7 @@ body.sale-mode .sale-page{width:100%;min-width:0;box-sizing:border-box}
 
 /* ภาพรวมบริษัท */
 .co-pipe{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow-sm,none)}
-.co-depts{display:grid;grid-template-columns:1fr 4fr 1fr;gap:10px;font-size:12.5px;font-weight:600}
+.co-depts{display:grid;grid-template-columns:1fr 5fr 1fr;gap:10px;font-size:12.5px;font-weight:600}
 .co-depts .dl{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;justify-content:center}
 .co-depts .dl svg{width:15px;height:15px}
 .dl.d-d{background:var(--doing-soft);color:var(--doing)}.dl.d-p{background:color-mix(in oklab,var(--p-mach) 13%,var(--surface));color:var(--p-mach)}.dl.d-s{background:color-mix(in oklab,var(--p-ready) 13%,var(--surface));color:var(--p-ready)}
@@ -2415,7 +2415,7 @@ body.sale-mode .sale-page{width:100%;min-width:0;box-sizing:border-box}
 .co-meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:0}
 .co-meta small.late{color:var(--late);font-weight:600}
 .co-meta svg{width:12px;height:12px;vertical-align:-1px;margin-right:3px}
-.co-trk{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.co-trk{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .co-trk i{height:7px;border-radius:4px;background:var(--surface-3);position:relative}
 .co-trk i.past.d-d{background:color-mix(in oklab,var(--doing) 55%,var(--surface))}
 .co-trk i.past.d-p{background:color-mix(in oklab,var(--p-mach) 55%,var(--surface))}
@@ -2448,7 +2448,7 @@ body.pm-open{overflow:hidden}
 .pm-f{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--line);background:var(--surface-2);flex-wrap:wrap}
 .pm-del{font-size:13px;color:var(--late);font-weight:600}
 .btn.danger{background:var(--late);border-color:var(--late);color:#fff}
-.pm-steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;position:relative}
+.pm-steps{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;position:relative}
 .pm-step{display:flex;flex-direction:column;align-items:center;gap:4px;border:0;background:none;padding:4px 0;font-size:11.5px;color:var(--muted);min-width:0}
 .pm-step span{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--surface-3);color:var(--muted);transition:transform .15s}
 .pm-step span svg{width:18px;height:18px}
@@ -2512,3 +2512,17 @@ body.pm-open{overflow:hidden}
 .pt-mc{background:color-mix(in oklab,var(--p-mach) 13%,var(--surface));color:var(--p-mach)}
 .pt-mc svg{width:12px;height:12px}
 @media (max-width:760px){.co-kpis .kpi span{font-size:11.5px;line-height:1.3}.co-pipe{padding:10px}}
+
+/* v2.27: ขั้นประกอบติดตั้ง → บอร์ดผลิต 6 คอลัมน์ */
+.pboard{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media (max-width:1599px) and (min-width:761px){
+  .pboard{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .pboard .col,.pboard .col:nth-child(4),.pboard .col:nth-child(5){grid-column:span 2;min-height:0}
+}
+@media (max-width:760px){.pboard{grid-template-columns:minmax(0,1fr)}.pboard .col,.pboard .col:nth-child(4),.pboard .col:nth-child(5){grid-column:auto}}
+.pc-go.adv-assemble{border-color:var(--p-assy);color:var(--p-assy)}
+.pt-noassy{background:color-mix(in oklab,var(--p-assy) 12%,var(--surface));color:var(--p-assy)}
+.pc-skips{display:flex;flex-wrap:wrap;gap:6px}
+.ptog[data-passy].on,.ptog[data-paddassy].on{border-color:var(--p-assy);color:var(--p-assy);background:color-mix(in oklab,var(--p-assy) 10%,var(--surface))}
+.flow.pflow .flow-step{min-width:100px}
+@media (max-width:760px){.co-step{flex:1 1 30%}}

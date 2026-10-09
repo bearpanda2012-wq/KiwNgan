@@ -20,13 +20,13 @@ await login('แอดมิน', true);
 eq('nav has company + production', await pg.evaluate(() => ['flow', 'prod'].map(v => !!document.querySelector('#nav [data-view="' + v + '"]'))), [true, true]);
 eq('nav dept headings', await pg.locator('#nav .nav-h').allTextContents(), ['ฝ่ายแบบ', 'ฝ่ายผลิต', 'ทั่วไป']);
 await pg.click('#nav [data-view="flow"]'); await pg.waitForTimeout(700);
-eq('company pipeline steps', await pg.locator('.co-step').count(), 6);
+eq('company pipeline steps', await pg.locator('.co-step').count(), 7);
 const rows = await pg.locator('.co-row').count(); eq('company rows shown', rows > 5, true);
 await pg.screenshot({ path: out + 'prod-company.png', fullPage: true });
 await pg.click('.co-step[data-cf="machine"]'); await pg.waitForTimeout(300);
 eq('filter by step', await pg.evaluate(() => [...document.querySelectorAll('.co-row .pill')].every(p => p.textContent === 'ลงเครื่อง')), true);
 await pg.click('#nav [data-view="prod"]'); await pg.waitForTimeout(700);
-eq('prod board 5 columns', await pg.locator('.pboard .col').count(), 5);
+eq('prod board 6 columns', await pg.locator('.pboard .col').count(), 6);
 await pg.screenshot({ path: out + 'prod-board.png', fullPage: true });
 // รอผลิต → เลือก 2 เครื่อง → เริ่ม
 const wid = await pg.evaluate(() => T.prodsAll().find(p => p.stage === 'wait').id);
@@ -42,9 +42,20 @@ eq('1/2 still on machine', await pg.evaluate(id => T.prodsAll().find(p => p.id =
 await pg.locator('.pcard[data-popen="' + wid + '"] [data-pmd="Punching"]').click(); await pg.waitForTimeout(800);
 eq('both done → paint', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'paint');
 await pg.locator('.pcard[data-popen="' + wid + '"] [data-padv]').click(); await pg.waitForTimeout(800);
-eq('paint → pack', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'pack');
+eq('paint → ประกอบติดตั้ง', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'assemble');
+await pg.locator('.pcard[data-popen="' + wid + '"] [data-padv]').click(); await pg.waitForTimeout(800);
+eq('ประกอบ → pack', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'pack');
+await pg.locator('.pcard[data-popen="' + wid + '"] [data-pback]').click(); await pg.waitForTimeout(800);
+eq('back → ประกอบ', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'assemble');
 await pg.locator('.pcard[data-popen="' + wid + '"] [data-pback]').click(); await pg.waitForTimeout(800);
 eq('back → paint', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'paint');
+// ข้ามประกอบ: ทำสีเสร็จแล้วไปแพ็คเลย
+await pg.evaluate(id => T.prodsAll().find(p => p.id === id).id, wid);
+await pg.locator('.pcard[data-popen="' + wid + '"] .code').click(); await pg.waitForTimeout(300);
+await pg.click('#pModal [data-passy]'); await pg.waitForTimeout(800);
+await pg.click('#pModal [data-padv]'); await pg.waitForTimeout(800);
+eq('no assembly: paint → pack', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'pack');
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
 // machine filter chips
 await pg.click('[data-pm="Router"]'); await pg.waitForTimeout(300);
 eq('router filter only router jobs', await pg.evaluate(() => [...document.querySelectorAll('[data-pcol="machine"] .pcard')].every(c => !!c.querySelector('[data-pmd="Router"]'))), true);
@@ -102,7 +113,7 @@ await pg.click('.sale-tile'); await pg.fill('#salePin', '0000'); await pg.press(
 eq('wrong sale pin', await pg.locator('#saleForm .err').textContent(), 'PIN ไม่ถูกต้อง');
 await pg.fill('#salePin', '5678'); await pg.press('#salePin', 'Enter'); await pg.waitForTimeout(1500);
 eq('sale page opened', /salek=/.test(pg.url()), true);
-eq('sale page production strip', await pg.locator('.sp-pf').count(), 6);
+eq('sale page production strip', await pg.locator('.sp-pf').count(), 7);
 eq('rows show production stage', (await pg.locator('.sp-prod').count()) > 0, true);
 await pg.screenshot({ path: out + 'prod-sale.png' });
 console.log(ok + ' ok, ' + bad + ' failed');

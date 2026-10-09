@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.21.0';
+const VERSION = '1.22.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -39,13 +39,14 @@ const SHEETS = {
   Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'fileId'],
   Files: ['id', 'jobId', 'name', 'mime', 'size', 'fileId', 'createdBy', 'createdAt'],
   Comments: ['id', 'jobId', 'ts', 'from', 'text'],
-  // ฝ่ายผลิต: 1 แถว = 1 เลข Job ที่ออกแบบเสร็จแล้ว เดินต่อ รอผลิต → ลงเครื่อง → ทำสี → แพ็ค → พร้อมส่ง → ส่งแล้ว
-  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history']
+  // ฝ่ายผลิต: 1 แถว = 1 เลข Job ที่ออกแบบเสร็จแล้ว เดินต่อ รอผลิต → ลงเครื่อง → ทำสี → ประกอบติดตั้ง → แพ็ค → พร้อมส่ง → ส่งแล้ว (paint/assy = 'no' คือข้ามขั้นนั้น)
+  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy']
 };
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
 const STATUSES = ['queue', 'doing', 'review', 'fix', 'hold', 'done'];
-const PROD_STAGES = ['wait', 'machine', 'paint', 'pack', 'ready', 'shipped'];
+const PROD_STAGES = ['wait', 'machine', 'paint', 'assemble', 'pack', 'ready', 'shipped'];
+const PROD_SKIP_ = { paint: 'paint', assemble: 'assy' };   // ขั้นที่ข้ามได้ → ชื่อคอลัมน์ธง
 const COLORS = ['#0B6B70', '#2D5FC4', '#B05A2A', '#7A4BB5', '#2B7F4A', '#B8435F', '#5B6B7A', '#A07A12'];
 
 /* ======================= HTTP ======================= */
@@ -498,7 +499,7 @@ function saleView_(k, sale) {
       return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', assignee: maskName_(j.assignee, { role: 'user' }) || '', helpers: helpersOf_(j).map(n => maskName_(n, { role: 'user' })).join(','),
                steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '' }; });
   const people = usersLite_().filter(x => x.active && x.role !== 'admin').map(x => ({ name: x.name, color: x.color }));
-  const pv = prods.map(x => ({ code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt }));
+  const pv = prods.map(x => ({ code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt }));
   const out = { brand: publicBrand_(), sales: s.sales || [], sale: sale || '', jobs: jobs, prods: pv, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(ck, t, 600); } catch (e) {}
   return out;
@@ -734,7 +735,7 @@ function deleteJob_(id, u) {
 
 /* ======================= ฝ่ายผลิต =======================
    งานที่ออกแบบเสร็จ (งานประเภทที่ "ส่งเข้าผลิต" เช่น ทำ CAM) จะเข้า "รอผลิต" เอง 1 เลข Job = 1 แถว
-   ขั้น: wait รอผลิต → machine ลงเครื่อง (เลือกได้หลายเครื่อง ครบทุกเครื่องแล้วไปต่อเอง) → paint ทำสี (ข้ามได้) → pack แพ็ค → ready พร้อมส่ง → shipped ส่งแล้ว
+   ขั้น: wait รอผลิต → machine ลงเครื่อง (เลือกได้หลายเครื่อง ครบทุกเครื่องแล้วไปต่อเอง) → paint ทำสี (ข้ามได้) → assemble ประกอบติดตั้ง (ข้ามได้) → pack แพ็ค → ready พร้อมส่ง → shipped ส่งแล้ว
    อัปเดตได้: ฝ่ายผลิต หัวหน้างาน แอดมิน · คนอื่นดูอย่างเดียว */
 function toProd_(taskType) {
   const t = (settings_().taskTypes || []).find(x => x.name === taskType);
@@ -768,7 +769,7 @@ function prodFind_(code) {
 function ensureProd_(job, u) {
   if (prodFind_(job.code)) return null;
   const now = nowIso_();
-  const p = { id: uid_('p_'), code: job.code, title: job.title || '', sale: job.sale || '', group: job.group || '', stage: 'wait', machines: '[]', paint: '', note: '',
+  const p = { id: uid_('p_'), code: job.code, title: job.title || '', sale: job.sale || '', group: job.group || '', stage: 'wait', machines: '[]', paint: '', assy: '', note: '',
               enteredAt: now.slice(0, 16), startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, updatedAt: now, updatedBy: u.name,
               history: JSON.stringify([{ t: now.slice(0, 16), by: u.name, s: 'wait', x: 'ออกแบบเสร็จ ส่งเข้าผลิต' }]) };
   writeRow_('Prod', p, -1);
@@ -791,24 +792,28 @@ function prodSave_(data, u) {
     if (prodFind_(code)) throw new Error('เลข Job ' + code + ' อยู่ในฝ่ายผลิตแล้ว');
     const src = readAll_('Jobs').filter(j => j.code.toLowerCase() === code.toLowerCase());
     const pick = k => (src.find(j => j[k]) || {})[k] || '';
-    cur = { id: uid_('p_'), code: code, title: pick('title'), sale: pick('sale'), group: pick('group'), stage: 'wait', machines: '[]', paint: '', note: '',
+    cur = { id: uid_('p_'), code: code, title: pick('title'), sale: pick('sale'), group: pick('group'), stage: 'wait', machines: '[]', paint: '', assy: '', note: '',
             enteredAt: now.slice(0, 16), startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, history: '[]' };
   }
   ['title', 'sale', 'group', 'note'].forEach(k => { if (data[k] !== undefined) cur[k] = String(data[k]).slice(0, k === 'note' ? 1000 : 200); });
   if (data.paint !== undefined) cur.paint = data.paint === 'no' ? 'no' : '';
+  if (data.assy !== undefined) cur.assy = data.assy === 'no' ? 'no' : '';
   if (data.machines !== undefined) cur.machines = JSON.stringify(prodMachines_(data.machines));
   if (data.stage !== undefined) { if (PROD_STAGES.indexOf(data.stage) < 0) throw new Error('ขั้นงานผลิตไม่ถูกต้อง'); cur.stage = data.stage; }
   const ms = prodMachines_(cur.machines);
   if (cur.stage === 'machine' && !ms.length) throw new Error('เลือกเครื่องอย่างน้อย 1 เครื่องก่อนเริ่มลงเครื่อง');
-  if (cur.stage === 'machine' && ms.every(x => x.d)) cur.stage = cur.paint === 'no' ? 'pack' : 'paint';   // ครบทุกเครื่อง → ไปขั้นต่อเอง
-  if (cur.stage === 'paint' && cur.paint === 'no' && (!before || before.stage !== 'paint')) cur.stage = 'pack';
-  const si = PROD_STAGES.indexOf(cur.stage);
+  if (cur.stage === 'machine' && ms.every(x => x.d)) cur.stage = 'paint';   // ครบทุกเครื่อง → ไปขั้นต่อเอง
+  for (let k = 0; k < 3; k++) {   // ข้ามขั้นที่ติ๊ก "ไม่ต้อง" ไว้ (ถ้าย้ายเข้ามาใหม่)
+    const f = PROD_SKIP_[cur.stage];
+    if (f && cur[f] === 'no' && (!before || before.stage !== cur.stage)) cur.stage = PROD_STAGES[PROD_STAGES.indexOf(cur.stage) + 1]; else break;
+  }
+  const si = PROD_STAGES.indexOf(cur.stage), iR = PROD_STAGES.indexOf('ready'), iS = PROD_STAGES.indexOf('shipped');
   if (si >= 1 && !cur.startedAt) cur.startedAt = now.slice(0, 16);
   if (si < 1) cur.startedAt = '';
-  if (si >= 4 && !cur.finishedAt) cur.finishedAt = now.slice(0, 16);
-  if (si < 4) cur.finishedAt = '';
-  if (si === 5 && !cur.shippedAt) cur.shippedAt = now.slice(0, 16);
-  if (si < 5) cur.shippedAt = '';
+  if (si >= iR && !cur.finishedAt) cur.finishedAt = now.slice(0, 16);
+  if (si < iR) cur.finishedAt = '';
+  if (si === iS && !cur.shippedAt) cur.shippedAt = now.slice(0, 16);
+  if (si < iS) cur.shippedAt = '';
   let hist = []; try { hist = JSON.parse(cur.history || '[]'); } catch (e) {}
   const changed = !before || before.stage !== cur.stage || before.machines !== cur.machines;
   if (changed) { hist.push({ t: now.slice(0, 16), by: u.name, s: cur.stage, x: String(data.why || '').slice(0, 120) }); hist = hist.slice(-40); }
