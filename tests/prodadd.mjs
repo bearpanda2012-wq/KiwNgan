@@ -16,7 +16,7 @@ await pg.evaluate(() => { const b = [...document.querySelectorAll('button')].fin
 eq('add modal open', await pg.locator('#pModal .pm-add').count(), 1);
 await pg.fill('#pAddCode', 'D-777'); await pg.waitForTimeout(100);
 eq('new job hint', await pg.locator('#pAddFound.on').count(), 0);
-await pg.fill('#pAddTitle', 'ป้ายร้านกาแฟ คุณบี');
+await pg.fill('#pAddTitle', 'ป้ายร้านกาแฟ คุณบี'); await pg.fill('#pAddNote', 'อะคริลิก 5 มม.');
 const sale = await pg.evaluate(() => { const o = [...document.querySelectorAll('#pAddSale option')].find(x => x.value); return o && o.value; });
 if (sale) await pg.selectOption('#pAddSale', sale);
 await pg.click('[data-padue="3"]'); await pg.waitForTimeout(150);
@@ -39,6 +39,19 @@ await pg.click('[data-pinfo="edit"]'); await pg.waitForTimeout(200);
 await pg.fill('#pEdTitle', 'ป้ายร้านกาแฟ (แก้)'); await pg.click('[data-pinfo="save"]'); await pg.waitForTimeout(1200);
 eq('edited title', await pg.evaluate(id => S.prods.find(q => q.id === id).title, p.id), 'ป้ายร้านกาแฟ (แก้)');
 await pg.screenshot({ path: out + 'prod-detail.png' });
+// ภาพรวมบริษัท: แถวงานที่ฝ่ายผลิตบันทึกเอง โชว์โน้ต + ชี้แล้วขึ้นการ์ดรายละเอียด
+await pg.evaluate(id => T.api && 0, p.id);
+await pg.evaluate(async id => { const x = S.prods.find(q => q.id === id); }, p.id);
+if (await pg.locator('#pModal [data-pclose]').count()) await pg.locator('#pModal .pm-f [data-pclose]').click(); await pg.waitForTimeout(200); await pg.evaluate(() => T.go('flow')); await pg.waitForTimeout(900);
+const prow = pg.locator('.co-row[data-phov="' + p.id + '"]');
+eq('prod-only row has hover', await prow.count(), 1);
+eq('row shows production note', await prow.locator('.co-pnote').textContent(), 'อะคริลิก 5 มม.');
+await prow.hover(); await pg.waitForTimeout(900);
+eq('prod hover shows title', await pg.locator('#hovercard.show .hv-head small').textContent(), 'ป้ายร้านกาแฟ (แก้)');
+eq('prod hover shows image', await pg.locator('#hovercard.show .hv-hero img').count(), 1);
+eq('prod hover shows source', await pg.locator('#hovercard.show', { hasText: 'ฝ่ายผลิตบันทึกเอง' }).count(), 1);
+await pg.screenshot({ path: out + 'prod-hover.png' });
+await pg.mouse.move(5, 5); await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(500);
 // งานที่มีในฝ่ายแบบ: ดึงข้อมูลมาให้
 await pg.keyboard.press('Escape'); await pg.evaluate(() => { const m = document.querySelector('#pModal'); if (m) m.remove(); });
 const dcode = await pg.evaluate(() => { const have = {}; S.prods.forEach(x => have[x.code.toLowerCase()] = 1); const j = S.jobs.find(x => x.status === 'done' && x.title && !have[x.code.toLowerCase()]); return j && [j.code, j.title]; });

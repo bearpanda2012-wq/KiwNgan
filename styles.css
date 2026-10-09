@@ -2897,3 +2897,7 @@ a.hv-main{display:block;position:relative;color:inherit;text-decoration:none}
 .img-view img{max-width:100%;max-height:calc(100vh - 90px);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .img-view .lb-btn{position:absolute;top:14px;right:14px}
 .iv-open{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;opacity:.8;text-decoration:underline}
+/* v2.40: รายละเอียดที่ฝ่ายผลิตบันทึกเองบนแถวงาน */
+.co-pnote{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;color:var(--urgent);background:color-mix(in oklab,var(--urgent) 10%,var(--surface));padding:0 8px;border-radius:999px;line-height:1.7;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.co-pnote svg{width:12px;height:12px;flex:none}
+.co-ph svg{width:12px;height:12px}
