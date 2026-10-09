@@ -2919,3 +2919,45 @@ a.hv-main{display:block;position:relative;color:inherit;text-decoration:none}
 .mp-snd svg{width:18px;height:18px}
 .mp-snd.off{opacity:.65}
 @media (prefers-reduced-motion:reduce){.top-msg .msg-n.pop,.top-msg.has svg{animation:none}}
+/* v2.45: ป้ายตำแหน่งงานแบบเด่น (ใช้ทั้งระบบ) — ไอคอนขั้น + แผนก + ชื่อขั้น + จุดเส้นทาง 7 ขั้น */
+.stg{display:inline-grid;grid-template-columns:auto minmax(0,1fr);column-gap:8px;align-items:center;padding:4px 11px 5px 4px;border-radius:13px;background:linear-gradient(100deg,color-mix(in oklab,var(--s,var(--muted)) 15%,var(--surface)),color-mix(in oklab,var(--s,var(--muted)) 5%,var(--surface)));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--s,var(--muted)) 30%,transparent);max-width:100%;vertical-align:middle;text-align:left}
+.stg-ic{grid-row:1/3;position:relative;width:30px;height:30px;border-radius:50%;background:var(--s,var(--muted));color:#fff;display:grid;place-items:center;box-shadow:0 5px 12px -5px var(--s,var(--muted))}
+.stg-ic svg{width:16px;height:16px}
+.stg.s-doing .stg-ic::after,.stg.s-late .stg-ic::after,.stg.s-fix .stg-ic::after,.stg.s-review .stg-ic::after,.stg[class*=" p-"]:not(.p-shipped) .stg-ic::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--s);animation:stgRing 2s ease-out infinite;pointer-events:none}
+.stg.s-doing .stg-ic svg{animation:spinSlow 4s linear infinite}
+.stg.s-late .stg-ic svg{animation:flicker 1.2s ease-in-out infinite}
+.stg-t{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.stg-t small{font-size:10px;font-weight:700;color:color-mix(in oklab,var(--s,var(--muted)) 55%,var(--muted));letter-spacing:.02em}
+.stg-t b{font-size:12.5px;font-weight:800;color:var(--s,var(--ink));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stg-dots{display:flex;gap:2px;margin-top:3px;font-style:normal}
+.stg-dots u{display:block;width:8px;height:4px;border-radius:3px;background:var(--surface-3);text-decoration:none}
+.stg-dots u.p{background:color-mix(in oklab,var(--s,var(--muted)) 50%,var(--surface-3))}
+.stg-dots u.n{width:15px;background:var(--s,var(--muted));animation:stgPulse 1.4s ease-in-out infinite}
+.stg-sub{grid-column:1/-1;font-style:normal;font-size:11px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stg.big{padding:6px 14px 7px 6px;border-radius:15px}.stg.big .stg-ic{width:36px;height:36px}.stg.big .stg-t b{font-size:14px}
+.stg.sm{padding:3px 9px 4px 3px;column-gap:6px}.stg.sm .stg-ic{width:24px;height:24px}.stg.sm .stg-ic svg{width:13px;height:13px}.stg.sm .stg-t b{font-size:11.5px}.stg.sm .stg-dots u{width:6px}.stg.sm .stg-dots u.n{width:11px}
+.s-queue{--s:var(--queue,#64748B)}.s-done{--s:var(--done)}
+@keyframes stgRing{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.55);opacity:0}}
+@keyframes stgPulse{0%,100%{opacity:1}50%{opacity:.45}}
+@media (prefers-reduced-motion:reduce){.stg-ic::after,.stg-ic svg,.stg-dots u.n{animation:none!important}}
+.row .c-st .stg,.aitem .stg{justify-self:end}
+.hv-grid .stg{margin:-2px 0}
+
+/* v2.45: ตารางงานหน้า Sale มีลูกเล่นแบบภาพรวมบริษัท */
+.sp-t{border-collapse:separate;border-spacing:0 6px}
+.sp-t thead th{border:0}
+.sp-r td{background:var(--surface);border-top:1px solid color-mix(in oklab,var(--s,var(--line)) 22%,var(--line));border-bottom:1px solid color-mix(in oklab,var(--s,var(--line)) 22%,var(--line));transition:background .2s,box-shadow .2s,transform .2s}
+.sp-r td:first-child{border-left:4px solid var(--s,var(--line));border-radius:12px 0 0 12px;background:linear-gradient(90deg,color-mix(in oklab,var(--s,var(--line)) 12%,var(--surface)),var(--surface))}
+.sp-r td:last-child{border-right:1px solid color-mix(in oklab,var(--s,var(--line)) 22%,var(--line));border-radius:0 12px 12px 0}
+.sp-r.late td:first-child{border-left-color:var(--late);box-shadow:none}
+.sp-r:hover td{background:color-mix(in oklab,var(--s,var(--brand)) 7%,var(--surface));border-color:color-mix(in oklab,var(--s,var(--brand)) 45%,var(--line))}
+.sp-r:hover td:first-child{background:linear-gradient(90deg,color-mix(in oklab,var(--s,var(--brand)) 20%,var(--surface)),color-mix(in oklab,var(--s,var(--brand)) 7%,var(--surface)))}
+.sp-r td:first-child b.mono{transition:color .15s}.sp-r:hover td:first-child b.mono{color:var(--s,var(--accent))}
+.sp-r.done td{opacity:1}.sp-r.done td>*{opacity:.85}
+.sp-r.late td:first-child{animation:coLate 2.6s ease-in-out 1s infinite}
+.sp-r.in{animation:spRowIn .5s cubic-bezier(.2,.9,.3,1.2) both;animation-delay:calc(var(--i) * 30ms)}
+@keyframes spRowIn{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+.sp-r td .stg{margin:1px 0 3px}
+.sp-dr{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);font-size:12.5px;color:var(--muted)}
+.sp-dr input{border:0;background:transparent;font:inherit;color:var(--ink);padding:3px 2px;min-height:0}
+@media (prefers-reduced-motion:reduce){.sp-r.in,.sp-r.late td:first-child{animation:none}}

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.44.0';
+const APP_VERSION = '2.45.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1242,7 +1242,7 @@ function jobInfoHtml(j, compact) {
     (imgs.length > 1 ? '<div class="hv-strip">' + imgs.slice(1, 6).map(m => '<button type="button" data-lbopen="' + esc(m.id) + '" data-lbjob="' + esc(j.id) + '">' + thumbImg(m) + '</button>').join('') + (imgs.length > 6 ? '<span class="more">+' + (imgs.length - 6) + '</span>' : '') + '</div>' : '') + '</div>' : '';
   return hero + '<div class="hv-head">' + stBadge(j, 'lg') + '<div><b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '–') + '</small></div></div>' +
     '<div class="hv-grid">' +
-      '<span>สถานะ</span><b>' + stPill(j) + '</b>' +
+      '<span>สถานะ</span><b>' + stgHtml(stageOf(j, j.status === 'done' && typeof prodOfCode === 'function' && S.prods ? prodOfCode(j.code) : null)) + '</b>' +
       '<span>ผู้รับผิดชอบ</span><b class="hv-who">' + av(j.assignee) + esc(j.assignee || 'ยังไม่มอบหมาย') + '</b>' +
       (helpersOf(j).length ? '<span>ผู้ร่วมทำงาน</span><b class="hv-who hv-helpers">' + helpersOf(j).map(n => '<span>' + av(n) + esc(n) + '</span>').join('') + '</b>' : '') +
       '<span>กลุ่ม / งาน</span><b class="hv-chips">' + (typeChip(j.taskType) + groupChip(j.group) || '–') + '</b>' +
@@ -1326,7 +1326,7 @@ function saleHoverHtml(r) {
   if (po) { j.note = r.prod.note || ''; if (r.prod.due) { j.due = r.prod.due; } }
   const dueTx = j.due && j.status !== 'done' ? (d => (d < 0 ? 'เลย ' + (-d) + ' วัน' : d === 0 ? 'ส่งวันนี้' : d === 1 ? 'ส่งพรุ่งนี้' : 'ส่ง ' + fd(j.due)) + ' · ' + fdY(j.due))(daysBetween(today(), j.due)) : j.status === 'done' ? 'เสร็จ ' + fd(String(j.finishedAt).slice(0, 10)) : '–';
   let h = hero + '<div class="hv-head"><span class="flow-ic ic-' + coIc(r) + '">' + PIC[coIc(r)] + '</span><div><b class="mono">' + esc(r.code) + '</b><small>' + esc(r.title || '–') + '</small></div></div>' +
-    '<div class="hv-grid"><span>สถานะ</span><b>' + st + '</b>' +
+    '<div class="hv-grid"><span>สถานะ</span><b>' + stgHtml(stageOf(r.step === 'design' ? j : null, r.step === 'design' ? null : r.prod)) + '</b>' +
     (po ? '<span>ที่มา</span><b><span class="co-sk">ฝ่ายผลิตบันทึกเอง</span></b>' : '<span>ผู้รับผิดชอบ</span><b class="hv-who">' + av(j.assignee) + esc(j.assignee || 'ยังไม่มอบหมาย') + '</b>') +
     (hs.length ? '<span>ผู้ร่วมทำงาน</span><b class="hv-who hv-helpers">' + hs.map(n => '<span>' + av(n) + esc(n) + '</span>').join('') + '</b>' : '') +
     '<span>กลุ่ม / งาน</span><b class="hv-chips">' + (tc(j.taskType) + (r.group ? '<span class="gchip" style="--c:#0EA5E9">' + STI.layers + esc(groupShort(r.group)) + '</span>' : '') || '–') + '</b>' +
@@ -1358,7 +1358,7 @@ function prodHoverHtml(p) {
   const hero = im.length ? '<div class="hv-hero"><button type="button" class="hv-main" data-lbopen="' + esc(im[0].id) + '" data-lbjob="' + esc(imj(0)) + '" title="กดดูรูปเต็มจอ">' + thumbImg(im[0], 'big') + '<span class="hv-zoom">' + I.search + 'กดดูรูป</span>' + (im.length > 1 ? '<span class="hv-cnt">' + STI.camera + im.length + '</span>' : '') + '</button>' +
     (im.length > 1 ? '<div class="hv-strip">' + im.slice(1, 6).map((m, k) => '<button type="button" data-lbopen="' + esc(m.id) + '" data-lbjob="' + esc(imj(k + 1)) + '">' + thumbImg(m) + '</button>').join('') + '</div>' : '') + '</div>' : '';
   const main = hero + '<div class="hv-head"><span class="flow-ic ic-' + p.stage + '">' + PIC[p.stage] + '</span><div><b class="mono">' + esc(p.code) + '</b><small>' + esc(p.title || '–') + '</small></div></div>' +
-    '<div class="hv-grid"><span>สถานะ</span><b>' + pPill(p.stage) + '</b>' +
+    '<div class="hv-grid"><span>สถานะ</span><b>' + stgHtml(stageOf(null, p)) + '</b>' +
     '<span>ที่มา</span><b>' + (dj.length ? '<span class="co-sk">จากฝ่ายแบบ</span>' : '<span class="co-sk">ฝ่ายผลิตบันทึกเอง</span>') + '</b>' +
     '<span>Sale</span><b>' + esc(p.sale || '–') + '</b>' +
     '<span>กลุ่มงาน</span><b class="hv-chips">' + (p.group ? groupChip(p.group) : '–') + '</b>' +
@@ -1407,14 +1407,14 @@ function hideHoverSoon() { clearTimeout(hovT); hovT = setTimeout(hideHover, 260)
 const inHover = el => !!(el && el.closest && el.closest('#hovercard'));
 if (window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches) {
   document.addEventListener('mouseover', e => {
-    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open], .co-row[data-hov], .co-row[data-shov], .co-row[data-phov], .pcard[data-popen]');
+    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open], .co-row[data-hov], .co-row[data-shov], .co-row[data-phov], .pcard[data-popen], tr[data-shov]');
     if (!el) return;
     if ((el.dataset.shov ? 'sale:' + el.dataset.shov : (el.dataset.phov || el.dataset.popen) ? 'prod:' + (el.dataset.phov || el.dataset.popen) : el.dataset.open || el.dataset.hov) === hovId) { clearTimeout(hovT); hovT = null; return; }
     if (hovId) hideHover();   // ย้ายไปการ์ดอื่น: ปิดกล่องเดิมทันที ไม่ให้บังการ์ดใบอื่น
     clearTimeout(hovT); hovT = setTimeout(() => { if (!S.edit && !S.drag) showHover(el); }, 380);
   });
   document.addEventListener('mouseout', e => {
-    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open], .co-row[data-hov], .co-row[data-shov], .co-row[data-phov], .pcard[data-popen]');
+    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open], .co-row[data-hov], .co-row[data-shov], .co-row[data-phov], .pcard[data-popen], tr[data-shov]');
     if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;
     if (inHover(e.relatedTarget)) { clearTimeout(hovT); hovT = null; return; }   // เลื่อนเมาส์เข้าไปในการ์ดสรุป → ค้างไว้ให้กดดูรูปได้
     if (hovId) hideHoverSoon(); else hideHover();
@@ -1641,11 +1641,11 @@ async function salePage() {
     const PM = {}; ((d && d.prods) || []).forEach(x => { const k = String(x.code).toLowerCase(); if (!PM[k] || (PM[k].stage === 'shipped' && x.stage !== 'shipped')) PM[k] = x; });
     const prodOf = j => PM[String(j.code || '').toLowerCase()] || null;
     const hs = j => String(j.helpers || '').split(',').map(x => x.trim()).filter(Boolean);
-    const since = F.range === '7' ? addDays(t, -6) : F.range === '30' ? addDays(t, -29) : F.range === 'm' ? t.slice(0, 8) + '01' : '';
+    const since = F.range === '7' ? addDays(t, -6) : F.range === '30' ? addDays(t, -29) : F.range === 'c' ? (F.rf || '') : '', until = F.range === 'c' ? (F.rt || '') : '';
     const isLateJ = j => j.status !== 'done' && j.due && j.due < t;
     const base = all.filter(j => (!qq || [j.code, j.title, j.taskType, j.group, j.note, j.sale, j.assignee, j.helpers].join(' ').toLowerCase().indexOf(qq) >= 0) &&
       (!F.status || (F.status === 'late' ? isLateJ(j) : j.status === F.status)) && (!F.sale || j.sale === F.sale) && (!F.group || j.group === F.group) && (!F.type || j.taskType === F.type) &&
-      (!F.who || (F.who === '__none' ? !j.assignee : j.assignee === F.who)) && (!F.help || (F.help === '__any' ? hs(j).length > 0 : hs(j).includes(F.help))) && (!since || String(j.received || '') >= since) &&
+      (!F.who || (F.who === '__none' ? !j.assignee : j.assignee === F.who)) && (!since || String(j.received || '') >= since) && (!until || String(j.received || '').slice(0, 10) <= until) &&
       (!F.prod || (prodOf(j) && prodOf(j).stage === F.prod)));
     const doneB = base.filter(j => j.status === 'done'), okB = doneB.filter(j => !j.due || String(j.finishedAt || '').slice(0, 10) <= j.due).length;
     const N = { all: base.length, act: base.filter(j => j.status !== 'done').length, late: base.filter(isLateJ).length, done: doneB.length };
@@ -1659,16 +1659,18 @@ async function salePage() {
       const badge = j.status === 'done' ? '<em class="sp-bdg ' + (ok ? 'ok' : 'bad') + '">' + (ok ? '✓ ตรงเวลา' : 'ช้ากว่ากำหนด') + '</em>' : dd === null ? '' : '<em class="sp-bdg ' + (dd < 0 ? 'bad' : dd <= 1 ? 'warn' : '') + '">' + (dd < 0 ? 'เลย ' + (-dd) + ' วัน' : dd === 0 ? 'วันนี้' : dd === 1 ? 'พรุ่งนี้' : 'อีก ' + dd + ' วัน') + '</em>';
       const stp = String(j.steps || '').split('/'), pct = stp.length === 2 && +stp[1] ? Math.round(+stp[0] / +stp[1] * 100) : -1;
       const team = (j.assignee ? av(j.assignee, 'sm') + '<span class="sp-who"><b>' + esc(j.assignee) + '</b>' + (hs(j).length ? '<small>+ ' + esc(hs(j).join(', ')) + '</small>' : '') + '</span>' : '<span class="sub">ยังไม่มอบหมาย</span>');
-      return '<tr class="sp-r' + (late ? ' late' : '') + (j.status === 'done' ? ' done' : '') + (firstAnim ? ' in' : '') + '" style="--i:' + Math.min(i, 20) + '"><td><b class="mono">' + esc(j.code) + '</b>' + (j.priority === 'urgent' ? ' <span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(j.title || '') + '</small></td>' +
+      const so = stageOf(j, prodOf(j));
+      return '<tr class="sp-r ' + so.cls + (late ? ' late' : '') + (j.status === 'done' ? ' done' : '') + (firstAnim ? ' in' : '') + '" style="--i:' + Math.min(i, 20) + '" data-shov="' + esc(j.code) + '"><td><b class="mono">' + esc(j.code) + '</b>' + (j.priority === 'urgent' ? ' <span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(j.title || '') + '</small></td>' +
         '<td><span class="sp-type" style="--tc:' + (typeColorPub(j.taskType)) + '">' + esc(j.taskType || '–') + '</span><small>' + esc(groupShort(j.group || '')) + '</small></td>' +
         '<td class="sp-team">' + team + '</td>' +
-        '<td><span class="pill ' + (late ? 's-late' : (ST[j.status] || ST.queue).cls) + '">' + (late ? STI.fire : (STI[j.status] || '')) + (late ? 'เลยกำหนด' : (ST[j.status] || ST.queue).label) + '</span>' +
+        '<td>' + stgHtml(stageOf(j, prodOf(j))) +
           (pct >= 0 ? '<span class="sp-cl" title="เช็กลิสต์ ' + esc(j.steps) + '"><i style="width:' + pct + '%"></i></span><small>เช็กลิสต์ ' + esc(j.steps) + '</small>' : '') +
-          ((pp => pp ? '<span class="sp-prod ' + PSTG[pp.stage].cls + '" title="ฝ่ายผลิต">' + PIC[pp.stage] + '<b>ผลิต: ' + PSTG[pp.stage].label + '</b>' + (pp.stage === 'machine' ? '<small>' + esc((pp.machines || []).map(m => (m.d ? '✓' : '') + m.m).join(' · ')) + '</small>' : pp.stage === 'shipped' ? '<small>' + esc(fd(pp.shippedAt)) + '</small>' : '') + '</span>' : '')(prodOf(j))) + '</td>' +
+          ((pp => pp && j.status !== 'done' ? '<span class="sp-prod ' + PSTG[pp.stage].cls + '" title="ฝ่ายผลิต">' + PIC[pp.stage] + '<b>ผลิต: ' + PSTG[pp.stage].label + '</b></span>' : pp && pp.stage === 'shipped' ? '<small>ส่งแล้ว ' + esc(fd(pp.shippedAt)) + '</small>' : '')(prodOf(j))) + '</td>' +
         '<td>' + fdY(j.received) + '</td><td>' + (j.status === 'done' ? '<b class="' + (ok ? 'ok' : 'bad') + '">เสร็จ ' + fdY(fin) + '</b>' : '<b class="' + (late ? 'bad' : '') + '">' + fdY(j.due) + '</b>') + badge + '</td>' +
         '<td class="sp-note">' + (j.note ? esc(j.note) : '<span class="sub">–</span>') + '</td>' + (sel ? '' : '<td>' + esc(j.sale || '–') + '</td>') + '</tr>';
     };
-    const b = (d && d.brand) || {}, anyF = F.st !== 'all' || F.status || F.sale || F.group || F.type || F.range || F.who || F.help || F.prod || q;
+    if (d) { SF.by = {}; saleRows(d).forEach(r => { SF.by[r.code] = r; }); }   // การ์ดลอยรายละเอียดเมื่อชี้แถวในตาราง
+    const b = (d && d.brand) || {}, anyF = F.st !== 'all' || F.status || F.sale || F.group || F.type || F.range || F.who || F.prod || q;
     const pall = Object.values(PM).filter(x => !sel || x.sale === sel), pn = st => pall.filter(x => x.stage === st).length;
     const pstrip = pall.length ? '<div class="sp-pflow"><span class="sp-pf-h">' + PIC.machine + 'ฝ่ายผลิต</span>' + PCOLS.concat('shipped').map(st => '<button type="button" class="sp-pf ' + PSTG[st].cls + (F.prod === st ? ' on' : '') + '" data-spprod="' + st + '">' + PIC[st] + '<b>' + pn(st) + '</b><span>' + PSTG[st].label + (st === 'shipped' ? ' (60 วัน)' : '') + '</span></button>').join('') + '</div>' : '';
     const cards = [['all', 'ทั้งหมด', '', I.list || STI.queue], ['act', 'กำลังดำเนินการ', 'doing', STI.doing], ['late', 'เลยกำหนด', 'bad', STI.fire], ['done', 'เสร็จใน 45 วัน', 'ok', STI.done]];
@@ -1683,10 +1685,10 @@ async function salePage() {
           fsel('status', STI.doing, 'ทุกสถานะ', [['queue', 'รอคิว'], ['doing', 'กำลังทำ'], ['review', 'รอตรวจ'], ['fix', 'แก้ไข'], ['hold', 'พักไว้'], ['done', 'เสร็จแล้ว'], ['late', 'เลยกำหนด']].map(o => opt(o[0], o[1] + ' (' + all.filter(j => o[0] === 'late' ? isLateJ(j) : j.status === o[0]).length + ')', F.status)).join('')) +
           (pall.length ? fsel('prod', PIC.machine, 'ขั้นผลิต: ทั้งหมด', PCOLS.concat('shipped').map(st => opt(st, 'ผลิต: ' + PSTG[st].label + ' (' + pn(st) + ')', F.prod)).join('')) : '') +
           fsel('who', '👤', 'ผู้รับผิดชอบ: ทุกคน', people.map(x => opt(x, x + ' (' + all.filter(j => j.assignee === x).length + ')', F.who)).join('') + (all.some(j => !j.assignee) ? opt('__none', 'ยังไม่มอบหมาย', F.who) : '')) +
-          fsel('help', '🤝', 'ผู้ร่วมทำงาน: ทั้งหมด', opt('__any', 'มีผู้ร่วมทำงาน', F.help) + helpersAll.map(x => opt(x, x + ' (' + all.filter(j => hs(j).includes(x)).length + ')', F.help)).join('')) +
           fsel('group', STI.layers || '▦', 'ทุกกลุ่มงาน', uniq('group').map(x => opt(x, groupShort(x), F.group)).join('')) +
           fsel('type', '✎', 'ทุกรายละเอียดงาน', uniq('taskType').map(x => opt(x, x, F.type)).join('')) +
-          fsel('range', STI.calendar, 'รับงาน: ทั้งหมด', [['7', 'รับงาน: 7 วันล่าสุด'], ['30', 'รับงาน: 30 วันล่าสุด'], ['m', 'รับงาน: เดือนนี้']].map(o => opt(o[0], o[1], F.range)).join('')) +
+          fsel('range', STI.calendar, 'รับงาน: ทั้งหมด', [['7', 'รับงาน: 7 วันล่าสุด'], ['30', 'รับงาน: 30 วันล่าสุด'], ['c', 'รับงาน: เลือกวันที่…']].map(o => opt(o[0], o[1], F.range)).join('')) +
+          (F.range === 'c' ? '<span class="sp-dr"><input type="date" data-spf="rf" value="' + esc(F.rf || '') + '" aria-label="รับงานตั้งแต่วันที่"><span>ถึง</span><input type="date" data-spf="rt" value="' + esc(F.rt || '') + '" aria-label="ถึงวันที่"></span>' : '') +
           (anyF ? '<button class="btn sm sp-clear" data-spclear="1">✕ ล้างตัวกรอง</button>' : '') + '</div></div>' +
         '<div class="sp-count">แสดง <b>' + jobs.length + '</b> จาก ' + all.length + ' งาน</div>' +
         '<div class="sp-wrap"><table class="sp-t"><thead><tr><th>งาน</th><th>รายละเอียด</th><th>ทีมงาน</th><th>สถานะ</th><th>รับงาน</th><th>กำหนดส่ง / เสร็จ</th><th>หมายเหตุ</th>' + (sel ? '' : '<th>Sale</th>') + '</tr></thead><tbody>' +
@@ -1723,7 +1725,7 @@ async function salePage() {
     if (c.dataset.spprod) { F.prod = F.prod === c.dataset.spprod ? '' : c.dataset.spprod; return draw(last, lastErr); }
     if (c.dataset.saleRefresh) return go();
     if (c.dataset.spst) { F.st = F.st === c.dataset.spst ? 'all' : c.dataset.spst; return draw(last, lastErr); }
-    if (c.dataset.spclear) { Object.assign(F, { st: 'all', status: '', sale: '', group: '', type: '', range: '', who: '', help: '', prod: '' }); q = ''; return draw(last, lastErr); }
+    if (c.dataset.spclear) { Object.assign(F, { st: 'all', status: '', sale: '', group: '', type: '', range: '', rf: '', rt: '', who: '', prod: '' }); q = ''; return draw(last, lastErr); }
   });
   document.addEventListener('change', e => { if (e.target && e.target.dataset && e.target.dataset.sfsale) { SF.sale = e.target.value; SF.anim = true; return draw(last, lastErr); } const k = e.target && e.target.dataset && e.target.dataset.spf; if (k) { F[k] = e.target.value; draw(last, lastErr); } });
   document.addEventListener('input', e => { if (e.target && e.target.id === 'sfQ') { SF.q = e.target.value; const pos = e.target.selectionStart; draw(last, lastErr); const el = $('#sfQ'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } } });
@@ -3679,7 +3681,7 @@ function aItem(j) {
   return '<button class="aitem" data-open="' + esc(j.id) + '">' + stBadge(j) + '<span style="min-width:0"><span class="code">' + esc(j.code) + '</span> ' + (imgsOf(j.id).length ? '<span class="img-chip">' + STI.camera + imgsOf(j.id).length + '</span> ' : '') +
     (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span> ' : '') + (run ? '<span class="tag late">● จับเวลา</span>' : '') +
     '<small>' + esc([j.title, groupShort(j.group), j.taskType].filter(Boolean).join(' · ')) + '</small></span>' +
-    '<span style="text-align:right">' + stPill(j) + '<small class="' + (di.cls === 'late' ? 'tag late' : /soon/.test(di.cls) ? 'tag ' + di.cls : '') + '">' + esc(di.text) + '</small></span></button>';
+    '<span style="text-align:right">' + stgHtml(stageOf(j, j.status === 'done' && typeof prodOfCode === 'function' && S.prods ? prodOfCode(j.code) : null), 'sm') + '<small class="' + (di.cls === 'late' ? 'tag late' : /soon/.test(di.cls) ? 'tag ' + di.cls : '') + '">' + esc(di.text) + '</small></span></button>';
 }
 
 /* ============ render: board ============ */
@@ -3803,7 +3805,7 @@ function viewList() {
       '<div class="cell">รับ ' + fd(j.received) + '<small>' + esc(j.taskType || '') + '</small></div>' +
       '<div class="cell c-due"><span class="' + (di.cls === 'late' ? 'tag late' : /soon/.test(di.cls) ? 'tag ' + di.cls : '') + '">' + esc(di.text) + '</span>' + (j.status !== 'done' && j.due ? '<small>กำหนด ' + fdY(j.due) + '</small>' : '') + '</div>' +
       '<div class="cell c-note"' + (j.note ? ' title="' + esc(j.note) + '"' : '') + '>' + (j.note ? '<span class="note-txt">' + STI.note + '<span>' + esc(j.note) + '</span></span>' : '<span class="muted">–</span>') + '</div>' +
-      '<div class="cell c-st">' + stPill(j) + '</div></div>';
+      '<div class="cell c-st">' + stgHtml(stageOf(j, j.status === 'done' && typeof prodOfCode === 'function' ? prodOfCode(j.code) : null)) + '</div></div>';
   }).join('') : '<div class="empty"><b>ไม่พบงาน</b>ลองเปลี่ยนตัวกรองหรือคำค้น</div>';
   return topbar('รายการงาน', isLead() ? rows.length + ' รายการ จากทั้งหมด ' + S.jobs.length + ' งาน' : 'งานของ' + esc(S.me) + ' · ' + rows.length + ' รายการ จาก ' + pool.length + ' งาน', '<button class="btn" data-act="csv">' + I.download + '<span>ส่งออก CSV</span></button>') +
     filterBar(monthSel, !isLead()) + '<div class="chips">' + chips + '</div>' +
@@ -4492,6 +4494,18 @@ function coRows() {
       due: due, dl: dl, dd: dd,
       urgent: r.jobs.some(j => j.priority === 'urgent' && j.status !== 'done') };
   }).filter(Boolean);
+}
+/* ป้ายตำแหน่งงานแบบเด่น (ใช้ทั้งระบบ): ไอคอน + แผนก + ขั้น + จุดเส้นทาง 7 ขั้น */
+function stageOf(j, p) {
+  const late = j && j.status !== 'done' && j.due && j.due < today();
+  if (j && j.status !== 'done') return { k: 'design', cls: late ? 's-late' : (ST[j.status] || ST.queue).cls, ic: late ? STI.fire : (STI[j.status] || PIC.design), dept: 'ฝ่ายแบบ', label: late ? 'เลยกำหนด' : (ST[j.status] || ST.queue).label };
+  if (p) return { k: p.stage, cls: PSTG[p.stage].cls, ic: PIC[p.stage], dept: p.stage === 'ready' || p.stage === 'shipped' ? 'ส่งมอบ' : 'ฝ่ายผลิต', label: PSTG[p.stage].label, sub: p.stage === 'machine' ? (Array.isArray(p.machines) ? p.machines : pms(p)).filter(m => m && m.m).map(m => (m.d ? '✓' : '') + m.m).join(' · ') : '' };
+  return { k: 'ddone', cls: 's-done', ic: STI.done, dept: 'ฝ่ายแบบ', label: 'ออกแบบเสร็จ' };
+}
+function stgHtml(o, size) {
+  const i = o.k === 'shipped' ? CO_STEPS.length : o.k === 'ddone' ? 0 : Math.max(0, CO_STEPS.findIndex(x => x.k === o.k)), fin = o.k === 'shipped';
+  return '<span class="stg ' + o.cls + (size ? ' ' + (size === true ? 'big' : size) : '') + '"><span class="stg-ic">' + o.ic + '</span><span class="stg-t"><small>' + esc(o.dept) + '</small><b>' + esc(o.label) + '</b></span>' +
+    '<i class="stg-dots" aria-hidden="true">' + CO_STEPS.map((x, k) => '<u class="' + (k < i || fin ? 'p' : k === i ? 'n' : '') + '"></u>').join('') + '</i>' + (o.sub ? '<em class="stg-sub">' + esc(o.sub) + '</em>' : '') + '</span>';
 }
 function coIdx(step) { return step === 'design' || step === 'ddone' ? 0 : step === 'shipped' ? CO_STEPS.length : CO_STEPS.findIndex(s => s.k === step); }
 /* เส้นทางงานแบบแอปส่งของ: จุดตามขั้น ช่วงที่ผ่านแล้วมีสี จุดปัจจุบันมีไอคอนและวงกระเพื่อม */

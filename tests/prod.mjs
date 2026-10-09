@@ -132,7 +132,7 @@ eq('row expands with details', await pg.locator('.sf-item.open .sf-det .sf-prod'
 await pg.locator('.sf-item.open').screenshot({ path: out + 'prod-sale-open.png' });
 await pg.click('[data-sfview="table"]'); await pg.waitForTimeout(400);
 eq('table view still has production strip', await pg.locator('.sp-pf').count(), 7);
-eq('rows show production stage', (await pg.locator('.sp-prod').count()) > 0, true);
+eq('rows show production stage', (await pg.locator('.sp-r .stg[class*=" p-"]').count()) > 0, true);
 await pg.click('[data-sfview="flow"]');
 await pg.setViewportSize({ width: 390, height: 844 }); await pg.waitForTimeout(400);
 eq('sale overview no horizontal scroll (mobile)', await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
