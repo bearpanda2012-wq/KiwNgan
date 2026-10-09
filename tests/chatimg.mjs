@@ -49,5 +49,10 @@ await pg.evaluate(() => { const c = document.querySelector('#msgPanel .mp-ch:not
 eq('no remote button', await pg.locator('#msgPanel [data-rtc="remote"]').count(), 0);
 await pg.mouse.click(400, 500); await pg.waitForTimeout(300);
 eq('click outside hides panel', await pg.locator('#msgPanel.open').count(), 0);
+// ตัวเลขข้อความที่ยังไม่อ่านบนปุ่ม "ข้อความ"
+await pg.evaluate(async () => { const M = KiwNgan.M; M.list.push({ id: 'zz1', ts: '2026-10-09T16:00:00', from: 'ฝน', to: 'แอดมิน', kind: 'msg', text: 'มีงานด่วน', read: false }); KiwNgan.M.open = false; });
+await pg.evaluate(() => { const b = document.querySelector('[data-act="msgopen"]'); }); 
+await pg.evaluate(() => window.T && T.go('home')); await pg.waitForTimeout(500);
+eq('unread badge on message button', await pg.evaluate(() => { const x = document.querySelector('.top-msg .msg-n'); return !!x && +x.textContent >= 1; }), true);
 console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.join(' | ') || 'none');
 await b.close(); srv.close(); if (bad || errs.length) process.exit(1);

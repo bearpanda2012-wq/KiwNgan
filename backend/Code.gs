@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.26.0';
+const VERSION = '1.27.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -1179,6 +1179,11 @@ function sendMessage_(p, u) {
   const kind = p.kind === 'help' ? 'help' : 'msg';
   const m = { id: uid_('m_'), ts: nowIso_(), from: u.name, fromRole: u.role, to: to, kind: kind, text: text, jobId: String(p.jobId || ''), status: kind === 'help' ? 'open' : '', helper: '', readBy: u.name, img: img };
   writeRow_('Messages', m, -1);
+  try {   // แจ้งเตือนบนมือถือ/คอมแม้ปิดแอป (เครื่องที่เปิดแจ้งเตือนไว้)
+    const act = usersLite_().filter(x => x.active && x.name !== u.name);
+    const names = to === 'team' ? act.map(x => x.name) : to === 'admin' ? adminNames_().filter(n => n !== u.name) : [to];
+    if (names.length) pushTo_(names, { kind: kind === 'help' ? 'sos' : 'msg', from: isAdmin_(u) ? ADMIN_LABEL : u.name, code: u.name, team: to === 'team', title: (text || (img ? '📷 ส่งรูปมา' : '')).slice(0, 100) });
+  } catch (e) {}
   return { message: maskMsg_(m, u) };
 }
 function markRead_(ids, u) {

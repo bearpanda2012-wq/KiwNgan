@@ -2909,3 +2909,13 @@ a.hv-main{display:block;position:relative;color:inherit;text-decoration:none}
 .mp-vbtn svg{width:17px;height:17px}
 .mp-vbtn.off{color:var(--late);background:var(--late-soft);border-color:color-mix(in oklab,var(--late) 30%,transparent)}
 .mp-vbtn.on{color:var(--done)}
+/* v2.43: ตัวเลขข้อความที่ยังไม่อ่านบนปุ่ม "ข้อความ" + ปุ่มเปิด/ปิดเสียงแจ้งเตือน */
+.top-msg{position:relative}
+.top-msg .msg-n{position:absolute;top:-7px;right:-7px;min-width:21px;height:21px;padding:0 6px;border-radius:999px;background:#FF3B30;color:#fff;font:700 12px/21px var(--f-display);text-align:center;box-shadow:0 0 0 2px var(--surface),0 4px 10px -3px rgba(255,59,48,.7);z-index:2}
+.top-msg .msg-n.pop{animation:msgPop .5s cubic-bezier(.3,1.8,.5,1)}
+.top-msg.has svg{animation:msgWig 1.2s ease-in-out 2}
+@keyframes msgPop{0%{transform:scale(.3)}60%{transform:scale(1.25)}100%{transform:scale(1)}}
+@keyframes msgWig{0%,100%{transform:rotate(0)}20%{transform:rotate(-14deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(5deg)}}
+.mp-snd svg{width:18px;height:18px}
+.mp-snd.off{opacity:.65}
+@media (prefers-reduced-motion:reduce){.top-msg .msg-n.pop,.top-msg.has svg{animation:none}}

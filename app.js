@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.42.0';
+const APP_VERSION = '2.43.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1792,6 +1792,7 @@ function startMsgPolling() {
   if (M.timer) return;
   M.list = []; M.since = ''; M.loaded = false; M.seen = {}; M.stamp = '';
   pollMessages(true); rtcLoop(); pushBoot();
+  if (/#msg$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} setTimeout(() => openMsgPanel(), 800); }
   M.timer = setInterval(() => { if (document.visibilityState === 'visible' || 'Notification' in window && Notification.permission === 'granted') pollMessages(); }, 20000);
 }
 function stopMsgPolling() { roomLeave(true); rtcStop(); clearInterval(M.timer); M.timer = null; M.list = []; M.open = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); renderMsgFab(); }
@@ -1815,6 +1816,9 @@ function appBadge(n) {
 }
 function renderMsgFab() {
   appBadge(S.screen === 'app' && S.user ? unreadAll() : 0);
+  { const n = S.screen === 'app' && S.user ? unreadAll() : 0;   // ตัวเลขสีแดงบนปุ่ม "ข้อความ" (คอม + มือถือ)
+    document.querySelectorAll('.top-msg').forEach(b => { let x = b.querySelector('.msg-n'); b.classList.toggle('has', n > 0);
+      if (!n) { if (x) x.remove(); return; } if (!x) { x = document.createElement('b'); x.className = 'badge msg-n'; b.appendChild(x); } const t = n > 99 ? '99+' : String(n); if (x.textContent !== t) { x.textContent = t; x.classList.remove('pop'); void x.offsetWidth; x.classList.add('pop'); } }); }
   let b = $('#msgFab');
   if (b) b.remove();
   if (S.screen !== 'app' || !S.user) { renderChatHeads(); return; }
@@ -1947,6 +1951,7 @@ function renderMsgPanel() {
   p.innerHTML = '<div class="mp-head"><span class="mp-hic">' + MSG_IC.chat + '</span><div><b>ข้อความ</b><small>' + (helps.length ? helps.length + ' คำขอความช่วยเหลือรออยู่' : 'คุยกับทีมและ' + ADMIN_LABEL) + '</small></div>' +
       ('Notification' in window && Notification.permission === 'default' ? '<button class="icon-btn" data-act="notifyperm" title="เปิดแจ้งเตือนบนเครื่องนี้">' + MSG_IC.bell + '</button>' : '') +
       (isAdmin() && M.list.some(m => chanOf(m) === M.ch) ? '<button class="icon-btn" data-act="msgclear" title="ล้างประวัติห้องนี้">' + I.trash + '</button>' : '') +
+      '<button class="icon-btn mp-snd' + (msgSoundOn() ? '' : ' off') + '" data-act="msgsound" title="' + (msgSoundOn() ? 'ปิดเสียง/สั่นแจ้งเตือนข้อความ' : 'เปิดเสียง/สั่นแจ้งเตือนข้อความ') + '" aria-pressed="' + msgSoundOn() + '">' + (msgSoundOn() ? RTC_IC.spk : RTC_IC.spkOff) + '</button>' +
       '<button class="icon-btn" data-act="msgclose" aria-label="ปิด">✕</button></div>' +
     (M.confirmClear ? '<div class="mp-confirm"><span>' + I.trash + 'ลบข้อความทั้งหมดในห้อง <b>' + esc(cur.name) + '</b> (' + M.list.filter(m => chanOf(m) === M.ch).length + ' ข้อความ)? ย้อนกลับไม่ได้</span><button class="btn sm danger" data-act="msgclearyes">ลบทั้งหมด</button><button class="btn sm" data-act="msgclearno">ยกเลิก</button></div>' : '') +
     '<div class="mp-chans" data-n="' + chans.length + '">' + chans.map(c => { const n = unreadIn(c.id); return '<button class="mp-ch' + (c.id === M.ch ? ' on' : '') + '" data-ch="' + esc(c.id) + '">' + (c.user ? avUser(c.user) : '<span class="av ch-ic">' + c.icon + '</span>') + '<span>' + esc(c.name) + '</span>' + (n ? '<b>' + n + '</b>' : '') + '</button>'; }).join('') + '</div>' +
@@ -2056,10 +2061,10 @@ function notifyMsg(m) {
   requestAnimationFrame(() => el.classList.add('in'));
   while (stack.children.length > 4) stack.lastChild.remove();
   setTimeout(() => dismissNtf(el), help ? 15000 : 7000);
-  try { if (navigator.vibrate) navigator.vibrate(help ? [40, 60, 40] : 25); } catch (e) {}
+  if (msgSoundOn()) msgBuzz(help);
   ping(help);
   if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
-    try { const n = new Notification(help ? who + ' ขอความช่วยเหลือ' : who, { body: m.text || (m.img ? '📷 ส่งรูปมา' : ''), tag: m.id, icon: 'icons/icon-192.png' }); n.onclick = () => { window.focus(); openMsgPanel(chanOf(m)); }; } catch (e) {}
+    sysNotify(help ? '🛟 ' + who + ' ขอความช่วยเหลือ' : '💬 ' + who + (m.to === 'team' ? ' ถึงทั้งทีม' : ''), m.text || (m.img ? '📷 ส่งรูปมา' : ''), 'kiwngan-' + (help ? 'sos' : 'msg') + '-' + m.from, () => openMsgPanel(chanOf(m)));
   }
 }
 /* แจ้งเตือนงาน: มอบหมายให้ / ถูกส่งกลับไปแก้ / ใกล้ถึงกำหนด */
@@ -2178,16 +2183,37 @@ function renderDue() {
 setInterval(() => { try { dueAlerts(); } catch (e) {} }, 10 * 60 * 1000);   // ข้ามวัน / เลยบ่ายสอง / เลยกำหนด ระหว่างเปิดแอปค้างไว้
 function dismissNtf(el) { if (!el || !el.isConnected) return; el.classList.remove('in'); el.classList.add('out'); setTimeout(() => el.remove(), 350); }
 function dropNotice(mid) { document.querySelectorAll('.ntf[data-mid="' + mid + '"]').forEach(dismissNtf); }
+/* เสียงแจ้งเตือนข้อความ: เบราว์เซอร์ (โดยเฉพาะมือถือ) ให้เล่นเสียงได้หลังจากแตะหน้าจอครั้งแรก จึงปลดล็อกเสียงตอนแตะครั้งแรก */
 let audioCtx = null;
-function ping(strong) {
+const msgSoundOn = () => LS.get('msgSound', 1) !== 0;
+function audioUnlock() {
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!audioUnlock.done) { const b = audioCtx.createBuffer(1, 1, 22050), s = audioCtx.createBufferSource(); s.buffer = b; s.connect(audioCtx.destination); s.start(0); audioUnlock.done = true; } } catch (e) {}
+}
+['pointerdown', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, audioUnlock, { passive: true }));
+function ping(strong, force) {
+  if (!force && !msgSoundOn()) return;
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain(), t = audioCtx.currentTime;
-    o.type = 'sine'; o.frequency.setValueAtTime(strong ? 740 : 880, t); o.frequency.setValueAtTime(strong ? 988 : 1175, t + 0.09);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.08, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
-    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + 0.3);
+    audioUnlock();
+    const t0 = audioCtx.currentTime, notes = strong ? [[784, 0], [988, .13], [1319, .26], [988, .52], [1319, .65]] : [[880, 0], [1319, .14]];
+    notes.forEach(n => {   // ติ๊ง-ต่อง แบบระฆังเล็ก ดังพอได้ยินบนมือถือ
+      const o = audioCtx.createOscillator(), o2 = audioCtx.createOscillator(), g = audioCtx.createGain(), t = t0 + n[1];
+      o.type = 'sine'; o2.type = 'triangle'; o.frequency.setValueAtTime(n[0], t); o2.frequency.setValueAtTime(n[0] * 2, t);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      o.connect(g); o2.connect(g); g.connect(audioCtx.destination); o.start(t); o2.start(t); o.stop(t + 0.6); o2.stop(t + 0.6);
+    });
   } catch (e) {}
 }
+function msgBuzz(help) { try { if (navigator.vibrate) navigator.vibrate(help ? [300, 120, 300, 120, 300] : [180, 90, 180]); } catch (e) {} }
+async function sysNotify(title, body, tag, onClick) {   // Android ต้องแจ้งผ่าน service worker (new Notification ใช้ไม่ได้)
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+    if (reg && reg.showNotification) { await reg.showNotification(title, { body: body, tag: tag, renotify: true, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', vibrate: [180, 90, 180], data: { url: './#msg' } }); return; }
+  } catch (e) {}
+  try { const n = new Notification(title, { body: body, tag: tag, icon: 'icons/icon-192.png' }); n.onclick = () => { window.focus(); if (onClick) onClick(); }; } catch (e) {}
+}
+if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.kn === 'openmsg' && S.user) openMsgPanel(); });
 
 /* ============ screen share & remote pointer (WebRTC, signaling via the API) ============
    ภาพหน้าจอวิ่งตรงระหว่างสองเครื่อง (peer-to-peer) — ฐานข้อมูลใช้แค่ส่งสัญญาณเริ่มต้น
@@ -3368,7 +3394,7 @@ function topbar(title, sub, extra) {
   const d = new Date();
   const hr = d.getHours(), tod = hr < 6 || hr >= 18 ? 'moon' : hr < 11 ? 'sunrise' : 'sun';
   return '<div class="topbar"><span class="hero-ic" aria-hidden="true">' + (I[S.view] || I.home) + '</span><span class="hero-dots" aria-hidden="true"><i></i><i></i><i></i></span><div><div class="eyebrow"><span class="tod ' + tod + '" aria-hidden="true">' + DECO[tod] + '</span>' + esc(s.company) + ' · วัน' + TH_D[d.getDay()] + ' ' + fdY(today()) + '</div><h1>' + title + '</h1>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
-    '<div class="top-actions">' + (extra || '') + (S.me ? (n => '<button class="btn top-due' + (n ? ' has' : '') + '" data-act="dueopen" title="กำหนดส่งงาน">' + STI.hourglass + '<span>กำหนดส่ง</span>' + (n ? '<b class="badge">' + n + '</b>' : '') + '</button>')(dueCount()) : '') + '<button class="btn top-msg" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span></button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
+    '<div class="top-actions">' + (extra || '') + (S.me ? (n => '<button class="btn top-due' + (n ? ' has' : '') + '" data-act="dueopen" title="กำหนดส่งงาน">' + STI.hourglass + '<span>กำหนดส่ง</span>' + (n ? '<b class="badge">' + n + '</b>' : '') + '</button>')(dueCount()) : '') + '<button class="btn top-msg' + (unreadAll() ? ' has' : '') + '" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span>' + (unreadAll() ? '<b class="badge msg-n">' + (unreadAll() > 99 ? '99+' : unreadAll()) + '</b>' : '') + '</button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
     newBtn() + '</div></div>';
 }
 
@@ -4915,6 +4941,7 @@ document.addEventListener('click', async e => {
     case 'holadd': { const dd = $('#holD'), nn = $('#holN'); if (!dd || !dd.value || !S.draft) return; S.draft.holidays = (S.draft.holidays || []).filter(h => h.d !== dd.value).concat({ d: dd.value, n: (nn && nn.value.trim()) || 'วันหยุด' }).sort((a, b) => a.d.localeCompare(b.d)); markDirty(); return render(); }
     case 'holfixed': { if (!S.draft) return; const y = new Date().getFullYear(); const add = [y, y + 1].flatMap(yy => FIXED_HOL.map(h => ({ d: yy + '-' + h[0], n: h[1] }))).filter(h => h.d >= today()); const have = new Set((S.draft.holidays || []).map(h => h.d)); S.draft.holidays = (S.draft.holidays || []).concat(add.filter(h => !have.has(h.d))).sort((a, b) => a.d.localeCompare(b.d)); markDirty(); toast('เพิ่มวันหยุดราชการ (วันที่ตายตัว) ' + add.filter(h => !have.has(h.d)).length + ' วัน'); return render(); }
     case 'msgclose': return closeMsgPanel();
+    case 'msgsound': LS.set('msgSound', msgSoundOn() ? 0 : 1); if (msgSoundOn()) { ping(false, true); msgBuzz(false); } toast(msgSoundOn() ? 'เปิดเสียงและสั่นเมื่อมีข้อความ' : 'ปิดเสียงแจ้งเตือนข้อความแล้ว'); renderMsgPanel(); return;
     case 'msgattdel': M.att = null; renderMsgPanel(); { const t = $('#msgText'); if (t) t.focus(); } return;
     case 'helpon': M.help = true; M.helpTo = M.ch === 'admin' ? 'admin' : 'team'; renderMsgPanel(); { const x = $('#msgText'); if (x) x.focus(); } return;
     case 'helpnojob': M.jobId = ''; renderMsgPanel(); return;

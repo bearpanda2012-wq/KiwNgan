@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.42.0';
+const CACHE = 'kiwngan-v2.43.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -33,6 +33,8 @@ const PUSH_TEXT = {
   cmt: (f, i) => ['💬 ' + f + ' คอมเมนต์ในงาน ' + (i.code || ''), i.title || ''],
   help: (f, i) => ['🤝 ' + f + ' ชวนคุณร่วมทำงาน · ' + (i.code || ''), (i.title || '') + ' — แตะเพื่อเปิดดูงาน'],
   fix: (f, i) => ['🔧 ถูกส่งกลับไปแก้ไข · ' + (i.code || ''), (i.title ? i.title + ' · ' : '') + f + ' ส่งกลับมา'],
+  msg: (f, i) => ['💬 ' + f + (i.team ? ' ถึงทั้งทีม' : ' ส่งข้อความถึงคุณ'), i.title || 'แตะเพื่อเปิดอ่าน'],
+  sos: (f, i) => ['🛟 ' + f + ' ขอความช่วยเหลือ', i.title || 'แตะเพื่อเปิดดู'],
   due: (f, i) => ['⏳ งานใกล้ถึงกำหนด ' + (i.count || '') + ' งาน', (i.late ? 'เลยกำหนดแล้ว ' + i.late + ' งาน · ' : '') + (i.code || '')]
 };
 self.addEventListener('push', e => {
@@ -47,17 +49,22 @@ self.addEventListener('push', e => {
       }
     } catch (x) { info = null; }
     const k = info && PUSH_TEXT[info.kind] ? info.kind : 'call', t = PUSH_TEXT[k](info && info.from ? info.from : 'มีคน', info || {});
+    if (k === 'msg' || k === 'sos') {   // แอปเปิดอยู่บนจอ: แอปเด้งแจ้งเตือน + เสียงเองแล้ว ไม่ต้องซ้ำ
+      const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      if (cs.some(c => c.visibilityState === 'visible' && c.focused)) return;
+    }
     await self.registration.showNotification(t[0], {
       body: t[1], tag: 'kiwngan-' + k + (info && info.code ? '-' + info.code : ''), renotify: true, requireInteraction: k === 'call',
-      vibrate: k === 'call' ? [500, 250, 500, 250, 500, 250, 500] : [200, 100, 200],
-      icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './?from=push#' + k }
+      vibrate: k === 'call' ? [500, 250, 500, 250, 500, 250, 500] : k === 'sos' ? [300, 120, 300, 120, 300] : [200, 100, 200],
+      icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './?from=push#' + (k === 'msg' || k === 'sos' ? 'msg' : k) }
     });
   })());
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-    for (const c of cs) { if (c.url.indexOf(self.registration.scope) === 0 && 'focus' in c) return c.focus(); }
+    const isMsg = /#msg$/.test((e.notification.data && e.notification.data.url) || '');
+    for (const c of cs) { if (c.url.indexOf(self.registration.scope) === 0 && 'focus' in c) { if (isMsg) c.postMessage({ kn: 'openmsg' }); return c.focus(); } }
     return self.clients.openWindow((e.notification.data && e.notification.data.url) || './');
   }));
 });
