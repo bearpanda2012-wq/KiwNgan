@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.48.0';
+const APP_VERSION = '2.49.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1317,16 +1317,17 @@ function hvLoadCmts(id) {
 /* หน้า Sale: การ์ดลอยรายละเอียดงานจากข้อมูลที่ Sale เห็น (รูปงาน สถานะ คนทำ กลุ่มงาน กำหนดส่ง เช็กลิสต์ ฝ่ายผลิต) */
 const saleImgSrc = (x, w) => /^data:/.test(x) ? x : driveImg(x, w || 800);
 function saleImgList(r) { const out = []; (r.prod ? [r.prod] : []).concat(r.jobs).forEach(j => (j.imgs || []).forEach(x => { if (out.indexOf(x) < 0) out.push(x); })); return out; }
+function saleGal(r) { const im = saleImgList(r); GALS['s:' + r.code] = im.map(x => ({ full: saleImgSrc(x, 2000), th: saleImgSrc(x, 400), fb: /^data:/.test(x) ? '' : 'https://lh3.googleusercontent.com/d/' + x + '=w2000', cap: r.code })); return im; }
 function saleImgs(r) {
-  const im = saleImgList(r); if (!im.length) return '';
-  return '<div class="sf-imgs">' + im.slice(0, 8).map(x => '<a href="' + esc(saleImgSrc(x, 2000)) + '" target="_blank" rel="noopener"><img alt="" loading="lazy" referrerpolicy="no-referrer" src="' + esc(saleImgSrc(x, 400)) + '"></a>').join('') + '</div>';
+  const im = saleGal(r); if (!im.length) return '';
+  return '<div class="sf-imgs">' + im.slice(0, 12).map((x, k) => '<button type="button" data-gal="s:' + esc(r.code) + '" data-gi="' + k + '" aria-label="ดูรูป"><img alt="" loading="lazy" referrerpolicy="no-referrer" src="' + esc(saleImgSrc(x, 400)) + '"></button>').join('') + '</div>';
 }
 function saleHoverHtml(r) {
   const ord = ['doing', 'fix', 'review', 'queue', 'hold'], open = r.jobs.filter(j => j.status !== 'done');
   const j = open.slice().sort((a, b) => ord.indexOf(a.status) - ord.indexOf(b.status))[0] || r.jobs.slice().sort((a, b) => String(b.finishedAt || '').localeCompare(String(a.finishedAt || '')))[0] || {};
-  const im = saleImgList(r), tc = n => n ? '<span class="tchip" style="--c:' + typeColorPub(n) + '">' + esc(n) + '</span>' : '';
-  const hero = im.length ? '<div class="hv-hero"><a class="hv-main" href="' + esc(saleImgSrc(im[0], 2000)) + '" target="_blank" rel="noopener" title="กดดูรูปเต็ม"><img class="th ok big" alt="" referrerpolicy="no-referrer" src="' + esc(saleImgSrc(im[0], 800)) + '"><span class="hv-zoom">' + I.search + 'กดดูรูป</span>' + (im.length > 1 ? '<span class="hv-cnt">' + STI.camera + im.length + '</span>' : '') + '</a>' +
-    (im.length > 1 ? '<div class="hv-strip">' + im.slice(1, 6).map(x => '<a href="' + esc(saleImgSrc(x, 2000)) + '" target="_blank" rel="noopener"><img class="th ok" alt="" referrerpolicy="no-referrer" src="' + esc(saleImgSrc(x, 300)) + '"></a>').join('') + '</div>' : '') + '</div>' : '';
+  const im = saleGal(r), tc = n => n ? '<span class="tchip" style="--c:' + typeColorPub(n) + '">' + esc(n) + '</span>' : '';
+  const hero = im.length ? '<div class="hv-hero"><button type="button" class="hv-main" data-gal="s:' + esc(r.code) + '" data-gi="0" title="กดดูรูป"><img class="th ok big" alt="" referrerpolicy="no-referrer" src="' + esc(saleImgSrc(im[0], 800)) + '"><span class="hv-zoom">' + I.search + 'กดดูรูป</span>' + (im.length > 1 ? '<span class="hv-cnt">' + STI.camera + im.length + '</span>' : '') + '</button>' +
+    (im.length > 1 ? '<div class="hv-strip">' + im.slice(1, 6).map((x, k) => '<button type="button" data-gal="s:' + esc(r.code) + '" data-gi="' + (k + 1) + '"><img class="th ok" alt="" referrerpolicy="no-referrer" src="' + esc(saleImgSrc(x, 300)) + '"></button>').join('') + '</div>' : '') + '</div>' : '';
   const st = r.step === 'design' ? '<span class="pill ' + (ST[j.status] || ST.queue).cls + '">' + (ST[j.status] || ST.queue).label + '</span>' + (r.late ? ' <span class="pill s-late">' + STI.fire + 'เลยกำหนด</span>' : '') :
     r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step === 'shipped' ? 'shipped' : r.step);
   const hs = String(j.helpers || '').split(',').map(x => x.trim()).filter(Boolean), po = !r.jobs.length && r.prod;   // งานที่ฝ่ายผลิตบันทึกเอง
@@ -1746,7 +1747,7 @@ async function salePage() {
     const c = e.target.closest && e.target.closest('[data-sale-refresh],[data-spst],[data-spclear],[data-spprod],[data-sfview],[data-sfstep],[data-sfopen]'); if (!c) return;
     if (c.dataset.sfview) { SF.v = c.dataset.sfview; SF.anim = true; LS.set('saleView', SF.v); return draw(last, lastErr); }
     if (c.dataset.sfstep) { SF.step = SF.step === c.dataset.sfstep && c.dataset.sfstep !== 'all' ? 'all' : c.dataset.sfstep; SF.anim = true; return draw(last, lastErr); }
-    if (c.dataset.sfopen) { const k = c.dataset.sfopen; SF.open[k] = !SF.open[k]; return draw(last, lastErr); }
+    if (c.dataset.sfopen) { const k = c.dataset.sfopen, was = !!SF.open[k]; SF.open = {}; if (!was) SF.open[k] = true; draw(last, lastErr); if (!was) setTimeout(() => { const el = document.querySelector('[data-sfopen="' + CSS.escape(k) + '"]'); if (el && el.getBoundingClientRect().top < 70) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 30); return; }
     if (c.dataset.spprod) { F.prod = F.prod === c.dataset.spprod ? '' : c.dataset.spprod; return draw(last, lastErr); }
     if (c.dataset.saleRefresh) return go();
     if (c.dataset.spst) { F.st = F.st === c.dataset.spst ? 'all' : c.dataset.spst; return draw(last, lastErr); }
@@ -2010,16 +2011,40 @@ async function msgAttach(file) {
   try { const data = await shrinkImage(file, 1800, 340000, 0.85); M.att = { data: data }; if (M.open) renderMsgPanel(); const t = $('#msgText'); if (t) t.focus(); }
   catch (e) { toast(e.message || 'อ่านรูปไม่ได้', true); }
 }
-function imgView(src) {
-  let v = $('#imgView'); if (!v) { v = document.createElement('div'); v.id = 'imgView'; v.className = 'img-view'; v.setAttribute('role', 'dialog'); document.body.appendChild(v); }
-  v.innerHTML = '<img alt="" referrerpolicy="no-referrer" src="' + esc(src) + '"><button type="button" class="lb-btn" data-imgclose="1" aria-label="ปิด">✕</button><a class="iv-open" href="' + esc(src) + '" target="_blank" rel="noopener">เปิดในแท็บใหม่</a>';
+/* ดูรูปในหน้าเดียวกัน (ไม่เปิดแท็บใหม่): เลื่อนดูทีละรูป ‹ › / ปัดซ้ายขวาบนมือถือ / ลูกศรคีย์บอร์ด · โชว์รูปเล็กก่อนแล้วค่อยเปลี่ยนเป็นรูปชัด */
+const GAL = { list: [], i: 0 }, GALS = {};
+function galOpen(list, i) { if (!list || !list.length) return; hideHover && hideHover(); GAL.list = list; GAL.i = i || 0; galDraw(); }
+function galDraw() {
+  let v = $('#imgView'); if (!v) { v = document.createElement('div'); v.id = 'imgView'; v.className = 'img-view'; v.setAttribute('role', 'dialog'); v.setAttribute('aria-modal', 'true'); document.body.appendChild(v); galWire(v); }
+  const L = GAL.list, n = L.length; GAL.i = (GAL.i + n) % n; const it = L[GAL.i];
+  v.innerHTML = '<div class="iv-top"><b>' + (n > 1 ? (GAL.i + 1) + ' / ' + n : 'รูป') + '</b>' + (it.cap ? '<span>' + esc(it.cap) + '</span>' : '') + '<button type="button" class="iv-x" data-imgclose="1" aria-label="ปิด">✕</button></div>' +
+    '<div class="iv-stage" id="ivStage">' + (n > 1 ? '<button type="button" class="iv-nav prev" data-ivgo="-1" aria-label="รูปก่อนหน้า">‹</button>' : '') +
+    '<img class="iv-img' + (it.th && it.th !== it.full ? ' blur' : '') + '" id="ivImg" alt="" referrerpolicy="no-referrer" src="' + esc(it.th || it.full) + '"><span class="iv-spin"></span>' +
+    (n > 1 ? '<button type="button" class="iv-nav next" data-ivgo="1" aria-label="รูปถัดไป">›</button>' : '') + '</div>' +
+    (n > 1 ? '<div class="iv-strip">' + L.map((x, k) => '<button type="button" data-ivto="' + k + '" class="' + (k === GAL.i ? 'on' : '') + '"><img alt="" loading="lazy" referrerpolicy="no-referrer" src="' + esc(x.th || x.full) + '"></button>').join('') + '</div>' : '');
   v.classList.add('open');
+  const want = GAL.i, full = new Image(); full.referrerPolicy = 'no-referrer';
+  full.onload = () => { if (GAL.i !== want) return; const im = $('#ivImg'); if (im) { im.src = it.full; im.classList.remove('blur'); } v.classList.add('loaded'); };
+  full.onerror = () => { if (GAL.i !== want) return; const fb = it.fb; if (fb) { const im = $('#ivImg'); if (im) { im.src = fb; im.classList.remove('blur'); } } v.classList.add('loaded'); };
+  v.classList.remove('loaded'); full.src = it.full;
+  [1, -1].forEach(d => { const x = L[(GAL.i + d + n) % n]; if (x && n > 1) { const p = new Image(); p.referrerPolicy = 'no-referrer'; p.src = x.full; } });   // โหลดรูปข้าง ๆ รอไว้
+  const on = v.querySelector('.iv-strip .on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' });
 }
+function galWire(v) {
+  let x0 = null;
+  v.addEventListener('touchstart', e => { if (e.touches.length === 1) x0 = e.touches[0].clientX; }, { passive: true });
+  v.addEventListener('touchend', e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50 && GAL.list.length > 1) { GAL.i += dx < 0 ? 1 : -1; galDraw(); } });
+}
+function imgView(src) { galOpen([{ full: src, th: src }], 0); }
 document.addEventListener('click', e => {
   const iv = e.target.closest && e.target.closest('[data-imgview]'); if (iv) { e.preventDefault(); e.stopPropagation(); imgView(iv.dataset.imgview); return; }
-  const v = $('#imgView'); if (v && v.classList.contains('open') && (e.target === v || (e.target.closest && e.target.closest('[data-imgclose]')))) { v.classList.remove('open'); }
+  const gl = e.target.closest && e.target.closest('[data-gal]'); if (gl && GALS[gl.dataset.gal]) { e.preventDefault(); e.stopPropagation(); galOpen(GALS[gl.dataset.gal], +gl.dataset.gi || 0); return; }
+  const go = e.target.closest && e.target.closest('[data-ivgo],[data-ivto]'); if (go && $('#imgView.open')) { e.preventDefault(); e.stopPropagation(); if (go.dataset.ivgo) GAL.i += +go.dataset.ivgo; else GAL.i = +go.dataset.ivto; galDraw(); return; }
+  const v = $('#imgView'); if (v && v.classList.contains('open') && (e.target === v || e.target.id === 'ivStage' || (e.target.closest && e.target.closest('[data-imgclose]')))) { v.classList.remove('open'); }
 }, true);
-document.addEventListener('keydown', e => { const v = $('#imgView'); if (e.key === 'Escape' && v && v.classList.contains('open')) { v.classList.remove('open'); e.stopPropagation(); } }, true);
+document.addEventListener('keydown', e => { const v = $('#imgView'); if (!v || !v.classList.contains('open')) return;
+  if (e.key === 'Escape') { v.classList.remove('open'); e.stopPropagation(); }
+  else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && GAL.list.length > 1) { GAL.i += e.key === 'ArrowRight' ? 1 : -1; galDraw(); e.preventDefault(); e.stopPropagation(); } }, true);
 document.addEventListener('paste', e => {
   if (!M.open) return; const p = $('#msgPanel'); if (!p || !(p.contains(e.target) || p.contains(document.activeElement))) return;
   const f = Array.from((e.clipboardData && e.clipboardData.files) || []).find(x => /^image\//.test(x.type));

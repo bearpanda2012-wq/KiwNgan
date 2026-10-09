@@ -29,6 +29,11 @@ await pg.screenshot({ path: out + 'sale-hover.png' });
 await pg.mouse.move(5, 5); await pg.waitForTimeout(500);
 await row.click(); await pg.waitForTimeout(400);
 eq('expanded detail shows image strip', await pg.locator('.sf-item.open .sf-imgs img').count(), 1);
+await pg.locator('.sf-item.open .sf-imgs button').first().click(); await pg.waitForTimeout(400);
+eq('image opens in-page viewer (no new tab)', await pg.locator('#imgView.open #ivImg').count(), 1);
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+const rows = pg.locator('[data-sfopen]'); await rows.nth(3).click(); await pg.waitForTimeout(400);
+eq('opening another row closes the previous', await pg.locator('.sf-item.open').count(), 1);
 // ตาราง Sale: ป้ายตำแหน่งงาน + ชี้แล้วขึ้นการ์ด + ไม่มีตัวกรองผู้ร่วมทำ + เลือกช่วงวันที่รับงาน
 await pg.mouse.move(5, 5); await pg.click('[data-sfview="table"]'); await pg.waitForTimeout(800);
 eq('no helper filter', await pg.locator('[data-spf="help"]').count(), 0);
