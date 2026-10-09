@@ -35,6 +35,11 @@ eq('image uploaded to prod job', await pg.evaluate(id => (S.images || []).filter
 eq('card shows thumb + due', await pg.evaluate(id => { const c = document.querySelector('.pcard[data-popen="' + id + '"]'); return !!(c && c.querySelector('.card-th') && c.querySelector('.pt-due')); }, p.id), true);
 await pg.click('.pcard[data-popen="' + p.id + '"] .title'); await pg.waitForTimeout(500);
 eq('detail shows image', await pg.locator('#pModal .pa-imgs .pa-im').count(), 1);
+await pg.locator('#pModal .pa-imgs .pa-im').first().click(); await pg.waitForTimeout(500);
+eq('lightbox has zoom bar', await pg.locator('#lightbox.open .zm-bar').count(), 1);
+await pg.click('#lightbox [data-zm="+"]'); await pg.waitForTimeout(250);
+eq('lightbox zooms', await pg.locator('#lightbox .zm-pct').textContent(), '150%');
+await pg.keyboard.press('Escape'); await pg.evaluate(() => { const b = document.querySelector('#lightbox [data-lb="close"]'); b && b.click(); }); await pg.waitForTimeout(300);
 await pg.click('[data-pinfo="edit"]'); await pg.waitForTimeout(200);
 await pg.fill('#pEdTitle', 'ป้ายร้านกาแฟ (แก้)'); await pg.click('[data-pinfo="save"]'); await pg.waitForTimeout(1200);
 eq('edited title', await pg.evaluate(id => S.prods.find(q => q.id === id).title, p.id), 'ป้ายร้านกาแฟ (แก้)');

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.51.0';
+const APP_VERSION = '2.52.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1233,6 +1233,7 @@ async function drawLightbox() {
     '<img id="lbImg" alt="" src="' + (FULL[m.id] || THUMBS[m.id] || '') + '" class="' + (FULL[m.id] ? 'ok' : 'blur') + '">' + (FULL[m.id] ? '' : '<span class="lb-load"><span class="spin-dot"></span></span>')) +
     (list.length > 1 ? '<button class="lb-nav next" data-lb="next" aria-label="ถัดไป">›</button>' : '') + '</div>' +
     '<div class="lb-strip">' + list.map((x, k) => '<button data-lbgo="' + k + '" class="' + (k === L.i ? 'on' : '') + '">' + thumbImg(x) + '</button>').join('') + '</div>';
+  { const st = box.querySelector('.lb-stage'); if (st && !box.querySelector('.zm-bar')) st.insertAdjacentHTML('afterend', zoomBar()); zoomable($('#lbImg'), st); }
   box.classList.add('open'); paintAllThumbs(box);
   if (!FULL[m.id] && !m.fileId) {
     try { const r = await api().image({ id: m.id }); FULL[m.id] = r.full; if (S.lb && imgsOf(S.lb.jobId)[S.lb.i] && imgsOf(S.lb.jobId)[S.lb.i].id === m.id) drawLightbox(); } catch (e) { toast(e.message, true); }
@@ -2011,6 +2012,33 @@ async function msgAttach(file) {
   try { const data = await shrinkImage(file, 1800, 340000, 0.85); M.att = { data: data }; if (M.open) renderMsgPanel(); const t = $('#msgText'); if (t) t.focus(); }
   catch (e) { toast(e.message || 'อ่านรูปไม่ได้', true); }
 }
+/* ซูมรูป (ใช้ทุกตัวดูรูป): ล้อเมาส์ / ดับเบิลคลิก / ดับเบิลแตะ / จีบนิ้ว 2 นิ้ว · ซูมแล้วลากเลื่อนดูได้ · ปุ่ม − % + ⤢ */
+const ZOOM_IC = { minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 12h12"/></svg>', plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg>', fit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>' };
+function zoomBar() { return '<div class="zm-bar" data-zm-bar="1"><button type="button" data-zm="-" aria-label="ซูมออก">' + ZOOM_IC.minus + '</button><b class="zm-pct">100%</b><button type="button" data-zm="+" aria-label="ซูมเข้า">' + ZOOM_IC.plus + '</button><button type="button" data-zm="0" aria-label="พอดีจอ" title="พอดีจอ (ดับเบิลคลิก)">' + ZOOM_IC.fit + '</button></div>'; }
+function zoomable(img, host) {
+  if (!img || !host || img.__zm) return; const Z = img.__zm = { s: 1, x: 0, y: 0 }, MAX = 8, pts = new Map(); let last = null, pinch = null, tapT = 0, moved = false;
+  const W = () => img.offsetWidth || 1, H = () => img.offsetHeight || 1;
+  const clamp = () => { const mx = Math.max(0, (Z.s * W() - host.clientWidth) / 2 + 40), my = Math.max(0, (Z.s * H() - host.clientHeight) / 2 + 40); if (Z.s <= 1.001) { Z.x = 0; Z.y = 0; } Z.x = Math.max(-mx, Math.min(mx, Z.x)); Z.y = Math.max(-my, Math.min(my, Z.y)); };
+  const apply = (anim) => { clamp(); img.style.transition = anim ? 'transform .22s ease' : 'none'; img.style.transform = 'translate(' + Z.x + 'px,' + Z.y + 'px) scale(' + Z.s + ')'; img.classList.toggle('zoomed', Z.s > 1.01); host.classList.toggle('zoomed', Z.s > 1.01); img.dataset.zs = Z.s.toFixed(2);
+    const bar = host.parentNode && host.parentNode.querySelector('.zm-pct'); if (bar) bar.textContent = Math.round(Z.s * 100) + '%'; };
+  const rel = (cx, cy) => { const r = host.getBoundingClientRect(); return [cx - (r.left + r.width / 2), cy - (r.top + r.height / 2)]; };
+  const zoomAt = (ns, cx, cy, anim) => { ns = Math.max(1, Math.min(MAX, ns)); const p = cx === undefined ? [0, 0] : rel(cx, cy); Z.x = p[0] - (p[0] - Z.x) * ns / Z.s; Z.y = p[1] - (p[1] - Z.y) * ns / Z.s; Z.s = ns; apply(anim); };
+  Z.zoomAt = zoomAt; Z.reset = () => { Z.s = 1; Z.x = 0; Z.y = 0; apply(true); };
+  host.addEventListener('wheel', e => { e.preventDefault(); zoomAt(Z.s * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0022)), e.clientX, e.clientY); }, { passive: false });
+  host.addEventListener('dblclick', e => { e.preventDefault(); if (Z.s > 1.01) Z.reset(); else zoomAt(2.5, e.clientX, e.clientY, true); });
+  host.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('button')) return; pts.set(e.pointerId, [e.clientX, e.clientY]); try { host.setPointerCapture(e.pointerId); } catch (x) {} moved = false;
+    if (pts.size === 2) { const a = [...pts.values()]; pinch = { d: Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]), s: Z.s, m: [(a[0][0] + a[1][0]) / 2, (a[0][1] + a[1][1]) / 2] }; } else last = [e.clientX, e.clientY]; });
+  host.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size >= 2 && pinch) { const a = [...pts.values()], d = Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]), m = [(a[0][0] + a[1][0]) / 2, (a[0][1] + a[1][1]) / 2]; Z.x += m[0] - pinch.m[0]; Z.y += m[1] - pinch.m[1]; pinch.m = m; zoomAt(pinch.s * d / pinch.d, m[0], m[1]); moved = true; return; }
+    if (last && Z.s > 1.01) { Z.x += e.clientX - last[0]; Z.y += e.clientY - last[1]; last = [e.clientX, e.clientY]; apply(); moved = true; } });
+  const up = e => { if (moved) window.__zmT = Date.now(); pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) { last = null;
+      if (e.pointerType === 'touch' && !moved) { const now = Date.now(); if (now - tapT < 300) { if (Z.s > 1.01) Z.reset(); else zoomAt(2.5, e.clientX, e.clientY, true); tapT = 0; } else tapT = now; } } };
+  host.addEventListener('pointerup', up); host.addEventListener('pointercancel', up);
+  apply();
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-zm]'); if (!b) return; e.preventDefault(); e.stopPropagation();
+  const root = b.closest('.img-view, .lightbox'), img = root && root.querySelector('#ivImg, #lbImg'), Z = img && img.__zm; if (!Z) return;
+  if (b.dataset.zm === '0') Z.reset(); else Z.zoomAt(Z.s * (b.dataset.zm === '+' ? 1.5 : 1 / 1.5), undefined, undefined, true); }, true);
 /* ดูรูปในหน้าเดียวกัน (ไม่เปิดแท็บใหม่): เลื่อนดูทีละรูป ‹ › / ปัดซ้ายขวาบนมือถือ / ลูกศรคีย์บอร์ด · โชว์รูปเล็กก่อนแล้วค่อยเปลี่ยนเป็นรูปชัด */
 const GAL = { list: [], i: 0 }, GALS = {};
 function galOpen(list, i) { if (!list || !list.length) return; hideHover && hideHover(); GAL.list = list; GAL.i = i || 0; galDraw(); }
@@ -2020,9 +2048,9 @@ function galDraw() {
   v.innerHTML = '<div class="iv-top"><b>' + (n > 1 ? (GAL.i + 1) + ' / ' + n : 'รูป') + '</b>' + (it.cap ? '<span>' + esc(it.cap) + '</span>' : '') + '<button type="button" class="iv-x" data-imgclose="1" aria-label="ปิด">✕</button></div>' +
     '<div class="iv-stage" id="ivStage">' + (n > 1 ? '<button type="button" class="iv-nav prev" data-ivgo="-1" aria-label="รูปก่อนหน้า">‹</button>' : '') +
     '<img class="iv-img' + (it.th && it.th !== it.full ? ' blur' : '') + '" id="ivImg" alt="" referrerpolicy="no-referrer" src="' + esc(it.th || it.full) + '"><span class="iv-spin"></span>' +
-    (n > 1 ? '<button type="button" class="iv-nav next" data-ivgo="1" aria-label="รูปถัดไป">›</button>' : '') + '</div>' +
+    (n > 1 ? '<button type="button" class="iv-nav next" data-ivgo="1" aria-label="รูปถัดไป">›</button>' : '') + '</div>' + zoomBar() +
     (n > 1 ? '<div class="iv-strip">' + L.map((x, k) => '<button type="button" data-ivto="' + k + '" class="' + (k === GAL.i ? 'on' : '') + '"><img alt="" loading="lazy" referrerpolicy="no-referrer" src="' + esc(x.th || x.full) + '"></button>').join('') + '</div>' : '');
-  v.classList.add('open');
+  v.classList.add('open'); zoomable($('#ivImg'), $('#ivStage'));
   const want = GAL.i, full = new Image(); full.referrerPolicy = 'no-referrer';
   full.onload = () => { if (GAL.i !== want) return; const im = $('#ivImg'); if (im) { im.src = it.full; im.classList.remove('blur'); } v.classList.add('loaded'); };
   full.onerror = () => { if (GAL.i !== want) return; const fb = it.fb; if (fb) { const im = $('#ivImg'); if (im) { im.src = fb; im.classList.remove('blur'); } } v.classList.add('loaded'); };
@@ -2033,14 +2061,14 @@ function galDraw() {
 function galWire(v) {
   let x0 = null;
   v.addEventListener('touchstart', e => { if (e.touches.length === 1) x0 = e.touches[0].clientX; }, { passive: true });
-  v.addEventListener('touchend', e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50 && GAL.list.length > 1) { GAL.i += dx < 0 ? 1 : -1; galDraw(); } });
+  v.addEventListener('touchend', e => { const zi = $('#ivImg'); if (zi && +zi.dataset.zs > 1.01) { x0 = null; return; } if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50 && GAL.list.length > 1) { GAL.i += dx < 0 ? 1 : -1; galDraw(); } });
 }
 function imgView(src) { galOpen([{ full: src, th: src }], 0); }
 document.addEventListener('click', e => {
   const iv = e.target.closest && e.target.closest('[data-imgview]'); if (iv) { e.preventDefault(); e.stopPropagation(); imgView(iv.dataset.imgview); return; }
   const gl = e.target.closest && e.target.closest('[data-gal]'); if (gl && GALS[gl.dataset.gal]) { e.preventDefault(); e.stopPropagation(); galOpen(GALS[gl.dataset.gal], +gl.dataset.gi || 0); return; }
   const go = e.target.closest && e.target.closest('[data-ivgo],[data-ivto]'); if (go && $('#imgView.open')) { e.preventDefault(); e.stopPropagation(); if (go.dataset.ivgo) GAL.i += +go.dataset.ivgo; else GAL.i = +go.dataset.ivto; galDraw(); return; }
-  const v = $('#imgView'); if (v && v.classList.contains('open') && (e.target === v || e.target.id === 'ivStage' || (e.target.closest && e.target.closest('[data-imgclose]')))) { v.classList.remove('open'); }
+  const v = $('#imgView'); if (v && v.classList.contains('open') && ((e.target === v || (e.target.id === 'ivStage' && !e.target.classList.contains('zoomed'))) && Date.now() - (window.__zmT || 0) > 350 || (e.target.closest && e.target.closest('[data-imgclose]')))) { v.classList.remove('open'); }
 }, true);
 document.addEventListener('keydown', e => { const v = $('#imgView'); if (!v || !v.classList.contains('open')) return;
   if (e.key === 'Escape') { v.classList.remove('open'); e.stopPropagation(); }
