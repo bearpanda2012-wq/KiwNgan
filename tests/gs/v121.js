@@ -19,7 +19,7 @@ eq('CAM done → รอผลิต', b.prods.map(x => [x.code, x.stage, x.sale,
 m.call('saveJob', { job: Object.assign({}, cam, { status: 'doing' }) }, U); m.call('saveJob', { job: Object.assign({}, cam, { status: 'done' }) }, U);
 eq('done again → no duplicate', m.call('bootstrap', {}, U).data.prods.length, 1);
 const P1 = b.prods[0];
-eq('designer cannot update prod', m.call('prodSave', { prod: { id: P1.id, stage: 'machine' } }, U).error, 'อัปเดตงานผลิตได้เฉพาะฝ่ายผลิต หัวหน้างาน หรือแอดมิน');
+eq('designer cannot update prod', m.call('prodSave', { prod: { id: P1.id, stage: 'machine' } }, U).error, 'อัปเดตงานผลิตได้เฉพาะฝ่ายผลิต');
 eq('machine needs a machine', m.call('prodSave', { prod: { id: P1.id, stage: 'machine' } }, PR).error, 'เลือกเครื่องอย่างน้อย 1 เครื่องก่อนเริ่มลงเครื่อง');
 let r = m.call('prodSave', { prod: { id: P1.id, stage: 'machine', machines: [{ m: 'Laser' }, { m: 'Punching' }] } }, PR).data.prod;
 eq('start on 2 machines', [r.stage, JSON.parse(r.machines).length, !!r.startedAt], ['machine', 2, true]);
@@ -33,15 +33,16 @@ r = m.call('prodSave', { prod: { id: P1.id, stage: 'ready' } }, PR).data.prod; e
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'shipped' } }, PR).data.prod; eq('→ ส่งแล้ว', [r.stage, !!r.shippedAt], ['shipped', true]);
 eq('history kept', JSON.parse(r.history).map(h => h.s), ['wait', 'machine', 'machine', 'paint', 'assemble', 'pack', 'ready', 'shipped']);
 // ข้ามทำสี
-r = m.call('prodSave', { prod: { code: 'P-3', paint: 'no', stage: 'machine', machines: [{ m: 'Laser', d: '2026-10-09T09:00' }] } }, A).data.prod;
+r = m.call('prodSave', { prod: { code: 'P-3', paint: 'no', stage: 'machine', machines: [{ m: 'Laser', d: '2026-10-09T09:00' }] } }, PR).data.prod;
 eq('no paint → ข้ามไปประกอบ', r.stage, 'assemble');
-m.call('prodDelete', { id: r.id }, A);
-r = m.call('prodSave', { prod: { code: 'P-2', paint: 'no', assy: 'no', stage: 'machine', machines: [{ m: 'Router', d: '2026-10-09T09:00' }] } }, A).data.prod;
+m.call('prodDelete', { id: r.id }, PR);
+r = m.call('prodSave', { prod: { code: 'P-2', paint: 'no', assy: 'no', stage: 'machine', machines: [{ m: 'Router', d: '2026-10-09T09:00' }] } }, PR).data.prod;
 eq('manual add + no paint + no assembly + all done → แพ็ค', [r.code, r.stage, r.paint, r.assy], ['P-2', 'pack', 'no', 'no']);
-eq('duplicate active code', m.call('prodSave', { prod: { code: 'p-2' } }, A).error, 'เลข Job p-2 อยู่ในฝ่ายผลิตแล้ว');
+eq('duplicate active code', m.call('prodSave', { prod: { code: 'p-2' } }, PR).error, 'เลข Job p-2 อยู่ในฝ่ายผลิตแล้ว');
 eq('stale write blocked', !!m.call('prodSave', { prod: { id: r.id, stage: 'ready', baseUpdatedAt: '2000-01-01' } }, PR).error, true);
 eq('prod role cannot add design job', m.call('saveJob', { job: { code: 'X-9', taskType: 'ทำ CAD' } }, PR).error, 'ฝ่ายผลิตเพิ่มงานของฝ่ายแบบไม่ได้');
-eq('prod user cannot delete', !!m.call('prodDelete', { id: r.id }, PR).error, true);
+eq('admin cannot update prod (view only)', m.call('prodSave', { prod: { id: r.id, stage: 'ready' } }, A).error, 'อัปเดตงานผลิตได้เฉพาะฝ่ายผลิต');
+eq('designer cannot delete prod', !!m.call('prodDelete', { id: r.id }, U).error, true);
 // Sale PIN
 eq('roster sale off', m.call('roster', {}).data.sale, false);
 eq('saleOpen before set', m.call('saleOpen', { pin: '1111' }).error, 'แอดมินยังไม่ได้ตั้ง PIN สำหรับ Sale');

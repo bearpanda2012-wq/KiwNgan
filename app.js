@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.29.0';
+const APP_VERSION = '2.30.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -136,7 +136,7 @@ const VIEWS = [
   { id: 'team', label: 'ทีมงาน', short: 'ทีม', g: 'ทั่วไป' }, { id: 'report', label: 'สรุปรายงาน', short: 'รายงาน', g: 'ทั่วไป' }, { id: 'settings', label: 'ตั้งค่า', short: 'ตั้งค่า', g: 'ทั่วไป' }
 ];
 /* ฝ่ายผลิตเห็นเฉพาะเมนูที่เกี่ยวกับงานผลิต */
-const PROD_VIEWS = ['flow', 'prod', 'team', 'settings'];
+const PROD_VIEWS = ['flow', 'home', 'board', 'list', 'prod', 'team', 'settings'];
 const viewsFor = u => VIEWS.filter(v => !(u && u.role === 'prod') || PROD_VIEWS.indexOf(v.id) >= 0);
 
 /* ============ state ============ */
@@ -485,7 +485,7 @@ const Demo = {
     d.prods.push({ id: uid('p_'), code: j.code, title: j.title || '', sale: j.sale || '', group: j.group || '', stage: 'wait', machines: '[]', paint: '', note: '', enteredAt: t, startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, updatedAt: t + ':00', updatedBy: u.name, history: JSON.stringify([{ t: t, by: u.name, s: 'wait', x: 'ออกแบบเสร็จ ส่งเข้าผลิต' }]) }); },
   async prodSave(p) {
     const d = this.db(), u = this.me(d), data = p.prod || {}, now = nowLocal() + ':' + pad(new Date().getSeconds()); d.prods = d.prods || [];
-    if (['admin', 'lead', 'prod'].indexOf(u.role) < 0) throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิต หัวหน้างาน หรือแอดมิน');
+    if (u.role !== 'prod') throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิต');
     let cur = data.id ? d.prods.find(x => x.id === data.id) : null; const before = cur ? clone(cur) : null;
     if (data.id && !cur) throw new Error('ไม่พบงานนี้ในฝ่ายผลิต อาจถูกลบไปแล้ว');
     if (cur && data.baseUpdatedAt && cur.updatedAt && data.baseUpdatedAt !== cur.updatedAt) throw new Error('งานนี้ถูกอัปเดตโดย ' + cur.updatedBy + ' เมื่อสักครู่ กดรีเฟรชแล้วลองอีกครั้ง');
@@ -506,7 +506,7 @@ const Demo = {
     if (!before || before.stage !== cur.stage || before.machines !== cur.machines) cur.history = JSON.stringify(phist(cur).concat({ t: n16, by: u.name, s: cur.stage, x: String(data.why || '') }).slice(-40));
     cur.updatedAt = now; cur.updatedBy = u.name; this.save(d); return { prod: this.mask(d, u, clone(cur), ['createdBy', 'updatedBy']) };
   },
-  async prodDelete(p) { const d = this.db(), u = this.me(d); if (!P.lead(u)) throw new Error('ลบงานผลิตได้เฉพาะหัวหน้างานหรือแอดมิน'); d.prods = (d.prods || []).filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
+  async prodDelete(p) { const d = this.db(), u = this.me(d); if (u.role !== 'prod') throw new Error('ลบงานผลิตได้เฉพาะฝ่ายผลิต'); d.prods = (d.prods || []).filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
   async salePin(p) { const d = this.db(); this.admin(this.me(d)); d.salePin = p.pin ? String(p.pin) : ''; if (d.salePin && !d.saleKey) d.saleKey = uid('k'); this.save(d); return { on: !!d.salePin }; },
   async saleOpen(p) { const d = this.db(); if (String(p.pin) !== String(d.salePin || '1234')) throw new Error('PIN ไม่ถูกต้อง'); if (!d.saleKey) { d.saleKey = uid('k'); this.save(d); } return { key: d.saleKey }; },
   mask(d, viewer, o, keys) {
@@ -3149,7 +3149,7 @@ function renderShell() {
   const s = S.settings || defaultSettings();
   $('#brand').innerHTML = brandMark(s) + '<div><b>' + esc(s.appName) + '</b><small>' + esc(s.company) + '</small></div>';
   $('#nav').innerHTML = navHtml(true);
-  { const fab = $('.fab'), pv = S.view === 'prod' || isProdRole(), lbl = pv ? 'เพิ่มงานเข้าผลิต' : 'เพิ่มงาน'; if (fab) { fab.style.display = pv && !canProd() ? 'none' : ''; fab.dataset.tip = lbl; fab.setAttribute('aria-label', lbl); } }
+  { const fab = $('.fab'), pv = S.view === 'prod', lbl = pv ? 'เพิ่มงานเข้าผลิต' : 'เพิ่มงาน'; if (fab) { fab.style.display = (pv && !canProd()) || (!pv && isProdRole()) ? 'none' : ''; fab.dataset.tip = lbl; fab.setAttribute('aria-label', lbl); } }
   $('#tabbar').innerHTML = navHtml(true, true); $('#tabbar').style.setProperty('--tabs', viewsFor(S.user).length);
   const connCls = mode() === 'demo' ? '' : (S.sync === 'err' ? 'err' : 'ok');
   const connTxt = mode() === 'demo' ? 'โหมดทดลอง (เก็บในเครื่องนี้)' : (S.sync === 'err' ? 'เชื่อมต่อไม่ได้' : S.sync === 'busy' ? 'กำลังซิงก์…' : (isAdmin() ? 'เชื่อมต่อ Google Sheet' : 'ซิงก์ข้อมูลแล้ว'));
@@ -3202,7 +3202,8 @@ function banner() {
 }
 
 function newBtn() {
-  if (S.view === 'prod' || isProdRole()) return canProd() ? '<button class="btn primary new" data-act="new">' + I.plus + 'เพิ่มงานเข้าผลิต</button>' : '';
+  if (S.view === 'prod') return canProd() ? '<button class="btn primary new" data-act="new">' + I.plus + 'เพิ่มงานเข้าผลิต</button>' : '';
+  if (isProdRole()) return '';   // ฝ่ายผลิตดูงานฝ่ายแบบได้อย่างเดียว
   return '<button class="btn primary new" data-act="new">' + I.plus + 'เพิ่มงาน</button>';
 }
 function topbar(title, sub, extra) {
@@ -3294,7 +3295,7 @@ function ganttPanel(pool) {
 }
 function viewHome() {
   /* พนักงานเห็นภาพรวมเฉพาะงานตัวเอง + ตัวเลขรวมของทีม (ไม่มีชื่อ) — หัวหน้างาน/แอดมินเห็นทั้งทีม */
-  const lead = isLead(), pool = listPool();
+  const lead = isLead() || isProdRole(), pool = listPool();
   const t = today(), open = pool.filter(isOpen), late = open.filter(isLate), urgent = open.filter(j => j.priority === 'urgent');
   const m = t.slice(0, 7), doneM = pool.filter(j => j.status === 'done' && finDate(j).slice(0, 7) === m);
   const okM = doneM.filter(onTime).length;
@@ -3560,13 +3561,13 @@ function viewBoard() {
   const quick = '<div class="qchips">' + [['all', 'ทั้งหมด', STI.all, ''], ['mine', 'งานของฉัน', STI.user, 'doing'], ['today', 'ส่งวันนี้/พรุ่งนี้', STI.hourglass, 'review'], ['urgent', 'งานด่วน', STI.fire, 'urgent'], ['late', 'เลยกำหนด', STI.clock, 'late']]
     .filter(x => x[0] !== 'mine' || (S.me && isLead()))
     .map(x => '<button class="qchip' + (x[3] ? ' q-' + x[3] : '') + '" data-quick="' + x[0] + '" aria-pressed="' + (q === x[0]) + '"><span class="qi">' + x[2] + '</span>' + x[1] + (x[0] !== 'all' ? '<b>' + qn(x[0]) + '</b>' : '') + '</button>').join('') + '</div>';
-  return topbar('บอร์ดงาน', (isAdmin() ? 'ลากการ์ดเพื่อเปลี่ยนสถานะ หรือกดลูกศรเพื่อเลื่อนไปขั้นถัดไป' : isLead() ? 'ลากหรือกดลูกศรบนการ์ดของคุณเพื่อเปลี่ยนสถานะ งานของคนอื่นดูได้อย่างเดียว' : 'งานของ' + esc(S.me) + ' · ลากหรือกดลูกศรบนการ์ดเพื่อเปลี่ยนสถานะ') + (hold.length ? ' · พักไว้ ' + hold.length + ' งาน (อยู่ในช่องรอคิว)' : '')) +
+  return topbar('บอร์ดงาน', (isProdRole() ? 'ดูงานของฝ่ายแบบได้อย่างเดียว (ฝ่ายผลิตแก้ไขหรือเพิ่มงานตรงนี้ไม่ได้)' : isAdmin() ? 'ลากการ์ดเพื่อเปลี่ยนสถานะ หรือกดลูกศรเพื่อเลื่อนไปขั้นถัดไป' : isLead() ? 'ลากหรือกดลูกศรบนการ์ดของคุณเพื่อเปลี่ยนสถานะ งานของคนอื่นดูได้อย่างเดียว' : 'งานของ' + esc(S.me) + ' · ลากหรือกดลูกศรบนการ์ดเพื่อเปลี่ยนสถานะ') + (hold.length ? ' · พักไว้ ' + hold.length + ' งาน (อยู่ในช่องรอคิว)' : '')) +
     flow + filterBar('', !isLead()) + quick + typeLegend() + '<div class="board-scroll"><div class="board">' + colHtml + '</div></div>';
 }
 
 /* ============ render: list ============ */
 /* พนักงานเห็นเฉพาะงานที่ตัวเองรับผิดชอบในหน้ารายการงานและบอร์ดงาน — หัวหน้างาน/แอดมินเห็นทุกงาน */
-const listPool = () => isLead() ? S.jobs : S.jobs.filter(j => inJob(j, S.me));
+const listPool = () => isLead() || isProdRole() ? S.jobs : S.jobs.filter(j => inJob(j, S.me));   // ฝ่ายผลิตดูงานฝ่ายแบบได้ทั้งหมด (แก้ไม่ได้)
 const listMatch = j => matchBase(j, !isLead());
 function listRows() {
   const f = S.f, t = today();
@@ -4115,7 +4116,7 @@ const PIC = {
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
 };
-const canProd = () => !!S.user && ['admin', 'lead', 'prod'].indexOf(S.user.role) >= 0;
+const canProd = () => !!S.user && S.user.role === 'prod';   // บอร์ดผลิต: ฝ่ายผลิตเท่านั้นที่แก้ได้
 const isProdRole = () => !!S.user && S.user.role === 'prod';
 const machinesList = () => { const m = (S.settings && S.settings.machines || []).map(x => String(x || '').trim()).filter(Boolean); return m.length ? m : DEF_MACHINES; };
 function pms(p) { try { const a = JSON.parse((p && p.machines) || '[]'); return Array.isArray(a) ? a.filter(x => x && x.m) : []; } catch (e) { return []; } }
@@ -4241,7 +4242,7 @@ function viewProd() {
     const n = x[0] === 'all' ? open.filter(p => p.stage === 'machine').length : open.filter(p => inMachine(p, x[0])).length;
     return '<button class="qchip" data-pm="' + esc(x[0]) + '" aria-pressed="' + (F === x[0]) + '"><span class="qi">' + (x[0] === 'all' ? STI.all : PIC.machine) + '</span>' + esc(x[1]) + '<b>' + n + '</b></button>'; }).join('') + '</div>';
   const search = '<div class="filters"><label class="search">' + I.search + '<input id="pq" type="search" autocomplete="off" placeholder="ค้นหาเลข Job, ชื่องาน, sale…" value="' + esc(S.pq || '') + '" aria-label="ค้นหางานผลิต"></label></div>';
-  const sub = canProd() ? 'เลือกเครื่องแล้วกด "เริ่มลงเครื่อง" · ติ๊กแต่ละเครื่องเมื่อเสร็จ ครบแล้วไปทำสี → ประกอบติดตั้ง → แพ็ค เอง' : 'ดูสถานะงานผลิตได้อย่างเดียว · อัปเดตได้เฉพาะฝ่ายผลิตและหัวหน้างาน';
+  const sub = canProd() ? 'เลือกเครื่องแล้วกด "เริ่มลงเครื่อง" · ติ๊กแต่ละเครื่องเมื่อเสร็จ ครบแล้วไปทำสี → ประกอบติดตั้ง → แพ็ค เอง' : 'ดูสถานะงานผลิตได้อย่างเดียว · อัปเดตได้เฉพาะฝ่ายผลิต';
   return topbar('ฝ่ายผลิต', sub) + flow + search + chips + '<div class="board-scroll"><div class="board pboard">' + cols + '</div></div>';
 }
 
@@ -4348,7 +4349,7 @@ function pModalDraw() {
     '<div class="f"><label for="pNote">โน้ตฝ่ายผลิต</label><textarea id="pNote" rows="2" placeholder="เช่น สีตามตัวอย่าง, ระวังขอบบาง"' + (ro ? ' readonly' : '') + '>' + esc(p.note || '') + '</textarea>' + (ro ? '' : '<div class="top-actions"><button type="button" class="btn sm" data-pnote="1">บันทึกโน้ต</button></div>') + '</div>' +
     (dj.length ? '<div class="f"><label>งานฝ่ายแบบของเลขนี้</label><div class="pm-jobs">' + dj.map(j => '<button type="button" class="pm-job" data-pjob="' + esc(j.id) + '">' + stBadge(j) + '<b>' + esc(j.taskType || 'งาน') + '</b><small>' + esc(j.assignee || '') + ' · ' + esc(j.status === 'done' ? 'เสร็จ ' + fd(finDate(j)) : ST[j.status].label) + '</small></button>').join('') + '</div></div>' : '') +
     (h.length ? '<div class="f"><label>ประวัติ</label><ol class="pm-hist">' + h.map(e => '<li class="' + (PSTG[e.s] ? PSTG[e.s].cls : '') + '"><i></i><b>' + esc(PSTG[e.s] ? PSTG[e.s].label : e.s) + '</b><span>' + esc(fdt(e.t)) + ' · ' + esc(e.by || '') + (e.x ? ' · ' + esc(e.x) : '') + '</span></li>').join('') + '</ol></div>' : '') +
-    '</div><div class="pm-f">' + (isLead() ? (P2.del ? '<span class="pm-del">ลบงานนี้ออกจากฝ่ายผลิต?</span><button type="button" class="btn sm" data-pdel="no">ไม่</button><button type="button" class="btn sm danger" data-pdel="yes">ลบ</button>' : '<button type="button" class="btn ghost sm" data-pdel="ask">' + I.trash + 'ลบ</button>') : '') +
+    '</div><div class="pm-f">' + (canProd() ? (P2.del ? '<span class="pm-del">ลบงานนี้ออกจากฝ่ายผลิต?</span><button type="button" class="btn sm" data-pdel="no">ไม่</button><button type="button" class="btn sm danger" data-pdel="yes">ลบ</button>' : '<button type="button" class="btn ghost sm" data-pdel="ask">' + I.trash + 'ลบ</button>') : '') +
     '<span style="flex:1"></span><button type="button" class="btn" data-pclose="1">ปิด</button>' +
     (!ro && p.stage === 'wait' ? '<button type="button" class="btn primary" data-pstart="' + esc(p.id) + '">' + PIC.machine + 'เริ่มลงเครื่อง</button>' : '') +
     (!ro && PDONE[p.stage] ? '<button type="button" class="btn primary" data-padv="' + esc(p.id) + '">' + PDONE[p.stage] + '</button>' : '') + '</div></div>';
@@ -4507,7 +4508,7 @@ document.addEventListener('click', async e => {
   if (d.open && !e.target.closest('.adv')) return openEditor(d.open);
 
   switch (d.act) {
-    case 'new': if (S.view === 'prod' || isProdRole()) return canProd() ? pAddOpen() : undefined; return openEditor(null);
+    case 'new': if (S.view === 'prod') return canProd() ? pAddOpen() : undefined; if (isProdRole()) return; return openEditor(null);
     case 'saleon': { const k = LS.get('saleKey', ''); if (k && mode() === 'sheet') { location.href = saleLinkUrl(k, ''); return; } S.login.sale = true; S.login.saleErr = ''; renderLogin(); setTimeout(() => { const x = $('#salePin'); if (x) x.focus(); }, 30); return; }
     case 'saleoff': S.login.sale = false; S.login.saleErr = ''; return renderLogin();
     case 'salepin': { const v = String(($('#salePinSet') || {}).value || '').trim(); if (v && !/^\d{4,6}$/.test(v)) { toast('PIN ต้องเป็นตัวเลข 4–6 หลัก', true); return; }
@@ -4581,7 +4582,7 @@ document.addEventListener('keydown', e => {
   if (S.lb) { if (e.key === 'Escape') return closeLightbox(); if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { S.lb.i += e.key === 'ArrowRight' ? 1 : -1; return drawLightbox(); } }
   if (e.key === 'Escape' && S.edit) closeEditor();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.card,.row') ) { e.preventDefault(); openEditor(e.target.dataset.open); }
-  if (e.key === 'n' && S.screen === 'app' && !S.edit && !P2.id && !P2.add && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !e.metaKey && !e.ctrlKey) { e.preventDefault(); if (S.view === 'prod' || isProdRole()) { if (canProd()) pAddOpen(); } else openEditor(null); }
+  if (e.key === 'n' && S.screen === 'app' && !S.edit && !P2.id && !P2.add && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !e.metaKey && !e.ctrlKey) { e.preventDefault(); if (S.view === 'prod') { if (canProd()) pAddOpen(); } else if (!isProdRole()) openEditor(null); }
 });
 $('#scrim').addEventListener('click', closeEditor);
 

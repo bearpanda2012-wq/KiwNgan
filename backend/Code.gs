@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.22.0';
+const VERSION = '1.23.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -253,7 +253,7 @@ function dropSessionsOf_(uid) {
 function admin_(u) { if (u.role !== 'admin') throw new Error('เฉพาะแอดมินเท่านั้น'); }
 const isAdmin_ = u => u.role === 'admin';
 const ROLE_ = r => r === 'admin' || r === 'lead' || r === 'prod' ? r : 'user'; // admin = ผู้ดูแลระบบ, lead = หัวหน้างาน, prod = ฝ่ายผลิต, user = พนักงาน
-const canProd_ = u => !!u && (u.role === 'admin' || u.role === 'lead' || u.role === 'prod');
+const canProd_ = u => !!u && u.role === 'prod';   // บอร์ดผลิต: ฝ่ายผลิตเท่านั้นที่แก้ได้ คนอื่นดูอย่างเดียว
 /* ผู้ร่วมทำงาน: เก็บเป็นชื่อคั่นด้วยจุลภาค "หมี,อีฟ" — ทำงาน/จับเวลา/เปลี่ยนสถานะได้เหมือนผู้รับผิดชอบ */
 const helpersOf_ = j => String((j && j.helpers) || '').split(',').map(x => x.trim()).filter(Boolean);
 const leadsJob_ = (u, j) => isAdmin_(u) || j.assignee === u.name || j.createdBy === u.name;
@@ -777,7 +777,7 @@ function ensureProd_(job, u) {
   return p;
 }
 function prodSave_(data, u) {
-  if (!canProd_(u)) throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิต หัวหน้างาน หรือแอดมิน');
+  if (!canProd_(u)) throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิต');
   if (!data || typeof data !== 'object') throw new Error('ข้อมูลไม่ถูกต้อง');
   const now = nowIso_(), row = data.id ? rowOf_('Prod', data.id) : -1;
   let before = null, cur;
@@ -824,7 +824,7 @@ function prodSave_(data, u) {
   return toObj_('Prod', SHEETS.Prod, SHEETS.Prod.map(h => cur[h] === undefined ? '' : String(cur[h])));
 }
 function prodDelete_(id, u) {
-  if (!(isAdmin_(u) || u.role === 'lead')) throw new Error('ลบงานผลิตได้เฉพาะหัวหน้างานหรือแอดมิน');
+  if (!canProd_(u)) throw new Error('ลบงานผลิตได้เฉพาะฝ่ายผลิต');
   const row = rowOf_('Prod', id);
   if (row < 0) throw new Error('ไม่พบงานนี้ในฝ่ายผลิต');
   const p = readRow_('Prod', row);

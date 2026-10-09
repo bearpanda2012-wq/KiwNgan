@@ -28,6 +28,9 @@ eq('filter by step', await pg.evaluate(() => [...document.querySelectorAll('.co-
 await pg.click('#nav [data-view="prod"]'); await pg.waitForTimeout(700);
 eq('prod board 6 columns', await pg.locator('.pboard .col').count(), 6);
 await pg.screenshot({ path: out + 'prod-board.png', fullPage: true });
+eq('admin read-only on prod board', await pg.locator('.pboard [data-pstart],.pboard [data-padv],.pboard [data-pmt]').count(), 0);
+eq('admin has no add-to-production button', await pg.evaluate(() => getComputedStyle(document.querySelector('.fab')).display), 'none');
+await login('ช่างเอ'); await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(500);
 // รอผลิต → เลือก 2 เครื่อง → เริ่ม
 const wid = await pg.evaluate(() => T.prodsAll().find(p => p.stage === 'wait').id);
 const wc = pg.locator('.pcard[data-popen="' + wid + '"]');
@@ -69,17 +72,18 @@ await pg.fill('#pNote', 'สีเทาด้าน'); await pg.click('[data-pn
 eq('note saved', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).note, wid), 'สีเทาด้าน');
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
 eq('modal closed', await pg.locator('#pModal').count(), 0);
+// add manually
+await pg.click('.fab'); await pg.waitForTimeout(300);
+eq('add modal', await pg.locator('#pAddCode').count(), 1);
+await pg.fill('#pAddCode', 'MAN-001'); await pg.click('[data-paddm="Router"]'); await pg.click('[data-paddsave]'); await pg.waitForTimeout(900);
+eq('manual job on router', await pg.evaluate(() => { const p = T.prodsAll().find(x => x.code === 'MAN-001'); return p && [p.stage, JSON.parse(p.machines)[0].m]; }), ['machine', 'Router']);
+await login('แอดมิน', true);
 // CAM เสร็จ → เข้ารอผلิตเอง
 const cam = await pg.evaluate(() => { const j = S.jobs.find(x => x.taskType === 'ทำ CAM' && x.status !== 'done' && !T.prodsAll().some(p => p.code === x.code)); return j && j.id; });
 const n0 = await pg.evaluate(() => T.prodsAll().filter(p => p.stage === 'wait').length);
 await pg.evaluate(async id => { const j = Object.assign({}, S.jobs.find(x => x.id === id), { status: 'done' }); await T.saveJob(j); }, cam); await pg.waitForTimeout(400);
 await pg.evaluate(() => KiwNgan && 0).catch(() => {}); await pg.click('[data-act="refresh"]').catch(() => {}); await pg.waitForTimeout(900);
 eq('CAM done → new รอผลิต card', await pg.evaluate(() => T.prodsAll().filter(p => p.stage === 'wait').length), n0 + 1);
-// add manually
-await pg.click('.fab'); await pg.waitForTimeout(300);
-eq('add modal', await pg.locator('#pAddCode').count(), 1);
-await pg.fill('#pAddCode', 'MAN-001'); await pg.click('[data-paddm="Router"]'); await pg.click('[data-paddsave]'); await pg.waitForTimeout(900);
-eq('manual job on router', await pg.evaluate(() => { const p = T.prodsAll().find(x => x.code === 'MAN-001'); return p && [p.stage, JSON.parse(p.machines)[0].m]; }), ['machine', 'Router']);
 // design card chip
 await pg.click('#nav [data-view="board"]'); await pg.waitForTimeout(600);
 eq('done design cards show production chip', (await pg.locator('.card .pchip').count()) > 0, true);
@@ -92,7 +96,12 @@ eq('sale pin on', await pg.locator('#s-salelink .pill.s-done').count(), 1);
 // production staff
 await login('ช่างเอ');
 eq('prod role lands on board', await pg.evaluate(() => S.view), 'prod');
-eq('prod role nav', await pg.evaluate(() => [...document.querySelectorAll('#nav [data-view]')].map(b => b.dataset.view)), ['flow', 'prod', 'team', 'settings']);
+eq('prod role nav', await pg.evaluate(() => [...document.querySelectorAll('#nav [data-view]')].map(b => b.dataset.view)), ['flow', 'home', 'board', 'list', 'prod', 'team', 'settings']);
+await pg.evaluate(() => T.go('board')); await pg.waitForTimeout(500);
+eq('prod role sees all design jobs', await pg.evaluate(() => document.querySelectorAll('.board .card').length > 10), true);
+eq('prod role cannot move/edit design cards', await pg.locator('.board .card .adv, .board .card .tbtn').count(), 0);
+eq('prod role has no add-design button', await pg.evaluate(() => getComputedStyle(document.querySelector('.fab')).display), 'none');
+await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(400);
 eq('prod role can act', (await pg.locator('.pboard [data-pstart],.pboard [data-padv]').count()) > 0, true);
 // designer: read-only
 await login('ต้น');
