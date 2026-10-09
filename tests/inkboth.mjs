@@ -1,0 +1,34 @@
+// แชร์จอ: คนแชร์วาด/ชี้บนจอตัวเองได้ และส่งไปให้อีกฝ่ายเห็น
+const { chromium } = await import(process.env.PW);
+import http from 'http'; import fs from 'fs'; import path from 'path';
+const root = new URL('..', import.meta.url).pathname, out = new URL('out/', import.meta.url).pathname; fs.mkdirSync(out, { recursive: true });
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,saveJob,api};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8797);
+const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1400, height: 900 } });
+const errs = []; pg.on('pageerror', e => errs.push(e.message));
+let ok = 0, bad = 0; const eq = (lbl, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
+await pg.addInitScript(() => { if (!sessionStorage.getItem('x')) { localStorage.clear(); sessionStorage.setItem('x', 1); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
+await pg.goto('http://127.0.0.1:8797/index.html'); await pg.waitForTimeout(700);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove());
+  const R = KiwNgan.R, c = document.createElement('canvas'); c.width = 640; c.height = 360; const g = c.getContext('2d'); g.fillStyle = '#345'; g.fillRect(0, 0, 640, 360);
+  window.__sent = []; Object.assign(R, { role: 'host', state: 'live', src: 'screen', name: 'ฝน', peer: 'ฝน', stream: c.captureStream(5), peekOpen: true, dc: { readyState: 'open', send: x => window.__sent.push(JSON.parse(x)) } });
+  KiwNgan.renderPeek();
+}); await pg.waitForTimeout(600);
+eq('peek shows draw tools', await pg.locator('.rtc-peek [data-peek="pen"]').count(), 1);
+await pg.click('.rtc-peek [data-peek="pen"]'); await pg.waitForTimeout(200);
+eq('peek in drawing mode', await pg.locator('.rtc-peek.drawing').count(), 1);
+const bx = await pg.locator('.rtc-peek canvas').boundingBox();
+await pg.mouse.move(bx.x + bx.width * .3, bx.y + bx.height * .4); await pg.mouse.down();
+for (let i = 1; i <= 8; i++) await pg.mouse.move(bx.x + bx.width * (.3 + i * .03), bx.y + bx.height * (.4 + i * .02));
+await pg.mouse.up(); await pg.waitForTimeout(300);
+eq('host stroke drawn locally', await pg.evaluate(() => KiwNgan.R.ink.strokes.filter(s => !s.l && !s.r).length), 1);
+eq('host stroke sent to viewer', await pg.evaluate(() => ['b', 'm', 'e'].every(t => window.__sent.some(m => m.t === t))), true);
+await pg.locator('.rtc-peek').screenshot({ path: out + 'peek-draw.png' });
+// อีกฝ่ายวาดมา: ขึ้นบนจอเราด้วย ป้ายชื่อเป็นของเขา
+await pg.evaluate(() => { const R = KiwNgan.R; R.dc.onmessage = null; });
+await pg.evaluate(() => { const ch = { readyState: 'open', send: x => window.__sent.push(JSON.parse(x)) }; KiwNgan.rtcDc(ch); ch.onmessage({ data: JSON.stringify({ t: 'b', id: 'v1', c: '#FF3B5C', l: 0, x: .6, y: .6 }) }); ch.onmessage({ data: JSON.stringify({ t: 'e', id: 'v1' }) }); });
+eq('viewer stroke marked remote', await pg.evaluate(() => KiwNgan.R.ink.strokes.filter(s => s.r).length), 1);
+await pg.click('.rtc-peek [data-peek="undo"]'); await pg.waitForTimeout(150);
+eq('undo removes last stroke', await pg.evaluate(() => KiwNgan.R.ink.strokes.length), 1);
+console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.join(' | ') || 'none');
+await b.close(); srv.close(); if (bad || errs.length) process.exit(1);

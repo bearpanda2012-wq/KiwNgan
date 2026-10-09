@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.43.0';
+const APP_VERSION = '2.44.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3012,6 +3012,12 @@ const PEEK_CSS = `.pip-wait{font:500 14px system-ui,sans-serif;color:#cfe;paddin
 .rtc-peek.in-pip .rtc-peek-box{flex:1;aspect-ratio:auto}
 .rtc-peek-box video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border-radius:8px}
 .rtc-peek-box canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.rtc-peek.drawing .rtc-peek-box canvas{pointer-events:auto;cursor:crosshair;touch-action:none}
+.rtc-peek.drawing:not(.in-pip){width:min(560px,calc(100vw - 32px))}
+.rtc-peek-bar button.on{background:#2f6fed;border-color:#2f6fed;color:#fff}
+.rtc-peek-bar .pk-dot{width:18px;height:18px;padding:0;border-radius:50%;background:var(--c);border:2px solid #1a232c}
+.rtc-peek-bar .pk-dot.on{box-shadow:0 0 0 2px #fff}
+.rtc-peek-bar{flex-wrap:wrap}
 .rtc-peek-where{display:flex;align-items:center;gap:7px;padding:7px 12px 9px;color:#93a3b2;font-size:13px}
 .rtc-peek-where b{color:#fff}
 .rtc-peek-where i{width:10px;height:10px;border-radius:50%;flex:none;box-shadow:0 0 8px currentColor}
@@ -3033,14 +3039,14 @@ const inkC = c => INK_COLORS.indexOf(c) >= 0 ? c : INK_COLORS[0];
 function inkApply(m, remote) {
   const k = R.ink, now = performance.now();
   switch (m.t) {
-    case 'p': k.ptr = { x: inkN(m.x), y: inkN(m.y), c: inkC(m.c), t: now }; break;
+    case 'p': k.ptr = { x: inkN(m.x), y: inkN(m.y), c: inkC(m.c), t: now, r: !!remote }; break;
     case 'pl': if (k.ptr) k.ptr.t = Math.min(k.ptr.t, now - 2400); break;
     case 'b': {
-      const st = { id: String(m.id), c: inkC(m.c), l: !!m.l, pts: [[inkN(m.x), inkN(m.y)]], end: 0 };
+      const st = { id: String(m.id), c: inkC(m.c), l: !!m.l, pts: [[inkN(m.x), inkN(m.y)]], end: 0, r: !!remote };
       k.strokes.push(st); if (k.strokes.length > 300) k.strokes.shift();
-      k.ptr = { x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }; k.rips.push({ x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }); break;
+      k.ptr = { x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now, r: !!remote }; k.rips.push({ x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }); break;
     }
-    case 'm': { const st = k.strokes.find(x => x.id === String(m.id)); if (st && st.pts.length < 4000) { st.pts.push([inkN(m.x), inkN(m.y)]); k.ptr = { x: inkN(m.x), y: inkN(m.y), c: st.c, t: now }; } break; }
+    case 'm': { const st = k.strokes.find(x => x.id === String(m.id)); if (st && st.pts.length < 4000) { st.pts.push([inkN(m.x), inkN(m.y)]); k.ptr = { x: inkN(m.x), y: inkN(m.y), c: st.c, t: now, r: st.r }; } break; }
     case 'e': { const st = k.strokes.find(x => x.id === String(m.id)); if (st) st.end = now; break; }
     case 'clr': k.strokes = []; break;
     case 'undo': for (let i = k.strokes.length - 1; i >= 0; i--) if (!k.strokes[i].l) { k.strokes.splice(i, 1); break; } break;
@@ -3128,7 +3134,7 @@ function inkPaint(cv, vid) {
     const gr = g.createRadialGradient(q[0], q[1], 0, q[0], q[1], pulse + 10); gr.addColorStop(0, c + 'aa'); gr.addColorStop(1, c + '00');
     g.fillStyle = gr; g.beginPath(); g.arc(q[0], q[1], pulse + 10, 0, Math.PI * 2); g.fill();
     g.fillStyle = c; g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 7, 0, Math.PI * 2); g.fill(); g.stroke();
-    if (R.role === 'host') {
+    if (k.ptr.r) {   // ป้ายชื่อบอกว่าใครชี้ (อีกฝ่าย) — ทั้งคนแชร์และคนดู
       const label = R.name; g.font = '600 12px Anuphan, system-ui, sans-serif';
       const tw = g.measureText(label).width + 14, lx = Math.min(q[0] + 12, W - tw - 2), ly = Math.min(q[1] + 12, H - 24);
       g.fillStyle = c; g.beginPath(); if (g.roundRect) g.roundRect(lx, ly, tw, 20, 10); else g.rect(lx, ly, tw, 20); g.fill();
@@ -3148,7 +3154,7 @@ function inkWhere() {
   let t;
   if (live) {
     const cx = k.ptr.x < .34 ? 'ซ้าย' : k.ptr.x > .66 ? 'ขวา' : '', cy = k.ptr.y < .34 ? 'บน' : k.ptr.y > .66 ? 'ล่าง' : '';
-    t = '<i style="background:' + k.ptr.c + '"></i>' + esc(R.name) + ' ชี้ที่ <b>' + (cx || cy ? (cx && cy ? 'มุม' : 'ด้าน') + cx + cy : 'กลางจอ') + '</b>';
+    t = '<i style="background:' + k.ptr.c + '"></i>' + (k.ptr.r ? esc(R.name) : 'คุณ') + ' ชี้ที่ <b>' + (cx || cy ? (cx && cy ? 'มุม' : 'ด้าน') + cx + cy : 'กลางจอ') + '</b>';
   } else t = k.strokes.some(x => !x.l) ? esc(R.name) + ' วาดบอกไว้ ' + k.strokes.filter(x => !x.l).length + ' จุด' : 'รอ ' + esc(R.name) + ' ชี้…';
   if (el.innerHTML !== t) el.innerHTML = t;
 }
@@ -3169,7 +3175,7 @@ window.addEventListener('resize', () => inkKick());
 /* คนดู: ลาก/ชี้บนภาพ */
 let inkLastP = 0;
 function inkXY(e) {
-  const box = e.target.parentNode, rc = box.getBoundingClientRect(), vid = $('#rtcVideo');
+  const box = e.target.parentNode, rc = box.getBoundingClientRect(), vid = e.target.id === 'rtcInk' ? $('#rtcVideo') : (box.querySelector('video') && box.querySelector('video').videoWidth ? box.querySelector('video') : inkDims());
   const r = inkFit(box, vid && vid.videoWidth, vid && vid.videoHeight);
   const x = (e.clientX - rc.left - r.x) / r.w, y = (e.clientY - rc.top - r.y) / r.h;
   return { x: inkN(x), y: inkN(y), out: x < 0 || x > 1 || y < 0 || y > 1 };
@@ -3211,7 +3217,10 @@ function inkBarSync() {
 /* คนแชร์: ภาพจอตัวเอง + จุดที่อีกฝ่ายชี้ (ในหน้า หรือหน้าต่างลอยอยู่บนสุด) */
 function peekBar() {
   return '<span class="rtc-peek-rec"></span><b>' + esc(R.name) + (R.pip ? ' ชี้บนจอคุณ' : R.src === 'camera' ? ' เห็นภาพกล้องนี้' : ' เห็นจอนี้') + '</b>' +
-    (R.ink.strokes.some(x => !x.l) ? '<button data-peek="clr" title="ล้างที่เขาวาด">' + RTC_IC.eraser + '</button>' : '') +
+    '<button data-peek="laser" class="' + (R.tool === 'laser' ? 'on' : '') + '" title="ชี้ให้ ' + esc(R.name) + ' เห็น">' + RTC_IC.laser + '</button>' +
+    '<button data-peek="pen" class="' + (R.tool === 'pen' ? 'on' : '') + '" title="วาด/เขียนบอก ' + esc(R.name) + ' (เขาเห็นด้วย)">' + RTC_IC.pen + '</button>' +
+    (R.tool ? INK_COLORS.map(c => '<button data-peek="c" data-c="' + c + '" class="pk-dot' + (c === R.color ? ' on' : '') + '" style="--c:' + c + '" aria-label="สี"></button>').join('') : '') +
+    (R.ink.strokes.some(x => !x.l) ? '<button data-peek="undo" title="ย้อน">' + RTC_IC.undo + '</button><button data-peek="clr" title="ล้างที่วาดทั้งหมด">' + RTC_IC.eraser + '</button>' : '') +
     (R.pip ? '<button data-peek="stop" title="หยุดแชร์">' + RTC_IC.stop + 'หยุด</button>'
       : (CAN_PIP && R.src !== 'camera' ? '<button data-peek="pip" title="หน้าต่างลอยอยู่บนสุดของทุกโปรแกรม">' + RTC_IC.pip + 'ลอย</button>' : '') + '<button data-peek="hide" title="ซ่อน">✕</button>');
 }
@@ -3228,11 +3237,22 @@ function renderPeek() {
       const a = b.dataset.peek;
       if (a === 'pip') rtcPip(); else if (a === 'hide') { R.peekOpen = false; renderRtc(); }
       else if (a === 'clr') { inkSendAll({ t: 'clr' }); renderPeek(); } else if (a === 'stop') rtcHang();
+      else if (a === 'undo') { inkSendAll({ t: 'undo' }); renderPeek(); }
+      else if (a === 'laser' || a === 'pen') { R.tool = R.tool === a ? '' : a; if (!R.tool) inkSendAll({ t: 'pl' }); renderPeek(); }
+      else if (a === 'c') { R.color = b.dataset.c; if (!R.tool) R.tool = 'pen'; renderPeek(); }
     });
+    {   // คนแชร์วาด/ชี้บนภาพจอตัวเองได้ด้วย อีกฝ่ายเห็นบนภาพที่เขาดูอยู่
+      const cv = el.querySelector('canvas');
+      cv.addEventListener('pointerdown', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (p.out) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, x: p.x, y: p.y }); });
+      cv.addEventListener('pointermove', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (R.drawId) return inkSendAll({ t: 'm', id: R.drawId, x: p.x, y: p.y }); if (p.out) return; const now = performance.now(); if (now - inkLastP < 33) return; inkLastP = now; inkSendAll({ t: 'p', x: p.x, y: p.y, c: R.color }); });
+      const up = () => { if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); renderPeek(); };
+      cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+      cv.addEventListener('pointerleave', () => { if (!R.drawId && R.tool) inkSendAll({ t: 'pl' }); });
+    }
     R.peek = el;
   }
   R.peek.querySelector('.rtc-peek-bar').innerHTML = peekBar();
-  R.peek.classList.toggle('in-pip', !!R.pip);
+  R.peek.classList.toggle('in-pip', !!R.pip); R.peek.classList.toggle('drawing', !!R.tool);
   const home = R.pip ? R.pip.document.body : R.peekOpen ? document.body : null;
   if (!home) R.peek.remove();
   else if (R.peek.parentNode !== home) { home.appendChild(R.peek); const v = R.peek.querySelector('video'); if (v) v.play().catch(() => {}); }
@@ -5299,7 +5319,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|u
   } catch (e) {}
 })();
 try { applyTheme(); } catch (e) {}
-window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION };
+window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION, renderPeek: renderPeek, rtcDc: rtcDc };
 if (SALE_Q) { salePage(); } else {
 if (mode() === 'sheet') ibStart(LS.get('rtpub', null));   // เปิดกล่องรับคำตอบไว้ก่อน ระหว่างรอ bootstrap ครั้งแรก
 load(false);
