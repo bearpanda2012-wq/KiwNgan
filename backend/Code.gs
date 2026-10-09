@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.25.0';
+const VERSION = '1.26.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -35,7 +35,7 @@ const SHEETS = {
   Activity: ['ts', 'jobId', 'who', 'action', 'detail'],
   Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo'],
   Settings: ['key', 'value'],
-  Messages: ['id', 'ts', 'from', 'fromRole', 'to', 'kind', 'text', 'jobId', 'status', 'helper', 'readBy'],
+  Messages: ['id', 'ts', 'from', 'fromRole', 'to', 'kind', 'text', 'jobId', 'status', 'helper', 'readBy', 'img'],
   Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'fileId'],
   Files: ['id', 'jobId', 'name', 'mime', 'size', 'fileId', 'createdBy', 'createdAt'],
   Comments: ['id', 'jobId', 'ts', 'from', 'text'],
@@ -1143,7 +1143,7 @@ function msgVisible_(m, u) {
 }
 function maskMsg_(m, u) {
   const read = (',' + m.readBy + ',').indexOf(',' + u.name + ',') >= 0 || m.from === u.name;
-  const o = { id: m.id, ts: m.ts, from: m.from, fromAdmin: m.fromRole === 'admin', to: m.to, kind: m.kind, text: m.text, jobId: m.jobId, status: m.status, helper: m.helper, read: read };
+  const o = { id: m.id, ts: m.ts, from: m.from, fromAdmin: m.fromRole === 'admin', to: m.to, kind: m.kind, text: m.text, jobId: m.jobId, status: m.status, helper: m.helper, read: read, img: m.img || '' };
   if (!isAdmin_(u)) { o.from = maskName_(o.from, u); o.helper = maskName_(o.helper, u); if (adminNames_().indexOf(o.to) >= 0) o.to = 'admin'; }
   return o;
 }
@@ -1158,7 +1158,18 @@ function messages_(u, since, stamp) {
 }
 function sendMessage_(p, u) {
   const text = String(p.text || '').trim().slice(0, 1000);
-  if (!text) throw new Error('พิมพ์ข้อความก่อนส่ง');
+  let img = '';
+  if (p.img) {   // รูปที่แปะ (Print Screen → Ctrl+V) หรือเลือกจากเครื่อง → เก็บใน Drive โฟลเดอร์ "รูปในแชท"
+    const raw = String(p.img);
+    if (!IMG_RE_.test(raw)) throw new Error('ไฟล์รูปไม่ถูกต้อง');
+    if (raw.length > IMG_CELL * IMG_PARTS) throw new Error('รูปใหญ่เกินไป');
+    const mm = raw.match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
+    let f;
+    try { f = driveFolder_('chat').createFile(Utilities.newBlob(Utilities.base64Decode(mm[2]), 'image/' + mm[1], 'chat_' + Utilities.formatDate(new Date(), tz_(), 'yyyyMMdd_HHmmss') + '.' + (mm[1] === 'jpeg' ? 'jpg' : mm[1]))); } catch (e) { throw new Error('บันทึกรูปไม่สำเร็จ ลองใหม่อีกครั้ง'); }
+    try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+    img = f.getId();
+  }
+  if (!text && !img) throw new Error('พิมพ์ข้อความก่อนส่ง');
   let to = String(p.to || 'team');
   if (to !== 'team' && to !== 'admin') {
     const target = usersLite_().find(x => x.name === to && x.active);
@@ -1166,7 +1177,7 @@ function sendMessage_(p, u) {
     if (target.role === 'admin' && !isAdmin_(u)) to = 'admin';
   }
   const kind = p.kind === 'help' ? 'help' : 'msg';
-  const m = { id: uid_('m_'), ts: nowIso_(), from: u.name, fromRole: u.role, to: to, kind: kind, text: text, jobId: String(p.jobId || ''), status: kind === 'help' ? 'open' : '', helper: '', readBy: u.name };
+  const m = { id: uid_('m_'), ts: nowIso_(), from: u.name, fromRole: u.role, to: to, kind: kind, text: text, jobId: String(p.jobId || ''), status: kind === 'help' ? 'open' : '', helper: '', readBy: u.name, img: img };
   writeRow_('Messages', m, -1);
   return { message: maskMsg_(m, u) };
 }
@@ -1214,9 +1225,13 @@ function deleteMessages_(ids, u) {
   ids = (ids || []).slice(0, 2000).map(String);
   const sh = sheet_('Messages'), last = sh.getLastRow();
   if (last < 2 || !ids.length) return { deleted: 0 };
-  const idv = sh.getRange(2, 1, last - 1, 1).getDisplayValues();
+  const idv = sh.getRange(2, 1, last - 1, 1).getDisplayValues(), ic = SHEETS.Messages.indexOf('img') + 1;
+  const imv = sh.getLastColumn() >= ic ? sh.getRange(2, ic, last - 1, 1).getDisplayValues() : [];
   let n = 0;
-  for (let i = idv.length - 1; i >= 0; i--) if (ids.indexOf(idv[i][0]) >= 0) { sh.deleteRow(i + 2); n++; }
+  for (let i = idv.length - 1; i >= 0; i--) if (ids.indexOf(idv[i][0]) >= 0) {
+    const fid = imv[i] && imv[i][0]; if (fid) { try { DriveApp.getFileById(fid).setTrashed(true); } catch (e) {} }   // รูปในแชท → ถังขยะ (กู้คืนได้ 30 วัน)
+    sh.deleteRow(i + 2); n++;
+  }
   log_('', u.name, 'message', 'ลบข้อความ ' + n + ' รายการ');
   return { deleted: n };
 }
@@ -1427,7 +1442,7 @@ function room_(p, u) {
    v1.16 — โฟลเดอร์โปรเจกต์ใน Google Drive, รูปงานใน Drive, งานต่อ CAM,
    เก็บถาวรงานเก่า, สำรองข้อมูลทุกคืน, แจ้งเตือนงาน, เรียลไทม์ (Supabase)
    ===================================================================== */
-const DF_ = { files: 'ไฟล์งาน', images: 'รูปงาน', backup: 'สำรองข้อมูล (อัตโนมัติ)', archive: 'เก็บถาวร (งานเก่า)', docs: 'เอกสาร / ไฟล์งานอื่นๆ' };
+const DF_ = { files: 'ไฟล์งาน', images: 'รูปงาน', chat: 'รูปในแชท', backup: 'สำรองข้อมูล (อัตโนมัติ)', archive: 'เก็บถาวร (งานเก่า)', docs: 'เอกสาร / ไฟล์งานอื่นๆ' };
 /** โฟลเดอร์หลักของโปรเจกต์ = โฟลเดอร์ที่ชีตฐานข้อมูลอยู่ (ถ้าชีตอยู่หน้าแรกของไดรฟ์ จะสร้างโฟลเดอร์ใหม่แล้วย้ายชีตเข้าไป) */
 function driveRoot_() {
   const props = PropertiesService.getScriptProperties(), id = props.getProperty('DRIVE_ROOT');

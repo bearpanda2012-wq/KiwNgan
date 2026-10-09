@@ -1,0 +1,22 @@
+// ข้อความแนบรูป (Print Screen → วาง) เก็บใน Drive และลบตามเมื่อแอดมินลบข้อความ
+const path = require('path'); process.argv[2] = path.join(__dirname, '../../backend/Code.gs');
+const m = require('./mock.js'); const logs = []; const ol = console.log; console.log = (...a) => logs.push(a.join(' ')); m.ctx.setup(); console.log = ol;
+const pin = (logs.join('\n').match(/PIN[^0-9]*(\d{4})/) || [])[1]; const A = m.call('login', { name: 'แอดมิน', pin }).data.token;
+const mk = (n, role) => { const r = m.call('saveUser', { user: { name: n, role: role || 'user' } }, A).data; return [m.call('login', { userId: r.user.id, pin: r.pin }).data.token, r.user]; };
+const [U] = mk('หมี'), [U2] = mk('ฝน');
+let ok = 0, bad = 0; const eq = (lbl, a, b) => { const p = JSON.stringify(a) === JSON.stringify(b); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(b))); };
+const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+const r = m.call('sendMessage', { to: 'ฝน', text: '', img: PX }, U);
+eq('image-only message ok', !!(r.data && r.data.message.img), true);
+const r2 = m.call('sendMessage', { to: 'team', text: 'ดูจอนี้หน่อย', img: PX }, U);
+eq('text + image', [r2.data.message.text, !!r2.data.message.img], ['ดูจอนี้หน่อย', true]);
+eq('bad image rejected', m.call('sendMessage', { to: 'team', img: 'data:text/html;base64,AAAA' }, U).error, 'ไฟล์รูปไม่ถูกต้อง');
+eq('empty still rejected', m.call('sendMessage', { to: 'team', text: ' ' }, U).error, 'พิมพ์ข้อความก่อนส่ง');
+const got = m.call('messages', {}, U2).data;
+const list = (got.messages || got.list || []);
+eq('receiver sees image id', list.some(x => x.id === r.data.message.id && x.img === r.data.message.img), true);
+const fid = r.data.message.img;
+m.call('deleteMessages', { ids: [r.data.message.id] }, A);
+eq('deleted message trashes image', DriveApp.getFileById(fid).trashed, true);
+console.log(ok + ' ok, ' + bad + ' failed');
+if (bad) process.exit(1);

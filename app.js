@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.38.0';
+const APP_VERSION = '2.39.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -440,9 +440,9 @@ const Demo = {
     return { ids: d.messages.filter(vis).map(m => m.id), messages: d.messages.filter(m => vis(m) && (!p.since || m.ts > p.since || (m.kind === 'help' && m.status !== 'done'))).map(m => this.mmsg(d, u, m)), serverTime: nowLocal() + ':' + pad(new Date().getSeconds()) }; },
   mmsg(d, u, m) { const admins = d.users.filter(x => x.role === 'admin').map(x => x.name); const o = Object.assign({}, m, { fromAdmin: admins.indexOf(m.from) >= 0, read: (m.readBy || []).indexOf(u.name) >= 0 || m.from === u.name }); delete o.readBy;
     if (!P.admin(u)) { if (o.fromAdmin) o.from = ADMIN_LABEL; if (admins.indexOf(o.helper) >= 0) o.helper = ADMIN_LABEL; if (admins.indexOf(o.to) >= 0) o.to = 'admin'; } return o; },
-  async sendMessage(p) { const d = this.db(), u = this.me(d); d.messages = d.messages || []; const text = String(p.text || '').trim(); if (!text) throw new Error('พิมพ์ข้อความก่อนส่ง');
+  async sendMessage(p) { const d = this.db(), u = this.me(d); d.messages = d.messages || []; const text = String(p.text || '').trim(), img = /^data:image\//.test(p.img || '') ? String(p.img) : ''; if (!text && !img) throw new Error('พิมพ์ข้อความก่อนส่ง');
     let to = p.to || 'team'; const tu = d.users.find(x => x.name === to); if (tu && tu.role === 'admin' && !P.admin(u)) to = 'admin';
-    const m = { id: uid('m_'), ts: nowLocal() + ':' + pad(new Date().getSeconds()), from: u.name, to: to, kind: p.kind === 'help' ? 'help' : 'msg', text: text, jobId: p.jobId || '', status: p.kind === 'help' ? 'open' : '', helper: '', readBy: [u.name] };
+    const m = { id: uid('m_'), ts: nowLocal() + ':' + pad(new Date().getSeconds()), from: u.name, to: to, kind: p.kind === 'help' ? 'help' : 'msg', text: text, jobId: p.jobId || '', status: p.kind === 'help' ? 'open' : '', helper: '', readBy: [u.name], img: img };
     d.messages.push(m); this.save(d); return { message: this.mmsg(d, u, m) }; },
   async rtcSend() { return {}; },
   async rtcPoll() { return { signals: [] }; },
@@ -1812,7 +1812,7 @@ function renderChatHeads() {
     keep[h.key] = 1;
     const u = memberBy(h.name), inner = (h.admin ? '<span class="av ch-adm">' + MSG_IC.shield + '</span>' : avUser(u, '', h.name)) +
       (h.help ? '<i class="hd-sos">' + MSG_IC.sos + '</i>' : '') +
-      '<span class="hd-name"><b>' + esc(h.name) + '</b><small>' + (h.help ? '🛟 ขอความช่วยเหลือ' : esc(String(h.last.text).slice(0, 40))) + '</small></span>' + (h.n ? '<b class="hd-n">' + h.n + '</b>' : '');
+      '<span class="hd-name"><b>' + esc(h.name) + '</b><small>' + (h.help ? '🛟 ขอความช่วยเหลือ' : esc(h.last.text ? String(h.last.text).slice(0, 40) : (h.last.img ? '📷 ส่งรูปมา' : ''))) + '</small></span>' + (h.n ? '<b class="hd-n">' + h.n + '</b>' : '');
     let el = have[h.key];
     if (!el) { el = document.createElement('button'); el.className = 'ch-head enter'; el.dataset.key = h.key; setTimeout(() => el.classList.remove('enter'), 700); }
     el.dataset.head = h.last.id; el.classList.toggle('help', h.help); el.setAttribute('aria-label', h.name + (h.help ? ' ขอความช่วยเหลือ' : ' ส่งข้อความ'));
@@ -1890,7 +1890,7 @@ function renderMsgPanel() {
     if (m.kind === 'help') return sep + helpCard(m);
     const mine = (m.from === S.me && !m.fromAdmin) || (isAdmin() && m.from === S.me);
     return sep + '<div class="bub' + (mine ? ' me' : '') + (m.pending ? ' pending' : '') + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบข้อความนี้">' + I.trash + '</button>' : '') + (mine ? '' : (m.fromAdmin && !isAdmin() ? '<span class="av bub-av adm">' + MSG_IC.shield + '</span>' : av(m.from, 'bub-av'))) +
-      '<div class="bub-b">' + (mine || M.ch !== 'team' ? '' : '<small class="bub-n">' + esc(m.from) + '</small>') + '<p>' + esc(m.text).replace(/\n/g, '<br>') + '</p>' + (m.jobId && jobById(m.jobId) ? '<button class="bub-job" data-open="' + esc(m.jobId) + '">' + esc(jobById(m.jobId).code) + '</button>' : '') + '<time>' + msgTime(m.ts) + '</time></div></div>';
+      '<div class="bub-b">' + (mine || M.ch !== 'team' ? '' : '<small class="bub-n">' + esc(m.from) + '</small>') + msgImg(m) + (m.text ? '<p>' + esc(m.text).replace(/\n/g, '<br>') + '</p>' : '') + (m.jobId && jobById(m.jobId) ? '<button class="bub-job" data-open="' + esc(m.jobId) + '">' + esc(jobById(m.jobId).code) + '</button>' : '') + '<time>' + msgTime(m.ts) + '</time></div></div>';
   }).join('') : '<div class="mp-empty"><span class="e-ic">' + MSG_IC.chat + '</span><b>ยังไม่มีข้อความ</b><small>' + (M.ch === 'team' ? 'ส่งข้อความถึงทุกคนในทีมได้ที่นี่' : 'เริ่มคุยกับ ' + esc(cur.name)) + '</small></div>';
   const helpForm = M.help ? '<div class="mp-help"><div class="mp-help-h"><span class="hc-ic">' + MSG_IC.sos + '</span><b>ขอความช่วยเหลือ</b><button class="icon-btn sm" data-act="helpoff" aria-label="ยกเลิก">✕</button></div>' +
       '<div class="seg"><button data-helpto="team" aria-pressed="' + (M.helpTo === 'team') + '">' + MSG_IC.team + 'ทั้งทีม</button>' + (!isAdmin() ? '<button data-helpto="admin" aria-pressed="' + (M.helpTo === 'admin') + '">' + MSG_IC.shield + ADMIN_LABEL + '</button>' : '') + '</div>' +
@@ -1908,29 +1908,66 @@ function renderMsgPanel() {
     '<div class="mp-body" id="mpBody">' + body + '</div>' +
     '<form class="mp-compose' + (M.help ? ' helping' : '') + '" id="msgForm">' + helpForm +
       '<div class="emo-pop" id="emoPop"' + (M.emoji ? '' : ' hidden') + '>' + (M.emoji ? emoPopHtml() : '') + '</div>' +
+      (M.att ? '<div class="mp-att"><img alt="" src="' + M.att.data + '"><div><b>' + STI.camera + 'รูปที่จะส่ง</b><small>พิมพ์ข้อความเพิ่มได้ แล้วกด Enter หรือปุ่มส่ง</small></div><button type="button" class="icon-btn" data-act="msgattdel" aria-label="เอารูปออก">✕</button></div>' : '') +
       '<div class="mp-row">' + (M.help ? '' : '<button type="button" class="mp-sos-btn" data-act="helpon" title="ขอความช่วยเหลือ">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') +
+      '<label class="mp-att-btn" title="แนบรูป (หรือกด Print Screen แล้ว Ctrl+V ในช่องพิมพ์)" aria-label="แนบรูป">' + STI.camera + '<input type="file" id="msgImg" accept="image/*" hidden></label>' +
       '<button type="button" class="mp-emo-btn" id="emoBtn" data-act="emoji" title="ใส่อีโมจิ" aria-label="ใส่อีโมจิ" aria-pressed="' + !!M.emoji + '">😊</button>' +
-      '<textarea id="msgText" rows="1" autocomplete="off" maxlength="1000" placeholder="' + (M.help ? 'บอกว่าอยากให้ช่วยอะไร…' : 'พิมพ์ข้อความถึง ' + esc(cur.name) + '…') + '"></textarea>' +
+      '<textarea id="msgText" rows="1" autocomplete="off" maxlength="1000" placeholder="' + (M.help ? 'บอกว่าอยากให้ช่วยอะไร… (Ctrl+V วางรูปได้)' : 'พิมพ์ถึง ' + esc(cur.name) + '… (Ctrl+V วางรูปได้)') + '"></textarea>' +
       '<button type="submit" class="mp-send' + (M.help ? ' sos' : '') + '" aria-label="ส่ง"' + (M.sending ? ' disabled' : '') + '>' + MSG_IC.send + '</button></div></form>';
   const b = $('#mpBody'); if (b) b.scrollTop = b.scrollHeight;
   const nt = $('#msgText');
   if (nt && draft && draft.v) { nt.value = draft.v; nt.style.height = 'auto'; nt.style.height = Math.min(140, nt.scrollHeight) + 'px'; if (draft.f) { nt.focus(); try { nt.setSelectionRange(draft.a, draft.b); } catch (x) {} } }
 }
+/* รูปในแชท: Print Screen → Ctrl+V ในกล่องข้อความ, ลากรูปมาวาง หรือกดปุ่มกล้อง */
+const MSGIMG = {};
+function msgImg(m) {
+  const src = m.imgLocal || (m.img ? (MSGIMG[m.img] || (/^data:/.test(m.img) ? m.img : driveImg(m.img, 900))) : '');
+  if (!src) return '';
+  const full = m.imgLocal || (m.img ? (/^data:/.test(m.img) ? m.img : driveImg(m.img, 2400)) : '');
+  return '<button type="button" class="bub-img" data-imgview="' + esc(full) + '" aria-label="ดูรูปเต็ม"><img alt="รูปที่ส่งมา" loading="lazy" referrerpolicy="no-referrer" src="' + esc(src) + '" onerror="if(!this.dataset.r&&' + (m.img && !/^data:/.test(m.img) ? 1 : 0) + '){this.dataset.r=1;this.src=\'https://lh3.googleusercontent.com/d/' + esc(m.img || '') + '=w900\'}"></button>';
+}
+async function msgAttach(file) {
+  if (!file || !/^image\//.test(file.type)) return toast('แนบได้เฉพาะไฟล์รูป', true);
+  try { const data = await shrinkImage(file, 1800, 340000, 0.85); M.att = { data: data }; if (M.open) renderMsgPanel(); const t = $('#msgText'); if (t) t.focus(); }
+  catch (e) { toast(e.message || 'อ่านรูปไม่ได้', true); }
+}
+function imgView(src) {
+  let v = $('#imgView'); if (!v) { v = document.createElement('div'); v.id = 'imgView'; v.className = 'img-view'; v.setAttribute('role', 'dialog'); document.body.appendChild(v); }
+  v.innerHTML = '<img alt="" referrerpolicy="no-referrer" src="' + esc(src) + '"><button type="button" class="lb-btn" data-imgclose="1" aria-label="ปิด">✕</button><a class="iv-open" href="' + esc(src) + '" target="_blank" rel="noopener">เปิดในแท็บใหม่</a>';
+  v.classList.add('open');
+}
+document.addEventListener('click', e => {
+  const iv = e.target.closest && e.target.closest('[data-imgview]'); if (iv) { e.preventDefault(); e.stopPropagation(); imgView(iv.dataset.imgview); return; }
+  const v = $('#imgView'); if (v && v.classList.contains('open') && (e.target === v || (e.target.closest && e.target.closest('[data-imgclose]')))) { v.classList.remove('open'); }
+}, true);
+document.addEventListener('keydown', e => { const v = $('#imgView'); if (e.key === 'Escape' && v && v.classList.contains('open')) { v.classList.remove('open'); e.stopPropagation(); } }, true);
+document.addEventListener('paste', e => {
+  if (!M.open) return; const p = $('#msgPanel'); if (!p || !(p.contains(e.target) || p.contains(document.activeElement))) return;
+  const f = Array.from((e.clipboardData && e.clipboardData.files) || []).find(x => /^image\//.test(x.type));
+  if (!f) return; e.preventDefault(); msgAttach(f);
+});
+document.addEventListener('change', e => { if (e.target && e.target.id === 'msgImg') { const f = (e.target.files || [])[0]; if (f) msgAttach(f); } });
+document.addEventListener('dragover', e => { const p = $('#msgPanel'); if (M.open && p && p.contains(e.target) && e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') >= 0) { e.preventDefault(); p.classList.add('drop'); } });
+document.addEventListener('dragleave', e => { const p = $('#msgPanel'); if (p && !p.contains(e.relatedTarget)) p.classList.remove('drop'); });
+document.addEventListener('drop', e => { const p = $('#msgPanel'); if (!M.open || !p || !p.contains(e.target)) return; p.classList.remove('drop'); const f = Array.from((e.dataTransfer && e.dataTransfer.files) || []).find(x => /^image\//.test(x.type)); if (f) { e.preventDefault(); msgAttach(f); } });
 async function sendMsg() {
   const t = $('#msgText'); if (!t || M.sending) return;
-  const text = t.value.trim(); if (!text) { t.focus(); return; }
+  const text = t.value.trim(), att = M.att; if (!text && !att) { t.focus(); return; }
   const p = M.help ? { to: M.helpTo, kind: 'help', text: text, jobId: M.jobId || '' } : { to: chanTo(M.ch), kind: 'msg', text: text };
-  if (!M.help) histPush('msg', text);
+  if (att) p.img = att.data;
+  if (!M.help && text) histPush('msg', text);
   suggClose();
   if (!M.help) {   // ข้อความธรรมดา: ขึ้นในห้องแชททันที แล้วส่งเบื้องหลัง
-    const d = new Date(), tmp = { id: uid('tmp_'), ts: isoOf(d) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()), from: S.me, to: p.to, kind: 'msg', text: text, jobId: '', status: '', helper: '', read: true, pending: true };
-    M.list.push(tmp); M.seen[tmp.id] = 1; t.value = ''; t.style.height = 'auto'; M.emoji = false; renderMsgPanel();
+    const d = new Date(), tmp = { id: uid('tmp_'), ts: isoOf(d) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()), from: S.me, to: p.to, kind: 'msg', text: text, jobId: '', status: '', helper: '', read: true, pending: true, imgLocal: att ? att.data : '' };
+    M.list.push(tmp); M.seen[tmp.id] = 1; t.value = ''; M.att = null; t.style.height = 'auto'; M.emoji = false; renderMsgPanel();
     api().sendMessage(p).then(r => {
       const i = M.list.findIndex(x => x.id === tmp.id);
+      if (att && r.message.img) MSGIMG[r.message.img] = att.data;   // รูปของเราเอง: โชว์จากเครื่องทันที ไม่ต้องรอโหลดจาก Drive
       if (M.list.some(x => x.id === r.message.id)) { if (i >= 0) M.list.splice(i, 1); } else if (i >= 0) M.list[i] = r.message; else M.list.push(r.message);
       M.seen[r.message.id] = 1; if (M.open) renderMsgPanel(); renderMsgFab();
     }).catch(e => {
       M.list = M.list.filter(x => x.id !== tmp.id); toast('ส่งข้อความไม่สำเร็จ: ' + e.message, true);
+      if (att && !M.att) M.att = att;
       if (M.open) { renderMsgPanel(); const c = $('#msgText'); if (c && !c.value) c.value = text; }
     });
     return;
@@ -1938,7 +1975,7 @@ async function sendMsg() {
   M.sending = true;
   try {
     const r = await api().sendMessage(p);
-    M.list.push(r.message); M.seen[r.message.id] = 1; t.value = ''; { const c = $('#msgText'); if (c) c.value = ''; } M.emoji = false;
+    M.list.push(r.message); M.seen[r.message.id] = 1; t.value = ''; { const c = $('#msgText'); if (c) c.value = ''; } M.emoji = false; M.att = null;
     if (M.help) { M.ch = chanOf(r.message); M.help = false; M.jobId = ''; toast('ส่งคำขอความช่วยเหลือแล้ว'); }
     M.sending = false; renderMsgPanel(); renderMsgFab();
   } catch (e) { M.sending = false; toast(e.message, true); }
@@ -1975,7 +2012,7 @@ function notifyMsg(m) {
   try { if (navigator.vibrate) navigator.vibrate(help ? [40, 60, 40] : 25); } catch (e) {}
   ping(help);
   if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
-    try { const n = new Notification(help ? who + ' ขอความช่วยเหลือ' : who, { body: m.text, tag: m.id, icon: 'icons/icon-192.png' }); n.onclick = () => { window.focus(); openMsgPanel(chanOf(m)); }; } catch (e) {}
+    try { const n = new Notification(help ? who + ' ขอความช่วยเหลือ' : who, { body: m.text || (m.img ? '📷 ส่งรูปมา' : ''), tag: m.id, icon: 'icons/icon-192.png' }); n.onclick = () => { window.focus(); openMsgPanel(chanOf(m)); }; } catch (e) {}
   }
 }
 /* แจ้งเตือนงาน: มอบหมายให้ / ถูกส่งกลับไปแก้ / ใกล้ถึงกำหนด */
@@ -4829,6 +4866,7 @@ document.addEventListener('click', async e => {
     case 'holadd': { const dd = $('#holD'), nn = $('#holN'); if (!dd || !dd.value || !S.draft) return; S.draft.holidays = (S.draft.holidays || []).filter(h => h.d !== dd.value).concat({ d: dd.value, n: (nn && nn.value.trim()) || 'วันหยุด' }).sort((a, b) => a.d.localeCompare(b.d)); markDirty(); return render(); }
     case 'holfixed': { if (!S.draft) return; const y = new Date().getFullYear(); const add = [y, y + 1].flatMap(yy => FIXED_HOL.map(h => ({ d: yy + '-' + h[0], n: h[1] }))).filter(h => h.d >= today()); const have = new Set((S.draft.holidays || []).map(h => h.d)); S.draft.holidays = (S.draft.holidays || []).concat(add.filter(h => !have.has(h.d))).sort((a, b) => a.d.localeCompare(b.d)); markDirty(); toast('เพิ่มวันหยุดราชการ (วันที่ตายตัว) ' + add.filter(h => !have.has(h.d)).length + ' วัน'); return render(); }
     case 'msgclose': return closeMsgPanel();
+    case 'msgattdel': M.att = null; renderMsgPanel(); { const t = $('#msgText'); if (t) t.focus(); } return;
     case 'helpon': M.help = true; M.helpTo = M.ch === 'admin' ? 'admin' : 'team'; renderMsgPanel(); { const x = $('#msgText'); if (x) x.focus(); } return;
     case 'helpnojob': M.jobId = ''; renderMsgPanel(); return;
     case 'msgclear': M.confirmClear = true; renderMsgPanel(); return;
@@ -4968,6 +5006,7 @@ document.addEventListener('drop', e => {
 });
 document.addEventListener('paste', e => {
   if (!S.edit || !$('#sheet').classList.contains('open')) return;
+  { const mp = $('#msgPanel'); if (mp && M.open && (mp.contains(e.target) || mp.contains(document.activeElement))) return; }
   const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter(f => /^image\//.test(f.type));
   if (!files.length) return;
   const E = S.edit, live = E.isNew ? null : jobById(E.job.id);

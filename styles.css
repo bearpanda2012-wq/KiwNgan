@@ -2876,3 +2876,24 @@ a.hv-main{display:block;position:relative;color:inherit;text-decoration:none}
 .tag.pt-due svg{width:12px;height:12px}
 @media (max-width:560px){.pm-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pa-2{grid-template-columns:1fr}.pa-quick label{display:none}.pa-im,.pa-add{width:76px;height:76px}}
 .pa-sec .f input,.pa-sec .f select,.pa-sec .f textarea{background:var(--surface)}
+/* v2.39: รูปในแชท — Print Screen แล้ว Ctrl+V, ลากวาง หรือกดปุ่มกล้อง */
+.mp-att-btn{display:grid;place-items:center;width:38px;height:38px;flex:none;border-radius:11px;color:var(--muted);cursor:pointer;transition:background .15s,color .15s}
+.mp-att-btn:hover{background:var(--accent-soft);color:var(--accent)}
+.mp-att-btn svg{width:20px;height:20px}
+.mp-att{display:flex;align-items:center;gap:10px;margin:0 0 8px;padding:6px 6px 6px 6px;border-radius:12px;background:var(--accent-soft);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--accent) 30%,transparent);animation:pmIn .2s ease-out}
+.mp-att img{width:64px;height:48px;object-fit:cover;border-radius:8px;flex:none;background:var(--surface)}
+.mp-att div{flex:1;min-width:0;display:flex;flex-direction:column}
+.mp-att b{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:var(--accent)}
+.mp-att b svg{width:14px;height:14px}
+.mp-att small{font-size:11.5px;color:var(--muted)}
+.bub-img{display:block;padding:0;border:0;background:none;cursor:zoom-in;border-radius:12px;overflow:hidden;margin:2px 0 4px;max-width:min(260px,100%)}
+.bub-img img{display:block;width:100%;max-height:260px;object-fit:cover;border-radius:12px;background:var(--surface-3);min-height:60px;transition:transform .2s}
+.bub-img:hover img{transform:scale(1.02)}
+.bub.pending .bub-img img{opacity:.7}
+.msg-panel.drop{outline:3px dashed var(--accent);outline-offset:-8px}
+.msg-panel.drop::after{content:"วางรูปเพื่อแนบ";position:absolute;inset:0;display:grid;place-items:center;font:700 18px var(--f-display);color:var(--accent);background:color-mix(in oklab,var(--surface) 80%,transparent);pointer-events:none;border-radius:inherit}
+.img-view{position:fixed;inset:0;z-index:300;display:none;place-items:center;background:rgba(10,12,16,.88);padding:24px}
+.img-view.open{display:grid;animation:pmIn .2s ease-out}
+.img-view img{max-width:100%;max-height:calc(100vh - 90px);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.img-view .lb-btn{position:absolute;top:14px;right:14px}
+.iv-open{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;opacity:.8;text-decoration:underline}
