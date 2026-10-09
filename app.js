@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.31.0';
+const APP_VERSION = '2.32.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3636,15 +3636,16 @@ function viewTeam() {
     const unr = M.list.filter(m => !m.read && m.from === x.name && !m.fromAdmin).length, canChat = x.name !== S.me;
     const helpBox = hp.length ? '<div class="t-help' + (hOpen.length ? '' : ' taken') + '"><span class="th-ic">' + MSG_IC.sos + '</span><div class="th-b"><b>' + (hOpen.length ? 'ขอความช่วยเหลือ' : (hp[0].helper ? esc(hp[0].helper) + ' กำลังช่วย' : 'มีคนรับช่วยแล้ว')) + '</b><p>' + esc(hp[hp.length - 1].text) + '</p></div>' +
       '<div class="th-act">' + (hOpen.length && canChat ? '<button class="btn sm primary" data-helptake="' + esc(hOpen[hOpen.length - 1].id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + '<button class="btn sm" data-ch="' + esc(hp[hp.length - 1].to === 'team' ? 'team' : chanOf(hp[hp.length - 1])) + '">ดูข้อความ</button></div></div>' : '';
-    const full = isLead() || x.name === S.me; // พนักงานเห็นงาน/ผลงานเฉพาะของตัวเอง — การ์ดคนอื่นมีแค่คุยและขอความช่วยเหลือ
+    const full = isLead() || x.name === S.me; // กดเข้าไปดูงาน: เฉพาะหัวหน้างาน/แอดมิน หรือของตัวเอง
+    const stats = x.role !== 'prod';            // ตัวเลขผลงานฝ่ายแบบ: ทุกคนเห็น (ฝ่ายผลิตไม่มีตัวเลขนี้)
     return '<div class="tcard' + (hOpen.length ? ' needs-help' : '') + '" style="--c:' + esc(x.color || '#5B6B7A') + '"><div class="tcard-h"><span class="t-av">' + av(x.name, 'lg') + '<i class="av-role tl ' + ROLES[roleOf(x)].cls + '">' + ROLE_IC[roleOf(x)] + '</i>' + (hOpen.length ? '<i class="t-sos">' + MSG_IC.sos + '</i>' : unr ? '<i class="t-unread">' + unr + '</i>' : '') + '</span><div><b>' + esc(x.name) + (x.name === S.me ? ' <span class="tag rev">คุณ</span>' : '') + '</b><small>' + esc(x.full || '') + '</small><span class="t-roles">' + roleChip(x) + deptTag(x) + '</span></div></div>' +
       (rj ? (full ? '<button class="now-on" data-open="' + esc(rj.id) + '" style="border:0;text-align:left"><span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>กำลังทำ <b>' + esc(rj.code) + '</b></button>'
-        : '<div class="now-on busy"><span class="busy-dot"></span>กำลังทำงานอยู่</div>') : '') +
-      (full ? '<div class="tstats"><div><span>งานค้าง</span><b>' + open.length + '</b></div><div><span>เลยกำหนด</span><b style="color:' + (late.length ? 'var(--late)' : 'inherit') + '">' + late.length + '</b></div><div><span>เสร็จเดือนนี้</span><b>' + doneM.length + '</b></div></div>' +
+        : '<div class="now-on ro" title="ดูได้อย่างเดียว"><span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>กำลังทำ <b>' + esc(rj.code) + '</b></div>') : '') +
+      (stats ? '<div class="tstats"><div><span>งานค้าง</span><b>' + open.length + '</b></div><div><span>เลยกำหนด</span><b style="color:' + (late.length ? 'var(--late)' : 'inherit') + '">' + late.length + '</b></div><div><span>เสร็จเดือนนี้</span><b>' + doneM.length + '</b></div></div>' +
       '<div><div class="panel-h" style="margin-bottom:6px"><span class="sub">ตรงเวลา ' + (doneM.length ? pct + '%' : '–') + '</span><span class="sub">เวลาทำ ' + fdur(minsM) + ' · ยากเฉลี่ย ' + lv + '</span></div><div class="meter"><i style="width:' + pct + '%"></i></div></div>' : '') +
       helpBox + '<div class="t-btns">' + (full ? '<button class="btn" data-memberjobs="' + esc(x.name) + '">' + (x.name === S.me ? 'ดูงานของฉัน' : 'ดูงานของ' + esc(x.name)) + '</button>' : '') + (canChat && CAN_RTC ? '<button class="btn t-call" data-rtc="call" data-peer="' + esc(x.name) + '" data-name="' + esc(x.name) + '" title="โทรหา ' + esc(x.name) + '">' + RTC_IC.phone + '</button>' : '') + (canChat ? '<button class="btn t-chat' + (unr ? ' has' : '') + (full ? '' : ' wide') + '" data-ch="u:' + esc(x.name) + '" title="ส่งข้อความถึง ' + esc(x.name) + '">' + MSG_IC.chat + (full ? '' : '<span>ส่งข้อความ</span>') + (unr ? '<b>' + unr + '</b>' : '') + '</button>' : '<button class="btn t-sosbtn" data-act="askhelp" data-job="" title="ขอความช่วยเหลือจากทีมและ' + ADMIN_LABEL + '">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') + '</div></div>';
   }).join('');
-  return topbar('ทีมงาน', isLead() ? 'ภาระงานและผลงานรายคน เดือน' + monthLabel(m) : 'คุยกับเพื่อนร่วมทีม และดูผลงานของคุณ เดือน' + monthLabel(m)) + (CAN_RTC ? roomCard() : '') + '<div class="teams">' + cards + '</div>';
+  return topbar('ทีมงาน', 'ภาระงานและผลงานรายคน เดือน' + monthLabel(m)) + (CAN_RTC ? roomCard() : '') + '<div class="teams">' + cards + '</div>';
 }
 
 /* ============ render: report (printable) ============ */
