@@ -23,7 +23,7 @@ for (const vw of [390, 360]) {
   const pg = await b.newPage({ viewport: { width: vw, height: 800 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true }); pg.on('pageerror', e => errs.push(e.message));
   await pg.addInitScript(() => { if (!sessionStorage.getItem('x')) { localStorage.clear(); sessionStorage.setItem('x', 1); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
   await pg.goto('http://127.0.0.1:8793/index.html'); await pg.waitForTimeout(700);
-  const chk = async (name) => { const o = await overflow(pg); eq(vw + ' ' + name + ' fits width', o.docW <= o.W && !o.bad.length ? 'fit' : o, 'fit'); if (SHOT) await pg.screenshot({ path: out + vw + '-' + name + '.png', fullPage: true }); };
+  const chk = async (name) => { const o = await overflow(pg); eq(vw + ' ' + name + ' fits width', o.docW <= o.W && !o.bad.length ? 'fit' : o, 'fit'); if (SHOT && vw === 390) { const H = await pg.evaluate(() => document.documentElement.scrollHeight); const modal = /modal|detail|new-job|open/.test(name); for (let k = 0; k < (modal ? 1 : Math.min(4, Math.ceil(H / 760))); k++) { await pg.evaluate(y => window.scrollTo(0, y), k * 760); await pg.waitForTimeout(250); await pg.screenshot({ path: out + 'v-' + name + '-' + k + '.png' }); } await pg.evaluate(() => window.scrollTo(0, 0)); } };
   await chk('login');
   await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1300);
   await pg.evaluate(() => document.querySelectorAll('.ntf').forEach(e => e.remove()));
@@ -39,13 +39,18 @@ for (const vw of [390, 360]) {
   await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(600);
   const pc = pg.locator('.pcard').first();
   if (await pc.count()) { await pc.click(); await pg.waitForTimeout(700); await chk('prod-modal'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300); }
+  { const qid = await pg.evaluate(async () => { const r = await T.api().prodSave({ prod: { code: 'MQC-' + Math.random().toString(36).slice(2, 6), paint: 'no', assy: 'no', stage: 'machine', machines: [{ m: 'Laser', d: '2026-10-09T09:00' }] } }); S.prods.push(r.prod); T.go('prod'); return r.prod.id; }); await pg.waitForTimeout(500);
+    await pg.locator('.pcard[data-popen="' + qid + '"] [data-pqc]').click(); await pg.waitForTimeout(600); await chk('prod-qc'); await pg.locator('#pModal .pm-f [data-pclose]').click(); await pg.waitForTimeout(300); }
+  await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(500); await chk('prod2');
   // หน้า Sale
   const key = await pg.evaluate(async () => (await T.api().saleOpen({ pin: '1234' })).key);
   await pg.goto('http://127.0.0.1:8793/index.html?salek=' + key); await pg.waitForTimeout(1500); await chk('sale');
   const row = pg.locator('[data-sfopen]').first();
   if (await row.count()) { await row.click(); await pg.waitForTimeout(500); await chk('sale-open'); }
   const tab = pg.locator('[data-sfview="table"]');
-  if (await tab.count()) { await tab.click(); await pg.waitForTimeout(700); await chk('sale-table'); await pg.locator('[data-sfview="flow"]').click(); await pg.waitForTimeout(300); }
+  if (await tab.count()) { await tab.click(); await pg.waitForTimeout(700); await chk('sale-table');
+    const tr = pg.locator('tr.sp-r[data-shov]').first(); if (await tr.count()) { await tr.click(); await pg.waitForTimeout(500); eq(vw + ' sale row opens detail', await pg.locator('#sdModal .sd-card').count(), 1); await chk('sale-detail'); await pg.click('#sdModal [data-sdclose]'); await pg.waitForTimeout(200); }
+    await pg.locator('[data-sfview="flow"]').click(); await pg.waitForTimeout(300); }
   await b.close();
 }
 console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.join(' | ') || 'none');

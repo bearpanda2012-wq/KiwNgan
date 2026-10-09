@@ -3037,3 +3037,87 @@ a.hv-main{display:block;position:relative;color:inherit;text-decoration:none}
 .topbar .hero-me + .top-actions{margin-left:0}
 @media (max-width:760px){.hero-me{position:absolute;top:14px;right:14px;padding:3px;border-radius:50%}.hm-t{display:none}.hero-me .av{width:40px;height:40px;font-size:16px}}
 @media (prefers-reduced-motion:reduce){.hm-on{animation:none}}
+/* v2.47: ป้ายสถานะโฉมใหม่ — แคปซูลสีเต็มบอกขั้น + บรรทัดเล็กบอกแผนกและเส้นความคืบหน้า (ไม่มีกรอบ) */
+.stg{display:inline-flex;flex-direction:column;align-items:flex-start;gap:4px;padding:0;border-radius:0;background:none;box-shadow:none;max-width:100%;vertical-align:middle}
+.stg-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 11px 3px 3px;border-radius:999px;background:var(--s,var(--muted));color:#fff;box-shadow:0 4px 12px -5px var(--s,var(--muted));max-width:100%;white-space:nowrap}
+.stg-pill b{font-size:12.5px;font-weight:700;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis}
+.stg .stg-ic{position:relative;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.24);color:#fff;box-shadow:none;grid-row:auto}
+.stg .stg-ic svg{width:13px;height:13px}
+.stg.s-doing .stg-ic::after,.stg.s-late .stg-ic::after,.stg.s-fix .stg-ic::after,.stg.s-review .stg-ic::after,.stg[class*=" p-"]:not(.p-shipped) .stg-ic::after{inset:-2px;border-color:rgba(255,255,255,.8)}
+.stg.s-late .stg-pill{animation:stgLate 1.8s ease-in-out infinite}
+@keyframes stgLate{0%,100%{box-shadow:0 4px 12px -5px var(--late)}50%{box-shadow:0 0 0 4px color-mix(in oklab,var(--late) 22%,transparent),0 4px 12px -5px var(--late)}}
+.stg.s-queue .stg-pill,.stg.s-hold .stg-pill{background:color-mix(in oklab,var(--s,var(--muted)) 16%,var(--surface));color:var(--s,var(--muted));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--s,var(--muted)) 35%,transparent)}
+.stg.s-queue .stg-ic,.stg.s-hold .stg-ic{background:var(--s,var(--muted))}
+.stg-meta{display:inline-flex;align-items:center;gap:6px;padding-left:4px}
+.stg-meta small{font-size:10.5px;font-weight:700;color:var(--muted);white-space:nowrap}
+.stg .stg-dots{display:flex;gap:2px;margin:0}
+.stg .stg-dots u{width:7px;height:3px;border-radius:2px;background:var(--surface-3)}
+.stg .stg-dots u.p{background:color-mix(in oklab,var(--s,var(--muted)) 55%,var(--surface-3))}
+.stg .stg-dots u.n{width:12px;background:var(--s,var(--muted))}
+.stg .stg-sub{padding-left:4px;margin:0}
+.stg.big .stg-pill{padding:4px 14px 4px 4px}.stg.big .stg-ic{width:28px;height:28px}.stg.big .stg-ic svg{width:16px;height:16px}.stg.big .stg-pill b{font-size:14px}
+.stg.sm .stg-pill{padding:2px 9px 2px 2px;gap:5px}.stg.sm .stg-ic{width:18px;height:18px}.stg.sm .stg-ic svg{width:11px;height:11px}.stg.sm .stg-pill b{font-size:11.5px}.stg.sm .stg-meta{display:none}
+.aitem .stg,.row .c-st .stg{align-items:flex-end}
+@media (prefers-reduced-motion:reduce){.stg.s-late .stg-pill{animation:none}}
+/* v2.47: หน้าต่างรายละเอียดงาน (กดแถวในตารางหน้า Sale) */
+.sd-card{width:min(720px,100%);border-top-color:var(--s,var(--accent))}
+.sd-top{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 6px 18px}
+.sd-top .eyebrow{font-size:12.5px;color:var(--muted);font-weight:600}
+.sd-body.hovercard.static{position:static;width:auto;opacity:1;transform:none;pointer-events:auto;box-shadow:none;border-radius:0;max-height:none;overflow:auto;flex:1;min-height:0;z-index:auto}
+.sd-body.hovercard.static.wide{width:auto}
+.sd-body.hovercard.static .hv-col,.sd-body.hovercard.static .hv-side{max-height:none}
+.sd-body.hovercard.static.wide .hv-col{flex:1 1 55%}
+.sd-body.hovercard.static .hv-main{border-radius:0}
+@media (max-width:700px){.sd-body.hovercard.static.wide{width:auto;flex-direction:column}}
+tr.sp-r[data-shov]{cursor:pointer}
+/* v2.47: ตารางงานหน้า Sale บนมือถือ = การ์ดต่องาน (ไม่ต้องเลื่อนซ้าย-ขวา) */
+@media (max-width:760px){
+  .sp-wrap{overflow:visible;border:0;background:none;box-shadow:none;max-height:none}
+  .sp-t{min-width:0!important;border-spacing:0}
+  .sp-t,.sp-t tbody{display:block;width:100%}
+  .sp-t thead{display:none}
+  .sp-t tr.sp-r{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"code stat" "type type" "team sale" "recv due" "note note";gap:6px 10px;margin:0 0 10px;padding:12px 12px 10px 14px;border-radius:14px;background:linear-gradient(100deg,color-mix(in oklab,var(--s,var(--line)) 10%,var(--surface)),var(--surface) 55%);border:1px solid color-mix(in oklab,var(--s,var(--line)) 28%,var(--line));border-left:5px solid var(--s,var(--line));box-shadow:0 6px 16px -12px var(--s,rgba(0,0,0,.3))}
+  .sp-t tr.sp-r.late{border-left-color:var(--late)}
+  .sp-t tr.sp-r td{display:block;padding:0;border:0!important;background:none!important;border-radius:0!important;box-shadow:none!important;animation:none!important;min-width:0}
+  .sp-t tr.sp-r td:nth-child(1){grid-area:code}
+  .sp-t tr.sp-r td:nth-child(2){grid-area:type;display:flex;align-items:center;gap:8px}
+  .sp-t tr.sp-r td:nth-child(2) small{margin:0}
+  .sp-t tr.sp-r td:nth-child(3){grid-area:team}
+  .sp-t tr.sp-r td:nth-child(4){grid-area:stat;justify-self:end;text-align:right}
+  .sp-t tr.sp-r td:nth-child(4) .stg{align-items:flex-end}
+  .sp-t tr.sp-r td:nth-child(5){grid-area:recv;font-size:12.5px;color:var(--muted)}
+  .sp-t tr.sp-r td:nth-child(5)::before{content:"รับงาน ";font-weight:600}
+  .sp-t tr.sp-r td:nth-child(6){grid-area:due;justify-self:end;text-align:right;font-size:13px}
+  .sp-t tr.sp-r td:nth-child(7){grid-area:note;font-size:12.5px}
+  .sp-t tr.sp-r td:nth-child(7):has(.sub){display:none}
+  .sp-t tr.sp-r td:nth-child(8){grid-area:sale;justify-self:end;align-self:center;font-size:12px;color:var(--muted)}
+  .sp-t tr.sp-r td:nth-child(8)::before{content:"Sale ";font-weight:600}
+  .sp-t tr.sp-r td:first-child b.mono{font-size:15px}
+  .sp-t tr.sp-r td:first-child small{white-space:normal}
+}
+/* v2.47: มือถือ — เว้นที่ด้านล่างให้ปุ่ม + และหัวแชตลอย ไม่บังรายการสุดท้าย */
+@media (max-width:760px){
+  #view{padding-bottom:170px}
+  .chat-heads{bottom:calc(150px + env(safe-area-inset-bottom,0px))}
+  .aitem .stg{max-width:150px}
+  .row .c-st .stg-meta{display:none}
+}
+/* v2.48: QC สีชัด + บอร์ดผลิต 7 คอลัมน์สมส่วน + รูปผู้ใช้กลางแบนเนอร์ */
+:root{--p-qc:#0596AE}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--p-qc:#38D3E8}}
+:root[data-theme="dark"]{--p-qc:#38D3E8}
+.ic-qc{--ic:var(--p-qc)}
+.flow-ic.ic-qc svg,.col-ic.ic-qc svg,.co-bub.ic-qc svg{animation:pulseBig 2.4s ease-in-out infinite}
+.pboard .col.p-qc{background:linear-gradient(180deg,color-mix(in oklab,var(--p-qc) 16%,var(--surface)),color-mix(in oklab,var(--p-qc) 6%,var(--surface)) 40%);box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--p-qc) 30%,transparent)}
+.pboard .col.p-qc .col-h b{color:var(--p-qc)}
+/* บอร์ดผลิต: คอลัมน์กว้างพอดีอ่าน เลื่อนซ้าย-ขวาได้เมื่อจอแคบ */
+@media (min-width:761px){
+  .pboard{grid-template-columns:repeat(7,minmax(218px,1fr))!important;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:10px}
+  .pboard .col,.pboard .col:nth-child(4),.pboard .col:nth-child(5){grid-column:auto!important;scroll-snap-align:start;min-height:0}
+  .pboard .col-t{min-width:0}
+  .pboard .col-t b{white-space:nowrap}
+  .pboard .col-t small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+}
+.topbar{align-items:center}
+.hero-me{margin:0 auto}
+@media (max-width:760px){.hero-me{margin:0}}

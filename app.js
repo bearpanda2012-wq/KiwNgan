@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.46.0';
+const APP_VERSION = '2.48.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1396,6 +1396,23 @@ function showProdHover(el) {
   place(); hovId = 'prod:' + p.id; hovEl = el; paintAllThumbs(h);
   h.querySelectorAll('img').forEach(im => im.addEventListener('load', () => { if (hovEl === el) place(); }, { once: true }));
 }
+/* หน้า Sale: กดแถวงานในตาราง → หน้าต่างรายละเอียด (ใช้ได้ทั้งมือถือและคอม) */
+function saleDetail(code) {
+  const r = SF.by && SF.by[code]; if (!r) return;
+  hideHover();
+  const o = saleHoverHtml(r);
+  let m = $('#sdModal'); if (!m) { m = document.createElement('div'); m.id = 'sdModal'; m.className = 'pmodal sd-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); }
+  m.innerHTML = '<div class="pm-card sd-card ' + coStg(r) + '"><div class="sd-top"><span class="eyebrow">รายละเอียดงาน</span><button type="button" class="icon-btn" data-sdclose="1" aria-label="ปิด">✕</button></div><div class="sd-body hovercard show static' + (o.wide ? ' wide' : '') + (o.img ? ' has-img' : '') + '">' + o.html + '</div></div>';
+  document.body.classList.add('pm-open');
+}
+function saleDetailClose() { const m = $('#sdModal'); if (m) m.remove(); document.body.classList.remove('pm-open'); }
+document.addEventListener('click', e => {
+  const t = e.target; if (!t || !t.closest) return;
+  if (t.id === 'sdModal' || t.closest('[data-sdclose]')) { saleDetailClose(); return; }
+  if (!SALE_Q) return;
+  const tr = t.closest('tr[data-shov]'); if (tr && !t.closest('a,button')) saleDetail(tr.dataset.shov);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#sdModal')) saleDetailClose(); });
 function showSaleHover(el) {
   const r = SF.by && SF.by[el.dataset.shov]; if (!r) return;
   let h = $('#hovercard'); if (!h) { h = document.createElement('div'); h.id = 'hovercard'; h.className = 'hovercard'; h.setAttribute('role', 'tooltip'); document.body.appendChild(h); }
@@ -4542,9 +4559,11 @@ function stageOf(j, p) {
   return { k: 'ddone', cls: 's-done', ic: STI.done, dept: 'ฝ่ายแบบ', label: 'ออกแบบเสร็จ' };
 }
 function stgHtml(o, size) {
-  const i = o.k === 'shipped' ? CO_STEPS.length : o.k === 'ddone' ? 0 : Math.max(0, CO_STEPS.findIndex(x => x.k === o.k)), fin = o.k === 'shipped';
-  return '<span class="stg ' + o.cls + (size ? ' ' + (size === true ? 'big' : size) : '') + '"><span class="stg-ic">' + o.ic + '</span><span class="stg-t"><small>' + esc(o.dept) + '</small><b>' + esc(o.label) + '</b></span>' +
-    '<i class="stg-dots" aria-hidden="true">' + CO_STEPS.map((x, k) => '<u class="' + (k < i || fin ? 'p' : k === i ? 'n' : '') + '"></u>').join('') + '</i>' + (o.sub ? '<em class="stg-sub">' + esc(o.sub) + '</em>' : '') + '</span>';
+  const n = CO_STEPS.length, i = o.k === 'shipped' ? n : o.k === 'ddone' ? 0 : Math.max(0, CO_STEPS.findIndex(x => x.k === o.k)), fin = o.k === 'shipped';
+  return '<span class="stg ' + o.cls + (size ? ' ' + (size === true ? 'big' : size) : '') + '" title="' + esc(o.dept + ' · ' + o.label) + '">' +
+    '<span class="stg-pill"><span class="stg-ic">' + o.ic + '</span><b>' + esc(o.label) + '</b></span>' +
+    '<span class="stg-meta"><small>' + esc(o.dept) + '</small><i class="stg-dots" aria-hidden="true">' + CO_STEPS.map((x, k) => '<u class="' + (k < i || fin ? 'p' : k === i ? 'n' : '') + '"></u>').join('') + '</i></span>' +
+    (o.sub ? '<em class="stg-sub">' + esc(o.sub) + '</em>' : '') + '</span>';
 }
 function coIdx(step) { return step === 'design' || step === 'ddone' ? 0 : step === 'shipped' ? CO_STEPS.length : CO_STEPS.findIndex(s => s.k === step); }
 /* เส้นทางงานแบบแอปส่งของ: จุดตามขั้น ช่วงที่ผ่านแล้วมีสี จุดปัจจุบันมีไอคอนและวงกระเพื่อม */

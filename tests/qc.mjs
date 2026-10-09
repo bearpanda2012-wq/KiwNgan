@@ -10,6 +10,7 @@ await pg.addInitScript(() => { if (!sessionStorage.getItem('x')) { localStorage.
 await pg.goto('http://127.0.0.1:8798/index.html'); await pg.waitForTimeout(700);
 await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
 eq('user avatar on banner', await pg.locator('.topbar .hero-me .av').count(), 1);
+await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('prod'); }); await pg.waitForTimeout(600); await pg.screenshot({ path: out + 'prod-board.png' });
 await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('prod'); }); await pg.waitForTimeout(500);
 const id = await pg.evaluate(async () => { const r = await T.api().prodSave({ prod: { code: 'QC-1', title: 'ป้ายทดสอบ', paint: 'no', assy: 'no', stage: 'machine', machines: [{ m: 'Laser', d: '2026-10-09T09:00' }] } }); S.prods.push(r.prod); T.go('prod'); return r.prod.id; });
 await pg.waitForTimeout(500);
