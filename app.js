@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.53.0';
+const APP_VERSION = '2.54.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4819,7 +4819,12 @@ function pModalDraw() {
   const p = prodById(P2.id); if (!p) return pModalClose();
   const ro = !canProd(), ms = pms(p), dj = designJobsOf(p.code), h = phist(p).slice().reverse();
   const order = PORDER, ci = order.indexOf(p.stage);
-  const stepper = '<div class="pm-steps">' + order.map((st, i) => '<button type="button" class="pm-step ' + PSTG[st].cls + (i < ci ? ' past' : i === ci ? ' now' : '') + (pSkipped(p, st) ? ' skip' : '') + '"' + (ro || i === ci ? ' disabled' : '') + ' data-pset="' + st + '" title="' + (ro ? '' : 'ย้ายไปขั้น ' + PSTG[st].label) + '"><span>' + PIC[st] + '</span><small>' + PSTG[st].label + '</small></button>').join('') + '</div>';
+  const nSt = order.length, nxt = order.slice(ci + 1).find(st => !pSkipped(p, st)), pct = Math.round(ci / (nSt - 1) * 100);
+  const PV = { wait: 'p-wait', machine: 'p-mach', paint: 'p-paint', assemble: 'p-assy', qc: 'p-qc', pack: 'p-pack', ready: 'p-ready', shipped: 'p-ship' };
+  const stepper = '<div class="pm-prog ' + PSTG[p.stage].cls + '" style="--s2:var(--' + PV[nxt || p.stage] + ');--p:' + (ci / (nSt - 1)).toFixed(4) + ';--n:' + nSt + ';--ci:' + ci + '">' +
+    '<div class="pm-ph"><span class="pm-cur"><i></i>' + PIC[p.stage] + '</span><div class="pm-pt"><b>' + PSTG[p.stage].label + '</b><small>ขั้นที่ ' + (ci + 1) + ' จาก ' + nSt + (nxt ? ' · ถัดไป <u class="' + PSTG[nxt].cls + '">' + PSTG[nxt].label + '</u>' : ' · เสร็จครบทุกขั้น 🎉') + '</small></div><em style="--pc:' + pct + '"><b>' + pct + '%</b></em></div>' +
+    '<div class="pm-steps"><div class="pm-rail"><i></i></div>' + (ci > 0 ? '<div class="pm-run"><i></i></div>' : '') + order.map((st, i) => { const sk = pSkipped(p, st) && i !== ci;
+      return '<button type="button" style="--i:' + i + '" class="pm-step ' + PSTG[st].cls + (i < ci ? ' past' : i === ci ? ' now' : '') + (sk ? ' skip' : '') + '"' + (ro || i === ci ? ' disabled' : '') + ' data-pset="' + st + '" title="' + (ro ? PSTG[st].label : 'ย้ายไปขั้น ' + PSTG[st].label) + '"><span>' + (sk ? '<i>ข้าม</i>' : i < ci ? PIC.check : PIC[st]) + (i === ci ? '<b class="pm-spk"></b>' : '') + '</span><small>' + PSTG[st].label + '</small></button>'; }).join('') + '</div></div>';
   const mPick = '<div class="pc-pick">' + machinesList().concat(ms.map(x => x.m).filter(n => machinesList().indexOf(n) < 0)).map(n => { const cur = ms.find(x => x.m === n);
     return '<button type="button" class="mchip' + (cur ? ' on' : '') + (cur && cur.d ? ' done' : '') + '"' + (ro ? ' disabled' : '') + ' data-pmset="' + esc(n) + '" aria-pressed="' + !!cur + '">' + (cur ? PIC.check : '') + esc(n) + (cur && cur.d ? ' · เสร็จ ' + esc(fdt(cur.d).replace(/^.* /, '')) : '') + '</button>'; }).join('') + '</div>';
   m.innerHTML = '<div class="pm-card ' + PSTG[p.stage].cls + '"><div class="pm-h"><div><span class="eyebrow">' + pPill(p.stage) + ' · อยู่ขั้นนี้ ' + pAgeTxt(pAge(p)) + '</span><h3>' + esc(p.code) + '</h3>' + (p.title ? '<p class="sub">' + esc(p.title) + '</p>' : '') + '</div>' + x + '</div><div class="pm-b">' +
