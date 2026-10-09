@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.54.0';
+const APP_VERSION = '2.55.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -892,12 +892,12 @@ async function showLogin(keepErr) {
 }
 function renderLogin() {
   const L = S.login, b = L.brand || S.settings || defaultSettings(), sel = (L.roster || []).find(u => u.id === L.userId);
-  const dots = '<div class="pin-dots' + (L.shake ? ' shake' : '') + '" aria-hidden="true">' + [0, 1, 2, 3, 4, 5].map(i => '<i class="' + (i < L.pin.length ? 'on' : '') + (i === L.pin.length ? ' next' : '') + (i >= 4 ? ' opt' : '') + '"></i>').join('') + '</div>' +
+  const dots = '<div class="pin-dots' + (L.shake ? ' shake' : '') + '" aria-hidden="true">' + [0, 1, 2, 3].map(i => '<i class="' + (i < L.pin.length ? 'on' : '') + (i === L.pin.length ? ' next' : '') + '"></i>').join('') + '</div>' +
     '<div class="pin-hint' + (L.err ? ' bad' : '') + '" aria-live="polite">' + (L.err ? esc(L.err) : L.pin.length === 0 ? 'แตะตัวเลขเพื่อใส่ PIN' : L.pin.length < 4 ? 'อีก ' + (4 - L.pin.length) + ' หลัก' : 'พร้อมแล้ว กดเข้าสู่ระบบ') + '</div>';
   L.shake = false;
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'].map(k => k === 'clear' ? '<button type="button" class="key fn" data-pin="clear">ล้าง</button>'
     : k === 'back' ? '<button type="button" class="key fn" data-pin="back" aria-label="ลบ">⌫</button>' : '<button type="button" class="key" data-pin="' + k + '">' + k + '</button>').join('');
-  const pinForm = extra => '<form id="pinForm" class="pin-form">' + (extra || '') + '<input id="pinIn" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="current-password" value="' + esc(L.pin) + '" aria-label="PIN">' + dots +
+  const pinForm = extra => '<form id="pinForm" class="pin-form">' + (extra || '') + '<input id="pinIn" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="current-password" value="' + esc(L.pin) + '" aria-label="PIN">' + dots +
     '<div class="keypad">' + keys + '</div><button class="btn primary login-go' + (L.submitting ? ' busy' : '') + (L.pin.length >= 4 ? ' ready' : '') + '" type="submit"' + (L.pin.length < 4 || L.submitting ? ' disabled' : '') + '>' + (L.submitting ? '<span class="spin-dot"></span>กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ') + '</button></form>';
   const c = S.conn || { url: '' };
   let body;
@@ -907,7 +907,7 @@ function renderLogin() {
   else if (!sel) body = '<h2 class="login-h">เข้าสู่ระบบ</h2><p class="sub">เลือกชื่อของคุณ</p>' +
     ((L.roster || []).length ? '<div class="who-grid">' + L.roster.map(u => '<button type="button" class="who" data-who="' + esc(u.id) + '">' + '<span class="t-av">' + avUser(u, 'lg') + '<i class="av-role ' + ROLES[roleOf(u)].cls + '">' + ROLE_IC[roleOf(u)] + '</i></span><b>' + esc(u.name) + '</b><small>' + (ROLES[roleOf(u)].short || ROLES[roleOf(u)].label) + '</small>' + deptTag(u) + '</button>').join('') + '</div>'
       : '<div class="empty" style="padding:20px 0"><b>ยังไม่มีผู้ใช้งาน</b>ผู้ดูแลระบบเพิ่มทีมงานได้ในหน้าตั้งค่า</div>');
-  else body = '<button type="button" class="back-who" data-who="">‹ เปลี่ยนชื่อ</button><div class="pin-head">' + avUser(sel, 'lg') + '<div><b>' + esc(sel.name) + '</b><small>ใส่ PIN 4–6 หลัก</small></div></div>' + pinForm();
+  else body = '<button type="button" class="back-who" data-who="">‹ เปลี่ยนชื่อ</button><div class="pin-head">' + avUser(sel, 'lg') + '<div><b>' + esc(sel.name) + '</b><small>ใส่ PIN 4 หลัก</small></div></div>' + pinForm();
 
   const showConn = L.showConn;
   const hr = new Date().getHours(), greet = hr < 12 ? 'อรุณสวัสดิ์' : hr < 17 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น';
@@ -939,7 +939,7 @@ function renderLogin() {
 function pressKey(k, btn) {
   const L = S.login, an = $('#adminName'); if (an) L.adminName = an.value;
   const before = L.pin.length;
-  if (k === 'clear') L.pin = ''; else if (k === 'back') L.pin = L.pin.slice(0, -1); else if (L.pin.length < 6) L.pin += k;
+  if (k === 'clear') L.pin = ''; else if (k === 'back') L.pin = L.pin.slice(0, -1); else if (L.pin.length < 4) L.pin += k;
   try { if (navigator.vibrate) navigator.vibrate(k === 'clear' || k === 'back' ? 6 : 12); } catch (e) {}
   if (btn) { btn.classList.remove('hit'); void btn.offsetWidth; btn.classList.add('hit'); }
   if (L.err) { L.err = ''; const er = $('.login .err'); if (er) er.remove(); const h = $('.pin-hint'); if (h) h.classList.remove('bad'); }
@@ -948,12 +948,13 @@ function pressKey(k, btn) {
 function syncPin(added) {
   const L = S.login, n = L.pin.length;
   document.querySelectorAll('.pin-dots i').forEach((el, i) => {
-    el.classList.toggle('on', i < n); el.classList.toggle('next', i === n && n < 6); el.classList.remove('just');
+    el.classList.toggle('on', i < n); el.classList.toggle('next', i === n && n < 4); el.classList.remove('just');
     if (added && i === n - 1) { void el.offsetWidth; el.classList.add('just'); }
   });
   const pi = $('#pinIn'); if (pi && pi.value !== L.pin) pi.value = L.pin;
   const sb = $('#pinForm [type=submit]'); if (sb) { sb.disabled = n < 4; sb.classList.toggle('ready', n >= 4); }
-  const hint = $('.pin-hint'); if (hint) hint.textContent = n === 0 ? 'แตะตัวเลขเพื่อใส่ PIN' : n < 4 ? 'อีก ' + (4 - n) + ' หลัก' : 'พร้อมแล้ว กดเข้าสู่ระบบ';
+  const hint = $('.pin-hint'); if (hint) hint.textContent = n === 0 ? 'แตะตัวเลขเพื่อใส่ PIN' : n < 4 ? 'อีก ' + (4 - n) + ' หลัก' : 'กำลังเข้าสู่ระบบ…';
+  if (added && n === 4 && !L.submitting && (!L.adminMode || (L.adminName || '').trim())) setTimeout(() => { if (S.login.pin.length === 4 && !S.login.submitting) doLogin(); }, 160);
 }
 async function doLogin() {
   const L = S.login; if (L.pin.length < 4 || L.submitting) return;
@@ -4090,8 +4091,8 @@ function viewSettings() {
       (S.user && S.user.photo ? '<button class="btn sm ghost" data-rmphoto="' + esc(S.user.id) + '">ลบรูป</button>' : '') + '</div></div></div>' +
     '<p class="help">' + (admin ? 'แก้ไขและลบได้ทุกงาน มอบหมายงาน และจัดการผู้ใช้' : 'ลงงานใหม่ แก้ไขและจับเวลางานของตัวเองได้ งานของคนอื่นดูได้อย่างเดียว') + '</p>' +
     '<div class="form-grid"><div class="f"><label for="pOld">PIN เดิม</label><input id="pOld" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password"></div><div></div>' +
-    '<div class="f"><label for="pNew">PIN ใหม่ (4–6 หลัก)</label><input id="pNew" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>' +
-    '<div class="f"><label for="pNew2">ยืนยัน PIN ใหม่</label><input id="pNew2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div></div>' +
+    '<div class="f"><label for="pNew">PIN ใหม่ (4 หลัก)</label><input id="pNew" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div>' +
+    '<div class="f"><label for="pNew2">ยืนยัน PIN ใหม่</label><input id="pNew2" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password"></div></div>' +
     '<div><button class="btn" data-act="changepin">เปลี่ยน PIN</button></div></section>';
   h += pushSection();
   h += themeSection();
@@ -4115,13 +4116,13 @@ function viewSettings() {
         (u.id !== (S.user && S.user.id) ? '<button class="icon-btn sm udel" data-udel="' + esc(u.id) + '" aria-label="ลบ ' + esc(u.name) + '" title="ลบผู้ใช้">' + I.trash + '</button>' : '') + '</div>' +
       (S.userDel === u.id ? '<div class="confirm"><span>ลบบัญชี <b>' + esc(u.name) + '</b> ถาวร? เข้าระบบไม่ได้อีก แต่งานและเวลาที่เคยทำยังอยู่ในประวัติและรายงาน (ถ้าแค่พักใช้ ให้ปิด "ใช้งาน" แทน)</span><button class="btn sm danger" data-udelyes="' + esc(u.id) + '">ลบผู้ใช้</button><button class="btn sm" data-udel="">ไม่ลบ</button></div>' : '') +
       (S.pinEdit === u.id ? '<div class="pin-edit"><span class="pe-ic">' + STI.key + '</span><div class="pe-b"><b>เปลี่ยน PIN ของ ' + esc(u.name) + '</b><small>ระบบเก็บ PIN แบบเข้ารหัส จึงดู PIN เดิมไม่ได้ ตั้งใหม่ได้เลย</small></div>' +
-        '<input id="pinSet" inputmode="numeric" maxlength="6" placeholder="PIN ใหม่ 4–6 หลัก" autocomplete="off"><button class="btn sm primary" data-pinsave="' + esc(u.id) + '">บันทึก PIN</button><button class="btn sm" data-resetpin="' + esc(u.id) + '">สุ่มให้</button><button class="icon-btn sm" data-pinedit="" aria-label="ปิด">✕</button></div>' : '') +
+        '<input id="pinSet" inputmode="numeric" maxlength="4" placeholder="PIN ใหม่ 4 หลัก" autocomplete="off"><button class="btn sm primary" data-pinsave="' + esc(u.id) + '">บันทึก PIN</button><button class="btn sm" data-resetpin="' + esc(u.id) + '">สุ่มให้</button><button class="icon-btn sm" data-pinedit="" aria-label="ปิด">✕</button></div>' : '') +
       (S.pinNote && S.pinNote.userId === u.id ? '<div class="pin-note">PIN ใหม่ของ ' + esc(u.name) + ': <b class="mono">' + esc(S.pinNote.pin) + '</b> <button class="btn sm" data-copypin="' + esc(S.pinNote.pin) + '">คัดลอก</button> แจ้งเจ้าตัว ใช้เข้าระบบได้ทันที (เจ้าตัวเปลี่ยนเองได้ในหน้าตั้งค่า)</div>' : '') + '</div>').join('');
     h += '<section class="panel sec" id="s-users"><div class="panel-h"><h2>ผู้ใช้งานและสิทธิ์</h2><span class="sub">' + S.users.filter(u => u.active).length + ' คนใช้งานอยู่</span></div>' +
       '<p class="help"><b>แอดมิน</b> แก้ไขได้ทั้งหมด · <b>ผู้ใช้งาน</b> ลงงานและแก้ไขงานของตัวเองได้ ปิด "ใช้งาน" เพื่อระงับบัญชีโดยไม่ลบประวัติงาน</p>' +
       '<div class="ulist">' + rows + '</div>' +
       '<div class="uadd"><b>เพิ่มผู้ใช้</b><span class="sub">ใส่รูปได้หลังเพิ่มแล้ว โดยกดที่วงกลมหน้าชื่อ</span><div class="urow"><input type="color" id="nuColor" value="' + COLORS[S.users.length % COLORS.length] + '" aria-label="สี"><input id="nuName" placeholder="ชื่อเล่น" aria-label="ชื่อเล่น"><input id="nuFull" class="opt" placeholder="ชื่อจริง" aria-label="ชื่อจริง">' +
-      '<select id="nuRole" aria-label="ตำแหน่ง">' + roleOpts('user') + '</select><input id="nuPin" inputmode="numeric" maxlength="6" placeholder="PIN (ว่าง = สุ่ม)" aria-label="PIN เริ่มต้น">' +
+      '<select id="nuRole" aria-label="ตำแหน่ง">' + roleOpts('user') + '</select><input id="nuPin" inputmode="numeric" maxlength="4" placeholder="PIN (ว่าง = สุ่ม)" aria-label="PIN เริ่มต้น">' +
       '<div class="urow-act"><button class="btn sm primary" data-act="adduser">' + I.plus + 'เพิ่ม</button></div>' +
       (S.pinNote && S.pinNote.userId === 'new' ? '<div class="pin-note">เพิ่ม ' + esc(S.pinNote.name) + ' แล้ว PIN: <b class="mono">' + esc(S.pinNote.pin) + '</b></div>' : '') + '</div></div></section>';
 
@@ -5064,7 +5065,7 @@ document.addEventListener('click', async e => {
   if (d.rmphoto) return setPhoto(d.rmphoto, null);
   if (d.pinedit !== undefined) { S.pinEdit = d.pinedit; S.pinNote = null; render(); const x = $('#pinSet'); if (x) x.focus(); return; }
   if (d.copypin) { try { await navigator.clipboard.writeText(d.copypin); toast('คัดลอก PIN แล้ว'); } catch (x) {} return; }
-  if (d.pinsave) { const v = ($('#pinSet') || {}).value || ''; if (!/^\d{4,6}$/.test(v)) { toast('PIN ต้องเป็นตัวเลข 4–6 หลัก', true); return; } try { const r = await mutate(() => api().resetPin({ userId: d.pinsave, pin: v }), 'ตั้ง PIN ใหม่แล้ว'); S.pinEdit = ''; S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
+  if (d.pinsave) { const v = ($('#pinSet') || {}).value || ''; if (!/^\d{4}$/.test(v)) { toast('PIN ต้องเป็นตัวเลข 4 หลัก', true); return; } try { const r = await mutate(() => api().resetPin({ userId: d.pinsave, pin: v }), 'ตั้ง PIN ใหม่แล้ว'); S.pinEdit = ''; S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
   if (d.resetpin) { S.pinEdit = ''; try { const r = await mutate(() => api().resetPin({ userId: d.resetpin })); S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
 
   // editor-scoped
@@ -5192,7 +5193,7 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.id === 'msgText') { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; return; }
   if (t.id === 'adminName') { S.login.adminName = t.value; const w = t.closest('.name-in'); if (w) { w.classList.toggle('has', !!t.value.trim()); w.classList.remove('typing'); void w.offsetWidth; w.classList.add('typing'); } return; }
-  if (t.id === 'pinIn') { S.login.pin = t.value.replace(/\D/g, '').slice(0, 6); S.login.err = ''; const dots = document.querySelectorAll('.pin-dots i'); dots.forEach((el, i) => el.classList.toggle('on', i < S.login.pin.length)); const sb = document.querySelector('#pinForm [type=submit]'); if (sb) sb.disabled = S.login.pin.length < 4; return; }
+  if (t.id === 'pinIn') { S.login.pin = t.value.replace(/\D/g, '').slice(0, 4); S.login.err = ''; const dots = document.querySelectorAll('.pin-dots i'); dots.forEach((el, i) => el.classList.toggle('on', i < S.login.pin.length)); const sb = document.querySelector('#pinForm [type=submit]'); if (sb) sb.disabled = S.login.pin.length < 4; if (S.login.pin.length === 4) setTimeout(() => { if (S.login.pin.length === 4 && !S.login.submitting && (!S.login.adminMode || ($('#adminName') && $('#adminName').value.trim()))) doLogin(); }, 160); return; }
   if (t.id === 'pq' || t.id === 'cq') { S[t.id] = t.value; const pos = t.selectionStart, id = t.id; render(); const q = $('#' + id); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if (t.id === 'q') { S.f.q = t.value; const pos = t.selectionStart; render(); const q = $('#q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if ((t.id === 'thC1' || t.id === 'thC2') && $('#thC1') && $('#thC2')) { // live preview while dragging the picker
@@ -5429,7 +5430,7 @@ async function connect() {
 }
 async function changePin() {
   const o = $('#pOld').value.trim(), n = $('#pNew').value.trim(), n2 = $('#pNew2').value.trim();
-  if (!/^\d{4,6}$/.test(n)) { toast('PIN ใหม่ต้องเป็นตัวเลข 4–6 หลัก', true); return; }
+  if (!/^\d{4}$/.test(n)) { toast('PIN ใหม่ต้องเป็นตัวเลข 4 หลัก', true); return; }
   if (n !== n2) { toast('PIN ใหม่ทั้งสองช่องไม่ตรงกัน', true); return; }
   try { await mutate(() => api().changePin({ oldPin: o, newPin: n }), 'เปลี่ยน PIN แล้ว'); ['#pOld', '#pNew', '#pNew2'].forEach(x => { $(x).value = ''; }); } catch (e) {}
 }
@@ -5448,7 +5449,7 @@ async function saveUserRow(id) {
 async function addUser() {
   const name = $('#nuName').value.trim(); if (!name) { toast('ใส่ชื่อผู้ใช้', true); $('#nuName').focus(); return; }
   const pin = $('#nuPin').value.trim();
-  if (pin && !/^\d{4,6}$/.test(pin)) { toast('PIN ต้องเป็นตัวเลข 4–6 หลัก หรือเว้นว่างเพื่อสุ่ม', true); return; }
+  if (pin && !/^\d{4}$/.test(pin)) { toast('PIN ต้องเป็นตัวเลข 4 หลัก หรือเว้นว่างเพื่อสุ่ม', true); return; }
   try {
     const r = await mutate(() => api().saveUser({ user: { name: name, full: $('#nuFull').value.trim(), role: $('#nuRole').value, color: $('#nuColor').value, pin: pin } }), 'เพิ่มผู้ใช้ ' + name + ' แล้ว');
     S.users.push(r.user); S.pinNote = { userId: 'new', name: r.user.name, pin: r.pin }; render();

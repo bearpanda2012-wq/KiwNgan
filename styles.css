@@ -3241,7 +3241,7 @@ html,body{overflow-x:hidden}
 .pm-step{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:7px;border:0;background:none;padding:0 1px;min-width:0;cursor:pointer;color:var(--muted);opacity:1}
 .pm-step span{position:relative;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;margin:0;
   background:color-mix(in oklab,var(--s) 12%,var(--surface));border:2px solid color-mix(in oklab,var(--s) 45%,var(--surface));color:var(--s);
-  box-shadow:0 0 0 4px var(--surface);transition:transform .18s cubic-bezier(.3,1.6,.5,1),box-shadow .18s;animation:pmIn .45s cubic-bezier(.3,1.5,.5,1) calc(var(--i) * 70ms) both}
+  box-shadow:0 0 0 4px var(--surface);transition:transform .18s cubic-bezier(.3,1.6,.5,1),box-shadow .18s;animation:pmStIn .45s cubic-bezier(.3,1.5,.5,1) calc(var(--i) * 70ms) both}
 .pm-step span svg{width:17px;height:17px;display:block;animation:none}
 .pm-step span::after{content:none}
 .pm-step small{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:2px 7px;border-radius:999px;color:color-mix(in oklab,var(--s) 70%,var(--muted))}
@@ -3250,7 +3250,7 @@ html,body{overflow-x:hidden}
 .pm-step.past span svg{width:17px;height:17px;stroke-dasharray:24;stroke-dashoffset:24;animation:pmTick .4s ease-out calc(var(--i) * 70ms + .3s) forwards}
 .pm-step.past small{color:var(--s)}
 .pm-step.now span{width:46px;height:46px;margin-top:-4px;color:#fff;border:0;background:linear-gradient(140deg,color-mix(in oklab,var(--s) 70%,#fff),var(--s));
-  box-shadow:0 0 0 4px var(--surface),0 10px 22px -8px var(--s);animation:pmIn .5s cubic-bezier(.3,1.6,.5,1) calc(var(--i) * 70ms) both,pmBeat 1.6s ease-in-out 1.4s infinite}
+  box-shadow:0 0 0 4px var(--surface),0 10px 22px -8px var(--s);animation:pmStIn .5s cubic-bezier(.3,1.6,.5,1) calc(var(--i) * 70ms) both,pmBeat 1.6s ease-in-out 1.4s infinite}
 .pm-step.now span svg{width:21px;height:21px;animation:pmBob 1.6s ease-in-out infinite}
 .pm-step.now span::before{content:"";position:absolute;inset:-7px;border-radius:50%;padding:3px;
   background:conic-gradient(var(--s),transparent 35%,var(--s2) 55%,transparent 80%,var(--s));
@@ -3271,14 +3271,14 @@ html,body{overflow-x:hidden}
 .pm-step:not(:disabled):active span{transform:scale(.92)}
 .pm-step:disabled{cursor:default}
 @keyframes pmSheen{0%{background-position:150% 0}60%,100%{background-position:-50% 0}}
-@keyframes pmTile{0%{transform:scale(.4) rotate(-20deg)}100%{transform:none}}
+@keyframes pmTile{0%{transform:scale(.4)}100%{transform:none}}
 @keyframes pmTileRing{0%{transform:scale(.9);opacity:.8}100%{transform:scale(1.35);opacity:0}}
 @keyframes pmBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
 @keyframes pmRing{from{--pa:0}}
 @keyframes pmUnfill{from{clip-path:inset(0 0 0 0)}}
 @keyframes pmShine{to{left:100%}}
 @keyframes pmRun{0%{left:0;opacity:0;transform:scale(.4)}12%{opacity:1;transform:scale(1)}82%{opacity:1;transform:scale(1)}100%{left:100%;opacity:0;transform:scale(1.6)}}
-@keyframes pmIn{0%{transform:scale(0) rotate(-90deg);opacity:0}100%{transform:none;opacity:1}}
+@keyframes pmStIn{0%{transform:scale(0);opacity:0}100%{transform:none;opacity:1}}
 @keyframes pmTick{to{stroke-dashoffset:0}}
 @keyframes pmBeat{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 @keyframes pmSpin{to{transform:rotate(360deg)}}
