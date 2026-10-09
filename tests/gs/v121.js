@@ -28,20 +28,29 @@ eq('1 of 2 done stays on machine', r.stage, 'machine');
 r = m.call('prodSave', { prod: { id: P1.id, machines: [{ m: 'Laser', d: '2026-10-09T10:00' }, { m: 'Punching', d: '2026-10-09T11:00' }] } }, PR).data.prod;
 eq('all machines done → ทำสี', r.stage, 'paint');
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'assemble' } }, PR).data.prod; eq('ทำสี → ประกอบติดตั้ง', r.stage, 'assemble');
-r = m.call('prodSave', { prod: { id: P1.id, stage: 'pack' } }, PR).data.prod; eq('→ แพ็ค', r.stage, 'pack');
+r = m.call('prodSave', { prod: { id: P1.id, stage: 'qc' } }, PR).data.prod; eq('ประกอบ → QC', r.stage, 'qc');
+eq('cannot pack before QC passes', m.call('prodSave', { prod: { id: P1.id, stage: 'pack' } }, PR).error, 'งานต้องผ่าน QC ก่อนส่งไปแพ็ค');
+r = m.call('prodSave', { prod: { id: P1.id, stage: 'pack', qc: { it: [{ t: 'ขนาดตรงแบบ', d: '1' }], res: 'pass', ok: 10, ng: 0 } } }, PR).data.prod; eq('QC pass → แพ็ค', [r.stage, JSON.parse(r.qc).res, JSON.parse(r.qc).by], ['pack', 'pass', 'ช่างเอ']);
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'ready' } }, PR).data.prod; eq('→ พร้อมส่ง has finishedAt', [r.stage, !!r.finishedAt], ['ready', true]);
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'shipped' } }, PR).data.prod; eq('→ ส่งแล้ว', [r.stage, !!r.shippedAt], ['shipped', true]);
-eq('history kept', JSON.parse(r.history).map(h => h.s), ['wait', 'machine', 'machine', 'paint', 'assemble', 'pack', 'ready', 'shipped']);
+eq('history kept', JSON.parse(r.history).map(h => h.s), ['wait', 'machine', 'machine', 'paint', 'assemble', 'qc', 'pack', 'ready', 'shipped']);
 // ข้ามทำสี
 r = m.call('prodSave', { prod: { code: 'P-3', paint: 'no', stage: 'machine', machines: [{ m: 'Laser', d: '2026-10-09T09:00' }] } }, PR).data.prod;
 eq('no paint → ข้ามไปประกอบ', r.stage, 'assemble');
 m.call('prodDelete', { id: r.id }, PR);
 r = m.call('prodSave', { prod: { code: 'P-2', paint: 'no', assy: 'no', stage: 'machine', machines: [{ m: 'Router', d: '2026-10-09T09:00' }] } }, PR).data.prod;
-eq('manual add + no paint + no assembly + all done → แพ็ค', [r.code, r.stage, r.paint, r.assy], ['P-2', 'pack', 'no', 'no']);
+eq('manual add + no paint + no assembly + all done → QC', [r.code, r.stage, r.paint, r.assy], ['P-2', 'qc', 'no', 'no']);
 eq('duplicate active code', m.call('prodSave', { prod: { code: 'p-2' } }, PR).error, 'เลข Job p-2 อยู่ในฝ่ายผลิตแล้ว');
 eq('stale write blocked', !!m.call('prodSave', { prod: { id: r.id, stage: 'ready', baseUpdatedAt: '2000-01-01' } }, PR).error, true);
 eq('prod role cannot add design job', m.call('saveJob', { job: { code: 'X-9', taskType: 'ทำ CAD' } }, PR).error, 'ฝ่ายผลิตเพิ่มงานของฝ่ายแบบไม่ได้');
-eq('admin can update prod', m.call('prodSave', { prod: { id: r.id, stage: 'ready' } }, A).data.prod.stage, 'ready');
+eq('admin can update prod', m.call('prodSave', { prod: { id: r.id, stage: 'ready', qc: { res: 'pass' } } }, A).data.prod.stage, 'ready');
+// QC ไม่ผ่าน → ส่งกลับไปแก้ แล้วเข้า QC ใหม่ต้องตรวจใหม่
+let q2 = m.call('prodSave', { prod: { code: 'Q-1', paint: 'no', assy: 'no', stage: 'machine', machines: [{ m: 'Laser', d: '2026-10-09T09:00' }] } }, PR).data.prod;
+eq('Q-1 in QC', q2.stage, 'qc');
+q2 = m.call('prodSave', { prod: { id: q2.id, stage: 'machine', machines: [{ m: 'Laser', d: '' }], why: 'ขอบบิ่น 2 ชิ้น', qc: { it: [{ t: 'ขอบเรียบ', d: '' }], res: 'fail' } } }, PR).data.prod;
+eq('QC fail sends back + counts', [q2.stage, JSON.parse(q2.qc).fails, JSON.parse(q2.qc).last, JSON.parse(q2.qc).res], ['machine', 1, 'ขอบบิ่น 2 ชิ้น', 'fail']);
+q2 = m.call('prodSave', { prod: { id: q2.id, machines: [{ m: 'Laser', d: '2026-10-10T09:00' }] } }, PR).data.prod;
+eq('back to QC resets result', [q2.stage, JSON.parse(q2.qc).res, JSON.parse(q2.qc).it[0].d, JSON.parse(q2.qc).fails], ['qc', '', '', 1]);
 eq('designer cannot delete prod', !!m.call('prodDelete', { id: r.id }, U).error, true);
 // Sale PIN
 eq('roster sale off', m.call('roster', {}).data.sale, false);
@@ -54,7 +63,8 @@ eq('wrong pin', m.call('saleOpen', { pin: '1111' }).error, 'PIN ไม่ถู�
 const key = m.call('saleOpen', { pin: '2468' }).data.key;
 eq('right pin → same key as admin link', key, m.call('saleLink', {}, A).data.key);
 const sv = m.call('saleView', { k: key }).data;
-eq('saleView has prods', sv.prods.map(x => [x.code, x.stage]).sort(), [['P-1', 'shipped'], ['P-2', 'ready']]);
+eq('saleView has prods', sv.prods.map(x => [x.code, x.stage]).sort(), [['P-1', 'shipped'], ['P-2', 'ready'], ['Q-1', 'qc']]);
+eq('saleView has qc summary', sv.prods.find(x => x.code === 'Q-1').qc.fails, 1);
 eq('saleView machines', sv.machines, ['Router', 'Laser', 'Punching', 'WaterJet']);
 for (let i = 0; i < 9; i++) m.call('saleOpen', { pin: '0000' });
 eq('locked after many fails', m.call('saleOpen', { pin: '2468' }).error, 'ใส่ PIN ผิดหลายครั้ง รอ 10 นาทีแล้วลองใหม่');

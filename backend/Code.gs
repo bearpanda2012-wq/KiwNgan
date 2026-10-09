@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.27.0';
+const VERSION = '1.28.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -40,12 +40,12 @@ const SHEETS = {
   Files: ['id', 'jobId', 'name', 'mime', 'size', 'fileId', 'createdBy', 'createdAt'],
   Comments: ['id', 'jobId', 'ts', 'from', 'text'],
   // ฝ่ายผลิต: 1 แถว = 1 เลข Job ที่ออกแบบเสร็จแล้ว เดินต่อ รอผลิต → ลงเครื่อง → ทำสี → ประกอบติดตั้ง → แพ็ค → พร้อมส่ง → ส่งแล้ว (paint/assy = 'no' คือข้ามขั้นนั้น)
-  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due']
+  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due', 'qc']
 };
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
 const STATUSES = ['queue', 'doing', 'review', 'fix', 'hold', 'done'];
-const PROD_STAGES = ['wait', 'machine', 'paint', 'assemble', 'pack', 'ready', 'shipped'];
+const PROD_STAGES = ['wait', 'machine', 'paint', 'assemble', 'qc', 'pack', 'ready', 'shipped'];   // qc = ตรวจคุณภาพก่อนแพ็ค (ข้ามไม่ได้)
 const PROD_SKIP_ = { paint: 'paint', assemble: 'assy' };   // ขั้นที่ข้ามได้ → ชื่อคอลัมน์ธง
 const COLORS = ['#0B6B70', '#2D5FC4', '#B05A2A', '#7A4BB5', '#2B7F4A', '#B8435F', '#5B6B7A', '#A07A12'];
 
@@ -501,7 +501,7 @@ function saleView_(k, sale) {
       return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', assignee: maskName_(j.assignee, { role: 'user' }) || '', helpers: helpersOf_(j).map(n => maskName_(n, { role: 'user' })).join(','),
                steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '', imgs: (im[j.id] || []).slice(-6) }; });
   const people = usersLite_().filter(x => x.active && x.role !== 'admin').map(x => ({ name: x.name, color: x.color }));
-  const pv = prods.map(x => ({ code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6) }));
+  const pv = prods.map(x => ({ code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6), qc: (q => ({ res: q.res, at: q.at, fails: q.fails, ok: q.ok, ng: q.ng }))(prodQc_(x.qc)) }));
   const out = { brand: publicBrand_(), sales: s.sales || [], sale: sale || '', jobs: jobs, prods: pv, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(ck, t, 600); } catch (e) {}
   return out;
@@ -802,6 +802,8 @@ function prodSave_(data, u) {
   if (data.paint !== undefined) cur.paint = data.paint === 'no' ? 'no' : '';
   if (data.assy !== undefined) cur.assy = data.assy === 'no' ? 'no' : '';
   if (data.machines !== undefined) cur.machines = JSON.stringify(prodMachines_(data.machines));
+  let qc = prodQc_(cur.qc);
+  if (data.qc !== undefined) qc = Object.assign(prodQc_(data.qc), { fails: qc.fails, last: qc.last });
   if (data.stage !== undefined) { if (PROD_STAGES.indexOf(data.stage) < 0) throw new Error('ขั้นงานผลิตไม่ถูกต้อง'); cur.stage = data.stage; }
   const ms = prodMachines_(cur.machines);
   if (cur.stage === 'machine' && !ms.length) throw new Error('เลือกเครื่องอย่างน้อย 1 เครื่องก่อนเริ่มลงเครื่อง');
@@ -810,6 +812,14 @@ function prodSave_(data, u) {
     const f = PROD_SKIP_[cur.stage];
     if (f && cur[f] === 'no' && (!before || before.stage !== cur.stage)) cur.stage = PROD_STAGES[PROD_STAGES.indexOf(cur.stage) + 1]; else break;
   }
+  const iQ = PROD_STAGES.indexOf('qc'), bi = before ? PROD_STAGES.indexOf(before.stage) : 0, ni = PROD_STAGES.indexOf(cur.stage);
+  if (ni > iQ && bi <= iQ && qc.res !== 'pass') throw new Error('งานต้องผ่าน QC ก่อนส่งไปแพ็ค');   // ผ่านด่าน QC ได้เมื่อผลเป็น "ผ่าน" เท่านั้น
+  if (before && before.stage === 'qc' && ni < iQ && data.qc && data.qc.res === 'fail') {   // QC ไม่ผ่าน → ส่งกลับไปแก้ (ย้อนกลับเฉย ๆ ไม่นับ)
+    qc.fails = (qc.fails || 0) + 1; qc.last = String(data.why || qc.note || '').slice(0, 300); qc.res = 'fail'; qc.by = u.name; qc.at = now.slice(0, 16);
+  }
+  if (cur.stage === 'qc' && (!before || before.stage !== 'qc')) { qc.res = ''; qc.by = ''; qc.at = ''; qc.it = qc.it.map(x => ({ t: x.t, d: '' })); }   // เข้า QC รอบใหม่ = ตรวจใหม่
+  if (data.qc !== undefined && qc.res === 'pass' && !qc.by) { qc.by = u.name; qc.at = now.slice(0, 16); }
+  cur.qc = JSON.stringify(qc);
   const si = PROD_STAGES.indexOf(cur.stage), iR = PROD_STAGES.indexOf('ready'), iS = PROD_STAGES.indexOf('shipped');
   if (si >= 1 && !cur.startedAt) cur.startedAt = now.slice(0, 16);
   if (si < 1) cur.startedAt = '';
@@ -825,6 +835,15 @@ function prodSave_(data, u) {
   writeRow_('Prod', cur, row);
   log_(cur.id, u.name, 'prod', cur.code + (before ? (before.stage !== cur.stage ? ' ' + before.stage + '→' + cur.stage : ' แก้ไข') : ' → ' + cur.stage));
   return toObj_('Prod', SHEETS.Prod, SHEETS.Prod.map(h => cur[h] === undefined ? '' : String(cur[h])));
+}
+/** ผล QC ของงานผลิต: it = หัวข้อตรวจ, res = pass/fail, ok/ng = จำนวนชิ้นผ่าน/เสีย, fails = ไม่ผ่านกี่รอบ */
+function prodQc_(raw) {
+  let q = raw; if (typeof q === 'string') { try { q = JSON.parse(q || '{}'); } catch (e) { q = {}; } }
+  if (!q || typeof q !== 'object') q = {};
+  const it = (Array.isArray(q.it) ? q.it : []).map(x => ({ t: String((x && x.t) || '').trim().slice(0, 120), d: String((x && x.d) || '').slice(0, 40) })).filter(x => x.t).slice(0, 25);
+  const n = v => String(v === undefined || v === null ? '' : v).replace(/[^0-9]/g, '').slice(0, 6);
+  return { it: it, res: q.res === 'pass' || q.res === 'fail' ? q.res : '', by: String(q.by || '').slice(0, 60), at: String(q.at || '').slice(0, 16), ok: n(q.ok), ng: n(q.ng),
+           note: String(q.note || '').slice(0, 500), fails: Math.max(0, Math.min(99, +q.fails || 0)), last: String(q.last || '').slice(0, 300) };
 }
 function prodDelete_(id, u) {
   if (!canProd_(u)) throw new Error('ลบงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน');

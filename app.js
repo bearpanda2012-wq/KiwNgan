@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.45.0';
+const APP_VERSION = '2.46.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -499,11 +499,18 @@ const Demo = {
     if (data.paint !== undefined) cur.paint = data.paint === 'no' ? 'no' : '';
     if (data.assy !== undefined) cur.assy = data.assy === 'no' ? 'no' : '';
     if (data.machines !== undefined) cur.machines = JSON.stringify((Array.isArray(data.machines) ? data.machines : []).filter(x => x && x.m).map(x => ({ m: String(x.m), d: String(x.d || '') })));
+    let qc = pqc(cur); if (data.qc !== undefined) qc = Object.assign(pqc({ qc: data.qc }), { fails: qc.fails, last: qc.last });
     if (data.stage !== undefined) cur.stage = data.stage;
     const ms = pms(cur);
     if (cur.stage === 'machine' && !ms.length) { if (!before) d.prods.pop(); else Object.assign(cur, before); throw new Error('เลือกเครื่องอย่างน้อย 1 เครื่องก่อนเริ่มลงเครื่อง'); }
     if (cur.stage === 'machine' && ms.every(x => x.d)) cur.stage = 'paint';
     for (let k = 0; k < 3; k++) { if (pSkipped(cur, cur.stage) && (!before || before.stage !== cur.stage)) cur.stage = PORDER[PORDER.indexOf(cur.stage) + 1]; else break; }
+    { const iQ = PORDER.indexOf('qc'), bi = before ? PORDER.indexOf(before.stage) : 0, ni = PORDER.indexOf(cur.stage);
+      if (ni > iQ && bi <= iQ && qc.res !== 'pass') { if (!before) d.prods.pop(); else Object.assign(cur, before); throw new Error('งานต้องผ่าน QC ก่อนส่งไปแพ็ค'); }
+      if (before && before.stage === 'qc' && ni < iQ && data.qc && data.qc.res === 'fail') { qc.fails++; qc.last = String(data.why || qc.note || ''); qc.res = 'fail'; qc.by = u.name; qc.at = now.slice(0, 16); }
+      if (cur.stage === 'qc' && (!before || before.stage !== 'qc')) { qc.res = ''; qc.by = ''; qc.at = ''; qc.it = qc.it.map(x => ({ t: x.t, d: '' })); }
+      if (data.qc !== undefined && qc.res === 'pass' && !qc.by) { qc.by = u.name; qc.at = now.slice(0, 16); }
+      cur.qc = JSON.stringify(qc); }
     const si = PORDER.indexOf(cur.stage), n16 = now.slice(0, 16), iR = PORDER.indexOf('ready');
     cur.startedAt = si >= 1 ? cur.startedAt || n16 : ''; cur.finishedAt = si >= iR ? cur.finishedAt || n16 : ''; cur.shippedAt = si === iR + 1 ? cur.shippedAt || n16 : '';
     if (!before || before.stage !== cur.stage || before.machines !== cur.machines) cur.history = JSON.stringify(phist(cur).concat({ t: n16, by: u.name, s: cur.stage, x: String(data.why || '') }).slice(-40));
@@ -1369,7 +1376,8 @@ function prodHoverHtml(p) {
   const side = '<div class="hv-side"><section class="hv-sec hv-pd ' + PSTG[p.stage].cls + '"><div class="hv-sh"><b>' + PIC.machine + 'ฝ่ายผลิต</b>' + pPill(p.stage) + '</div>' +
     '<div class="hv-steps">' + PORDER.map((st, k) => '<i class="' + PSTG[st].cls + (k < ci ? ' past' : k === ci ? ' now' : '') + (pSkipped(p, st) ? ' skip' : '') + '" title="' + PSTG[st].label + '">' + (k === ci ? PIC[st] : '') + '</i>').join('') + '</div>' +
     (ms.length ? '<div class="hv-ms">' + ms.map(m => '<span class="' + (m.d ? 'on' : '') + '">' + (m.d ? '✓ ' : '') + esc(m.m) + '</span>').join('') + '</div>' : '') +
-    '<small class="hv-age">อยู่ขั้นนี้ ' + pAgeTxt(pAge(p)) + (p.paint === 'no' ? ' · ไม่ทำสี' : '') + (p.assy === 'no' ? ' · ไม่ประกอบ' : '') + '</small></section>' +
+    '<small class="hv-age">อยู่ขั้นนี้ ' + pAgeTxt(pAge(p)) + (p.paint === 'no' ? ' · ไม่ทำสี' : '') + (p.assy === 'no' ? ' · ไม่ประกอบ' : '') + '</small>' +
+    ((q => q.res === 'pass' ? '<div class="hv-qc ok">' + PIC.qc + 'ผ่าน QC' + (q.by ? ' · ' + esc(q.by) : '') + (q.ok ? ' · ' + esc(q.ok) + ' ชิ้น' : '') + '</div>' : p.stage === 'qc' ? '<div class="hv-qc">' + PIC.qc + 'กำลังตรวจ ' + qcItemsFor(p).filter(x => x.d).length + '/' + qcItemsFor(p).length + (q.fails ? ' · เคยไม่ผ่าน ' + q.fails + ' ครั้ง' : '') + '</div>' : q.fails ? '<div class="hv-qc bad">' + PIC.xmark + 'QC ไม่ผ่าน ' + q.fails + ' ครั้ง' + (q.last ? ': ' + esc(q.last) : '') + '</div>' : '')(pqc(p))) + '</section>' +
     (dj.length ? '<section class="hv-sec hv-jobs"><div class="hv-sh"><b>' + STI.layers + 'งานฝ่ายแบบของเลขนี้</b><span class="hv-n">' + dj.length + '</span></div>' + dj.map(j => '<div class="hv-jr">' + typeChip(j.taskType, 'sm') + '<span class="pill ' + (ST[j.status] || ST.queue).cls + '">' + (ST[j.status] || ST.queue).label + '</span><span class="hv-jw">' + av(j.assignee, 'xs') + esc(j.assignee || '–') + (j.status === 'done' && finDate(j) ? ' · เสร็จ ' + esc(fd(finDate(j))) : '') + '</span></div>').join('') + '</section>' : '') +
     (h.length ? '<section class="hv-sec hv-jobs"><div class="hv-sh"><b>' + STI.clock + 'ความเคลื่อนไหวล่าสุด</b></div>' + h.map(e => '<div class="hv-jr"><span class="pill ' + (PSTG[e.s] ? PSTG[e.s].cls : '') + '">' + esc(PSTG[e.s] ? PSTG[e.s].label : e.s) + '</span><span class="hv-jw">' + esc(fdt(e.t)) + (e.by ? ' · ' + esc(e.by) : '') + '</span></div>').join('') + '</section>' : '') + '</div>';
   return '<div class="hv-col">' + main + '</div>' + side;
@@ -3416,6 +3424,7 @@ function topbar(title, sub, extra) {
   const d = new Date();
   const hr = d.getHours(), tod = hr < 6 || hr >= 18 ? 'moon' : hr < 11 ? 'sunrise' : 'sun';
   return '<div class="topbar"><span class="hero-ic" aria-hidden="true">' + (I[S.view] || I.home) + '</span><span class="hero-dots" aria-hidden="true"><i></i><i></i><i></i></span><div><div class="eyebrow"><span class="tod ' + tod + '" aria-hidden="true">' + DECO[tod] + '</span>' + esc(s.company) + ' · วัน' + TH_D[d.getDay()] + ' ' + fdY(today()) + '</div><h1>' + title + '</h1>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
+    (S.user ? (u => '<button type="button" class="hero-me" data-view="settings" title="บัญชีของฉัน · เปลี่ยนรูปโปรไฟล์ได้ที่ตั้งค่า">' + '<span class="hm-av">' + avUser(u, 'lg') + '<i class="hm-on"></i></span><span class="hm-t"><b>' + esc(u.name || S.me) + '</b><small>' + esc(ROLES[roleOf(u)].short || ROLES[roleOf(u)].label) + '</small></span></button>')(Object.assign({}, S.user, (typeof memberBy === 'function' && memberBy(S.me)) || {})) : '') +
     '<div class="top-actions">' + (extra || '') + (S.me ? (n => '<button class="btn top-due' + (n ? ' has' : '') + '" data-act="dueopen" title="กำหนดส่งงาน">' + STI.hourglass + '<span>กำหนดส่ง</span>' + (n ? '<b class="badge">' + n + '</b>' : '') + '</button>')(dueCount()) : '') + '<button class="btn top-msg' + (unreadAll() ? ' has' : '') + '" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span>' + (unreadAll() ? '<b class="badge msg-n">' + (unreadAll() > 99 ? '99+' : unreadAll()) + '</b>' : '') + '</button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
     newBtn() + '</div></div>';
 }
@@ -4298,11 +4307,12 @@ const PSTG = {
   machine: { label: 'ลงเครื่อง', sub: 'กำลังผลิต', cls: 'p-machine', empty: 'ไม่มีงานบนเครื่อง' },
   paint: { label: 'ทำสี', sub: 'พ่น / ทำสี', cls: 'p-paint', empty: 'ไม่มีงานรอทำสี' },
   assemble: { label: 'ประกอบ', sub: 'ประกอบติดตั้ง', cls: 'p-assemble', empty: 'ไม่มีงานรอประกอบ' },
+  qc: { label: 'QC', sub: 'ตรวจคุณภาพก่อนแพ็ค', cls: 'p-qc', empty: 'ไม่มีงานรอตรวจ QC' },
   pack: { label: 'แพ็ค', sub: 'แพ็คงาน', cls: 'p-pack', empty: 'ไม่มีงานรอแพ็ค' },
   ready: { label: 'พร้อมส่ง', sub: 'รอส่งลูกค้า', cls: 'p-ready', empty: 'ยังไม่มีงานพร้อมส่ง' },
   shipped: { label: 'ส่งแล้ว', sub: 'ส่งถึงลูกค้า', cls: 'p-shipped', empty: '' }
 };
-const PCOLS = ['wait', 'machine', 'paint', 'assemble', 'pack', 'ready'];
+const PCOLS = ['wait', 'machine', 'paint', 'assemble', 'qc', 'pack', 'ready'];
 const PORDER = PCOLS.concat('shipped');
 const PSKIP = { paint: 'paint', assemble: 'assy' };   // ขั้นที่ติ๊ก "ไม่ต้อง" ได้ → ชื่อช่องธง
 const pSkipped = (p, st) => !!PSKIP[st] && !!p && p[PSKIP[st]] === 'no';
@@ -4320,8 +4330,32 @@ const PIC = {
   design: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l3.5-1 11-11-2.5-2.5-11 11zM14 5.5l2.5-2.5 2.5 2.5L16.5 8"/><path d="M13 21h8"/></svg>',
   sale: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.3-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/></svg>',
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
-  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  qc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M8.5 12l2.5 2.5 4.6-4.8"/></svg>',
+  xmark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
 };
+/* QC ตรวจคุณภาพก่อนแพ็ค: หัวข้อตรวจตั้งต้น (ปรับตามงาน: ไม่ทำสี/ไม่ประกอบ ไม่ต้องตรวจหัวข้อนั้น) · เพิ่มหัวข้อเองต่องานได้ */
+const QC_DEFAULT = [
+  ['size', 'ขนาด / ระยะ ตรงตามแบบ (วัดจริงด้วยตลับเมตร)'],
+  ['count', 'จำนวนชิ้นครบตามใบสั่งงาน'],
+  ['pattern', 'ลวดลาย / รูเจาะ ครบ และตรงตำแหน่ง'],
+  ['surface', 'ผิวงานเรียบ ไม่มีรอยขีดข่วน บิ่น หรือไหม้'],
+  ['edge', 'ขอบ-มุม เก็บเรียบร้อย ไม่มีเสี้ยนคม'],
+  ['paint', 'สีตรงตามตัวอย่าง ไม่ด่าง ไม่เป็นคราบ ไม่ย้อย'],
+  ['assy', 'ประกอบแน่นหนา น็อต/อุปกรณ์ยึดครบ'],
+  ['clean', 'ทำความสะอาด / ลอกฟิล์มตามสเปกลูกค้า'],
+  ['photo', 'ถ่ายรูปงานก่อนแพ็ค (แนบในหัวข้อรูปงาน)']
+];
+function pqc(p) {
+  let q = p && p.qc; if (typeof q === 'string') { try { q = JSON.parse(q || '{}'); } catch (e) { q = {}; } }
+  q = q && typeof q === 'object' ? q : {};
+  return { it: Array.isArray(q.it) ? q.it.filter(x => x && x.t) : [], res: q.res || '', by: q.by || '', at: q.at || '', ok: q.ok || '', ng: q.ng || '', note: q.note || '', fails: +q.fails || 0, last: q.last || '' };
+}
+function qcItemsFor(p) {
+  const q = pqc(p); if (q.it.length) return q.it;
+  const custom = (S.settings && Array.isArray(S.settings.qcItems) && S.settings.qcItems.filter(Boolean).length) ? S.settings.qcItems.filter(Boolean).map(t => ['', t]) : null;
+  return (custom || QC_DEFAULT.filter(x => !(x[0] === 'paint' && p.paint === 'no') && !(x[0] === 'assy' && p.assy === 'no'))).map(x => ({ t: x[1], d: '' }));
+}
 const canProd = () => !!S.user && (S.user.role === 'prod' || S.user.role === 'admin');   // บอร์ดผลิต: ฝ่ายผลิตและแอดมินแก้ได้
 const isProdRole = () => !!S.user && S.user.role === 'prod';
 const machinesList = () => { const m = (S.settings && S.settings.machines || []).map(x => String(x || '').trim()).filter(Boolean); return m.length ? m : DEF_MACHINES; };
@@ -4409,6 +4443,10 @@ function pcard(p) {
   } else if (p.stage === 'machine') {
     body = '<div class="pc-ms">' + ms.map(m => '<button type="button" class="mrow' + (m.d ? ' done' : '') + (F !== 'all' && F === m.m ? ' hi' : '') + '"' + (ro ? ' disabled' : '') + ' data-pmd="' + esc(m.m) + '" data-pid="' + esc(p.id) + '" title="' + (m.d ? 'เสร็จ ' + esc(fdt(m.d)) + ' · กดอีกครั้งเพื่อยกเลิก' : 'กดเมื่อเครื่องนี้ทำเสร็จ') + '">' +
       '<span class="mr-box">' + (m.d ? PIC.check : '') + '</span><b>' + esc(m.m) + '</b><small>' + (m.d ? 'เสร็จ ' + esc(fdt(m.d).replace(/^.* /, '')) : 'กำลังทำ') + '</small></button>').join('') + '</div>';
+  } else if (p.stage === 'qc') {
+    const it = qcItemsFor(p), n = it.filter(x => x.d).length, q = pqc(p);
+    body = '<div class="pc-qc"><div class="pcq-h">' + PIC.qc + '<b>ตรวจแล้ว ' + n + '/' + it.length + '</b>' + (q.fails ? '<em title="' + esc(q.last) + '">ไม่ผ่าน ' + q.fails + ' ครั้ง</em>' : '') + '</div><span class="pcq-bar"><i style="width:' + Math.round(n / (it.length || 1) * 100) + '%"></i></span></div>' +
+      (ro ? '' : '<button type="button" class="btn sm pc-go adv-qc" data-pqc="' + esc(p.id) + '">' + PIC.qc + (n === it.length ? 'สรุปผล QC' : 'ตรวจ QC') + '</button>');
   } else if (PDONE[p.stage]) {
     const nx = pNextOf(p);
     body = ms.length ? '<div class="pc-mdone">' + ms.map(m => '<span>' + PIC.check + esc(m.m) + '</span>').join('') + '</div>' : '';
@@ -4464,6 +4502,7 @@ const CO_STEPS = [
   { k: 'machine', label: 'ลงเครื่อง', sub: 'Router · Laser …', ic: 'machine', dept: 'p' },
   { k: 'paint', label: 'ทำสี', sub: '', ic: 'paint', dept: 'p' },
   { k: 'assemble', label: 'ประกอบ', sub: 'ประกอบติดตั้ง', ic: 'assemble', dept: 'p' },
+  { k: 'qc', label: 'QC', sub: 'ตรวจคุณภาพ', ic: 'qc', dept: 'p' },
   { k: 'pack', label: 'แพ็ค', sub: '', ic: 'pack', dept: 'p' },
   { k: 'ready', label: 'พร้อมส่ง', sub: '', ic: 'ready', dept: 's' }
 ];
@@ -4594,7 +4633,7 @@ function viewFlow() {
 
 /* ---- หน้าต่างรายละเอียดงานผลิต / เพิ่มงานเข้าผลิต ---- */
 const P2 = { id: '', add: false };
-function pModalOpen(id) { P2.id = id; P2.add = false; P2.edit = false; pModalDraw(); }
+function pModalOpen(id) { P2.id = id; P2.add = false; P2.edit = false; ['qcIt', 'qcOk', 'qcNg', 'qcNote', 'qcWhy', 'qcFail', 'qcBack'].forEach(k => { delete P2[k]; }); pModalDraw(); }
 function pAddOpen(code) { P2.id = ''; P2.add = true; P2.code = code || ''; P2.ms = []; P2.paint = ''; P2.assy = ''; (P2.files || []).forEach(x => URL.revokeObjectURL(x.url)); P2.files = []; P2.f = { title: '', sale: '', group: '', due: '', note: '' }; P2.found = null; if (code) pAddLookup(code); pModalDraw(); setTimeout(() => { const x = $('#pAddCode'); if (x) x.focus(); }, 30); }
 function pAddRead() {
   if (!P2.add) return; const v = id => { const e = $('#' + id); return e ? e.value : undefined; };
@@ -4625,6 +4664,31 @@ async function uploadProdImages(id, files) {
   return ok;
 }
 function pModalClose() { (P2.files || []).forEach(x => URL.revokeObjectURL(x.url)); P2.files = []; P2.id = ''; P2.add = false; P2.edit = false; const m = $('#pModal'); if (m) m.remove(); document.body.classList.remove('pm-open'); }
+function pQcHtml(p, ro) {
+  const q = pqc(p);
+  if (p.stage !== 'qc') {   // สรุปผล QC ที่ผ่านมา
+    if (!q.res && !q.fails) return '';
+    return '<div class="qc-sum ' + (q.res === 'pass' ? 'ok' : 'bad') + '">' + (q.res === 'pass' ? PIC.qc : PIC.xmark) + '<div><b>' + (q.res === 'pass' ? 'ผ่าน QC' : 'QC ไม่ผ่าน (ส่งกลับไปแก้)') + '</b><small>' +
+      [q.by ? 'โดย ' + esc(q.by) : '', q.at ? esc(fdt(q.at)) : '', q.ok ? 'ผ่าน ' + esc(q.ok) + ' ชิ้น' : '', q.ng && +q.ng ? 'เสีย ' + esc(q.ng) + ' ชิ้น' : '', q.fails ? 'เคยไม่ผ่าน ' + q.fails + ' ครั้ง' : ''].filter(Boolean).join(' · ') + '</small>' +
+      (q.res !== 'pass' && q.last ? '<p>เหตุผล: ' + esc(q.last) + '</p>' : q.note ? '<p>' + esc(q.note) + '</p>' : '') + '</div></div>';
+  }
+  const it = P2.qcIt || qcItemsFor(p), n = it.filter(x => x.d).length, all = n === it.length && it.length > 0;
+  const backs = ['machine', 'paint', 'assemble'].filter(st => !pSkipped(p, st));
+  return '<section class="qc-box"><div class="qc-h"><span class="qc-ic">' + PIC.qc + '</span><div><b>ตรวจคุณภาพ (QC) ก่อนแพ็ค</b><small>ติ๊กทุกหัวข้อที่ตรวจแล้ว · ผ่านครบจึงส่งไปแพ็คได้</small></div><span class="qc-n' + (all ? ' all' : '') + '">' + n + '/' + it.length + '</span></div>' +
+    (q.fails ? '<div class="qc-warn">' + PIC.xmark + 'เคยไม่ผ่าน ' + q.fails + ' ครั้ง' + (q.last ? ' · ล่าสุด: ' + esc(q.last) : '') + '</div>' : '') +
+    '<div class="qc-bar"><i style="width:' + Math.round(n / (it.length || 1) * 100) + '%"></i></div>' +
+    '<ul class="qc-list">' + it.map((x, k) => '<li><button type="button" class="qc-it' + (x.d ? ' on' : '') + '"' + (ro ? ' disabled' : '') + ' data-qct="' + k + '"><span class="qc-ck">' + (x.d ? PIC.check : '') + '</span><span class="t">' + esc(x.t) + '</span>' + (x.d && x.d.indexOf('|') > 0 ? '<small>' + esc(x.d.split('|')[0]) + '</small>' : '') + '</button></li>').join('') + '</ul>' +
+    (ro ? '' : '<div class="qc-add"><input id="qcNew" placeholder="เพิ่มหัวข้อตรวจเฉพาะงานนี้ เช่น ทดสอบแสงไฟ LED" maxlength="120"><button type="button" class="btn sm" data-qcadd="1">' + I.plus + 'เพิ่ม</button></div>' +
+      '<div class="pa-2 qc-cnt"><div class="f"><label for="qcOk">จำนวนชิ้นที่ผ่าน</label><input id="qcOk" type="number" min="0" inputmode="numeric" value="' + esc(P2.qcOk !== undefined ? P2.qcOk : q.ok) + '"></div><div class="f"><label for="qcNg">ชิ้นเสีย / ต้องแก้</label><input id="qcNg" type="number" min="0" inputmode="numeric" value="' + esc(P2.qcNg !== undefined ? P2.qcNg : q.ng) + '"></div></div>' +
+      '<div class="f"><label for="qcNote">บันทึกผลตรวจ</label><textarea id="qcNote" rows="2" placeholder="เช่น ขนาดเผื่อ +1 มม. ลูกค้ารับได้, ลอกฟิล์มด้านหลังแล้ว">' + esc(P2.qcNote !== undefined ? P2.qcNote : q.note) + '</textarea></div>' +
+      (P2.qcFail ? '<div class="qc-fail"><b>' + PIC.xmark + 'QC ไม่ผ่าน — ส่งกลับไปแก้ที่ขั้น</b><div class="qc-backs">' + backs.map(st => '<button type="button" class="qc-back ' + PSTG[st].cls + (P2.qcBack === st ? ' on' : '') + '" data-qcback="' + st + '">' + PIC[st] + PSTG[st].label + '</button>').join('') + '</div>' +
+        '<textarea id="qcWhy" rows="2" placeholder="ปัญหาที่พบ (จำเป็น) เช่น ขอบบิ่น 2 ชิ้น, สีด่างมุมซ้าย">' + esc(P2.qcWhy || '') + '</textarea>' +
+        '<div class="top-actions"><button type="button" class="btn sm" data-qcfail="cancel">ยกเลิก</button><button type="button" class="btn sm danger" data-qcfail="go">ส่งกลับไปแก้</button></div></div>'
+      : '<div class="qc-act"><button type="button" class="btn danger ghost" data-qcfail="ask">' + PIC.xmark + 'ไม่ผ่าน</button><button type="button" class="btn primary qc-pass" data-qcpass="1"' + (all ? '' : ' disabled title="ติ๊กให้ครบทุกหัวข้อก่อน"') + '>' + PIC.qc + 'ผ่าน QC → ไปแพ็ค</button></div>')) +
+    '</section>';
+}
+function qcRead() { const v = id => { const e = $('#' + id); return e ? e.value : undefined; }; ['Ok', 'Ng', 'Note', 'Why'].forEach(k => { const x = v('qc' + k); if (x !== undefined) P2['qc' + k] = x; }); }
+function qcPayload(p, res) { const q = pqc(p); return { it: P2.qcIt || qcItemsFor(p), res: res, ok: P2.qcOk !== undefined ? P2.qcOk : q.ok, ng: P2.qcNg !== undefined ? P2.qcNg : q.ng, note: P2.qcNote !== undefined ? P2.qcNote : q.note }; }
 function pInfoHtml(p, ro) {
   if (P2.edit && !ro) {
     const sales = (S.settings && S.settings.sales) || [], groups = (S.settings && S.settings.groups) || [];
@@ -4687,7 +4751,7 @@ function pModalDraw() {
   const mPick = '<div class="pc-pick">' + machinesList().concat(ms.map(x => x.m).filter(n => machinesList().indexOf(n) < 0)).map(n => { const cur = ms.find(x => x.m === n);
     return '<button type="button" class="mchip' + (cur ? ' on' : '') + (cur && cur.d ? ' done' : '') + '"' + (ro ? ' disabled' : '') + ' data-pmset="' + esc(n) + '" aria-pressed="' + !!cur + '">' + (cur ? PIC.check : '') + esc(n) + (cur && cur.d ? ' · เสร็จ ' + esc(fdt(cur.d).replace(/^.* /, '')) : '') + '</button>'; }).join('') + '</div>';
   m.innerHTML = '<div class="pm-card ' + PSTG[p.stage].cls + '"><div class="pm-h"><div><span class="eyebrow">' + pPill(p.stage) + ' · อยู่ขั้นนี้ ' + pAgeTxt(pAge(p)) + '</span><h3>' + esc(p.code) + '</h3>' + (p.title ? '<p class="sub">' + esc(p.title) + '</p>' : '') + '</div>' + x + '</div><div class="pm-b">' +
-    stepper +
+    stepper + pQcHtml(p, ro) +
     pInfoHtml(p, ro) + pImgsHtml(p, ro) +
     '<div class="f"><label>เครื่องที่ใช้</label>' + mPick + (p.stage === 'machine' && !ro ? '<div class="hint">ติ๊กเครื่องที่ทำเสร็จได้ที่การ์ดบนบอร์ด ครบทุกเครื่องแล้วงานไปขั้นต่อเอง</div>' : '') + '</div>' +
     '<div class="pc-skips">' + pSkipTogs(p, ro) + '</div>' +
@@ -4742,6 +4806,28 @@ function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ
       if (files.length) { const n = await uploadProdImages(r.id, files); if (n) toast('เพิ่มรูปแล้ว ' + n + ' รูป'); }
     });
     return true;
+  }
+  if (d.pqc) { e.stopPropagation(); pModalOpen(d.pqc); setTimeout(() => { const b = $('#pModal .qc-box'); if (b) b.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); return true; }
+  if (d.qct !== undefined || d.qcadd || d.qcpass || d.qcfail || d.qcback) {
+    const p = prodById(P2.id); if (!p || !canProd()) return true; qcRead();
+    P2.qcIt = (P2.qcIt || qcItemsFor(p)).map(x => ({ t: x.t, d: x.d }));
+    if (d.qct !== undefined) { const x = P2.qcIt[+d.qct]; if (x) x.d = x.d ? '' : (S.me || '') + '|' + nowLocal(); prodWrite(p.id, { qc: qcPayload(p, '') }); pModalDraw(); return true; }
+    if (d.qcadd) { const t = String(($('#qcNew') || {}).value || '').trim(); if (!t) { toast('พิมพ์หัวข้อที่จะตรวจก่อน', true); return true; } P2.qcIt.push({ t: t, d: '' }); prodWrite(p.id, { qc: qcPayload(p, '') }, 'เพิ่มหัวข้อตรวจแล้ว'); pModalDraw(); return true; }
+    if (d.qcfail === 'ask') { P2.qcFail = true; P2.qcBack = P2.qcBack || ['assemble', 'paint', 'machine'].find(st => !pSkipped(p, st)); pModalDraw(); setTimeout(() => { const w = $('#qcWhy'); if (w) w.focus(); }, 30); return true; }
+    if (d.qcfail === 'cancel') { P2.qcFail = false; pModalDraw(); return true; }
+    if (d.qcback) { P2.qcBack = d.qcback; pModalDraw(); return true; }
+    if (d.qcfail === 'go') {
+      const why = String(P2.qcWhy || '').trim(); if (!why) { toast('บอกปัญหาที่พบก่อน เพื่อให้ขั้นก่อนหน้าแก้ได้ถูก', true); const w = $('#qcWhy'); if (w) w.focus(); return true; }
+      const to = P2.qcBack || 'machine', patch = { stage: to, why: why, qc: qcPayload(p, 'fail') };
+      if (to === 'machine') patch.machines = pms(p).map(m => ({ m: m.m, d: '' }));
+      prodWrite(p.id, patch, p.code + ' QC ไม่ผ่าน → ส่งกลับไป' + PSTG[to].label).then(r => { if (r) { P2.qcFail = false; ['qcIt', 'qcWhy'].forEach(k => { delete P2[k]; }); pModalDraw(); } });
+      return true;
+    }
+    if (d.qcpass) {
+      if (P2.qcIt.some(x => !x.d)) { toast('ติ๊กให้ครบทุกหัวข้อก่อน', true); return true; }
+      prodWrite(p.id, { stage: pNextOf(p) || 'pack', qc: qcPayload(p, 'pass'), why: 'ผ่าน QC' }, '✅ ' + p.code + ' ผ่าน QC → แพ็ค').then(r => { if (r) { ['qcIt', 'qcOk', 'qcNg', 'qcNote'].forEach(k => { delete P2[k]; }); pModalDraw(); } });
+      return true;
+    }
   }
   if (d.pinfo) {
     if (d.pinfo === 'edit') { P2.edit = true; pModalDraw(); setTimeout(() => { const x = $('#pEdTitle'); if (x) x.focus(); }, 30); return true; }
