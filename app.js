@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.35.0';
+const APP_VERSION = '2.36.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -487,7 +487,7 @@ const Demo = {
     d.prods.push({ id: uid('p_'), code: j.code, title: j.title || '', sale: j.sale || '', group: j.group || '', stage: 'wait', machines: '[]', paint: '', note: '', enteredAt: t, startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, updatedAt: t + ':00', updatedBy: u.name, history: JSON.stringify([{ t: t, by: u.name, s: 'wait', x: 'ออกแบบเสร็จ ส่งเข้าผลิต' }]) }); },
   async prodSave(p) {
     const d = this.db(), u = this.me(d), data = p.prod || {}, now = nowLocal() + ':' + pad(new Date().getSeconds()); d.prods = d.prods || [];
-    if (u.role !== 'prod') throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิต');
+    if (u.role !== 'prod' && u.role !== 'admin') throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน');
     let cur = data.id ? d.prods.find(x => x.id === data.id) : null; const before = cur ? clone(cur) : null;
     if (data.id && !cur) throw new Error('ไม่พบงานนี้ในฝ่ายผลิต อาจถูกลบไปแล้ว');
     if (cur && data.baseUpdatedAt && cur.updatedAt && data.baseUpdatedAt !== cur.updatedAt) throw new Error('งานนี้ถูกอัปเดตโดย ' + cur.updatedBy + ' เมื่อสักครู่ กดรีเฟรชแล้วลองอีกครั้ง');
@@ -508,7 +508,7 @@ const Demo = {
     if (!before || before.stage !== cur.stage || before.machines !== cur.machines) cur.history = JSON.stringify(phist(cur).concat({ t: n16, by: u.name, s: cur.stage, x: String(data.why || '') }).slice(-40));
     cur.updatedAt = now; cur.updatedBy = u.name; this.save(d); return { prod: this.mask(d, u, clone(cur), ['createdBy', 'updatedBy']) };
   },
-  async prodDelete(p) { const d = this.db(), u = this.me(d); if (u.role !== 'prod') throw new Error('ลบงานผลิตได้เฉพาะฝ่ายผลิต'); d.prods = (d.prods || []).filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
+  async prodDelete(p) { const d = this.db(), u = this.me(d); if (u.role !== 'prod' && u.role !== 'admin') throw new Error('ลบงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน'); d.prods = (d.prods || []).filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
   async salePin(p) { const d = this.db(); this.admin(this.me(d)); d.salePin = p.pin ? String(p.pin) : ''; if (d.salePin && !d.saleKey) d.saleKey = uid('k'); this.save(d); return { on: !!d.salePin }; },
   async saleOpen(p) { const d = this.db(); if (String(p.pin) !== String(d.salePin || '1234')) throw new Error('PIN ไม่ถูกต้อง'); if (!d.saleKey) { d.saleKey = uid('k'); this.save(d); } return { key: d.saleKey }; },
   mask(d, viewer, o, keys) {
@@ -4123,7 +4123,7 @@ const PIC = {
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
 };
-const canProd = () => !!S.user && S.user.role === 'prod';   // บอร์ดผลิต: ฝ่ายผลิตเท่านั้นที่แก้ได้
+const canProd = () => !!S.user && (S.user.role === 'prod' || S.user.role === 'admin');   // บอร์ดผลิต: ฝ่ายผลิตและแอดมินแก้ได้
 const isProdRole = () => !!S.user && S.user.role === 'prod';
 const machinesList = () => { const m = (S.settings && S.settings.machines || []).map(x => String(x || '').trim()).filter(Boolean); return m.length ? m : DEF_MACHINES; };
 function pms(p) { try { const a = JSON.parse((p && p.machines) || '[]'); return Array.isArray(a) ? a.filter(x => x && x.m) : []; } catch (e) { return []; } }
@@ -4249,7 +4249,7 @@ function viewProd() {
     const n = x[0] === 'all' ? open.filter(p => p.stage === 'machine').length : open.filter(p => inMachine(p, x[0])).length;
     return '<button class="qchip" data-pm="' + esc(x[0]) + '" aria-pressed="' + (F === x[0]) + '"><span class="qi">' + (x[0] === 'all' ? STI.all : PIC.machine) + '</span>' + esc(x[1]) + '<b>' + n + '</b></button>'; }).join('') + '</div>';
   const search = '<div class="filters"><label class="search">' + I.search + '<input id="pq" type="search" autocomplete="off" placeholder="ค้นหาเลข Job, ชื่องาน, sale…" value="' + esc(S.pq || '') + '" aria-label="ค้นหางานผลิต"></label></div>';
-  const sub = canProd() ? 'เลือกเครื่องแล้วกด "เริ่มลงเครื่อง" · ติ๊กแต่ละเครื่องเมื่อเสร็จ ครบแล้วไปทำสี → ประกอบติดตั้ง → แพ็ค เอง' : 'ดูสถานะงานผลิตได้อย่างเดียว · อัปเดตได้เฉพาะฝ่ายผลิต';
+  const sub = canProd() ? 'เลือกเครื่องแล้วกด "เริ่มลงเครื่อง" · ติ๊กแต่ละเครื่องเมื่อเสร็จ ครบแล้วไปทำสี → ประกอบติดตั้ง → แพ็ค เอง' : 'ดูสถานะงานผลิตได้อย่างเดียว · อัปเดตได้เฉพาะฝ่ายผลิตและแอดมิน';
   return topbar('ฝ่ายผลิต', sub) + flow + search + chips + '<div class="board-scroll"><div class="board pboard">' + cols + '</div></div>';
 }
 

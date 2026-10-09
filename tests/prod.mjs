@@ -28,8 +28,8 @@ eq('filter by step', await pg.evaluate(() => [...document.querySelectorAll('.co-
 await pg.click('#nav [data-view="prod"]'); await pg.waitForTimeout(700);
 eq('prod board 6 columns', await pg.locator('.pboard .col').count(), 6);
 await pg.screenshot({ path: out + 'prod-board.png', fullPage: true });
-eq('admin read-only on prod board', await pg.locator('.pboard [data-pstart],.pboard [data-padv],.pboard [data-pmt]').count(), 0);
-eq('admin has no add-to-production button', await pg.evaluate(() => getComputedStyle(document.querySelector('.fab')).display), 'none');
+eq('admin can act on prod board', (await pg.locator('.pboard [data-pstart],.pboard [data-padv]').count()) > 0, true);
+eq('admin has add-to-production button', await pg.evaluate(() => getComputedStyle(document.querySelector('.fab')).display) !== 'none', true);
 await login('ช่างเอ'); await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(500);
 // รอผลิต → เลือก 2 เครื่อง → เริ่ม
 const wid = await pg.evaluate(() => T.prodsAll().find(p => p.stage === 'wait').id);
