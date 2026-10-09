@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.28.0';
+const APP_VERSION = '2.29.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1251,7 +1251,7 @@ function jobInfoHtml(j, compact) {
     (imgs.length ? '' : '<div class="hv-noimg">' + DECO.palette.replace('palette', '') + 'ยังไม่มีรูปงาน</div>');
 }
 function showHover(el) {
-  const j = jobById(el.dataset.open); if (!j) return;
+  const j = jobById(el.dataset.open || el.dataset.hov); if (!j) return;
   let h = $('#hovercard'); if (!h) { h = document.createElement('div'); h.id = 'hovercard'; h.className = 'hovercard'; h.setAttribute('role', 'tooltip'); document.body.appendChild(h); }
   const side = hvSide(j);
   h.className = 'hovercard ' + (ST[isLate(j) ? 'late' : j.status] ? 's-' + (isLate(j) ? 'late' : j.status) : '') + (imgsOf(j.id).length ? ' has-img' : '') + (side ? ' wide' : '');
@@ -1267,9 +1267,16 @@ function showHover(el) {
 /* การ์ดลอย: เช็กลิสต์ + คอมเมนต์ล่าสุด (ด้านขวา) — คอมเมนต์ดึงตอนชี้ แล้วจำไว้ 1 นาที */
 const HCMT = {};
 function hvSide(j) {
-  const cl = clOf(j), nC = ((S.cmtCount || {})[j.id] || 0) || (HCMT[j.id] ? HCMT[j.id].list.length : 0);
-  if (!cl.length && !nC) return '';
+  const cl = clOf(j), nC = ((S.cmtCount || {})[j.id] || 0) || (HCMT[j.id] ? HCMT[j.id].list.length : 0), pd = typeof prodOfCode === 'function' && S.prods && S.prods.length ? prodOfCode(j.code) : null;
+  if (!cl.length && !nC && !pd) return '';
   let h = '<div class="hv-side">';
+  if (pd) {   // งานนี้อยู่ในฝ่ายผลิตแล้ว: ขั้นปัจจุบัน + เครื่อง
+    const ci = PORDER.indexOf(pd.stage), ms = pms(pd);
+    h += '<section class="hv-sec hv-pd ' + PSTG[pd.stage].cls + '"><div class="hv-sh"><b>' + PIC.machine + 'ฝ่ายผลิต</b>' + pPill(pd.stage) + '</div>' +
+      '<div class="hv-steps">' + PORDER.map((st, k) => '<i class="' + PSTG[st].cls + (k < ci ? ' past' : k === ci ? ' now' : '') + (pSkipped(pd, st) ? ' skip' : '') + '" title="' + PSTG[st].label + '">' + (k === ci ? PIC[st] : '') + '</i>').join('') + '</div>' +
+      (ms.length ? '<div class="hv-ms">' + ms.map(m => '<span class="' + (m.d ? 'on' : '') + '">' + (m.d ? '✓ ' : '') + esc(m.m) + '</span>').join('') + '</div>' : '') +
+      '<small class="hv-age">' + (pd.stage === 'shipped' ? 'ส่งแล้ว ' + esc(fd(pd.shippedAt)) : 'อยู่ขั้นนี้ ' + pAgeTxt(pAge(pd))) + (pd.note ? ' · ' + esc(pd.note) : '') + '</small></section>';
+  }
   if (cl.length) {
     const n = cl.filter(x => x.d).length, pct = Math.round(n / cl.length * 100), MAX = 7;
     h += '<section class="hv-sec hv-cl' + (n === cl.length ? ' all' : '') + '"><div class="hv-sh"><b>' + STI.done + 'เช็กลิสต์</b><span class="hv-n">' + n + '/' + cl.length + '</span></div>' +
@@ -1300,14 +1307,14 @@ function hideHoverSoon() { clearTimeout(hovT); hovT = setTimeout(hideHover, 260)
 const inHover = el => !!(el && el.closest && el.closest('#hovercard'));
 if (window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches) {
   document.addEventListener('mouseover', e => {
-    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open]');
+    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open], .co-row[data-hov]');
     if (!el) return;
-    if (el.dataset.open === hovId) { clearTimeout(hovT); hovT = null; return; }
+    if ((el.dataset.open || el.dataset.hov) === hovId) { clearTimeout(hovT); hovT = null; return; }
     if (hovId) hideHover();   // ย้ายไปการ์ดอื่น: ปิดกล่องเดิมทันที ไม่ให้บังการ์ดใบอื่น
     clearTimeout(hovT); hovT = setTimeout(() => { if (!S.edit && !S.drag) showHover(el); }, 380);
   });
   document.addEventListener('mouseout', e => {
-    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open]');
+    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open], .co-row[data-hov]');
     if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;
     if (inHover(e.relatedTarget)) { clearTimeout(hovT); hovT = null; return; }   // เลื่อนเมาส์เข้าไปในการ์ดสรุป → ค้างไว้ให้กดดูรูปได้
     if (hovId) hideHoverSoon(); else hideHover();
@@ -4291,7 +4298,8 @@ function viewFlow() {
   const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง'], ['late', 'ค้างนาน'], ['shipped', 'ส่งแล้ว 7 วัน']].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-cf="' + x[0] + '" aria-pressed="' + (F === x[0]) + '">' + x[1] + '<b>' + (x[0] === 'all' ? rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length : x[0] === 'late' ? late : shipped7) + '</b></button>').join('') +
     (F !== 'all' && F !== 'late' && F !== 'shipped' ? '<button class="qchip" data-cf="all" aria-pressed="true">' + esc(F === 'design' ? 'ฝ่ายแบบ' : PSTG[F] ? PSTG[F].label : F) + ' ✕</button>' : '') + '</div>';
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
-  const table = list.length ? '<div class="co-list">' + list.slice(0, 200).map(r => '<button type="button" class="co-row' + (r.late ? ' late' : '') + '" data-coopen="' + esc(r.code) + '">' +
+  const hovJob = r => { const o = r.jobs.filter(j => j.status !== 'done'); return (o[0] || r.jobs.slice().sort((a, b) => String(finDate(b)).localeCompare(String(finDate(a))))[0] || {}).id || ''; };
+  const table = list.length ? '<div class="co-list">' + list.slice(0, 200).map((r, k) => '<button type="button" class="co-row co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + '" style="--i:' + Math.min(k, 24) + '" data-coopen="' + esc(r.code) + '"' + (hovJob(r) ? ' data-hov="' + esc(hovJob(r)) + '"' : '') + '>' +
       '<span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' +
       '<span class="co-mid">' + coTrack(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
       '<span class="co-meta"><small>' + esc(r.sale ? 'Sale ' + r.sale : '') + '</small><small class="' + (r.late ? 'late' : '') + '">' + (r.since && r.step !== 'shipped' ? (r.late ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(Math.max(0, daysBetween(String(r.since).slice(0, 10), today()))) : '') + '</small></span></button>').join('') + '</div>' +
@@ -4355,7 +4363,7 @@ function coOpen(code) {
 function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ่มอื่นในแอปต้องตอบสนองทันที
   if (d.pclose || (t.id === 'pModal')) { pModalClose(); return true; }
   if (d.pm) { S.pm = d.pm; render(); return true; }
-  if (d.cf) { S.cf = S.cf === d.cf && d.cf !== 'all' ? 'all' : d.cf; render(); return true; }
+  if (d.cf) { S.cf = S.cf === d.cf && d.cf !== 'all' ? 'all' : d.cf; S.animIn = true; render(); return true; }
   if (d.coopen) { coOpen(d.coopen); return true; }
   if (d.pship) { S.pship = !S.pship; render(); return true; }
   if (d.pjob) { pModalClose(); openEditor(d.pjob); return true; }
@@ -4400,8 +4408,7 @@ function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ
 
 /* ---- ปุ่ม Sale ที่หน้าเข้าสู่ระบบ ---- */
 function saleTile() {
-  const L = S.login, on = mode() === 'demo' ? true : !!L.saleOn;
-  if (!on) return '';
+  const L = S.login;   // แสดงเสมอ — ถ้าแอดมินยังไม่ตั้ง PIN จะบอกตอนกด
   if (!L.sale) return '<button type="button" class="sale-tile" data-act="saleon"><span class="st-ic">' + PIC.sale + '</span><span><b>สำหรับ Sale</b><small>ดูสถานะงานทุกฝ่าย ไม่ต้องมีบัญชี</small></span><span class="st-go">' + I.next + '</span></button>';
   return '<form class="sale-pin" id="saleForm"><div class="sp-row"><span class="st-ic">' + PIC.sale + '</span><b>PIN สำหรับ Sale</b><button type="button" class="icon-btn sm" data-act="saleoff" aria-label="ยกเลิก">✕</button></div>' +
     '<div class="sp-row"><input id="salePin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="PIN 4–6 หลัก" aria-label="PIN สำหรับ Sale"><button class="btn primary sm" type="submit"' + (L.saleBusy ? ' disabled' : '') + '>' + (L.saleBusy ? 'กำลังเปิด…' : 'เปิดหน้า Sale') + '</button></div>' +

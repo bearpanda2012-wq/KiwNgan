@@ -2567,3 +2567,39 @@ body.pm-open{overflow:hidden}
 .hv-sk i{display:block;height:34px;border-radius:10px;background:linear-gradient(90deg,var(--surface-2) 0,var(--surface-3) 50%,var(--surface-2) 100%);background-size:200% 100%;animation:shimmer 1.2s linear infinite}
 @media (max-width:700px){.hovercard.wide{width:340px;flex-direction:column;overflow:auto}.hovercard.wide .hv-col{flex:none;max-height:none;overflow:visible}.hv-side{border-left:0;border-top:1px solid var(--line);max-height:none;overflow:visible}}
 @media (prefers-reduced-motion:reduce){.hv-sec{animation:none}}
+
+/* v2.29: ภาพรวมบริษัท — แถวงานมีชีวิตชีวา + การ์ดลอยมีขั้นผลิต */
+.co-row{position:relative;overflow:hidden;animation:none;transition:transform .18s,box-shadow .18s,border-color .18s}
+.enter .co-row{animation:coIn .45s cubic-bezier(.2,.9,.3,1.2) both;animation-delay:calc(var(--i,0) * 35ms)}
+@keyframes coIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+.co-row::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,color-mix(in oklab,var(--accent) 9%,transparent) 50%,transparent 70%);transform:translateX(-100%);pointer-events:none}
+.co-row:hover{transform:translateY(-2px);border-color:color-mix(in oklab,var(--accent) 55%,var(--line));box-shadow:0 10px 24px -14px color-mix(in oklab,var(--brand) 55%,transparent)}
+.co-row:hover::before{animation:coSweep .8s ease-out}
+@keyframes coSweep{to{transform:translateX(100%)}}
+.co-row.late{border-left:3px solid var(--late);animation:coLate 2.6s ease-in-out 1s infinite}
+.enter .co-row.late{animation:coIn .45s cubic-bezier(.2,.9,.3,1.2) both,coLate 2.6s ease-in-out 1s infinite;animation-delay:calc(var(--i,0) * 35ms),calc(var(--i,0) * 35ms + .6s)}
+@keyframes coLate{0%,100%{box-shadow:inset 3px 0 0 0 var(--late)}50%{box-shadow:inset 3px 0 0 0 var(--late),0 0 0 3px color-mix(in oklab,var(--late) 14%,transparent)}}
+.co-code b{transition:color .15s}.co-row:hover .co-code b{color:var(--accent)}
+/* แถบความคืบหน้า: ช่องที่ผ่านแล้วมีแสงวิ่ง ช่องปัจจุบันค่อย ๆ เติม */
+.co-trk i{overflow:visible}
+.co-trk i.past{background-image:linear-gradient(90deg,transparent 0,rgba(255,255,255,.55) 50%,transparent 100%);background-size:200% 100%;background-repeat:no-repeat;animation:coFlow 2.4s linear infinite;animation-delay:calc(var(--i,0) * 35ms)}
+@keyframes coFlow{from{background-position:-150% 0}to{background-position:250% 0}}
+.enter .co-trk i.now{transform-origin:left center;animation:coGrow .7s cubic-bezier(.3,1.2,.5,1) both;animation-delay:calc(var(--i,0) * 35ms + .15s)}
+@keyframes coGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.co-row:hover .co-trk i.now::after{transform:scale(1.3)}
+.co-trk i.now::after{transition:transform .2s}
+.co-mid .pill{transition:transform .15s}.co-row:hover .co-mid .pill{transform:scale(1.05)}
+.co-meta small:last-child{transition:color .15s}
+@media (prefers-reduced-motion:reduce){.co-row,.co-row.late,.enter .co-row,.co-trk i.past,.enter .co-trk i.now{animation:none}.co-row:hover::before{animation:none}}
+/* การ์ดลอย: ส่วนฝ่ายผลิต */
+.hv-pd .hv-sh b svg{color:var(--s)}
+.hv-steps{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;align-items:center}
+.hv-steps i{height:6px;border-radius:4px;background:var(--surface-3);display:grid;place-items:center;position:relative}
+.hv-steps i.past{background:color-mix(in oklab,var(--s) 55%,var(--surface))}
+.hv-steps i.skip{background:repeating-linear-gradient(45deg,var(--surface-3) 0 3px,transparent 3px 6px)}
+.hv-steps i.now{height:22px;border-radius:999px;background:var(--s);color:#fff;box-shadow:0 4px 10px -4px var(--s)}
+.hv-steps i.now svg{width:13px;height:13px}
+.hv-ms{display:flex;flex-wrap:wrap;gap:4px}
+.hv-ms span{font-size:11.5px;font-weight:600;border-radius:999px;padding:1px 8px;background:color-mix(in oklab,var(--p-mach) 12%,var(--surface));color:var(--p-mach)}
+.hv-ms span.on{background:var(--done-soft);color:var(--done)}
+.hv-age{font-size:12px;color:var(--muted)}

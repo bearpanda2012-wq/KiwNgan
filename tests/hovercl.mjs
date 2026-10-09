@@ -30,5 +30,13 @@ const plain = await pg.evaluate(() => { const j = S.jobs.find(x => x.status !== 
 await pg.mouse.move(5, 5); await pg.waitForTimeout(500);
 await pg.hover('.card[data-id="' + plain + '"] .code'); await pg.waitForTimeout(1000);
 eq('plain job keeps narrow card', await pg.locator('#hovercard.show:not(.wide)').count(), 1);
+// ภาพรวมบริษัท: ชี้แถวงานแล้วขึ้นการ์ดลอยเหมือนบอร์ดงาน (งานที่อยู่ฝ่ายผลิตมีส่วน "ฝ่ายผลิต")
+await pg.mouse.move(5, 5); await pg.evaluate(() => T.go('flow')); await pg.waitForTimeout(1600);
+eq('rows have hover job', (await pg.locator('.co-row[data-hov]').count()) > 5, true);
+const prow = pg.locator('.co-row.co-machine[data-hov]').first();
+await prow.hover(); await pg.waitForTimeout(1300);
+eq('hover card on company row', await pg.locator('#hovercard.show').count(), 1);
+eq('production section in hover', await pg.locator('#hovercard .hv-pd .hv-steps i.now').count(), 1);
+await pg.screenshot({ path: out + 'hover-co.png' });
 console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.join(' | ') || 'none');
 await b.close(); srv.close(); if (bad || errs.length) process.exit(1);
