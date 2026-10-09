@@ -1,0 +1,57 @@
+// ฝ่ายผลิต: งาน CAM เสร็จ → รอผลิต เอง, สิทธิ์อัปเดต, หลายเครื่อง, ข้ามทำสี, PIN ของ Sale
+const path = require('path'); process.argv[2] = path.join(__dirname, '../../backend/Code.gs');
+const m = require('./mock.js'); const logs = []; const ol = console.log; console.log = (...a) => logs.push(a.join(' ')); m.ctx.setup(); console.log = ol;
+const pin = (logs.join('\n').match(/PIN[^0-9]*(\d{4})/) || [])[1]; const A = m.call('login', { name: 'แอดมิน', pin }).data.token;
+const mk = (n, role) => { const r = m.call('saveUser', { user: { name: n, role: role || 'user' } }, A).data; return [m.call('login', { userId: r.user.id, pin: r.pin }).data.token, r.user]; };
+const [U, uu] = mk('หมี'), [PR, pu] = mk('ช่างเอ', 'prod');
+let ok = 0, bad = 0; const eq = (lbl, a, b) => { const p = JSON.stringify(a) === JSON.stringify(b); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(b))); };
+eq('prod role saved', pu.role, 'prod');
+// CAD เสร็จ ไม่เข้า, CAM เสร็จ เข้ารอผลิต
+m.call('saveJob', { job: { code: 'P-1', title: 'ผนังล็อบบี้', taskType: 'ทำ CAD', sale: 'ป้อม', group: 'งาน 2D', status: 'queue' } }, U);
+let b = m.call('bootstrap', {}, U).data; const cad = b.jobs.find(j => j.code === 'P-1');
+m.call('saveJob', { job: Object.assign({}, cad, { status: 'done' }) }, U);
+eq('CAD done → no prod', m.call('bootstrap', {}, U).data.prods.length, 0);
+m.call('saveJob', { job: { code: 'P-1', title: 'ผนังล็อบบี้', taskType: 'ทำ CAM', sale: 'ป้อม', group: 'งาน 2D', status: 'queue' } }, U);
+const cam = m.call('bootstrap', {}, U).data.jobs.find(j => j.code === 'P-1' && j.taskType === 'ทำ CAM');
+m.call('saveJob', { job: Object.assign({}, cam, { status: 'done' }) }, U);
+b = m.call('bootstrap', {}, U).data;
+eq('CAM done → รอผลิต', b.prods.map(x => [x.code, x.stage, x.sale, x.title]), [['P-1', 'wait', 'ป้อม', 'ผนังล็อบบี้']]);
+m.call('saveJob', { job: Object.assign({}, cam, { status: 'doing' }) }, U); m.call('saveJob', { job: Object.assign({}, cam, { status: 'done' }) }, U);
+eq('done again → no duplicate', m.call('bootstrap', {}, U).data.prods.length, 1);
+const P1 = b.prods[0];
+eq('designer cannot update prod', m.call('prodSave', { prod: { id: P1.id, stage: 'machine' } }, U).error, 'อัปเดตงานผลิตได้เฉพาะฝ่ายผลิต หัวหน้างาน หรือแอดมิน');
+eq('machine needs a machine', m.call('prodSave', { prod: { id: P1.id, stage: 'machine' } }, PR).error, 'เลือกเครื่องอย่างน้อย 1 เครื่องก่อนเริ่มลงเครื่อง');
+let r = m.call('prodSave', { prod: { id: P1.id, stage: 'machine', machines: [{ m: 'Laser' }, { m: 'Punching' }] } }, PR).data.prod;
+eq('start on 2 machines', [r.stage, JSON.parse(r.machines).length, !!r.startedAt], ['machine', 2, true]);
+r = m.call('prodSave', { prod: { id: P1.id, machines: [{ m: 'Laser', d: '2026-10-09T10:00' }, { m: 'Punching' }] } }, PR).data.prod;
+eq('1 of 2 done stays on machine', r.stage, 'machine');
+r = m.call('prodSave', { prod: { id: P1.id, machines: [{ m: 'Laser', d: '2026-10-09T10:00' }, { m: 'Punching', d: '2026-10-09T11:00' }] } }, PR).data.prod;
+eq('all machines done → ทำสี', r.stage, 'paint');
+r = m.call('prodSave', { prod: { id: P1.id, stage: 'pack' } }, PR).data.prod; eq('→ แพ็ค', r.stage, 'pack');
+r = m.call('prodSave', { prod: { id: P1.id, stage: 'ready' } }, PR).data.prod; eq('→ พร้อมส่ง has finishedAt', [r.stage, !!r.finishedAt], ['ready', true]);
+r = m.call('prodSave', { prod: { id: P1.id, stage: 'shipped' } }, PR).data.prod; eq('→ ส่งแล้ว', [r.stage, !!r.shippedAt], ['shipped', true]);
+eq('history kept', JSON.parse(r.history).map(h => h.s), ['wait', 'machine', 'machine', 'paint', 'pack', 'ready', 'shipped']);
+// ข้ามทำสี
+r = m.call('prodSave', { prod: { code: 'P-2', paint: 'no', stage: 'machine', machines: [{ m: 'Router', d: '2026-10-09T09:00' }] } }, A).data.prod;
+eq('manual add + no paint + all done → แพ็ค', [r.code, r.stage, r.paint], ['P-2', 'pack', 'no']);
+eq('duplicate active code', m.call('prodSave', { prod: { code: 'p-2' } }, A).error, 'เลข Job p-2 อยู่ในฝ่ายผลิตแล้ว');
+eq('stale write blocked', !!m.call('prodSave', { prod: { id: r.id, stage: 'ready', baseUpdatedAt: '2000-01-01' } }, PR).error, true);
+eq('prod role cannot add design job', m.call('saveJob', { job: { code: 'X-9', taskType: 'ทำ CAD' } }, PR).error, 'ฝ่ายผลิตเพิ่มงานของฝ่ายแบบไม่ได้');
+eq('prod user cannot delete', !!m.call('prodDelete', { id: r.id }, PR).error, true);
+// Sale PIN
+eq('roster sale off', m.call('roster', {}).data.sale, false);
+eq('saleOpen before set', m.call('saleOpen', { pin: '1111' }).error, 'แอดมินยังไม่ได้ตั้ง PIN สำหรับ Sale');
+eq('user cannot set sale pin', m.call('salePin', { pin: '2468' }, U).error, 'เฉพาะแอดมินเท่านั้น');
+m.call('salePin', { pin: '2468' }, A);
+eq('roster sale on', m.call('roster', {}).data.sale, true);
+eq('admin bootstrap shows pin set', m.call('bootstrap', {}, A).data.salePin, true);
+eq('wrong pin', m.call('saleOpen', { pin: '1111' }).error, 'PIN ไม่ถูกต้อง');
+const key = m.call('saleOpen', { pin: '2468' }).data.key;
+eq('right pin → same key as admin link', key, m.call('saleLink', {}, A).data.key);
+const sv = m.call('saleView', { k: key }).data;
+eq('saleView has prods', sv.prods.map(x => [x.code, x.stage]).sort(), [['P-1', 'shipped'], ['P-2', 'pack']]);
+eq('saleView machines', sv.machines, ['Router', 'Laser', 'Punching', 'WaterJet']);
+for (let i = 0; i < 9; i++) m.call('saleOpen', { pin: '0000' });
+eq('locked after many fails', m.call('saleOpen', { pin: '2468' }).error, 'ใส่ PIN ผิดหลายครั้ง รอ 10 นาทีแล้วลองใหม่');
+console.log(ok + ' ok, ' + bad + ' failed');
+if (bad) process.exit(1);

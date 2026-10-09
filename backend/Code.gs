@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.20.3';
+const VERSION = '1.21.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -38,11 +38,14 @@ const SHEETS = {
   Messages: ['id', 'ts', 'from', 'fromRole', 'to', 'kind', 'text', 'jobId', 'status', 'helper', 'readBy'],
   Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'fileId'],
   Files: ['id', 'jobId', 'name', 'mime', 'size', 'fileId', 'createdBy', 'createdAt'],
-  Comments: ['id', 'jobId', 'ts', 'from', 'text']
+  Comments: ['id', 'jobId', 'ts', 'from', 'text'],
+  // ฝ่ายผลิต: 1 แถว = 1 เลข Job ที่ออกแบบเสร็จแล้ว เดินต่อ รอผลิต → ลงเครื่อง → ทำสี → แพ็ค → พร้อมส่ง → ส่งแล้ว
+  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history']
 };
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
 const STATUSES = ['queue', 'doing', 'review', 'fix', 'hold', 'done'];
+const PROD_STAGES = ['wait', 'machine', 'paint', 'pack', 'ready', 'shipped'];
 const COLORS = ['#0B6B70', '#2D5FC4', '#B05A2A', '#7A4BB5', '#2B7F4A', '#B8435F', '#5B6B7A', '#A07A12'];
 
 /* ======================= HTTP ======================= */
@@ -97,11 +100,13 @@ function rtReply_(topic, rid, text) {
 const PUBLIC = {
   ping: () => ({ version: VERSION, app: 'KiwNgan', brand: publicBrand_() }),
   // แอดมินไม่แสดงในรายชื่อหน้าเข้าสู่ระบบ (เข้าทางลิงก์ "ผู้ดูแลระบบ" ด้วยชื่อ + PIN)
-  roster: () => ({ users: readAll_('Users').filter(u => u.active && u.role !== 'admin').map(publicUser_), brand: publicBrand_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null }),
+  roster: () => ({ users: readAll_('Users').filter(u => u.active && u.role !== 'admin').map(publicUser_), brand: publicBrand_(), sale: !!PropertiesService.getScriptProperties().getProperty('SALE_PIN'), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null }),
   // ไม่ล็อก: เข้าสู่ระบบแค่เขียน Script Property 1 ค่า · ส่งข้อมูลเริ่มต้นกลับไปด้วยเลย ไม่ต้องเรียก bootstrap อีกรอบ
   login: p => login_(p.userId, p.pin, p.name),
   // ลิงก์ให้ Sale ดูสถานะงาน (อ่านอย่างเดียว ไม่ต้องเข้าสู่ระบบ) — ต้องมีกุญแจที่แอดมินสร้าง
-  saleView: p => saleView_(p.k, p.sale)
+  saleView: p => saleView_(p.k, p.sale),
+  // ปุ่ม Sale ที่หน้าเข้าสู่ระบบ: ใส่ PIN ของ Sale (แอดมินตั้งไว้) แล้วได้กุญแจเปิดหน้าสถานะงาน
+  saleOpen: p => saleOpen_(p.pin)
 };
 
 const ACTIONS = {
@@ -139,6 +144,9 @@ const ACTIONS = {
   addComment: (p, u) => withLock_(() => addComment_(p, u)),
   deleteComment: (p, u) => withLock_(() => deleteComment_(p.id, u)),
   saleLink: (p, u) => { admin_(u); return { key: saleKey_(!!p.reset) }; },
+  salePin: (p, u) => withLock_(() => { admin_(u); return salePin_(p.pin); }),
+  prodSave: (p, u) => withLock_(() => ({ prod: maskProd_(prodSave_(p.prod, u), u) })),
+  prodDelete: (p, u) => withLock_(() => prodDelete_(p.id, u)),
   image: (p, u) => imageFull_(p.id),
   // admin
   saveSettings: (p, u) => withLock_(() => { admin_(u); return saveSettings_(p.settings, u); }),
@@ -149,7 +157,7 @@ const ACTIONS = {
 
 /* ===== ความเร็ว: ตัวบอกเวอร์ชันข้อมูล (stamp) ใน cache
    หน้าเว็บส่ง stamp ล่าสุดมาด้วย ถ้าไม่มีอะไรเปลี่ยนจะตอบกลับทันทีโดยไม่ต้องอ่านชีต ===== */
-const DATA_ACTIONS_ = { deleteFile: 1, addComment: 1, deleteComment: 1, copyImages: 1, saveJob: 1, deleteJob: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
+const DATA_ACTIONS_ = { deleteFile: 1, addComment: 1, deleteComment: 1, copyImages: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
 const MSG_ACTIONS_ = { sendMessage: 1, markRead: 1, helpUpdate: 1, deleteMessages: 1 };
 function stamp_(kind) {
   const c = CacheService.getScriptCache(), k = 'stamp:' + kind;
@@ -243,7 +251,8 @@ function dropSessionsOf_(uid) {
 
 function admin_(u) { if (u.role !== 'admin') throw new Error('เฉพาะแอดมินเท่านั้น'); }
 const isAdmin_ = u => u.role === 'admin';
-const ROLE_ = r => r === 'admin' || r === 'lead' ? r : 'user'; // admin = ผู้ดูแลระบบ, lead = หัวหน้างาน, user = พนักงาน
+const ROLE_ = r => r === 'admin' || r === 'lead' || r === 'prod' ? r : 'user'; // admin = ผู้ดูแลระบบ, lead = หัวหน้างาน, prod = ฝ่ายผลิต, user = พนักงาน
+const canProd_ = u => !!u && (u.role === 'admin' || u.role === 'lead' || u.role === 'prod');
 /* ผู้ร่วมทำงาน: เก็บเป็นชื่อคั่นด้วยจุลภาค "หมี,อีฟ" — ทำงาน/จับเวลา/เปลี่ยนสถานะได้เหมือนผู้รับผิดชอบ */
 const helpersOf_ = j => String((j && j.helpers) || '').split(',').map(x => x.trim()).filter(Boolean);
 const leadsJob_ = (u, j) => isAdmin_(u) || j.assignee === u.name || j.createdBy === u.name;
@@ -414,7 +423,8 @@ function defaultSettings_() {
       'งาน 3D': { cam: [1, 2], draw: [4, 5] }, 'งาน โครงการ': { cam: [1, 2], draw: [2, 2] },
       'งาน ตัวอย่าง': { cam: [1, 2], draw: [1, 2] }
     },
-    skipWeekends: true
+    skipWeekends: true,
+    machines: ['Router', 'Laser', 'Punching', 'WaterJet']
   };
 }
 
@@ -481,12 +491,15 @@ function saleView_(k, sale) {
   const cache = CacheService.getScriptCache(), ck = 'sale:' + VERSION + ':' + stamp_('data') + ':' + encodeURIComponent(String(sale || '')).slice(0, 120);
   try { const hit = cache.get(ck); if (hit) return JSON.parse(hit); } catch (e) {}
   const s = settings_(), since = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), tz_(), 'yyyy-MM-dd');
-  const jobs = readAll_('Jobs').filter(j => (!sale || j.sale === sale) && (j.status !== 'done' || String(j.finishedAt).slice(0, 10) >= since))
+  const prods = prodsRecent_().filter(x => !sale || x.sale === sale), live = {};
+  prods.forEach(x => { if (x.stage !== 'shipped') live[x.code.toLowerCase()] = 1; });
+  const jobs = readAll_('Jobs').filter(j => (!sale || j.sale === sale) && (j.status !== 'done' || String(j.finishedAt).slice(0, 10) >= since || live[j.code.toLowerCase()]))
     .map(j => { let cl = []; try { cl = JSON.parse(j.checklist || '[]'); } catch (e) {}
       return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', assignee: maskName_(j.assignee, { role: 'user' }) || '', helpers: helpersOf_(j).map(n => maskName_(n, { role: 'user' })).join(','),
                steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '' }; });
   const people = usersLite_().filter(x => x.active && x.role !== 'admin').map(x => ({ name: x.name, color: x.color }));
-  const out = { brand: publicBrand_(), sales: s.sales || [], sale: sale || '', jobs: jobs, people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
+  const pv = prods.map(x => ({ code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt }));
+  const out = { brand: publicBrand_(), sales: s.sales || [], sale: sale || '', jobs: jobs, prods: pv, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(ck, t, 600); } catch (e) {}
   return out;
 }
@@ -613,6 +626,8 @@ function bootstrap_(u, stamp) {
     images: imageMeta_().map(m => Object.assign(m, { createdBy: maskName_(m.createdBy, u) })),
     files: readAll_('Files').map(f => Object.assign(f, { createdBy: maskName_(f.createdBy, u) })),
     cmtCount: commentCounts_(),
+    prods: prodsRecent_().map(x => maskProd_(x, u)),
+    salePin: isAdmin_(u) ? !!PropertiesService.getScriptProperties().getProperty('SALE_PIN') : undefined,
     me: publicUser_(meFull), serverTime: nowIso_(), version: VERSION,
     rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY, secret: rtSecret_() } : null,
     archivedBefore: PropertiesService.getScriptProperties().getProperty('ARCHIVED_BEFORE') || ''
@@ -651,6 +666,7 @@ function saveJob_(job, u) {
       throw new Error('งานนี้ถูกแก้โดย ' + (before.updatedBy || 'คนอื่น') + ' เมื่อสักครู่ กดรีเฟรชแล้วลองอีกครั้ง');
     }
   } else {
+    if (u.role === 'prod') throw new Error('ฝ่ายผลิตเพิ่มงานของฝ่ายแบบไม่ได้');
     // เลข Job ซ้ำ: ทุกงานจบที่ CAM → เพิ่มงาน CAM ของเลขเดิมได้ถ้ายังไม่มีงาน CAM ของเลขนั้น · รายละเอียดอื่นซ้ำไม่ได้
     const same = readAll_('Jobs').filter(x => x.code.toLowerCase() === data.code.toLowerCase());
     if (same.length) {
@@ -672,6 +688,7 @@ function saveJob_(job, u) {
   if ((merged.status === 'doing' || merged.status === 'review' || merged.status === 'fix') && !merged.startedAt) merged.startedAt = now.slice(0, 16);
   writeRow_('Jobs', merged, row);
   notifyJob_(before, merged, u);
+  if (merged.status === 'done' && (!before || before.status !== 'done') && toProd_(merged.taskType)) { try { ensureProd_(merged, u); } catch (e) {} }
 
   if (!before) log_(merged.id, u.name, 'create', merged.code);
   else if (before.status !== merged.status) log_(merged.id, u.name, 'status', before.status + '→' + merged.status);
@@ -713,6 +730,121 @@ function deleteJob_(id, u) {
   });
   log_(id, u.name, 'delete', job.code);
   return { id: id };
+}
+
+/* ======================= ฝ่ายผลิต =======================
+   งานที่ออกแบบเสร็จ (งานประเภทที่ "ส่งเข้าผลิต" เช่น ทำ CAM) จะเข้า "รอผลิต" เอง 1 เลข Job = 1 แถว
+   ขั้น: wait รอผลิต → machine ลงเครื่อง (เลือกได้หลายเครื่อง ครบทุกเครื่องแล้วไปต่อเอง) → paint ทำสี (ข้ามได้) → pack แพ็ค → ready พร้อมส่ง → shipped ส่งแล้ว
+   อัปเดตได้: ฝ่ายผลิต หัวหน้างาน แอดมิน · คนอื่นดูอย่างเดียว */
+function toProd_(taskType) {
+  const t = (settings_().taskTypes || []).find(x => x.name === taskType);
+  if (t && t.prod !== undefined) return t.prod === true || t.prod === 'true';
+  return /CAM/i.test(String(taskType || ''));
+}
+function prodMachines_(raw) {
+  let a = raw;
+  if (typeof a === 'string') { try { a = JSON.parse(a || '[]'); } catch (e) { a = []; } }
+  if (!Array.isArray(a)) a = [];
+  const seen = {};
+  return a.map(x => ({ m: String((x && x.m) || '').trim().slice(0, 40), d: String((x && x.d) || '').slice(0, 16) }))
+    .filter(x => x.m && !seen[x.m] && (seen[x.m] = 1)).slice(0, 12);
+}
+function prodsRecent_() {
+  const since = Utilities.formatDate(new Date(Date.now() - 60 * 864e5), tz_(), 'yyyy-MM-dd');
+  return readAll_('Prod').filter(x => x.stage !== 'shipped' || String(x.shippedAt).slice(0, 10) >= since);
+}
+function maskProd_(x, viewer) {
+  if (!x || isAdmin_(viewer)) return x;
+  const o = Object.assign({}, x);
+  ['createdBy', 'updatedBy'].forEach(k => { o[k] = maskName_(o[k], viewer); });
+  try { o.history = JSON.stringify(JSON.parse(o.history || '[]').map(h => Object.assign(h, { by: maskName_(h.by, viewer) }))); } catch (e) {}
+  return o;
+}
+function prodFind_(code) {
+  const c = String(code || '').trim().toLowerCase();
+  return readAll_('Prod').filter(x => x.code.toLowerCase() === c && x.stage !== 'shipped')[0] || null;
+}
+/** งานออกแบบเสร็จ → สร้างงานรอผลิต (ถ้ายังไม่มีเลข Job นี้ในฝ่ายผลิต) */
+function ensureProd_(job, u) {
+  if (prodFind_(job.code)) return null;
+  const now = nowIso_();
+  const p = { id: uid_('p_'), code: job.code, title: job.title || '', sale: job.sale || '', group: job.group || '', stage: 'wait', machines: '[]', paint: '', note: '',
+              enteredAt: now.slice(0, 16), startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, updatedAt: now, updatedBy: u.name,
+              history: JSON.stringify([{ t: now.slice(0, 16), by: u.name, s: 'wait', x: 'ออกแบบเสร็จ ส่งเข้าผลิต' }]) };
+  writeRow_('Prod', p, -1);
+  log_(p.id, u.name, 'prod', p.code + ' → รอผลิต');
+  return p;
+}
+function prodSave_(data, u) {
+  if (!canProd_(u)) throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิต หัวหน้างาน หรือแอดมิน');
+  if (!data || typeof data !== 'object') throw new Error('ข้อมูลไม่ถูกต้อง');
+  const now = nowIso_(), row = data.id ? rowOf_('Prod', data.id) : -1;
+  let before = null, cur;
+  if (row > 0) {
+    before = readRow_('Prod', row);
+    if (data.baseUpdatedAt && before.updatedAt && data.baseUpdatedAt !== before.updatedAt) throw new Error('งานนี้ถูกอัปเดตโดย ' + maskName_(before.updatedBy, u) + ' เมื่อสักครู่ กดรีเฟรชแล้วลองอีกครั้ง');
+    cur = Object.assign({}, before);
+  } else {
+    if (data.id) throw new Error('ไม่พบงานนี้ในฝ่ายผลิต อาจถูกลบไปแล้ว');
+    const code = String(data.code || '').trim();
+    if (!code) throw new Error('กรุณาใส่เลข Job');
+    if (prodFind_(code)) throw new Error('เลข Job ' + code + ' อยู่ในฝ่ายผลิตแล้ว');
+    const src = readAll_('Jobs').filter(j => j.code.toLowerCase() === code.toLowerCase());
+    const pick = k => (src.find(j => j[k]) || {})[k] || '';
+    cur = { id: uid_('p_'), code: code, title: pick('title'), sale: pick('sale'), group: pick('group'), stage: 'wait', machines: '[]', paint: '', note: '',
+            enteredAt: now.slice(0, 16), startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, history: '[]' };
+  }
+  ['title', 'sale', 'group', 'note'].forEach(k => { if (data[k] !== undefined) cur[k] = String(data[k]).slice(0, k === 'note' ? 1000 : 200); });
+  if (data.paint !== undefined) cur.paint = data.paint === 'no' ? 'no' : '';
+  if (data.machines !== undefined) cur.machines = JSON.stringify(prodMachines_(data.machines));
+  if (data.stage !== undefined) { if (PROD_STAGES.indexOf(data.stage) < 0) throw new Error('ขั้นงานผลิตไม่ถูกต้อง'); cur.stage = data.stage; }
+  const ms = prodMachines_(cur.machines);
+  if (cur.stage === 'machine' && !ms.length) throw new Error('เลือกเครื่องอย่างน้อย 1 เครื่องก่อนเริ่มลงเครื่อง');
+  if (cur.stage === 'machine' && ms.every(x => x.d)) cur.stage = cur.paint === 'no' ? 'pack' : 'paint';   // ครบทุกเครื่อง → ไปขั้นต่อเอง
+  if (cur.stage === 'paint' && cur.paint === 'no' && (!before || before.stage !== 'paint')) cur.stage = 'pack';
+  const si = PROD_STAGES.indexOf(cur.stage);
+  if (si >= 1 && !cur.startedAt) cur.startedAt = now.slice(0, 16);
+  if (si < 1) cur.startedAt = '';
+  if (si >= 4 && !cur.finishedAt) cur.finishedAt = now.slice(0, 16);
+  if (si < 4) cur.finishedAt = '';
+  if (si === 5 && !cur.shippedAt) cur.shippedAt = now.slice(0, 16);
+  if (si < 5) cur.shippedAt = '';
+  let hist = []; try { hist = JSON.parse(cur.history || '[]'); } catch (e) {}
+  const changed = !before || before.stage !== cur.stage || before.machines !== cur.machines;
+  if (changed) { hist.push({ t: now.slice(0, 16), by: u.name, s: cur.stage, x: String(data.why || '').slice(0, 120) }); hist = hist.slice(-40); }
+  cur.history = JSON.stringify(hist);
+  cur.updatedAt = now; cur.updatedBy = u.name;
+  writeRow_('Prod', cur, row);
+  log_(cur.id, u.name, 'prod', cur.code + (before ? (before.stage !== cur.stage ? ' ' + before.stage + '→' + cur.stage : ' แก้ไข') : ' → ' + cur.stage));
+  return toObj_('Prod', SHEETS.Prod, SHEETS.Prod.map(h => cur[h] === undefined ? '' : String(cur[h])));
+}
+function prodDelete_(id, u) {
+  if (!(isAdmin_(u) || u.role === 'lead')) throw new Error('ลบงานผลิตได้เฉพาะหัวหน้างานหรือแอดมิน');
+  const row = rowOf_('Prod', id);
+  if (row < 0) throw new Error('ไม่พบงานนี้ในฝ่ายผลิต');
+  const p = readRow_('Prod', row);
+  sheet_('Prod').deleteRow(row);
+  log_(id, u.name, 'prod', p.code + ' ลบออกจากฝ่ายผลิต');
+  return { id: id };
+}
+/* PIN ของ Sale: เก็บเป็นค่าแฮชใน Script Properties (ไม่อยู่ในชีต ไม่ส่งไปให้ใคร) */
+function salePin_(pin) {
+  const pr = PropertiesService.getScriptProperties();
+  if (!pin) { pr.deleteProperty('SALE_PIN'); return { on: false }; }
+  if (!validPin_(pin)) throw new Error('PIN ต้องเป็นตัวเลข 4–6 หลัก');
+  const salt = Utilities.getUuid();
+  pr.setProperty('SALE_PIN', salt + ':' + hash_(salt, String(pin)));
+  saleKey_(false);
+  return { on: true };
+}
+function saleOpen_(pin) {
+  const raw = PropertiesService.getScriptProperties().getProperty('SALE_PIN');
+  if (!raw) throw new Error('แอดมินยังไม่ได้ตั้ง PIN สำหรับ Sale');
+  const c = CacheService.getScriptCache(), fails = Number(c.get('salefail') || 0);
+  if (fails >= 10) throw new Error('ใส่ PIN ผิดหลายครั้ง รอ 10 นาทีแล้วลองใหม่');
+  const i = raw.indexOf(':'), salt = raw.slice(0, i);
+  if (!validPin_(pin) || hash_(salt, String(pin)) !== raw.slice(i + 1)) { c.put('salefail', String(fails + 1), 600); throw new Error('PIN ไม่ถูกต้อง'); }
+  return { key: saleKey_(false) };
 }
 
 /* ---------- รูปงาน (เก็บในชีต Images แบ่งเป็นช่วง ๆ เพราะ 1 ช่องเก็บได้ไม่เกิน 50,000 ตัวอักษร) ---------- */
