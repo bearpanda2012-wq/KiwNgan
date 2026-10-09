@@ -2526,3 +2526,44 @@ body.pm-open{overflow:hidden}
 .ptog[data-passy].on,.ptog[data-paddassy].on{border-color:var(--p-assy);color:var(--p-assy);background:color-mix(in oklab,var(--p-assy) 10%,var(--surface))}
 .flow.pflow .flow-step{min-width:100px}
 @media (max-width:760px){.co-step{flex:1 1 30%}}
+
+/* v2.28: การ์ดลอย — เช็กลิสต์ + คอมเมนต์ด้านขวา */
+.hovercard.wide{width:640px;flex-direction:row;align-items:stretch;gap:0;padding:0;overflow:hidden}
+.hovercard.wide .hv-col{flex:0 0 320px;min-width:0;display:flex;flex-direction:column;gap:10px;padding:14px;overflow:auto;max-height:calc(100vh - 16px)}
+.hovercard.wide .hv-hero{margin:-14px -14px 0}
+.hovercard.wide .hv-main{border-radius:16px 0 0 0}
+.hv-side{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;padding:16px 14px 14px;background:linear-gradient(180deg,color-mix(in oklab,var(--s,var(--brand)) 6%,var(--surface-2)),var(--surface-2));border-left:1px solid var(--line);overflow:auto;max-height:calc(100vh - 16px)}
+.hv-sec{display:flex;flex-direction:column;gap:8px;background:var(--surface);border-radius:12px;padding:10px 12px;box-shadow:0 1px 0 rgba(0,0,0,.03),0 0 0 1px var(--line);animation:hvIn .22s ease-out both}
+.hv-sec+.hv-sec{animation-delay:.05s}
+@keyframes hvIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.hv-sh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.hv-sh b{display:inline-flex;align-items:center;gap:6px;font:600 13.5px var(--f-display)}
+.hv-sh b svg{width:16px;height:16px}
+.hv-cl .hv-sh b svg{color:var(--done)}
+.hv-cm .hv-sh b svg{color:var(--doing)}
+.hv-n{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;border-radius:999px;padding:1px 9px;background:var(--surface-3);color:var(--muted)}
+.hv-cl.all .hv-n{background:var(--done-soft);color:var(--done)}
+.hv-bar{height:6px;border-radius:9px;background:var(--surface-3);overflow:hidden}
+.hv-bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,color-mix(in oklab,var(--done) 60%,var(--surface)),var(--done));transition:width .5s}
+.hv-cl ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.hv-cl li{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:8px;font-size:12.5px;line-height:1.35}
+.hv-cl li .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hv-ck{width:18px;height:18px;border-radius:6px;border:2px solid var(--line);display:grid;place-items:center;color:#fff;flex:none}
+.hv-ck svg{width:12px;height:12px}
+.hv-cl li.on .hv-ck{background:var(--done);border-color:var(--done)}
+.hv-cl li.on .t{color:var(--muted);text-decoration:line-through;text-decoration-color:color-mix(in oklab,var(--muted) 60%,transparent)}
+.hv-cl li .av{width:18px;height:18px;font-size:9px}
+.hv-cl li.more{display:block;font-size:12px;color:var(--muted);padding-left:26px}
+.hv-c{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:start}
+.hv-c .av{width:26px;height:26px;font-size:11px}
+.hv-cb{background:var(--surface-2);border-radius:4px 12px 12px 12px;padding:6px 10px;min-width:0}
+.hv-c.me .hv-cb{background:color-mix(in oklab,var(--brand) 10%,var(--surface))}
+.hv-cb span{display:flex;align-items:baseline;gap:6px}
+.hv-cb b{font-size:12.5px;font-weight:600}
+.hv-cb small{font-size:11px;color:var(--muted)}
+.hv-cb p{margin:2px 0 0;font-size:12.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.hv-more{font-size:12px;color:var(--accent);font-weight:600}
+.hv-sk{display:flex;flex-direction:column;gap:6px}
+.hv-sk i{display:block;height:34px;border-radius:10px;background:linear-gradient(90deg,var(--surface-2) 0,var(--surface-3) 50%,var(--surface-2) 100%);background-size:200% 100%;animation:shimmer 1.2s linear infinite}
+@media (max-width:700px){.hovercard.wide{width:340px;flex-direction:column;overflow:auto}.hovercard.wide .hv-col{flex:none;max-height:none;overflow:visible}.hv-side{border-left:0;border-top:1px solid var(--line);max-height:none;overflow:visible}}
+@media (prefers-reduced-motion:reduce){.hv-sec{animation:none}}

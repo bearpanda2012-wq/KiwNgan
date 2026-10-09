@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.27.0';
+const APP_VERSION = '2.28.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1253,14 +1253,47 @@ function jobInfoHtml(j, compact) {
 function showHover(el) {
   const j = jobById(el.dataset.open); if (!j) return;
   let h = $('#hovercard'); if (!h) { h = document.createElement('div'); h.id = 'hovercard'; h.className = 'hovercard'; h.setAttribute('role', 'tooltip'); document.body.appendChild(h); }
-  h.className = 'hovercard ' + (ST[isLate(j) ? 'late' : j.status] ? 's-' + (isLate(j) ? 'late' : j.status) : '') + (imgsOf(j.id).length ? ' has-img' : '');
-  h.innerHTML = jobInfoHtml(j, false);
+  const side = hvSide(j);
+  h.className = 'hovercard ' + (ST[isLate(j) ? 'late' : j.status] ? 's-' + (isLate(j) ? 'late' : j.status) : '') + (imgsOf(j.id).length ? ' has-img' : '') + (side ? ' wide' : '');
+  h.innerHTML = side ? '<div class="hv-col">' + jobInfoHtml(j, false) + '</div>' + side : jobInfoHtml(j, false);
+  hvLoadCmts(j.id);
   if (!h.dataset.wired) { h.dataset.wired = '1'; h.addEventListener('mouseenter', () => { clearTimeout(hovT); hovT = null; }); h.addEventListener('mouseleave', e => { if (!(hovEl && e.relatedTarget && hovEl.contains(e.relatedTarget))) hideHoverSoon(); }); }
   const r = (el.classList.contains('grow') ? el.querySelector('.glab') || el : el).getBoundingClientRect(), W = h.offsetWidth || 340, vw = window.innerWidth, vh = window.innerHeight;
   let x = r.right + 12; if (x + W > vw - 8) x = Math.max(8, r.left - W - 12);
   h.style.left = x + 'px'; h.style.top = '0px'; h.classList.add('show');
   const hh = h.offsetHeight; let y = r.top + r.height / 2 - hh / 2; y = Math.max(8, Math.min(vh - hh - 8, y));
   h.style.top = y + 'px'; hovId = j.id; hovEl = el; paintAllThumbs(h);
+}
+/* การ์ดลอย: เช็กลิสต์ + คอมเมนต์ล่าสุด (ด้านขวา) — คอมเมนต์ดึงตอนชี้ แล้วจำไว้ 1 นาที */
+const HCMT = {};
+function hvSide(j) {
+  const cl = clOf(j), nC = ((S.cmtCount || {})[j.id] || 0) || (HCMT[j.id] ? HCMT[j.id].list.length : 0);
+  if (!cl.length && !nC) return '';
+  let h = '<div class="hv-side">';
+  if (cl.length) {
+    const n = cl.filter(x => x.d).length, pct = Math.round(n / cl.length * 100), MAX = 7;
+    h += '<section class="hv-sec hv-cl' + (n === cl.length ? ' all' : '') + '"><div class="hv-sh"><b>' + STI.done + 'เช็กลิสต์</b><span class="hv-n">' + n + '/' + cl.length + '</span></div>' +
+      '<div class="hv-bar" title="' + pct + '%"><i style="width:' + pct + '%"></i></div><ul>' +
+      cl.slice(0, MAX).map(x => '<li class="' + (x.d ? 'on' : '') + '"><span class="hv-ck">' + (x.d ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : '') + '</span><span class="t">' + esc(x.t) + '</span>' +
+        (x.d && x.by ? '<small title="' + esc(x.by + (x.at ? ' · ' + fdt(x.at) : '')) + '">' + av(x.by, 'xs') + '</small>' : '') + '</li>').join('') +
+      (cl.length > MAX ? '<li class="more">+ อีก ' + (cl.length - MAX) + ' ขั้น</li>' : '') + '</ul></section>';
+  }
+  if (nC) {
+    const c = HCMT[j.id], list = c ? c.list.slice(-3).reverse() : null;
+    h += '<section class="hv-sec hv-cm"><div class="hv-sh"><b>' + MSG_IC.chat + 'คอมเมนต์</b><span class="hv-n">' + nC + '</span></div>' +
+      (!list ? '<div class="hv-sk"><i></i><i></i></div>' : list.map(m => '<div class="hv-c' + (m.from === S.me ? ' me' : '') + '">' + av(m.from, 'sm') + '<div class="hv-cb"><span><b>' + esc(m.from) + '</b><small>' + esc(fdt(String(m.ts).slice(0, 16))) + '</small></span><p>' + esc(m.text) + '</p></div></div>').join('')) +
+      (nC > 3 ? '<div class="hv-more">ดูอีก ' + (nC - 3) + ' ข้อความ — กดเปิดงาน</div>' : '') + '</section>';
+  }
+  return h + '</div>';
+}
+function hvLoadCmts(id) {
+  const n = (S.cmtCount || {})[id] || 0, c = HCMT[id];
+  if (!n || (c && Date.now() - c.at < 60000 && c.list.length === n)) return;
+  api().comments({ jobId: id }).then(r => {
+    HCMT[id] = { at: Date.now(), list: r.comments || [] };
+    const h = $('#hovercard'), j = jobById(id);
+    if (h && hovId === id && j) { const sd = h.querySelector('.hv-side'), nh = hvSide(j); if (sd && nh) { sd.outerHTML = nh; if (hovEl) { const r = hovEl.getBoundingClientRect(), hh = h.offsetHeight, vh = window.innerHeight; h.style.top = Math.max(8, Math.min(vh - hh - 8, r.top + r.height / 2 - hh / 2)) + 'px'; } } }
+  }).catch(() => {});
 }
 function hideHover() { clearTimeout(hovT); hovT = null; hovId = null; hovEl = null; const h = $('#hovercard'); if (h) h.classList.remove('show'); }
 function hideHoverSoon() { clearTimeout(hovT); hovT = setTimeout(hideHover, 260); }
@@ -1420,7 +1453,7 @@ function cmtSec(jj) {
     '<div class="cmt-add"><textarea id="cmtText" rows="2" placeholder="เขียนคอมเมนต์… (Ctrl+Enter ส่ง)"></textarea><button type="button" class="btn primary sm" data-act="cmtsend">' + MSG_IC.send + 'ส่ง</button></div></section>';
 }
 function loadCmts(jobId) {
-  api().comments({ jobId: jobId }).then(r => { if (S.edit && S.edit.job.id === jobId) { S.edit.cmts = r.comments || []; (S.cmtCount = S.cmtCount || {})[jobId] = S.edit.cmts.length; if (S.edit.mode === 'view') { const el = $('#dtCmt'); if (el) el.outerHTML = cmtSec(jobById(jobId) || S.edit.job); } } }).catch(() => {});
+  api().comments({ jobId: jobId }).then(r => { HCMT[jobId] = { at: Date.now(), list: r.comments || [] }; if (S.edit && S.edit.job.id === jobId) { S.edit.cmts = r.comments || []; (S.cmtCount = S.cmtCount || {})[jobId] = S.edit.cmts.length; if (S.edit.mode === 'view') { const el = $('#dtCmt'); if (el) el.outerHTML = cmtSec(jobById(jobId) || S.edit.job); } } }).catch(() => {});
 }
 async function sendCmt() {
   const t = $('#cmtText'), text = t ? t.value.trim() : ''; if (!text || !S.edit) return;
