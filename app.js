@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.40.0';
+const APP_VERSION = '2.41.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1255,7 +1255,7 @@ function jobInfoHtml(j, compact) {
 }
 function showHover(el) {
   if (el.dataset.shov) return showSaleHover(el);
-  if (el.dataset.phov) return showProdHover(el);
+  if (el.dataset.phov || el.dataset.popen) return showProdHover(el);
   const j = jobById(el.dataset.open || el.dataset.hov); if (!j) return;
   let h = $('#hovercard'); if (!h) { h = document.createElement('div'); h.id = 'hovercard'; h.className = 'hovercard'; h.setAttribute('role', 'tooltip'); document.body.appendChild(h); }
   const side = hvSide(j);
@@ -1352,13 +1352,14 @@ function saleHoverHtml(r) {
 }
 /* การ์ดลอยของงานที่ฝ่ายผลิตบันทึกเอง (ไม่มีงานฝ่ายแบบ): ข้อมูลงาน โน้ต รูป เครื่อง ประวัติ */
 function prodHoverHtml(p) {
-  const im = imgsOf(p.id), ms = pms(p), ci = PORDER.indexOf(p.stage), h = phist(p).slice(-4).reverse();
+  const dj = designJobsOf(p.code), imo = imgsOf(p.id).map(m => ({ m: m, j: p.id })); dj.forEach(j => imgsOf(j.id).forEach(m => imo.push({ m: m, j: j.id })));
+  const im = imo.map(x => x.m), imj = k => imo[k].j, ms = pms(p), ci = PORDER.indexOf(p.stage), h = phist(p).slice(-4).reverse();
   const dn = p.due ? daysBetween(today(), p.due) : null, late = p.due && dn < 0 && p.stage !== 'ready' && p.stage !== 'shipped';
-  const hero = im.length ? '<div class="hv-hero"><button type="button" class="hv-main" data-lbopen="' + esc(im[0].id) + '" data-lbjob="' + esc(p.id) + '" title="กดดูรูปเต็มจอ">' + thumbImg(im[0], 'big') + '<span class="hv-zoom">' + I.search + 'กดดูรูป</span>' + (im.length > 1 ? '<span class="hv-cnt">' + STI.camera + im.length + '</span>' : '') + '</button>' +
-    (im.length > 1 ? '<div class="hv-strip">' + im.slice(1, 6).map(m => '<button type="button" data-lbopen="' + esc(m.id) + '" data-lbjob="' + esc(p.id) + '">' + thumbImg(m) + '</button>').join('') + '</div>' : '') + '</div>' : '';
+  const hero = im.length ? '<div class="hv-hero"><button type="button" class="hv-main" data-lbopen="' + esc(im[0].id) + '" data-lbjob="' + esc(imj(0)) + '" title="กดดูรูปเต็มจอ">' + thumbImg(im[0], 'big') + '<span class="hv-zoom">' + I.search + 'กดดูรูป</span>' + (im.length > 1 ? '<span class="hv-cnt">' + STI.camera + im.length + '</span>' : '') + '</button>' +
+    (im.length > 1 ? '<div class="hv-strip">' + im.slice(1, 6).map((m, k) => '<button type="button" data-lbopen="' + esc(m.id) + '" data-lbjob="' + esc(imj(k + 1)) + '">' + thumbImg(m) + '</button>').join('') + '</div>' : '') + '</div>' : '';
   const main = hero + '<div class="hv-head"><span class="flow-ic ic-' + p.stage + '">' + PIC[p.stage] + '</span><div><b class="mono">' + esc(p.code) + '</b><small>' + esc(p.title || '–') + '</small></div></div>' +
     '<div class="hv-grid"><span>สถานะ</span><b>' + pPill(p.stage) + '</b>' +
-    '<span>ที่มา</span><b><span class="co-sk">ฝ่ายผลิตบันทึกเอง</span></b>' +
+    '<span>ที่มา</span><b>' + (dj.length ? '<span class="co-sk">จากฝ่ายแบบ</span>' : '<span class="co-sk">ฝ่ายผลิตบันทึกเอง</span>') + '</b>' +
     '<span>Sale</span><b>' + esc(p.sale || '–') + '</b>' +
     '<span>กลุ่มงาน</span><b class="hv-chips">' + (p.group ? groupChip(p.group) : '–') + '</b>' +
     '<span>กำหนดส่ง</span><b class="' + (late ? 'bad' : '') + '">' + (p.due ? esc(fdY(p.due)) + (p.stage === 'shipped' ? '' : dn < 0 ? ' · เลย ' + (-dn) + ' วัน' : dn === 0 ? ' · วันนี้' : dn === 1 ? ' · พรุ่งนี้' : '') : '–') + '</b>' +
@@ -1369,19 +1370,21 @@ function prodHoverHtml(p) {
     '<div class="hv-steps">' + PORDER.map((st, k) => '<i class="' + PSTG[st].cls + (k < ci ? ' past' : k === ci ? ' now' : '') + (pSkipped(p, st) ? ' skip' : '') + '" title="' + PSTG[st].label + '">' + (k === ci ? PIC[st] : '') + '</i>').join('') + '</div>' +
     (ms.length ? '<div class="hv-ms">' + ms.map(m => '<span class="' + (m.d ? 'on' : '') + '">' + (m.d ? '✓ ' : '') + esc(m.m) + '</span>').join('') + '</div>' : '') +
     '<small class="hv-age">อยู่ขั้นนี้ ' + pAgeTxt(pAge(p)) + (p.paint === 'no' ? ' · ไม่ทำสี' : '') + (p.assy === 'no' ? ' · ไม่ประกอบ' : '') + '</small></section>' +
+    (dj.length ? '<section class="hv-sec hv-jobs"><div class="hv-sh"><b>' + STI.layers + 'งานฝ่ายแบบของเลขนี้</b><span class="hv-n">' + dj.length + '</span></div>' + dj.map(j => '<div class="hv-jr">' + typeChip(j.taskType, 'sm') + '<span class="pill ' + (ST[j.status] || ST.queue).cls + '">' + (ST[j.status] || ST.queue).label + '</span><span class="hv-jw">' + av(j.assignee, 'xs') + esc(j.assignee || '–') + (j.status === 'done' && finDate(j) ? ' · เสร็จ ' + esc(fd(finDate(j))) : '') + '</span></div>').join('') + '</section>' : '') +
     (h.length ? '<section class="hv-sec hv-jobs"><div class="hv-sh"><b>' + STI.clock + 'ความเคลื่อนไหวล่าสุด</b></div>' + h.map(e => '<div class="hv-jr"><span class="pill ' + (PSTG[e.s] ? PSTG[e.s].cls : '') + '">' + esc(PSTG[e.s] ? PSTG[e.s].label : e.s) + '</span><span class="hv-jw">' + esc(fdt(e.t)) + (e.by ? ' · ' + esc(e.by) : '') + '</span></div>').join('') + '</section>' : '') + '</div>';
   return '<div class="hv-col">' + main + '</div>' + side;
 }
 function showProdHover(el) {
-  const p = prodById(el.dataset.phov); if (!p) return;
+  const p = prodById(el.dataset.phov || el.dataset.popen); if (!p) return;
   let h = $('#hovercard'); if (!h) { h = document.createElement('div'); h.id = 'hovercard'; h.className = 'hovercard'; h.setAttribute('role', 'tooltip'); document.body.appendChild(h); }
-  h.className = 'hovercard wide' + (imgsOf(p.id).length ? ' has-img' : '');
+  h.className = 'hovercard wide' + (pThumb(p) ? ' has-img' : '');
   h.innerHTML = prodHoverHtml(p);
   if (!h.dataset.wired) { h.dataset.wired = '1'; h.addEventListener('mouseenter', () => { clearTimeout(hovT); hovT = null; }); h.addEventListener('mouseleave', e => { if (!(hovEl && e.relatedTarget && hovEl.contains(e.relatedTarget))) hideHoverSoon(); }); }
   const rc = el.getBoundingClientRect(), W = h.offsetWidth || 340, vw = window.innerWidth, vh = window.innerHeight;
-  let x = rc.left + Math.min(rc.width * .3, 360); if (x + W > vw - 8) x = Math.max(8, vw - W - 8);
+  const side = rc.width < 480;   // การ์ดบนบอร์ดผลิต: วางข้าง ๆ การ์ดเหมือนบอร์ดงาน
+  let x = side ? rc.right + 12 : rc.left + Math.min(rc.width * .3, 360); if (side && x + W > vw - 8) x = Math.max(8, rc.left - W - 12); if (x + W > vw - 8) x = Math.max(8, vw - W - 8);
   h.style.left = x + 'px'; h.style.top = '0px'; h.classList.add('show');
-  const place = () => { const hh = h.offsetHeight; let y = rc.bottom + 8; if (y + hh > vh - 8) y = rc.top - hh - 8; if (y < 8) y = Math.max(8, Math.min(vh - hh - 8, rc.top + rc.height / 2 - hh / 2)); h.style.top = y + 'px'; };
+  const place = () => { const hh = h.offsetHeight; if (side) { h.style.top = Math.max(8, Math.min(vh - hh - 8, rc.top + rc.height / 2 - hh / 2)) + 'px'; return; } let y = rc.bottom + 8; if (y + hh > vh - 8) y = rc.top - hh - 8; if (y < 8) y = Math.max(8, Math.min(vh - hh - 8, rc.top + rc.height / 2 - hh / 2)); h.style.top = y + 'px'; };
   place(); hovId = 'prod:' + p.id; hovEl = el; paintAllThumbs(h);
   h.querySelectorAll('img').forEach(im => im.addEventListener('load', () => { if (hovEl === el) place(); }, { once: true }));
 }
@@ -1404,14 +1407,14 @@ function hideHoverSoon() { clearTimeout(hovT); hovT = setTimeout(hideHover, 260)
 const inHover = el => !!(el && el.closest && el.closest('#hovercard'));
 if (window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches) {
   document.addEventListener('mouseover', e => {
-    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open], .co-row[data-hov], .co-row[data-shov], .co-row[data-phov]');
+    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open], .co-row[data-hov], .co-row[data-shov], .co-row[data-phov], .pcard[data-popen]');
     if (!el) return;
-    if ((el.dataset.shov ? 'sale:' + el.dataset.shov : el.dataset.phov ? 'prod:' + el.dataset.phov : el.dataset.open || el.dataset.hov) === hovId) { clearTimeout(hovT); hovT = null; return; }
+    if ((el.dataset.shov ? 'sale:' + el.dataset.shov : (el.dataset.phov || el.dataset.popen) ? 'prod:' + (el.dataset.phov || el.dataset.popen) : el.dataset.open || el.dataset.hov) === hovId) { clearTimeout(hovT); hovT = null; return; }
     if (hovId) hideHover();   // ย้ายไปการ์ดอื่น: ปิดกล่องเดิมทันที ไม่ให้บังการ์ดใบอื่น
     clearTimeout(hovT); hovT = setTimeout(() => { if (!S.edit && !S.drag) showHover(el); }, 380);
   });
   document.addEventListener('mouseout', e => {
-    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open], .co-row[data-hov], .co-row[data-shov], .co-row[data-phov]');
+    const el = e.target.closest && e.target.closest('.card[data-open], .row[data-open], .aitem[data-open], .gact[data-open], .grow[data-open], .co-row[data-hov], .co-row[data-shov], .co-row[data-phov], .pcard[data-popen]');
     if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;
     if (inHover(e.relatedTarget)) { clearTimeout(hovT); hovT = null; return; }   // เลื่อนเมาส์เข้าไปในการ์ดสรุป → ค้างไว้ให้กดดูรูปได้
     if (hovId) hideHoverSoon(); else hideHover();
@@ -4361,7 +4364,7 @@ function pcard(p) {
       (th ? '<button type="button" class="card-th" data-lbopen="' + esc(th.img.id) + '" data-lbjob="' + esc(th.job.id) + '" aria-label="ดูรูปงาน">' + thumbImg(th.img) + '</button>' : '') +
       (!ro && p.stage !== 'wait' ? '<button type="button" class="adv pback" data-pback="' + esc(p.id) + '" title="ย้อนกลับ 1 ขั้น" aria-label="ย้อนกลับ 1 ขั้น">' + PIC.back + '</button>' : '') + '</div>' +
     (p.title ? '<div class="title">' + esc(p.title) + '</div>' : '') +
-    '<div class="tags">' + (p.stage === 'machine' ? '<span class="tag pt-mc">' + PIC.machine + 'เสร็จ ' + ms.filter(m => m.d).length + '/' + ms.length + ' เครื่อง</span>' : '') + (p.paint === 'no' ? '<span class="tag pt-nopaint">ไม่ทำสี</span>' : '') + (p.assy === 'no' ? '<span class="tag pt-noassy">ไม่ประกอบ</span>' : '') + (p.group ? groupChip(p.group) : '') + pDueTag(p) + (p.note ? '<span class="tag pt-note" title="' + esc(p.note) + '">' + STI.note + 'โน้ต</span>' : '') + '</div>' +
+    '<div class="tags">' + (p.stage === 'machine' ? '<span class="tag pt-mc">' + PIC.machine + 'เสร็จ ' + ms.filter(m => m.d).length + '/' + ms.length + ' เครื่อง</span>' : '') + (p.paint === 'no' ? '<span class="tag pt-nopaint">ไม่ทำสี</span>' : '') + (p.assy === 'no' ? '<span class="tag pt-noassy">ไม่ประกอบ</span>' : '') + (p.group ? groupChip(p.group) : '') + pDueTag(p) + '</div>' + (p.note ? '<div class="pc-notetx" title="' + esc(p.note) + '">' + STI.note + '<span>' + esc(p.note) + '</span></div>' : '') +
     body + pTrack(p) +
     '<div class="card-foot"><span>' + esc(p.sale ? 'Sale ' + p.sale : '') + '</span><span class="due' + (stuck ? ' late' : '') + '" title="อยู่ขั้นนี้มาแล้ว">' + (stuck ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(age) + '</span></div></div>';
 }

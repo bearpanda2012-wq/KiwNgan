@@ -52,6 +52,18 @@ eq('prod hover shows image', await pg.locator('#hovercard.show .hv-hero img').co
 eq('prod hover shows source', await pg.locator('#hovercard.show', { hasText: 'ฝ่ายผลิตบันทึกเอง' }).count(), 1);
 await pg.screenshot({ path: out + 'prod-hover.png' });
 await pg.mouse.move(5, 5); await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(500);
+// บอร์ดผลิต: ชี้การ์ดแล้วขึ้นรายละเอียดแบบบอร์ดงาน + โน้ตโชว์บนการ์ด
+await pg.mouse.move(5, 5); await pg.waitForTimeout(400);
+eq('note text on prod card', await pg.locator('.pcard[data-popen="' + p.id + '"] .pc-notetx span').textContent(), 'อะคริลิก 5 มม.');
+await pg.locator('.pcard[data-popen="' + p.id + '"] .title').hover(); await pg.waitForTimeout(900);
+eq('prod board hover card', await pg.locator('#hovercard.show .hv-head b').textContent(), 'D-777');
+eq('hover beside card fits', await pg.evaluate(() => { const r = document.querySelector('#hovercard').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight + 1; }), true);
+await pg.screenshot({ path: out + 'prod-board-hover.png' });
+await pg.mouse.move(5, 5); await pg.waitForTimeout(500);
+const dp = await pg.evaluate(() => { const x = S.prods.find(q => q.stage !== 'shipped' && S.jobs.some(j => j.code === q.code) && document.querySelector('.pcard[data-popen="' + q.id + '"]')); return x && x.id; });
+await pg.locator('.pcard[data-popen="' + dp + '"] .code').hover(); await pg.waitForTimeout(900);
+eq('design-sourced card shows design jobs', await pg.locator('#hovercard.show', { hasText: 'งานฝ่ายแบบของเลขนี้' }).count(), 1);
+await pg.mouse.move(5, 5); await pg.waitForTimeout(400);
 // งานที่มีในฝ่ายแบบ: ดึงข้อมูลมาให้
 await pg.keyboard.press('Escape'); await pg.evaluate(() => { const m = document.querySelector('#pModal'); if (m) m.remove(); });
 const dcode = await pg.evaluate(() => { const have = {}; S.prods.forEach(x => have[x.code.toLowerCase()] = 1); const j = S.jobs.find(x => x.status === 'done' && x.title && !have[x.code.toLowerCase()]); return j && [j.code, j.title]; });
