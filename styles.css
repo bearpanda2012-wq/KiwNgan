@@ -2824,3 +2824,55 @@ body.pm-open{overflow:hidden}
   .ch-head .hd-sos{left:auto;right:-4px;bottom:-4px}
   .ch-head:hover{transform:none}
 }
+/* v2.38: หน้า Sale มีการ์ดลอยรายละเอียดงาน + รูปงาน, ภาพรวมบริษัทมีป้ายวันที่ */
+.hv-head .flow-ic{width:38px;height:38px;flex:none}.hv-head .flow-ic svg{width:19px;height:19px}
+a.hv-main{display:block;position:relative;color:inherit;text-decoration:none}
+.hv-strip a{display:block;border-radius:8px;overflow:hidden}
+.hv-jobs .hv-jr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 0;border-top:1px dashed var(--line);font-size:12px}
+.hv-jobs .hv-jr:first-of-type{border-top:0}
+.hv-jobs .pill{font-size:11px;padding:0 7px;line-height:1.6}
+.hv-jw{display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-weight:600}
+.hv-jw .av{width:16px;height:16px;font-size:9px}
+.sf-imgs{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:thin}
+.sf-imgs a{flex:none;width:84px;height:64px;border-radius:10px;overflow:hidden;background:var(--surface-2);box-shadow:0 0 0 1px var(--line)}
+.sf-imgs img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s}
+.sf-imgs a:hover img{transform:scale(1.06)}
+.co-meta .co-age{font-size:11.5px}
+.co-meta .co-age:empty{display:none}
+/* v2.38: เพิ่มงานเข้าผลิตแบบไม่ผ่านฝ่ายแบบ — ข้อมูลงาน รูป กำหนดส่ง */
+.pm-add{border-top-color:var(--p-mach)}
+.pm-add .pm-h .eyebrow svg{width:13px;height:13px}
+.pa-sec{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:14px;background:color-mix(in oklab,var(--surface-2) 70%,var(--surface));box-shadow:inset 0 0 0 1px var(--line)}
+.pa-h{display:flex;align-items:center;gap:8px}
+.pa-h b{font:700 14.5px var(--f-display)}
+.pa-h small{margin-left:auto;color:var(--muted);font-size:12px}
+.pa-n{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--p-mach);color:#fff;font:700 12px/1 var(--f-display);box-shadow:0 4px 10px -4px var(--p-mach)}
+.pa-sec .f{margin:0}
+.pa-sec .f input,.pa-sec .f select,.pa-sec .f textarea,.pm-edit input,.pm-edit select{width:100%}
+.req{color:var(--late);font-style:normal}
+.pa-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pa-quick>div{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-height:38px}
+.pa-quick .chip.sm{padding:3px 9px;font-size:12px}
+.pa-found{margin-top:6px;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);padding:6px 10px;border-radius:9px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+.pa-found svg{width:14px;height:14px;flex:none}
+.pa-found.on{color:var(--done);background:color-mix(in oklab,var(--done) 10%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--done) 30%,transparent)}
+.pa-imgs{display:flex;flex-wrap:wrap;gap:8px}
+.pa-im{position:relative;width:84px;height:84px;border-radius:12px;overflow:hidden;background:var(--surface-3);box-shadow:0 0 0 1px var(--line);padding:0;border:0;cursor:pointer;flex:none}
+.pa-im img,.pa-im .th{width:100%;height:100%;object-fit:cover;display:block}
+.pa-im button{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:11px;cursor:pointer;display:grid;place-items:center}
+.pa-up{display:grid;place-items:center}
+.pa-add{width:84px;height:84px;border-radius:12px;border:2px dashed color-mix(in oklab,var(--p-mach) 45%,var(--line));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--p-mach);cursor:pointer;text-align:center;font-size:12px;font-weight:700;background:color-mix(in oklab,var(--p-mach) 6%,var(--surface));transition:transform .15s,background .15s}
+.pa-add:hover{transform:translateY(-2px);background:color-mix(in oklab,var(--p-mach) 12%,var(--surface))}
+.pa-add svg{width:22px;height:22px}
+.pa-add small{font-size:9.5px;font-weight:500;color:var(--muted);line-height:1.2;padding:0 4px}
+.pm-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pm-grid b.bad{color:var(--late)}
+.pm-editbtn{grid-column:1/-1;justify-self:start}
+.pm-editbtn svg{width:13px;height:13px}
+.pm-edit{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:12px;background:var(--surface-2)}
+.tag.pt-due{color:var(--doing);background:var(--doing-soft)}
+.tag.pt-due.soon{color:var(--today);background:var(--today-soft)}
+.tag.pt-due.late{color:var(--late);background:var(--late-soft)}
+.tag.pt-due svg{width:12px;height:12px}
+@media (max-width:560px){.pm-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pa-2{grid-template-columns:1fr}.pa-quick label{display:none}.pa-im,.pa-add{width:76px;height:76px}}
+.pa-sec .f input,.pa-sec .f select,.pa-sec .f textarea{background:var(--surface)}

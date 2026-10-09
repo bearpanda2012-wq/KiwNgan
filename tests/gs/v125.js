@@ -1,0 +1,20 @@
+// งานที่ไม่ผ่านฝ่ายแบบ: ฝ่ายผลิตเพิ่มเอง ใส่ข้อมูลงาน Sale กำหนดส่ง และรูปได้
+const path = require('path'); process.argv[2] = path.join(__dirname, '../../backend/Code.gs');
+const m = require('./mock.js'); const logs = []; const ol = console.log; console.log = (...a) => logs.push(a.join(' ')); m.ctx.setup(); console.log = ol;
+const pin = (logs.join('\n').match(/PIN[^0-9]*(\d{4})/) || [])[1]; const A = m.call('login', { name: 'แอดมิน', pin }).data.token;
+const mk = (n, role) => { const r = m.call('saveUser', { user: { name: n, role: role || 'user' } }, A).data; return [m.call('login', { userId: r.user.id, pin: r.pin }).data.token, r.user]; };
+const [U] = mk('หมี'), [PR] = mk('ช่างเอ', 'prod');
+let ok = 0, bad = 0; const eq = (lbl, a, b) => { const p = JSON.stringify(a) === JSON.stringify(b); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(b))); };
+const r = m.call('prodSave', { prod: { code: 'D-1', title: 'ป้ายร้าน ABC', sale: 'ป้อม', group: 'งาน 2D', due: '2026-10-20', note: 'ลูกค้าส่งไฟล์มาเอง' } }, PR).data.prod;
+eq('direct prod job saved with info', [r.code, r.title, r.sale, r.group, r.due, r.note, r.stage], ['D-1', 'ป้ายร้าน ABC', 'ป้อม', 'งาน 2D', '2026-10-20', 'ลูกค้าส่งไฟล์มาเอง', 'wait']);
+eq('bad due rejected', m.call('prodSave', { prod: { id: r.id, due: '20/10' } }, PR).error, 'กำหนดส่งไม่ถูกต้อง');
+const PX = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+const im = m.call('addImage', { jobId: r.id, thumb: PX, full: PX }, PR);
+eq('prod user adds image to prod job', !!(im.data && im.data.image && im.data.image.jobId === r.id), true);
+eq('designer cannot add image to prod job', m.call('addImage', { jobId: r.id, thumb: PX, full: PX }, U).error, 'เพิ่มรูปงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน');
+eq('admin can add image to prod job', !!m.call('addImage', { jobId: r.id, thumb: PX, full: PX }, A).data, true);
+const b = m.call('bootstrap', {}, PR).data;
+eq('images listed for prod job', b.images.filter(x => x.jobId === r.id).length, 2);
+eq('prod user can delete prod image', !!m.call('deleteImage', { id: im.data.image.id }, PR).data, true);
+console.log(ok + ' ok, ' + bad + ' failed');
+if (bad) process.exit(1);

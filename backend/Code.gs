@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.24.0';
+const VERSION = '1.25.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -40,7 +40,7 @@ const SHEETS = {
   Files: ['id', 'jobId', 'name', 'mime', 'size', 'fileId', 'createdBy', 'createdAt'],
   Comments: ['id', 'jobId', 'ts', 'from', 'text'],
   // ฝ่ายผลิต: 1 แถว = 1 เลข Job ที่ออกแบบเสร็จแล้ว เดินต่อ รอผลิต → ลงเครื่อง → ทำสี → ประกอบติดตั้ง → แพ็ค → พร้อมส่ง → ส่งแล้ว (paint/assy = 'no' คือข้ามขั้นนั้น)
-  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy']
+  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due']
 };
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
@@ -494,12 +494,14 @@ function saleView_(k, sale) {
   const s = settings_(), since = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), tz_(), 'yyyy-MM-dd');
   const prods = prodsRecent_().filter(x => !sale || x.sale === sale), live = {};
   prods.forEach(x => { if (x.stage !== 'shipped') live[x.code.toLowerCase()] = 1; });
+  const im = {};   // รูปงานที่เก็บใน Drive (แชร์แบบมีลิงก์) ให้ Sale ดูในการ์ดลอยได้
+  try { imageMeta_().forEach(m => { if (m.fileId) (im[m.jobId] = im[m.jobId] || []).push(m.fileId); }); } catch (e) {}
   const jobs = readAll_('Jobs').filter(j => (!sale || j.sale === sale) && (j.status !== 'done' || String(j.finishedAt).slice(0, 10) >= since || live[j.code.toLowerCase()]))
     .map(j => { let cl = []; try { cl = JSON.parse(j.checklist || '[]'); } catch (e) {}
       return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', assignee: maskName_(j.assignee, { role: 'user' }) || '', helpers: helpersOf_(j).map(n => maskName_(n, { role: 'user' })).join(','),
-               steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '' }; });
+               steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '', imgs: (im[j.id] || []).slice(-6) }; });
   const people = usersLite_().filter(x => x.active && x.role !== 'admin').map(x => ({ name: x.name, color: x.color }));
-  const pv = prods.map(x => ({ code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt }));
+  const pv = prods.map(x => ({ code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6) }));
   const out = { brand: publicBrand_(), sales: s.sales || [], sale: sale || '', jobs: jobs, prods: pv, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(ck, t, 600); } catch (e) {}
   return out;
@@ -796,6 +798,7 @@ function prodSave_(data, u) {
             enteredAt: now.slice(0, 16), startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, history: '[]' };
   }
   ['title', 'sale', 'group', 'note'].forEach(k => { if (data[k] !== undefined) cur[k] = String(data[k]).slice(0, k === 'note' ? 1000 : 200); });
+  if (data.due !== undefined) { const dd = String(data.due || '').slice(0, 10); if (dd && !/^\d{4}-\d{2}-\d{2}$/.test(dd)) throw new Error('กำหนดส่งไม่ถูกต้อง'); cur.due = dd; }
   if (data.paint !== undefined) cur.paint = data.paint === 'no' ? 'no' : '';
   if (data.assy !== undefined) cur.assy = data.assy === 'no' ? 'no' : '';
   if (data.machines !== undefined) cur.machines = JSON.stringify(prodMachines_(data.machines));
@@ -862,10 +865,18 @@ function imageMeta_() {
 }
 const IMG_FILE_COL_ = SHEETS.Images.indexOf('fileId') + 1;
 function addImage_(p, u) {
-  const jr = rowOf_('Jobs', p.jobId);
-  if (jr < 0) throw new Error('ไม่พบงานนี้');
-  const job = readRow_('Jobs', jr);
-  if (!ownsJob_(u, job)) throw new Error('เพิ่มรูปได้เฉพาะงานของตัวเอง');
+  let job;
+  if (/^p_/.test(String(p.jobId || ''))) {   // รูปของงานฝ่ายผลิต (งานที่ไม่ได้ผ่านฝ่ายแบบ)
+    const pr = rowOf_('Prod', p.jobId);
+    if (pr < 0) throw new Error('ไม่พบงานนี้ในฝ่ายผลิต');
+    if (!canProd_(u)) throw new Error('เพิ่มรูปงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน');
+    job = readRow_('Prod', pr);
+  } else {
+    const jr = rowOf_('Jobs', p.jobId);
+    if (jr < 0) throw new Error('ไม่พบงานนี้');
+    job = readRow_('Jobs', jr);
+    if (!ownsJob_(u, job)) throw new Error('เพิ่มรูปได้เฉพาะงานของตัวเอง');
+  }
   const thumb = String(p.thumb || ''), full = String(p.full || '');
   if (!IMG_RE_.test(thumb) || !IMG_RE_.test(full)) throw new Error('ไฟล์รูปไม่ถูกต้อง');
   if (thumb.length > IMG_CELL) throw new Error('รูปย่อใหญ่เกินไป');
@@ -885,7 +896,8 @@ function deleteImage_(id, u) {
   if (row < 0) throw new Error('ไม่พบรูปนี้');
   const meta = sheet_('Images').getRange(row, 1, 1, 4).getDisplayValues()[0];
   const jr = rowOf_('Jobs', meta[1]), job = jr > 0 ? readRow_('Jobs', jr) : null;
-  if (!isAdmin_(u) && meta[2] !== u.name && !(job && ownsJob_(u, job))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง');
+  const isProdImg = /^p_/.test(meta[1]) && canProd_(u);
+  if (!isAdmin_(u) && meta[2] !== u.name && !isProdImg && !(job && ownsJob_(u, job))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง');
   const fid = sheet_('Images').getRange(row, IMG_FILE_COL_).getDisplayValue();
   sheet_('Images').deleteRow(row);
   if (fid && !imageMeta_().some(m => m.fileId === fid)) { try { DriveApp.getFileById(fid).setTrashed(true); } catch (e) {} }   // ไฟล์ที่งานอื่นไม่ได้ใช้ร่วม → ถังขยะ (กู้คืนได้ 30 วัน)
