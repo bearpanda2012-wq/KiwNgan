@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.33.0';
+const APP_VERSION = '2.35.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4284,6 +4284,18 @@ function coRows() {
   }).filter(Boolean);
 }
 function coIdx(step) { return step === 'design' || step === 'ddone' ? 0 : step === 'shipped' ? CO_STEPS.length : CO_STEPS.findIndex(s => s.k === step); }
+/* เส้นทางงานแบบแอปส่งของ: จุดตามขั้น ช่วงที่ผ่านแล้วมีสี จุดปัจจุบันมีไอคอนและวงกระเพื่อม */
+const coStg = r => r.step === 'design' ? 's-doing' : r.step === 'ddone' ? 's-done' : (PSTG[r.step] || PSTG.wait).cls;
+const coIc = r => r.step === 'design' ? 'design' : r.step === 'ddone' ? 'shipped' : r.step;
+function coRoute(r) {
+  const i = Math.min(coIdx(r.step), CO_STEPS.length - 1), fin = r.step === 'shipped', n = CO_STEPS.length - 1, pct = fin ? 100 : i / n * 100;
+  return '<div class="rt' + (fin ? ' fin' : '') + (r.late ? ' late' : '') + '" style="--p:' + pct + '%"><span class="rt-line"><i></i></span>' + CO_STEPS.map((st, k) => {
+    const cls = k < i || fin ? 'past' : k === i ? 'now' : '', sk = pSkipped(r.prod, st.k);
+    return '<span class="rt-dot d-' + st.dept + ' ' + cls + (sk ? ' skip' : '') + ' ' + (st.k === 'design' ? 's-doing' : PSTG[st.k].cls) + '" style="left:' + (k / n * 100) + '%" title="' + esc(st.label) + (sk ? ' (ข้าม)' : '') + '">' +
+      (cls === 'now' ? PIC[st.ic] : cls === 'past' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : '') + '</span>' +
+      (cls === 'now' ? '<span class="rt-lbl" style="left:' + (k / n * 100) + '%">' + esc(st.label) + '</span>' : '');
+  }).join('') + '</div>';
+}
 function coTrack(r) {
   const i = coIdx(r.step), n = CO_STEPS.length;
   return '<div class="co-trk" aria-label="' + esc(r.step === 'shipped' ? 'ส่งแล้ว' : (CO_STEPS[i] || {}).label || '') + '">' + CO_STEPS.map((s, k) =>
@@ -4307,9 +4319,9 @@ function viewFlow() {
     (F !== 'all' && F !== 'late' && F !== 'shipped' ? '<button class="qchip" data-cf="all" aria-pressed="true">' + esc(F === 'design' ? 'ฝ่ายแบบ' : PSTG[F] ? PSTG[F].label : F) + ' ✕</button>' : '') + '</div>';
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
   const hovJob = r => { const o = r.jobs.filter(j => j.status !== 'done'); return (o[0] || r.jobs.slice().sort((a, b) => String(finDate(b)).localeCompare(String(finDate(a))))[0] || {}).id || ''; };
-  const table = list.length ? '<div class="co-list">' + list.slice(0, 200).map((r, k) => '<button type="button" class="co-row co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + '" style="--i:' + Math.min(k, 24) + '" data-coopen="' + esc(r.code) + '"' + (hovJob(r) ? ' data-hov="' + esc(hovJob(r)) + '"' : '') + '>' +
-      '<span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' +
-      '<span class="co-mid">' + coTrack(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
+  const table = list.length ? '<div class="co-list">' + list.slice(0, 200).map((r, k) => '<button type="button" class="co-row ' + coStg(r) + ' co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + '" style="--i:' + Math.min(k, 24) + '" data-coopen="' + esc(r.code) + '"' + (hovJob(r) ? ' data-hov="' + esc(hovJob(r)) + '"' : '') + '>' +
+      '<span class="co-bub flow-ic ic-' + coIc(r) + '">' + PIC[coIc(r)] + '</span><span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' +
+      '<span class="co-mid">' + coRoute(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
       '<span class="co-meta"><small>' + esc(r.sale ? 'Sale ' + r.sale : '') + '</small><small class="' + (r.late ? 'late' : '') + '">' + (r.since && r.step !== 'shipped' ? (r.late ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(Math.max(0, daysBetween(String(r.since).slice(0, 10), today()))) : '') + '</small></span></button>').join('') + '</div>' +
       (list.length > 200 ? '<div class="col-more">แสดง 200 จาก ' + list.length + ' รายการ ใช้ช่องค้นหาเพื่อหางานอื่น</div>' : '')
     : '<div class="empty" style="padding:28px 0"><b>ไม่มีงานในมุมมองนี้</b>ลองเลือก "ทั้งหมดที่ยังไม่ส่ง"</div>';
@@ -4444,15 +4456,15 @@ function saleRows(d) {
     if (p && p.stage !== 'shipped') {
       step = p.stage; const ms = (p.machines || []).filter(m => m && m.m);
       sub = p.stage === 'machine' ? ms.map(m => (m.d ? '✓ ' : '') + m.m).join(' · ') : PSTG[p.stage].sub;
-      info = p.stage === 'ready' ? 'พร้อมส่งตั้งแต่ ' + fd(p.finishedAt) : 'เข้าผลิต ' + fd(p.enteredAt);
+      info = p.stage === 'ready' ? 'พร้อมส่งตั้งแต่ ' + fd(p.finishedAt) : 'เข้าผลิต ' + fd(p.enteredAt); var dl = p.stage === 'ready' ? 'พร้อมส่งตั้งแต่' : 'เข้าผลิต', dd = String(p.stage === 'ready' ? p.finishedAt : p.enteredAt).slice(0, 10);
     } else if (open.length) {
       const o = open.slice().sort((a, b) => ['doing', 'fix', 'review', 'queue', 'hold'].indexOf(a.status) - ['doing', 'fix', 'review', 'queue', 'hold'].indexOf(b.status))[0];
       step = 'design'; sub = (o.taskType || 'ออกแบบ') + ' · ' + (ST[o.status] || ST.queue).label;
       due = open.map(j => j.due).filter(Boolean).sort()[0] || ''; late = !!due && due < t;
-    } else if (p) { step = 'shipped'; sub = 'ส่งถึงลูกค้าแล้ว'; info = 'ส่งแล้ว ' + fd(p.shippedAt); }
-    else { const fin = r.jobs.map(j => String(j.finishedAt || '').slice(0, 10)).sort().pop() || ''; step = 'ddone'; sub = 'ออกแบบเสร็จ · รอเข้าผลิต'; info = 'เสร็จ ' + fd(fin); var old = fin < addDays(t, -14); }
+    } else if (p) { step = 'shipped'; sub = 'ส่งถึงลูกค้าแล้ว'; info = 'ส่งแล้ว ' + fd(p.shippedAt); dl = 'ส่งแล้ว'; dd = String(p.shippedAt).slice(0, 10); }
+    else { const fin = r.jobs.map(j => String(j.finishedAt || '').slice(0, 10)).sort().pop() || ''; step = 'ddone'; sub = 'ออกแบบเสร็จ · รอเข้าผลิต'; info = 'เสร็จ ' + fd(fin); var old = fin < addDays(t, -14); dl = 'ออกแบบเสร็จ'; dd = fin; }
     return { code: r.code, title: ref.title || (r.jobs.find(j => j.title) || {}).title || '', sale: ref.sale || (r.jobs.find(j => j.sale) || {}).sale || '', group: ref.group || (r.jobs[0] || {}).group || '',
-      step: step, sub: sub, info: info, late: late, due: due, prod: p, old: step === 'ddone' && !!old, jobs: r.jobs, urgent: r.jobs.some(j => j.priority === 'urgent' && j.status !== 'done') };
+      step: step, sub: sub, info: info, late: late, due: due, prod: p, old: step === 'ddone' && !!old, dl: due ? 'กำหนดส่งแบบ' : dl || '', dd: due || dd || '', jobs: r.jobs, urgent: r.jobs.some(j => j.priority === 'urgent' && j.status !== 'done') };
   });
 }
 function saleFlowHtml(d, sel) {
@@ -4469,6 +4481,13 @@ function saleFlowHtml(d, sel) {
   list.sort((a, b) => (b.late - a.late) || (coIdx(b.step) - coIdx(a.step)) || String(a.due || '9').localeCompare(String(b.due || '9')));
   const sales = [...new Set(saleRows(d).map(r => r.sale).filter(Boolean))].sort();
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
+  const dateBox = r => {   // ป้ายวันที่เด่น ๆ: วันเดือนตัวใหญ่ + สถานะ (เลย/วันนี้/พรุ่งนี้/อีกกี่วัน)
+    if (!r.dd) return '<span class="sf-date k-none"><span class="sf-dl"><small>ยังไม่กำหนดส่ง</small></span></span>';
+    const x = parseLocal(r.dd), n = daysBetween(t, r.dd), isDue = !!r.due;
+    const k = !isDue ? (r.step === 'shipped' ? 'ship' : r.step === 'ready' ? 'ready' : 'info') : n < 0 ? 'late' : n === 0 ? 'today' : n === 1 ? 'tmr' : n <= 3 ? 'soon' : 'later';
+    const tag = !isDue ? (n === 0 ? 'วันนี้' : n === -1 ? 'เมื่อวาน' : n < 0 ? (-n) + ' วันก่อน' : '') : n < 0 ? 'เลย ' + (-n) + ' วัน' : n === 0 ? 'ส่งวันนี้' : n === 1 ? 'ส่งพรุ่งนี้' : 'อีก ' + n + ' วัน';
+    return '<span class="sf-date k-' + k + '"><span class="sf-cal"><i>' + TH_M[x.getMonth()] + '</i><b>' + x.getDate() + '</b></span><span class="sf-dl"><small>' + esc(r.dl) + '</small>' + (tag ? '<em>' + (k === 'late' ? STI.fire : k === 'today' ? STI.hourglass : '') + tag + '</em>' : '') + '</span></span>';
+  };
   const dueTxt = r => { if (!r.due) return r.info; const dd = daysBetween(t, r.due); return 'กำหนดส่งแบบ ' + fd(r.due) + (dd < 0 ? ' · เลย ' + (-dd) + ' วัน' : dd === 0 ? ' · วันนี้' : dd === 1 ? ' · พรุ่งนี้' : ''); };
   const detail = r => '<div class="sf-det">' + (r.jobs.length ? '<div class="sf-jobs">' + r.jobs.map(j => '<div class="sf-job"><span class="sp-type" style="--tc:' + typeColorPub(j.taskType) + '">' + esc(j.taskType || 'งาน') + '</span>' +
       '<span class="pill ' + (ST[j.status] || ST.queue).cls + '">' + (ST[j.status] || ST.queue).label + '</span><span class="sf-who">' + (j.assignee ? av(j.assignee, 'sm') + esc(j.assignee) : 'ยังไม่มอบหมาย') + '</span>' +
@@ -4477,10 +4496,10 @@ function saleFlowHtml(d, sel) {
       '<small>' + [r.prod.paint === 'no' ? 'ไม่ทำสี' : '', r.prod.assy === 'no' ? 'ไม่ประกอบ' : '', r.prod.enteredAt ? 'เข้าผลิต ' + fd(r.prod.enteredAt) : '', r.prod.shippedAt ? 'ส่งแล้ว ' + fd(r.prod.shippedAt) : ''].filter(Boolean).join(' · ') + '</small></div>' : '') +
     ((r.jobs.find(j => j.note) || {}).note ? '<p class="sf-note">' + STI.note + esc(r.jobs.find(j => j.note).note) + '</p>' : '') + '</div>';
   const rows = list.length ? '<div class="co-list sf-list">' + list.slice(0, 300).map((r, k) => { const op = !!SF.open[r.code];
-      return '<div class="sf-item' + (op ? ' open' : '') + '"><button type="button" class="co-row co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + (SF.anim ? ' in' : '') + '" style="--i:' + Math.min(k, 24) + '" data-sfopen="' + esc(r.code) + '" aria-expanded="' + op + '">' +
-        '<span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' +
-        '<span class="co-mid">' + coTrack(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
-        '<span class="co-meta">' + (sel ? '' : '<small>' + esc(r.sale ? 'Sale ' + r.sale : '') + '</small>') + '<small class="' + (r.late ? 'late' : '') + '">' + (r.late ? STI.fire : STI.calendar) + esc(dueTxt(r)) + '</small><span class="sf-chev">' + I.next + '</span></span></button>' +
+      return '<div class="sf-item' + (op ? ' open' : '') + '"><button type="button" class="co-row ' + coStg(r) + ' co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + (SF.anim ? ' in' : '') + '" style="--i:' + Math.min(k, 24) + '" data-sfopen="' + esc(r.code) + '" aria-expanded="' + op + '">' +
+        '<span class="co-bub flow-ic ic-' + coIc(r) + '">' + PIC[coIc(r)] + '</span><span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' +
+        '<span class="co-mid">' + coRoute(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
+        '<span class="co-meta">' + (sel ? '' : '<small>' + esc(r.sale ? 'Sale ' + r.sale : '') + '</small>') + dateBox(r) + '<span class="sf-chev">' + I.next + '</span></span></button>' +
         (op ? detail(r) : '') + '</div>'; }).join('') + '</div>'
     : '<div class="sp-empty"><span>🔍</span><b>ไม่มีงานในมุมมองนี้</b><button class="btn sm" data-sfstep="all">ดูทั้งหมด</button></div>';
   const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง', live.length], ['late', 'เลยกำหนด', late], ['shipped', 'ส่งแล้ว', n('shipped')]].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-sfstep="' + x[0] + '" aria-pressed="' + (SF.step === x[0]) + '">' + x[1] + '<b>' + x[2] + '</b></button>').join('') +

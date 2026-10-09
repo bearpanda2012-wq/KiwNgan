@@ -2648,3 +2648,112 @@ body.pm-open{overflow:hidden}
 @media (max-width:760px){.sf-job{grid-template-columns:minmax(0,1fr) auto}.sf-job small{grid-column:1/-1;text-align:left}.sf-tabs{width:100%}.sf-tabs button{flex:1;justify-content:center;padding:8px 6px;font-size:13px}}
 @media (prefers-reduced-motion:reduce){.co-row.in,.co-row.late.in,.co-row.in .co-trk i.now,.sf-det{animation:none}}
 @media (max-width:600px){.sale-page .sp-h{flex-wrap:wrap}.sale-page .sp-ht{flex:1 1 calc(100% - 70px);min-width:0}.sale-page .sp-back{order:5;padding:4px 8px;font-size:12px}}
+/* v2.33.1: กล่อง "งานในสาย/งานที่ยังไม่ส่ง" มีสีของตัวเอง ไม่กลืนกับพื้นหลัง */
+.co-kpis .kpi:not(.k-late):not(.k-done){--k:var(--doing);background:linear-gradient(160deg,color-mix(in oklab,var(--doing) 16%,var(--surface)) 0%,var(--surface) 80%);box-shadow:var(--shadow-sm),0 0 0 1px color-mix(in oklab,var(--doing) 18%,transparent)}
+.co-kpis .kpi:not(.k-late):not(.k-done) b{color:var(--doing)}
+.co-kpis .kpi{background-color:var(--surface)}
+
+/* v2.34: ป้ายวันที่เด่น ๆ ในหน้า Sale */
+.sf-date{display:inline-flex;align-items:center;gap:8px;border-radius:12px;padding:4px 10px 4px 4px;background:var(--surface-2);border:1px solid var(--line);--dc:var(--muted);--ds:var(--surface-3)}
+.sf-cal{display:flex;flex-direction:column;align-items:center;justify-content:center;width:40px;border-radius:9px;overflow:hidden;background:var(--surface);box-shadow:0 2px 6px -3px rgba(0,0,0,.25);line-height:1}
+.sf-cal i{display:block;width:100%;text-align:center;font-style:normal;font-size:10px;font-weight:700;color:#fff;background:var(--dc);padding:3px 0}
+.sf-cal b{font:700 18px/1 var(--f-display);padding:3px 0 4px;color:var(--ink);font-variant-numeric:tabular-nums}
+.sf-dl{display:flex;flex-direction:column;align-items:flex-start;gap:2px;line-height:1.2}
+.sf-dl small{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.sf-dl em{display:inline-flex;align-items:center;gap:3px;font-style:normal;font-size:12.5px;font-weight:700;color:var(--dc);white-space:nowrap}
+.sf-dl em svg{width:13px;height:13px}
+.sf-date.k-late{--dc:var(--late);background:var(--late-soft);border-color:color-mix(in oklab,var(--late) 30%,transparent)}
+.sf-date.k-today{--dc:var(--today);background:var(--today-soft);border-color:color-mix(in oklab,var(--today) 30%,transparent)}
+.sf-date.k-tmr{--dc:var(--tmr);background:var(--tmr-soft);border-color:color-mix(in oklab,var(--tmr) 30%,transparent)}
+.sf-date.k-soon{--dc:var(--urgent);background:var(--urgent-soft)}
+.sf-date.k-later{--dc:var(--doing);background:var(--doing-soft)}
+.sf-date.k-info{--dc:var(--p-mach)}
+.sf-date.k-ready{--dc:var(--p-ready);background:color-mix(in oklab,var(--p-ready) 10%,var(--surface))}
+.sf-date.k-ship{--dc:var(--p-ship);background:color-mix(in oklab,var(--p-ship) 10%,var(--surface))}
+.sf-date.k-none{padding:6px 10px}
+.co-meta{gap:6px}
+.sf-date.k-today .sf-cal,.sf-date.k-late .sf-cal{animation:calBob 2.2s ease-in-out infinite}
+.sf-date.k-late{animation:dateGlow 1.8s ease-in-out infinite}
+.sf-date.k-today{animation:dateGlowT 2.2s ease-in-out infinite}
+@keyframes calBob{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-2px) rotate(-4deg)}60%{transform:translateY(0) rotate(3deg)}}
+@keyframes dateGlow{0%,100%{box-shadow:0 0 0 0 color-mix(in oklab,var(--late) 0%,transparent)}50%{box-shadow:0 0 0 4px color-mix(in oklab,var(--late) 18%,transparent)}}
+@keyframes dateGlowT{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 4px color-mix(in oklab,var(--today) 18%,transparent)}}
+.co-row:hover .sf-cal{transform:scale(1.06)}
+.sf-cal{transition:transform .2s}
+
+/* v2.34: แถบความคืบหน้ามีชีวิต (ภาพรวมบริษัท + หน้า Sale) */
+.co-trk i.now.d-d{color:var(--doing)}.co-trk i.now.d-p{color:var(--p-mach)}.co-trk i.now.d-s{color:var(--p-ready)}.co-trk i.now.late{color:var(--late)}
+.co-trk i.now{background-image:repeating-linear-gradient(-45deg,rgba(255,255,255,.38) 0 5px,transparent 5px 10px)!important;background-size:28px 28px;animation:coStripe .9s linear infinite}
+@keyframes coStripe{from{background-position:0 0}to{background-position:28px 0}}
+.enter .co-trk i.now,.co-row.in .co-trk i.now{animation:coGrow .7s cubic-bezier(.3,1.2,.5,1) both,coStripe .9s linear infinite;animation-delay:calc(var(--i,0) * 35ms + .15s),0s}
+.co-trk i.now::before{content:"";position:absolute;right:-3px;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;background:currentColor;opacity:.55;animation:coRipple 1.8s ease-out infinite;pointer-events:none}
+@keyframes coRipple{0%{transform:scale(1);opacity:.55}100%{transform:scale(3.2);opacity:0}}
+.co-trk i.now::after{background:currentColor!important}
+/* ช่องที่ยังไม่ถึง: จุดไฟวิ่งบอกทิศทาง */
+.co-trk i:not(.past):not(.now){background-image:linear-gradient(90deg,transparent 0,color-mix(in oklab,var(--accent) 22%,transparent) 50%,transparent 100%);background-size:60% 100%;background-repeat:no-repeat;animation:coAhead 2.8s ease-in-out infinite;animation-delay:calc(var(--k,0) * .18s)}
+@keyframes coAhead{0%{background-position:-60% 0}60%,100%{background-position:200% 0}}
+.co-trk i:nth-child(2){--k:1}.co-trk i:nth-child(3){--k:2}.co-trk i:nth-child(4){--k:3}.co-trk i:nth-child(5){--k:4}.co-trk i:nth-child(6){--k:5}.co-trk i:nth-child(7){--k:6}
+.co-row:hover .co-trk i.now{filter:saturate(1.2) brightness(1.05)}
+/* ป้ายขั้นงาน: ไอคอนขยับเบา ๆ */
+.co-mid .pill{position:relative;overflow:hidden}
+.co-mid .pill::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);transform:translateX(-120%);animation:pillShine 3.2s ease-in-out infinite;animation-delay:calc(var(--i,0) * .12s)}
+@keyframes pillShine{0%,70%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
+@media (prefers-reduced-motion:reduce){.co-trk i.now,.co-trk i.now::before,.co-trk i:not(.past):not(.now),.co-mid .pill::after,.sf-date,.sf-cal{animation:none!important}}
+@media (max-width:760px){.co-meta{flex-direction:row;align-items:center;justify-content:flex-end;flex-wrap:wrap}}
+
+/* v2.35: แถวงานโฉมใหม่ — สีตามขั้น, ไอคอนขั้นเคลื่อนไหว, เส้นทางแบบแอปส่งของ */
+.co-row{grid-template-columns:auto minmax(130px,1fr) minmax(0,2.3fr) auto;gap:16px;padding:12px 14px 12px 12px;border:0;border-left:4px solid var(--s,var(--line));
+  background:linear-gradient(90deg,color-mix(in oklab,var(--s,var(--line)) 11%,var(--surface)) 0%,var(--surface) 42%);box-shadow:var(--shadow-sm,0 1px 2px rgba(0,0,0,.06)),0 0 0 1px color-mix(in oklab,var(--s,var(--line)) 14%,var(--line))}
+.co-row:hover{transform:translateY(-3px);box-shadow:0 14px 30px -16px var(--s,var(--brand)),0 0 0 1px color-mix(in oklab,var(--s,var(--line)) 45%,transparent)}
+.co-row.late{border-left-color:var(--late)}
+.co-bub{width:44px;height:44px;flex:none;align-self:center}
+.co-bub svg{width:22px;height:22px}
+.co-row:hover .co-bub{transform:scale(1.08) rotate(-4deg)}
+.co-bub{transition:transform .25s cubic-bezier(.3,1.6,.5,1)}
+.co-bub.ic-design svg{animation:penWrite 1.8s ease-in-out infinite;transform-origin:20% 80%}
+@keyframes penWrite{0%,100%{transform:rotate(0) translate(0,0)}25%{transform:rotate(-8deg) translate(-1px,1px)}50%{transform:rotate(4deg) translate(1px,0)}75%{transform:rotate(-5deg) translate(0,1px)}}
+.co-bub.ic-paint svg{animation:wiggle 2s ease-in-out infinite}
+.co-bub.ic-assemble svg{animation:spinSlow 4s linear infinite}
+.co-bub.ic-pack svg{animation:bob 1.8s ease-in-out infinite}
+.co-bub.ic-wait svg{animation:bob 2.6s ease-in-out infinite}
+.co-bub.ic-shipped svg{animation:pulseBig 2.4s ease-in-out infinite}
+.co-code b{font-size:15px}
+.co-mid{gap:8px}
+/* เส้นทาง */
+.rt{position:relative;height:30px;margin:2px 14px 10px}
+.rt-line{position:absolute;left:0;right:0;top:50%;height:6px;margin-top:-3px;border-radius:9px;background:var(--surface-3);overflow:hidden}
+.rt-line i{display:block;height:100%;width:var(--p);border-radius:9px;background:linear-gradient(90deg,var(--doing) 0%,var(--p-mach) 55%,var(--p-ready) 100%);position:relative;overflow:hidden}
+.rt-line i::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-45deg,rgba(255,255,255,.35) 0 6px,transparent 6px 12px);background-size:34px 34px;animation:coStripe 1s linear infinite}
+.rt.late .rt-line i{background:linear-gradient(90deg,var(--late),color-mix(in oklab,var(--late) 70%,#ffb199))}
+.rt-dot{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--surface);border:2px solid var(--line);display:grid;place-items:center;color:#fff;z-index:1;transition:transform .2s}
+.rt-dot svg{width:9px;height:9px}
+.rt-dot.past{background:var(--s);border-color:var(--s)}
+.rt-dot.past.d-d{background:var(--doing);border-color:var(--doing)}
+.rt-dot.skip{border-style:dashed;background:var(--surface);opacity:.55}
+.rt-dot.skip svg{display:none}
+.rt-dot.now{width:30px;height:30px;margin:-15px 0 0 -15px;background:var(--s);border:3px solid var(--surface);box-shadow:0 6px 14px -4px var(--s);z-index:2;animation:dotPopIn .5s cubic-bezier(.3,1.6,.5,1) both}
+.rt-dot.now svg{width:15px;height:15px;animation:bob 1.6s ease-in-out infinite}
+.rt-dot.now::before,.rt-dot.now::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--s);animation:rtRing 2s ease-out infinite;pointer-events:none}
+.rt-dot.now::after{animation-delay:1s}
+.rt.late .rt-dot.now{background:var(--late);box-shadow:0 6px 14px -4px var(--late)}
+.rt.late .rt-dot.now::before,.rt.late .rt-dot.now::after{border-color:var(--late)}
+@keyframes rtRing{0%{transform:scale(1);opacity:.7}100%{transform:scale(2.1);opacity:0}}
+@keyframes dotPopIn{from{transform:scale(.3)}to{transform:scale(1)}}
+.rt-lbl{position:absolute;top:100%;transform:translateX(-50%);margin-top:3px;font-size:11px;font-weight:700;color:var(--s);white-space:nowrap;background:var(--surface);border-radius:999px;padding:0 6px;line-height:1.5;box-shadow:0 0 0 1px color-mix(in oklab,var(--s) 25%,transparent)}
+.rt-lbl{left:0}
+.rt .rt-lbl{z-index:3}
+.rt-dot.now ~ .rt-lbl{color:var(--s)}
+.rt.fin .rt-dot.past:last-of-type{animation:pulseBig 2.4s ease-in-out infinite}
+.co-row:hover .rt-dot:not(.now){transform:scale(1.15)}
+.co-mid>small{display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:normal}
+/* ปิดของเดิมที่ไม่ใช้แล้ว */
+.co-row .co-trk{display:none}
+@media (max-width:760px){
+  .co-row{grid-template-columns:auto minmax(0,1fr) auto;gap:8px 10px}
+  .co-row .co-mid{grid-column:1/-1;grid-row:2}
+  .co-row .co-meta{grid-column:3;grid-row:1}
+  .co-bub{width:38px;height:38px}.co-bub svg{width:19px;height:19px}
+  .rt{margin:2px 12px 14px}
+}
+@media (prefers-reduced-motion:reduce){.co-bub svg,.rt-dot.now,.rt-dot.now svg,.rt-dot.now::before,.rt-dot.now::after,.rt-line i::after{animation:none!important}}
+.co-mid>small .pill{display:none}
