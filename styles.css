@@ -4401,7 +4401,7 @@ body{scrollbar-gutter:stable}
 .sk-card.is-cust{box-shadow:inset 0 3px 0 #2D5FC4,var(--shadow-sm)}
 .sk-card.is-scrap,.sk-card.is-ng{box-shadow:inset 0 3px 0 color-mix(in oklab,#7064B0 70%,transparent),var(--shadow-sm)}
 .sk-card.is-ng{box-shadow:inset 0 3px 0 #B8742A,var(--shadow-sm)}
-.sk-acts:has(.sk-b.ret){grid-template-columns:1fr 1fr auto}
+.sk-acts:has(.sk-b.ret){grid-template-columns:1fr 1fr 1fr}
 .sk-acts:has(.sk-b:only-child){grid-template-columns:1fr}
 .sk-b.ret{color:#2F7FA0;padding-left:10px;padding-right:10px}.sk-b.ret:hover{background:color-mix(in oklab,#2F7FA0 10%,var(--surface))}
 .sf-own{display:grid;grid-template-columns:1fr 1fr;gap:8px}

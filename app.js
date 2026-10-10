@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.71.0';
+const APP_VERSION = '2.71.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5098,7 +5098,7 @@ function viewStock() {
       '<span class="sk-q"><b class="tnum">' + stNum(x.qty) + '</b><small>' + esc(x.unit || '') + '</small></span></div>' +
       '<div class="sk-body"><b class="sk-name">' + esc(x.name) + '</b>' + stTag(x) + '<small>' + [x.cat, x.loc ? '📍 ' + x.loc : ''].filter(Boolean).map(esc).join(' · ') + '</small>' + (stReg(x) ? stLevel(x) : '') +
       '<small class="sk-min">' + (stCustOf(x) ? (x.job ? 'Job ' + esc(x.job) : 'ไม่คิดมูลค่า · ไม่รวมยอดคลัง') : x.grade ? 'รับคืนจากหน้างาน' + (bs ? ' · จาก ' + esc(bs.name) : '') : (+x.min || 0) ? 'จุดสั่งซื้อ ' + stNum(x.min) + ' ' + esc(x.unit || '') : 'ไม่ได้ตั้งจุดสั่งซื้อ') + '</small></div>' +
-      (ed ? '<div class="sk-acts">' + (x.grade ? '' : '<button type="button" class="sk-b in" data-squick="in" data-sid="' + esc(x.id) + '">+ ' + (stCustOf(x) ? 'รับ' : 'รับเข้า') + '</button>') + '<button type="button" class="sk-b out" data-squick="out" data-sid="' + esc(x.id) + '"' + (stZero(x) ? ' disabled' : '') + '>− ' + (stCustOf(x) ? 'เบิกใช้' : 'เบิก') + '</button>' + (stReg(x) ? '<button type="button" class="sk-b ret" data-squick="ret" data-sid="' + esc(x.id) + '" title="รับคืนจากหน้างาน">↩ คืน</button>' : '') + '</div>' : '') + '</article>'; }).join('');
+      (ed ? '<div class="sk-acts">' + (x.grade ? '' : '<button type="button" class="sk-b in" data-squick="in" data-sid="' + esc(x.id) + '">+ ' + (stCustOf(x) ? 'รับ' : 'รับเข้า') + '</button>') + '<button type="button" class="sk-b out" data-squick="out" data-sid="' + esc(x.id) + '"' + (stZero(x) ? ' disabled' : '') + '>− ' + (stCustOf(x) ? 'เบิกใช้' : 'เบิก') + '</button>' + (stReg(x) ? '<button type="button" class="sk-b ret" data-squick="ret" data-sid="' + esc(x.id) + '" title="รับคืนจากหน้างาน">↩ รับคืน</button>' : '') + '</div>' : '') + '</article>'; }).join('');
   const addCard = ed && (SV.cat === 'all' || SV.cat === 'cust') && !q ? '<button type="button" class="sk-card sk-add" data-sadd="1" style="--i:' + Math.min(list.length, 24) + '"><span class="ska-ic">' + I.plus + '</span><b>เพิ่มวัสดุใหม่</b><small>ใส่รูป ถ่ายรูป ตั้งจุดสั่งซื้อ</small></button>' : '';
   const grid = list.length || addCard ? '<div class="sk-grid' + (an ? ' in' : '') + '">' + cards + addCard + '</div>' : '<div class="sk-empty"><span>' + I.stock + '</span><b>' + (all.length ? 'ไม่พบวัสดุที่ค้นหา' : 'ยังไม่มีรายการวัสดุ') + '</b>' + (ed && !all.length ? '<button class="btn primary" data-sadd="1">' + I.plus + 'เพิ่มวัสดุชิ้นแรก</button>' : '') + '</div>';
   const nameOf = id => (stItem(id) || {}).name || 'วัสดุที่ลบแล้ว';
