@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.70.1';
+const APP_VERSION = '2.70.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6365,6 +6365,15 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|u
     location.reload();
   });
 }
+
+/* เปิด/ปิดหน้าต่าง (body.pm-open = ล็อกเลื่อน) แล้วพื้นหลังต้องอยู่ที่เดิม ไม่เด้งกลับขึ้นบน */
+(function keepScrollOnModal() {
+  const b = document.body, h = document.documentElement; let y = [0, 0], open = b.classList.contains('pm-open');
+  const save = () => { if (!b.classList.contains('pm-open')) y = [b.scrollTop, h.scrollTop]; };
+  b.addEventListener('scroll', save, { passive: true }); window.addEventListener('scroll', save, { passive: true });
+  const fix = () => { if (b.scrollTop !== y[0]) b.scrollTop = y[0]; if (h.scrollTop !== y[1]) h.scrollTop = y[1]; };
+  new MutationObserver(() => { const o = b.classList.contains('pm-open'); if (o === open) return; open = o; fix(); requestAnimationFrame(fix); }).observe(b, { attributes: true, attributeFilter: ['class'] });
+})();
 
 /* ============ boot ============ */
 (function readApiParam() {
