@@ -4082,3 +4082,17 @@ body.more-open .fab,body.more-open #chatHeads,body.more-open .msg-fab{opacity:0!
 @keyframes pqPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
 @media (max-width:520px){.btn.pm-qr .pq-t small{display:none}.btn.pm-qr{padding-right:12px}}
 @media (prefers-reduced-motion:reduce){.btn.pm-qr::after,.btn.pm-qr .pq-ic svg{animation:none}}
+/* v2.64.2: แถวเลือกขนาด/จำนวน คงที่ ไม่ตกบรรทัดตอนสลับ */
+.qr-opts{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.qr-opts .seg{grid-column:1/-1}
+.qr-copies{justify-content:space-between;grid-column:1/-1;background:var(--surface-2);border-radius:12px;padding:6px 6px 6px 12px}
+.qr-copies .qc-l{display:flex;flex-direction:column;line-height:1.2;color:var(--ink);font-weight:600;font-size:13.5px}
+.qr-copies .qc-l small{font-weight:400;font-size:11.5px;color:var(--muted)}
+.qr-copies .sf-step{background:var(--surface)}
+/* v2.64.3: ปุ่มส่งต่อขั้นถัดไปบนการ์ดผลิต (ลูกศรขวา) */
+.adv.pfwd{border:0;color:#fff;background:linear-gradient(135deg,color-mix(in oklab,var(--s) 90%,#fff),color-mix(in oklab,var(--s) 80%,#000));box-shadow:0 6px 14px -6px var(--s);transition:transform .2s cubic-bezier(.3,1.6,.5,1),box-shadow .2s}
+.adv.pfwd svg{width:17px;height:17px;animation:fwdNudge 1.8s ease-in-out infinite}
+.adv.pfwd:hover{transform:translateX(2px) scale(1.08);box-shadow:0 10px 18px -6px var(--s)}
+.adv.pfwd:active{transform:scale(.92)}
+@keyframes fwdNudge{0%,100%{transform:translateX(0)}50%{transform:translateX(2.5px)}}
+@media (prefers-reduced-motion:reduce){.adv.pfwd svg{animation:none}}

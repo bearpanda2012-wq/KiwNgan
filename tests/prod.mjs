@@ -49,10 +49,13 @@ await pg.locator('.pcard[data-popen="' + wid + '"] [data-padv]').click(); await 
 eq('paint → ประกอบติดตั้ง', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'assemble');
 await pg.locator('.pcard[data-popen="' + wid + '"] [data-padv]').click(); await pg.waitForTimeout(800);
 eq('ประกอบ → QC', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'qc');
-await pg.locator('.pcard[data-popen="' + wid + '"] [data-pback]').click(); await pg.waitForTimeout(800);
-eq('back → ประกอบ', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'assemble');
-await pg.locator('.pcard[data-popen="' + wid + '"] [data-pback]').click(); await pg.waitForTimeout(800);
+eq('card arrow points forward (no back button)', [await pg.locator('.pcard[data-popen="' + wid + '"] [data-pfwd]').count(), await pg.locator('.pcard[data-popen="' + wid + '"] [data-pback]').count()], [1, 0]);
+await pg.locator('.pcard[data-popen="' + wid + '"] .code').click(); await pg.waitForTimeout(300);
+await pg.click('#pModal [data-pset="assemble"]'); await pg.waitForTimeout(800);
+eq('back → ประกอบ (detail stepper)', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'assemble');
+await pg.click('#pModal [data-pset="paint"]'); await pg.waitForTimeout(800);
 eq('back → paint', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'paint');
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
 // ข้ามประกอบ: ทำสีเสร็จแล้วไปแพ็คเลย
 await pg.evaluate(id => T.prodsAll().find(p => p.id === id).id, wid);
 await pg.locator('.pcard[data-popen="' + wid + '"] .code').click(); await pg.waitForTimeout(300);

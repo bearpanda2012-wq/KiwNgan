@@ -46,6 +46,13 @@ const nUndone = await pg.locator('#pModal .pm-mdone .mrow:not(.done)').count();
 await pg.locator('#pModal .pm-mdone .mrow:not(.done)').first().click(); await pg.waitForTimeout(1200);
 eq('modal ticks a machine done', await pg.evaluate(id => JSON.parse(T.prodById(id).machines).filter(m => !m.d).length, mp.id), nUndone - 1);
 await pg.keyboard.press('Escape');
+// card forward arrow: machine → all machines done → next stage; paint → ประกอบ
+await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(300);
+const fm = await pg.evaluate(() => (S.prods.find(p => p.stage === 'machine') || {}).id);
+if (fm) { await pg.click(`.pcard[data-popen="${fm}"] [data-pfwd]`); await pg.waitForTimeout(1200);
+  eq('→ on machine card finishes all machines', await pg.evaluate(id => { const p = T.prodById(id); return [p.stage !== 'machine', JSON.parse(p.machines).every(m => m.d)]; }, fm), [true, true]); }
+const fp = await pg.evaluate(() => (S.prods.find(p => p.stage === 'paint' && p.assy !== 'no') || {}).id);
+if (fp) { await pg.click(`.pcard[data-popen="${fp}"] [data-pfwd]`); await pg.waitForTimeout(1200); eq('→ on paint card goes to ประกอบ', await pg.evaluate(id => T.prodById(id).stage, fp), 'assemble'); }
 // in-app scanner: decode a real QR image of the job link → opens job
 await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(300);
 eq('scan button on prod board', await pg.locator('.topbar [data-act="scan"]').count(), 1);

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.64.1';
+const APP_VERSION = '2.64.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4625,6 +4625,7 @@ const PIC = {
   design: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l3.5-1 11-11-2.5-2.5-11 11zM14 5.5l2.5-2.5 2.5 2.5L16.5 8"/><path d="M13 21h8"/></svg>',
   sale: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.3-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/></svg>',
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
+  fwd: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   qc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M8.5 12l2.5 2.5 4.6-4.8"/></svg>',
   xmark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
@@ -4724,6 +4725,15 @@ function pStart(p) {
   return prodWrite(p.id, { stage: 'machine', machines: sel.map(m => ({ m: m, d: '' })), paint: p.paint, assy: p.assy }, p.code + ' เริ่มลงเครื่อง ' + sel.join(' + '));
 }
 
+/* ปุ่มลูกศรขวาบนการ์ด: ส่งงานไปขั้นถัดไป (ย้อนกลับทำได้ที่หน้ารายละเอียด กดขั้นก่อนหน้า) */
+function pFwdOk(p) { return !!p && !p.pending && p.stage !== 'shipped' && (p.stage === 'ready' ? canShip() : canProd()); }
+function pForward(p) {
+  if (!pFwdOk(p)) return;
+  if (p.stage === 'wait') return pStart(p);
+  if (p.stage === 'machine') { const now = pNow(), ms = pms(p).map(m => m.d ? m : { m: m.m, d: now }); return prodWrite(p.id, { machines: ms }, p.code + ' ลงเครื่องเสร็จครบ → ' + PSTG[pNextOf(Object.assign({}, p, { stage: 'machine' }))].label); }
+  if (p.stage === 'qc') { pModalOpen(p.id); setTimeout(() => { const b = $('#pModal .qc-box'); if (b) b.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); toast('ติ๊กหัวข้อ QC ให้ครบ แล้วกด "ผ่าน QC"'); return; }
+  return pAdvance(p);
+}
 function pSkipTogs(p, ro) {   // "ไม่ต้องทำสี" / "ไม่ต้องประกอบ"
   return [['paint', 'ppaint', 'ไม่ต้องทำสี'], ['assy', 'passy', 'ไม่ต้องประกอบ']].map(x => { const on = p[x[0]] === 'no';
     return '<button type="button" class="ptog' + (on ? ' on' : '') + '"' + (ro ? ' disabled' : '') + ' data-' + x[1] + '="' + esc(p.id) + '" aria-pressed="' + on + '">' + (on ? PIC.check : '') + x[2] + '</button>'; }).join('');
@@ -4756,7 +4766,7 @@ function pcard(p) {
   return '<div class="card pcard ' + PSTG[p.stage].cls + (p.pending ? ' is-pending' : '') + (stuck ? ' is-late' : '') + (urg ? ' is-urgent' : '') + '" data-popen="' + esc(p.id) + '" tabindex="0" role="button">' +
     '<div class="card-top"><div class="code">' + esc(p.code) + '</div>' +
       (th ? '<button type="button" class="card-th" data-lbopen="' + esc(th.img.id) + '" data-lbjob="' + esc(th.job.id) + '" aria-label="ดูรูปงาน">' + thumbImg(th.img) + '</button>' : '') +
-      (!ro && p.stage !== 'wait' ? '<button type="button" class="adv pback" data-pback="' + esc(p.id) + '" title="ย้อนกลับ 1 ขั้น" aria-label="ย้อนกลับ 1 ขั้น">' + PIC.back + '</button>' : '') + '</div>' +
+      (pFwdOk(p) ? (nx => '<button type="button" class="adv pfwd" data-pfwd="' + esc(p.id) + '" title="ส่งต่อไปขั้น ' + esc(nx) + '" aria-label="ส่งต่อไปขั้น ' + esc(nx) + '">' + PIC.fwd + '</button>')(PSTG[pNextOf(p) || 'shipped'].label) : '') + '</div>' +
     (p.title ? '<div class="title">' + esc(p.title) + '</div>' : '') +
     '<div class="tags">' + (urg ? URG_TAG : '') + (p.stage === 'machine' ? '<span class="tag pt-mc">' + PIC.machine + 'เสร็จ ' + ms.filter(m => m.d).length + '/' + ms.length + ' เครื่อง</span>' : '') + (p.paint === 'no' ? '<span class="tag pt-nopaint">ไม่ทำสี</span>' : '') + (p.assy === 'no' ? '<span class="tag pt-noassy">ไม่ประกอบ</span>' : '') + (p.group ? groupChip(p.group) : '') + pDueTag(p) + '</div>' + (p.note ? '<div class="pc-notetx" title="' + esc(p.note) + '">' + STI.note + '<span>' + esc(p.note) + '</span></div>' : '') +
     body + pTrack(p) +
@@ -5409,6 +5419,7 @@ function qrLabelHtml(p, svg) {
   return '<div class="ql"><div class="ql-qr">' + svg + '</div><div class="ql-t"><small>' + esc(s.company || s.appName || '') + '</small><b>' + esc(p.code) + '</b>' +
     (p.title ? '<span>' + esc(p.title) + '</span>' : '') + '<em>' + [p.sale ? 'Sale ' + esc(p.sale) : '', esc(due), pUrgent(p) ? '🔥 ด่วน' : ''].filter(Boolean).join(' · ') + '</em><i>สแกนเพื่อเปิดงาน · อัปเดตขั้นผลิต</i></div></div>';
 }
+const qrCountLbl = () => QRL.size === 'a4' ? 'จำนวนแผ่น <small>แผ่นละ 8 ดวง</small>' : 'จำนวนดวง <small>ดวงละแผ่น 100×70 มม.</small>';
 function qrOpen(id) { QRL.id = id; QRL.copies = QRL.copies || 1; loadQr(qrDraw); }
 function qrClose() { QRL.id = ''; const m = $('#qrModal'); if (m) m.remove(); }
 function qrDraw() {
@@ -5418,7 +5429,7 @@ function qrDraw() {
   m.innerHTML = '<div class="pm-card qr-card"><div class="pm-h"><div><span class="eyebrow">' + I.print + 'ฉลากติดชิ้นงาน</span><h3>' + esc(p.code) + '</h3><p class="sub">ช่างสแกน QR ด้วยกล้องมือถือ → เปิดงานนี้ในแอปทันที กดอัปเดตขั้นผลิตได้เลย</p></div><button type="button" class="icon-btn" data-qrx="1" aria-label="ปิด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
     '<div class="pm-b"><div class="qr-prev">' + qrLabelHtml(p, svg) + '</div>' +
     '<div class="qr-opts"><div class="seg" role="group" aria-label="ขนาดกระดาษ">' + [['label', 'ฉลาก 100×70 มม.'], ['a4', 'กระดาษ A4 (8 ดวง)']].map(o => '<button type="button" data-qrsize="' + o[0] + '" aria-pressed="' + (QRL.size === o[0]) + '">' + o[1] + '</button>').join('') + '</div>' +
-      '<label class="qr-copies">' + (QRL.size === 'a4' ? 'จำนวนแผ่น <small>(แผ่นละ 8 ดวง)</small>' : 'จำนวนดวง') + '<span class="sf-step"><button type="button" data-qrn="-1" aria-label="ลด">−</button><input id="qrN" type="number" min="1" max="40" inputmode="numeric" value="' + QRL.copies + '"><button type="button" data-qrn="1" aria-label="เพิ่ม">+</button></span></label></div>' +
+      '<label class="qr-copies"><span class="qc-l">' + qrCountLbl() + '</span><span class="sf-step"><button type="button" data-qrn="-1" aria-label="ลด">−</button><input id="qrN" type="number" min="1" max="40" inputmode="numeric" value="' + QRL.copies + '"><button type="button" data-qrn="1" aria-label="เพิ่ม">+</button></span></label></div>' +
     '<div class="qr-link"><span class="mono">' + esc(jobLinkUrl(p.code).replace(/^https?:\/\//, '')) + '</span><button type="button" class="btn sm ghost" data-qrcopy="1">คัดลอกลิงก์</button></div></div>' +
     '<div class="pm-f"><span style="flex:1"></span><button type="button" class="btn" data-qrx="1">ปิด</button><button type="button" class="btn primary" data-qrprint="1">' + I.print + 'พิมพ์ฉลาก</button></div></div>';
 }
@@ -5441,7 +5452,10 @@ function qrPrint() {
 function qrClick(t, d) {
   if (d.qrlabel) { qrOpen(d.qrlabel); return true; }
   if (d.qrx || t.id === 'qrModal') { qrClose(); return true; }
-  if (d.qrsize) { if (QRL.size !== d.qrsize) QRL.copies = 1; QRL.size = d.qrsize; qrDraw(); return true; }
+  if (d.qrsize) {   // สลับขนาด: เปลี่ยนเฉพาะปุ่มกับป้าย ไม่วาดหน้าต่างใหม่ (หน้าต่างไม่เด้ง/ไม่ขยับ)
+    if (QRL.size !== d.qrsize) { QRL.copies = 1; const x = $('#qrN'); if (x) x.value = 1; }
+    QRL.size = d.qrsize; document.querySelectorAll('#qrModal [data-qrsize]').forEach(b => b.setAttribute('aria-pressed', b.dataset.qrsize === QRL.size));
+    const l = $('#qrModal .qc-l'); if (l) l.innerHTML = qrCountLbl(); return true; }
   if (d.qrn) { const x = $('#qrN'); if (x) { x.value = Math.max(1, Math.min(40, (+x.value || 1) + (+d.qrn))); QRL.copies = +x.value; } return true; }
   if (d.qrcopy) { const p = prodById(QRL.id); if (p) navigator.clipboard.writeText(jobLinkUrl(p.code)).then(() => toast('คัดลอกลิงก์แล้ว'), () => toast(jobLinkUrl(p.code))); return true; }
   if (d.qrprint) { qrPrint(); return true; }
@@ -5700,6 +5714,7 @@ function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ
   if (d.pmd) { e.stopPropagation(); const p = prodById(d.pid); if (p) pMachineDone(p, d.pmd); return true; }
   if (d.padv) { e.stopPropagation(); const p = prodById(d.padv); if (p) pAdvance(p); return true; }
   if (d.pback) { e.stopPropagation(); const p = prodById(d.pback); if (p) pBack(p); return true; }
+  if (d.pfwd) { e.stopPropagation(); const p = prodById(d.pfwd); if (p) pForward(p); return true; }
   if (d.pset) { const p = prodById(P2.id); if (!p || !pCanSet(p, d.pset)) return true; if (d.pset === 'shipped') { shipOpen(p.id); return true; } const patch = { stage: d.pset, why: 'ย้ายขั้นจากหน้ารายละเอียด' };
     if (d.pset === 'machine' && !pms(p).length) { toast('เลือกเครื่องในช่อง "เครื่องที่ใช้" ก่อน', true); return true; }
     if (d.pset === 'machine') patch.machines = pms(p).map(m => ({ m: m.m, d: '' }));
