@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.62.0';
+const APP_VERSION = '2.62.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -886,7 +886,7 @@ async function load(silent, boot) {
     S.settings = normalizeSettings(d.settings);
     S.users = d.users || []; S.user = d.me; S.me = d.me.name;
     const prevJobs = S.loaded && S.me && S.jobs && S.jobs.length ? S.jobs : null, prevStock = S.loaded && S.me ? S.stock : null;
-    S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || []; S.files = d.files || []; S.prods = d.prods || []; S.stock = d.stock || null; S.salePinOn = !!d.salePin; S.salePins = d.salePins || [];
+    S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || []; S.files = d.files || []; S.prods = d.prods || []; S.stock = d.stock || null; S.salePinOn = !!d.salePin; S.salePins = d.salePins || []; S.apiV = d.version || '';
     if (!viewsFor(S.user).some(v => v.id === S.view) || (S.screen !== 'app' && isProdRole() && S.view !== 'flow')) S.view = isProdRole() ? 'prod' : 'home';   // ฝ่ายผลิตเข้าระบบแล้วเปิดบอร์ดผลิตเลย
     { const pc = S.loaded ? S.cmtCount : null; S.cmtCount = d.cmtCount || {}; if (pc) setTimeout(() => cmtAlerts(pc), 0); }
     if (d.rt !== undefined) { rtSetup(d.rt); ibStart(d.rt); }
@@ -4360,9 +4360,9 @@ function viewSettings() {
       '<p class="help">ที่หน้าเข้าสู่ระบบมีปุ่ม "สำหรับ Sale" กดแล้วใส่ PIN 4 หลัก ไม่ต้องมีบัญชี · PIN ทุกชุดต้องไม่ซ้ำกัน</p>' +
       '<div class="sp-pins"><div class="spp-row spp-all"><span class="spp-av">' + PIC.sale + '</span><div class="spp-t"><b>PIN รวม</b><small>เห็นงานทุก Sale · เช่น หัวหน้าฝ่ายขาย</small></div><span class="pill ' + (S.salePinOn ? 's-done">ตั้งแล้ว' : 's-hold">ยังไม่ตั้ง') + '</span>' +
         '<div class="pin-set"><input id="salePinSet" inputmode="numeric" maxlength="4" placeholder="PIN ใหม่ 4 หลัก" aria-label="PIN รวมสำหรับ Sale"><button class="btn primary sm" data-act="salepin">' + (S.salePinOn ? 'เปลี่ยน' : 'ตั้ง PIN') + '</button>' + (S.salePinOn ? '<button class="btn sm ghost" data-act="salepin" data-clear="1">ลบ</button>' : '') + '</div></div>' +
-      (d.sales || []).filter(Boolean).map((n, i) => { const on = (S.salePins || []).indexOf(n) >= 0;
+      (!NEW_API() ? '<p class="sub">PIN ส่วนตัวของ Sale แต่ละคน: ต้องอัปเดต Apps Script เป็นเวอร์ชัน 1.33.0 ก่อน</p>' : (d.sales || []).filter(Boolean).map((n, i) => { const on = (S.salePins || []).indexOf(n) >= 0;
         return '<div class="spp-row"><span class="spp-av">' + esc(initial(n)) + '</span><div class="spp-t"><b>' + esc(n) + '</b><small>เห็นเฉพาะงานของตัวเอง</small></div><span class="pill ' + (on ? 's-done">มี PIN ส่วนตัว' : 's-hold">ยังไม่มี') + '</span>' +
-          '<div class="pin-set"><input id="salePinSet' + i + '" inputmode="numeric" maxlength="4" placeholder="PIN 4 หลัก" aria-label="PIN ของ ' + esc(n) + '"><button class="btn sm' + (on ? '' : ' primary') + '" data-act="salepin" data-sale="' + esc(n) + '" data-pinin="salePinSet' + i + '">' + (on ? 'เปลี่ยน' : 'ตั้ง PIN') + '</button>' + (on ? '<button class="btn sm ghost" data-act="salepin" data-sale="' + esc(n) + '" data-clear="1" title="ลบ PIN · ลิงก์ที่คนนี้เปิดไว้จะใช้ไม่ได้ทันที">ลบ</button>' : '') + '</div></div>'; }).join('') +
+          '<div class="pin-set"><input id="salePinSet' + i + '" inputmode="numeric" maxlength="4" placeholder="PIN 4 หลัก" aria-label="PIN ของ ' + esc(n) + '"><button class="btn sm' + (on ? '' : ' primary') + '" data-act="salepin" data-sale="' + esc(n) + '" data-pinin="salePinSet' + i + '">' + (on ? 'เปลี่ยน' : 'ตั้ง PIN') + '</button>' + (on ? '<button class="btn sm ghost" data-act="salepin" data-sale="' + esc(n) + '" data-clear="1" title="ลบ PIN · ลิงก์ที่คนนี้เปิดไว้จะใช้ไม่ได้ทันที">ลบ</button>' : '') + '</div></div>'; }).join('')) +
       ((d.sales || []).filter(Boolean).length ? '' : '<p class="sub">เพิ่มรายชื่อ Sale ที่หัวข้อ "ข้อมูลพื้นฐาน" ก่อน แล้วจะตั้ง PIN แยกรายคนได้</p>') +
       '<p class="help">Sale ลาออกหรือ PIN หลุด: กด "ลบ" หรือ "เปลี่ยน" เฉพาะคนนั้น ลิงก์ที่คนนั้นเปิดค้างไว้จะใช้ไม่ได้ทันที คนอื่นไม่ต้องเปลี่ยน</p></div></section>' +
     '<section class="panel sec" id="s-salelink2"><div class="panel-h"><h2>ลิงก์ดูสถานะงานสำหรับ Sale</h2></div><p class="help">Sale เปิดลิงก์แล้วเห็นสถานะงานของตัวเอง (อ่านอย่างเดียว ไม่ต้องเข้าสู่ระบบ) — ไม่แสดงชื่อคนทำ เวลาทำงาน และข้อความภายในทีม</p>' +
@@ -5093,7 +5093,7 @@ function stFormHtml(it, x) {
     (isNew ? '<div class="f"><label for="sfQty">ยอดเริ่มต้น</label>' + step('sfQty', f.qty, '0') + '<span class="hint">ของที่มีอยู่ตอนนี้</span></div>'
       : '<div class="f"><label for="sfAdj">นับสต็อก: ยอดจริง</label>' + step('sfAdj', f.adj, stNum(it.qty)) + '<span class="hint">ตอนนี้ ' + esc(stNum(it.qty)) + ' ' + esc(it.unit || '') + ' · ว่าง = ไม่ปรับ</span></div>') +
     '<div class="f"><label for="sfMin">จุดสั่งซื้อ</label>' + step('sfMin', f.min, '0') + '<span class="hint">เตือน "ใกล้หมด" เมื่อเหลือไม่เกินนี้</span></div>' +
-    '<div class="f"><label for="sfPrice">ราคาต่อหน่วย (บาท)</label><input id="sfPrice" type="number" min="0" step="any" inputmode="decimal" value="' + esc(f.price === undefined || f.price === 0 ? '' : f.price) + '" placeholder="เช่น 850"><span class="hint">ใช้คิดต้นทุนวัสดุต่อเลข Job · ไม่บังคับ</span></div>' +
+    (!NEW_API() ? '' : '<div class="f"><label for="sfPrice">ราคาต่อหน่วย (บาท)</label><input id="sfPrice" type="number" min="0" step="any" inputmode="decimal" value="' + esc(f.price === undefined || f.price === 0 ? '' : f.price) + '" placeholder="เช่น 850"><span class="hint">ใช้คิดต้นทุนวัสดุต่อเลข Job · ไม่บังคับ</span></div>') +
     '<div class="f"><label for="sfLoc">ที่เก็บ</label><input id="sfLoc" value="' + esc(f.loc || '') + '" placeholder="เช่น ชั้น A1"></div>' +
     '<div class="f full"><label for="sfNote">หมายเหตุ</label><input id="sfNote" value="' + esc(f.note || '') + '" placeholder="เช่น สั่งจากร้าน… / ขนาด 1220×2440 มม."></div></div></div>' +
     '<div class="pm-f">' + (!isNew ? (SM.del ? '<span class="pm-del">ลบ ' + esc(it.name) + '? (ประวัติยังอยู่)</span><button type="button" class="btn sm" data-sdel="no">ไม่</button><button type="button" class="btn sm danger" data-sdel="yes">ลบ</button>' : '<button type="button" class="btn ghost sm" data-sdel="ask">' + I.trash + 'ลบ</button>') : '') +
@@ -5387,6 +5387,9 @@ function coOpen(code) {
 }
 
 /* ---- ฉลาก QR ติดชิ้นงาน: สแกนด้วยกล้องมือถือ → เปิดแอปที่งานนั้นทันที (ลิงก์ ?job=เลข Job) ---- */
+/* หลังบ้านเวอร์ชันใหม่พอไหม (ฟีเจอร์ที่ต้องใช้ Apps Script ใหม่ เปิดเมื่ออัปเดตแล้วเท่านั้น) · โหมดทดลอง = ใหม่เสมอ */
+const apiAtLeast = v => { if (mode() !== 'sheet') return true; const a = String(S.apiV || '0').split('.').map(Number), b = v.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0); } return true; };
+const NEW_API = () => apiAtLeast('1.33.0');
 const jobLinkUrl = code => appUrl() + '?job=' + encodeURIComponent(code);
 const QRL = { id: '', size: 'label', copies: 1 };
 function qrSvg(text, cell) { const q = window.qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: cell || 4, margin: 0, scalable: true }); }
@@ -5437,6 +5440,7 @@ const SHP = { id: '', files: [], to: '', note: '', sig: false, busy: false, add:
 const shipOf = p => { try { return JSON.parse((p && p.ship) || '{}') || {}; } catch (e) { return {}; } };
 function shipOpen(id, add) {
   const p = prodById(id); if (!p) return;
+  if (!NEW_API()) { if (!add) prodWrite(p.id, { stage: 'shipped' }, p.code + ' ส่งแล้ว 🎉'); return; }   // หลังบ้านเก่า: กดส่งแล้วแบบเดิม (ยังเก็บหลักฐานไม่ได้)
   (SHP.files || []).forEach(x => URL.revokeObjectURL(x.url));
   Object.assign(SHP, { id: id, files: [], to: add ? shipOf(p).to || '' : '', note: add ? shipOf(p).note || '' : '', sig: false, busy: false, add: !!add });
   shipDraw(); setTimeout(() => { const x = $('#shipTo'); if (x && !IS_IOS && !IS_ANDROID) x.focus(); }, 60);
@@ -5504,7 +5508,7 @@ async function shipSave() {
   if (r) shipClose(); else shipDraw();
 }
 function pShipHtml(p) {
-  if (p.stage !== 'shipped') return '';
+  if (p.stage !== 'shipped' || !NEW_API()) return '';
   const sp = shipOf(p), ims = imgsOf('d_' + p.id), sig = ims.find(x => x.id === sp.sig), photos = ims.filter(x => x !== sig), can = canShip();
   if (!sp.to && !sp.note && !ims.length) return can ? '<div class="ship-proof none"><span>' + PIC.shipped + '</span><div><b>ยังไม่มีหลักฐานส่งมอบ</b><small>ถ่ายรูปของที่ส่งและให้ผู้รับเซ็น เก็บไว้ตอบลูกค้า</small></div><button type="button" class="btn sm" data-shipadd="' + esc(p.id) + '">' + STI.camera + 'เพิ่มหลักฐาน</button></div>' : '';
   return '<section class="ship-proof"><div class="shp-h">' + PIC.shipped + '<div><b>หลักฐานส่งมอบ</b><small>' + [sp.at ? fdt(sp.at) : fdt(p.shippedAt), sp.by ? 'บันทึกโดย ' + sp.by : ''].filter(Boolean).map(esc).join(' · ') + '</small></div>' + (can ? '<button type="button" class="btn ghost sm" data-shipadd="' + esc(p.id) + '">' + STI.pen + 'แก้ไข</button>' : '') + '</div>' +
