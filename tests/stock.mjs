@@ -98,7 +98,7 @@ await shot('stock-add-modal');
 await pg.click('[data-ssave]'); await pg.waitForTimeout(1600);
 const gid = await pg.evaluate(() => (S.stock.items.find(i => i.name === 'กาวซิลิโคน') || {}).id);
 eq('new item low + photo uploaded', await pg.evaluate(id => { const x = S.stock.items.find(i => i.id === id); return x && [x.qty, x.min, x.unit, x.cat, S.images.filter(m => m.jobId === id).length]; }, gid), [4, 10, 'หลอด', 'อุปกรณ์ยึด', 1]);
-eq('after add, popup shows the item', await pg.locator('#sModal .sk-title h3').innerText(), 'กาวซิลิโคน');
+eq('after add, popup shows the item', await pg.locator('#sModal .skh-info h3').innerText(), 'กาวซิลิโคน');
 await pg.click('#sModal [data-sedit]'); await pg.waitForTimeout(200); await pg.fill('#sfAdj', '12'); await pg.click('[data-ssave]'); await pg.waitForTimeout(900);
 eq('edit adjusts qty', await pg.evaluate(id => S.stock.items.find(i => i.id === id).qty, gid), 12);
 await pg.click('#sModal [data-sclose]'); await pg.waitForTimeout(200);
