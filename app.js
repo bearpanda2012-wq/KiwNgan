@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.67.2';
+const APP_VERSION = '2.68.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -92,7 +92,7 @@ function decorate(root) {
 }
 // count numbers up from zero when a page opens
 function countUp(root) {
-  root.querySelectorAll('.kpi b, .mini b, .rkpi b, .tstats b, .skt b, .cj-n').forEach(el => {
+  root.querySelectorAll('.kpi b, .mini b, .rkpi b, .tstats b, .skt b, .cr-n').forEach(el => {
     const txt = el.textContent, m = txt.match(/^(\d+)(.*)$/); if (!m) return;
     const end = +m[1], rest = m[2]; if (end < 2) return;
     const t0 = performance.now(), dur = Math.min(900, 380 + end * 18);
@@ -4822,18 +4822,20 @@ const CO_STEPS = [
 /* พร้อมส่ง = งานของฝ่ายผลิต (รอฝ่ายสต็อกมารับ) · ฝ่ายสต็อกมีขั้นเดียวคือ ส่งแล้ว */
 const PIPE_STEPS = CO_STEPS;
 const PIPE_DEPTS = [['d', 'ฝ่ายแบบ', 'design'], ['p', 'ฝ่ายผลิต', 'machine'], ['s', 'ฝ่ายสต็อก', 'stock']];
-/* แถบขั้นตอน: การ์ดพื้นเรียบ ใช้สีขั้นเป็นจุดเน้น (แถบบน ไอคอน ตัวเลข) · หัวฝ่ายเป็นเส้นสีบาง ๆ เหนือกลุ่ม — โทนเดียวกับรายการงานด้านล่าง */
+/* แถบขั้นตอนแบบ "เส้นทาง" (ดีไซน์เดียวกับเส้นทางในรายการงาน): ราง 9 จุด ตัวเลขอยู่เหนือจุด ชื่อขั้นอยู่ใต้จุด
+   แถบฝ่ายด้านบนกว้างตามจำนวนขั้น · จุดเล็ก ๆ วิ่งบนรางแสดงงานที่ไหลต่อ · กดจุดเพื่อกรองรายการ */
 function pipeHtml(tile, anim) {
-  let k = 0;
-  return '<div class="cj' + (anim ? ' in' : '') + '">' + PIPE_DEPTS.map(d => { const ss = PIPE_STEPS.filter(x => x.dept === d[0]);
-    return '<div class="cj-seg d-' + d[0] + '" style="--n:' + ss.length + '"><div class="cj-dept"><b>' + (d[2] === 'stock' ? ROLE_IC.stock : PIC[d[2]]) + '</b><span>' + d[1] + '</span><i></i></div>' +
-      '<div class="cj-row">' + ss.map((x, i) => (i ? '<span class="cj-arr" aria-hidden="true"></span>' : '') + tile(x, k++)).join('') + '</div></div>'; }).join('') + '</div>';
+  const N = PIPE_STEPS.length, col = d => { const a = PIPE_STEPS.findIndex(x => x.dept === d), b = PIPE_STEPS.length - PIPE_STEPS.slice().reverse().findIndex(x => x.dept === d); return (a + 1) + '/' + (b + 1); };
+  return '<div class="cr' + (anim ? ' in' : '') + '" style="--N:' + N + '">' +
+    '<div class="cr-depts">' + PIPE_DEPTS.map(d => '<span class="cr-dept d-' + d[0] + '" style="grid-column:' + col(d[0]) + '"><b>' + (d[2] === 'stock' ? ROLE_IC.stock : PIC[d[2]]) + '</b>' + d[1] + '</span>').join('') + '</div>' +
+    '<div class="cr-body"><div class="cr-rail" aria-hidden="true"><i class="cr-fill"></i>' + [0, 1, 2, 3].map(k => '<u style="--k:' + k + '"></u>').join('') + '</div>' +
+    '<div class="cr-stops">' + PIPE_STEPS.map((x, i) => tile(x, i)).join('') + '</div></div></div>';
 }
-/* การ์ด 1 ขั้น (ใช้ทั้งภาพรวมบริษัทและหน้า Sale) */
+/* 1 จุดบนเส้นทาง (ใช้ทั้งภาพรวมบริษัทและหน้า Sale) — คลาส cj-tile คงไว้ให้โค้ด/เทสเดิมหาเจอ */
 function cjTile(s, i, n, attr, pressed, note, late) {
-  return '<button type="button" class="cj-tile ' + (n ? 'has' : 'zero') + (late ? ' late' : '') + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" style="--i:' + i + '" ' + attr + ' aria-pressed="' + pressed + '">' +
-    '<span class="cj-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><span class="cj-n">' + n + '</span><span class="cj-l">' + s.label + '</span>' +
-    (late ? '<em>' + STI.fire + late + ' ค้าง</em>' : '<small>' + esc(note || '') + '</small>') + '</button>';
+  return '<button type="button" class="cj-tile cr-stop d-' + s.dept + ' ' + (n ? 'has' : 'zero') + (late ? ' late' : '') + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" style="--i:' + i + '" ' + attr + ' aria-pressed="' + pressed + '" title="' + esc(s.label) + ' ' + n + ' งาน">' +
+    '<span class="cr-n">' + n + '</span><span class="cr-node ic-' + s.ic + '">' + PIC[s.ic] + '</span><span class="cr-l">' + s.label + '</span>' +
+    '<small>' + (late ? '<em>' + STI.fire + 'ค้าง ' + late + '</em>' : esc(note || '')) + '</small></button>';
 }
 function coRows() {
   const byCode = {}, pool = S.jobs, cutoff = addDays(today(), -14);   // ภาพรวมบริษัท: ทุกคนเห็นงานทั้งหมด (แก้ได้เฉพาะงานตัวเอง)
@@ -4950,7 +4952,7 @@ function viewFlow() {
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
   const hovJob = r => { const o = r.jobs.filter(j => j.status !== 'done'); return (o[0] || r.jobs.slice().sort((a, b) => String(finDate(b)).localeCompare(String(finDate(a))))[0] || {}).id || ''; };
   const table = list.length ? '<div class="co-list">' + list.slice(0, 200).map((r, k) => '<button type="button" class="co-row ' + coStg(r) + ' co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + '" style="--i:' + Math.min(k, 24) + '" data-coopen="' + esc(r.code) + '"' + (hovJob(r) ? ' data-hov="' + esc(hovJob(r)) + '"' : r.prod ? ' data-phov="' + esc(r.prod.id) + '"' : '') + '>' +
-      '<span class="co-bub flow-ic ic-' + coIc(r) + '">' + PIC[coIc(r)] + '</span><span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' + coX(r) +
+      '<span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' + coX(r) +
       '<span class="co-mid">' + coRoute(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
       '<span class="co-meta">' + coDate(r) + '<small class="co-age' + (r.late ? ' late' : '') + '">' + (r.since && r.step !== 'shipped' ? (r.late ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(Math.max(0, daysBetween(String(r.since).slice(0, 10), today()))) : '') + '</small></span></button>').join('') + '</div>' +
       (list.length > 200 ? '<div class="col-more">แสดง 200 จาก ' + list.length + ' รายการ ใช้ช่องค้นหาเพื่อหางานอื่น</div>' : '')
@@ -5863,7 +5865,7 @@ function saleFlowHtml(d, sel) {
   SF.by = {}; list.forEach(r => { SF.by[r.code] = r; });
   const rows = list.length ? '<div class="co-list sf-list">' + list.slice(0, 300).map((r, k) => { const op = !!SF.open[r.code];
       return '<div class="sf-item' + (op ? ' open' : '') + '"><button type="button" class="co-row ' + coStg(r) + ' co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + (SF.anim ? ' in' : '') + '" style="--i:' + Math.min(k, 24) + '" data-sfopen="' + esc(r.code) + '" data-shov="' + esc(r.code) + '" aria-expanded="' + op + '">' +
-        '<span class="co-bub flow-ic ic-' + coIc(r) + '">' + PIC[coIc(r)] + '</span><span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' + coX(r, { sale: !sel }) +
+        '<span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' + coX(r, { sale: !sel }) +
         '<span class="co-mid">' + coRoute(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
         '<span class="co-meta">' + dateBox(r) + '<span class="sf-chev">' + I.next + '</span></span></button>' +
         (op ? detail(r) : '') + '</div>'; }).join('') + '</div>'
