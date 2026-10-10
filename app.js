@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.66.0';
+const APP_VERSION = '2.66.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5075,6 +5075,7 @@ function stDraw() {
   card.classList.toggle('swap', !!card.dataset.k && !same); card.dataset.k = key;
   { const nb = card.querySelector('.pm-b'); if (nb && top) nb.scrollTop = top; }
   if (keep && (keep.qty || keep.job || keep.note)) { const s = (id, v) => { const e = $('#' + id); if (e) e.value = v; }; s('smQty', keep.qty); s('smJob', keep.job); s('smNote', keep.note); }
+  smAfter();
   paintAllThumbs(m);
 }
 function stGallery(it, ed) {
@@ -5090,8 +5091,11 @@ function stGallery(it, ed) {
 }
 function stViewHtml(it, ed, x) {
   const st = stState(it), logs = ((S.stock && S.stock.logs) || []).filter(l => l.itemId === it.id).slice(0, 12), k = SM.kind;
-  const move = ed ? '<section class="sk-move ' + (SK[k] || SK.out).cls + '"><div class="seg sk-seg">' + ['in', 'out', 'adj'].map(t => '<button type="button" class="' + SK[t].cls + '" data-skind="' + t + '" aria-pressed="' + (k === t) + '">' + SK[t].sign + ' ' + SK[t].label + '</button>').join('') + '</div>' +
+  const SKH = { in: ['รับของเข้าคลัง', 'ของมาส่ง / ซื้อเพิ่ม'], out: ['เบิกของออกไปใช้', 'ใส่เลข Job เพื่อคิดต้นทุนงาน'], adj: ['นับสต็อกแล้วปรับยอด', 'ใส่ยอดจริงที่นับได้'] }, SKI = { in: '↓', out: '↑', adj: '⟳' };
+  const move = ed ? '<section class="sk-move ' + (SK[k] || SK.out).cls + '"><i class="smv-blob" aria-hidden="true"></i><div class="seg sk-seg">' + ['in', 'out', 'adj'].map(t => '<button type="button" class="' + SK[t].cls + '" data-skind="' + t + '" aria-pressed="' + (k === t) + '"><i>' + SKI[t] + '</i>' + SK[t].label + '</button>').join('') + '</div>' +
+    '<div class="smv-h"><b>' + SKH[k || 'out'][0] + '</b><small>' + SKH[k || 'out'][1] + '</small></div>' +
     '<div class="sm-qty"><button type="button" class="sm-step" data-sstep="-1" aria-label="ลด">−</button><input id="smQty" type="number" inputmode="decimal" min="0" step="any" placeholder="' + (k === 'adj' ? 'ยอดจริงที่นับได้' : 'จำนวน') + '"><span class="sm-u">' + esc(it.unit || '') + '</span><button type="button" class="sm-step" data-sstep="1" aria-label="เพิ่ม">+</button></div>' +
+    (k === 'adj' ? '' : '<div class="sm-quick">' + [1, 5, 10, 50].map(n => '<button type="button" data-sqk="' + n + '">+' + n + '</button>').join('') + '<span class="sm-after" id="smAfter" data-have="' + (+it.qty || 0) + '" data-k="' + k + '" data-u="' + esc(it.unit || '') + '"></span></div>') +
     (k === 'out' ? '<input id="smJob" class="mono" list="smJobs" placeholder="ใช้กับเลข Job (ไม่บังคับ) เช่น R69-10012S" autocomplete="off"><datalist id="smJobs">' + Array.from(new Set(S.jobs.filter(j => j.status !== 'done' || prodOfCode(j.code)).map(j => j.code))).slice(0, 80).map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>' : '') +
     '<input id="smNote" placeholder="' + (k === 'in' ? 'หมายเหตุ เช่น รับจากซัพพลายเออร์ / เลขใบส่งของ' : k === 'out' ? 'หมายเหตุ เช่น ตัดผนังล็อบบี้' : 'หมายเหตุ เช่น นับสต็อกสิ้นเดือน') + '">' +
     '<button type="button" class="btn sk-go ' + (SK[k] || SK.out).cls + '" data-sgo="' + esc(it.id) + '"' + (SM.busy ? ' disabled' : '') + '>' + (SM.busy ? '<span class="spin-dot"></span>' : '') + 'บันทึก' + (SK[k] || SK.out).label + '</button></section>' : '';
@@ -5193,6 +5197,13 @@ function camShot() {
   const cb = CAM.cb;
   c.toBlob(b => { if (!b) return toast('ถ่ายรูปไม่สำเร็จ', true); const f = new File([b], 'stock-' + Date.now() + '.jpg', { type: 'image/jpeg' }); setTimeout(() => { camClose(); if (cb) cb([f]); }, 180); }, 'image/jpeg', 0.9);
 }
+function smAfter() {   // ตัวอย่างยอดหลังบันทึก (รับเข้า/เบิกออก)
+  const a = $('#smAfter'), x = $('#smQty'); if (!a || !x) return;
+  const n = +x.value || 0, have = +a.dataset.have || 0, out = a.dataset.k === 'out', bal = out ? have - n : have + n;
+  if (!n) { a.innerHTML = ''; a.className = 'sm-after'; return; }
+  a.className = 'sm-after on' + (bal < 0 ? ' bad' : ''); a.innerHTML = bal < 0 ? 'เกินยอดคงเหลือ' : 'เหลือหลังบันทึก <b>' + esc(stNum(bal)) + '</b> ' + esc(a.dataset.u);
+}
+document.addEventListener('input', e => { if (e.target && e.target.id === 'smQty') smAfter(); });
 function stockClick(t, d) {
   if (d.camx) { camClose(); return true; }
   if (d.camshot) { camShot(); return true; }
@@ -5217,7 +5228,8 @@ function stockClick(t, d) {
   }
   if (d.sfstep) { const e = $('#' + d.sfstep); if (e) { e.value = Math.max(0, Math.round(((+e.value || 0) + (+d.d)) * 100) / 100); e.focus(); } return true; }
   if (d.skind) { SM.kind = d.skind; stDraw(); setTimeout(() => { const x = $('#smQty'); if (x) x.focus(); }, 30); return true; }
-  if (d.sstep) { const x = $('#smQty'); if (x) { x.value = Math.max(0, (+x.value || 0) + (+d.sstep)); x.focus(); } return true; }
+  if (d.sstep) { const x = $('#smQty'); if (x) { x.value = Math.max(0, (+x.value || 0) + (+d.sstep)); x.focus(); smAfter(); } return true; }
+  if (d.sqk) { const x = $('#smQty'); if (x) { x.value = Math.round(((+x.value || 0) + (+d.sqk)) * 100) / 100; smAfter(); t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop'); } return true; }
   if (d.sedit) { const it = stItem(d.sedit); if (!it) return true; SM.mode = 'form'; SM.del = false; SM.f = { name: it.name, cat: it.cat, unit: it.unit, min: it.min || '', price: +it.price || '', loc: it.loc, note: it.note, adj: '' }; stDraw(); return true; }
   if (d.sback) { SM.mode = 'view'; SM.f = null; SM.del = false; stDraw(); return true; }
   if (d.sgo) {

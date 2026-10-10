@@ -4135,3 +4135,36 @@ body.more-open .fab,body.more-open #chatHeads,body.more-open .msg-fab{opacity:0!
 .rt.late .rt-line::before{background:linear-gradient(90deg,var(--late),color-mix(in oklab,var(--late) 70%,#ffb199))}
 .rt-line i{position:relative;z-index:1}
 .rt-dot.past{box-shadow:0 2px 6px -2px var(--s)}
+/* ===== v2.66.1: กล่องรับเข้า/เบิกออก/ปรับยอด — สีสดตามประเภท + แก้ข้อความปุ่มหายตอนชี้เมาส์ ===== */
+.sk-move{--mc:var(--p-mach);--mc2:var(--p-paint);position:relative;overflow:hidden;isolation:isolate;gap:10px;padding:12px 12px 14px;border:0;border-radius:18px;background:linear-gradient(150deg,color-mix(in oklab,var(--mc) 14%,var(--surface)),color-mix(in oklab,var(--mc2) 6%,var(--surface)));box-shadow:inset 0 0 0 1.5px color-mix(in oklab,var(--mc) 30%,transparent),0 14px 30px -22px var(--mc)}
+.sk-move.sk-in{--mc:var(--p-ready);--mc2:var(--p-qc)}
+.sk-move.sk-adj{--mc:var(--p-assy);--mc2:var(--p-wait)}
+.smv-blob{position:absolute;z-index:-1;right:-40px;top:-50px;width:150px;height:150px;border-radius:50%;background:radial-gradient(circle,color-mix(in oklab,var(--mc) 28%,transparent),transparent 70%);animation:coFloat 7s ease-in-out infinite}
+.sk-seg{gap:6px;background:color-mix(in oklab,var(--surface) 70%,transparent);padding:4px;border-radius:14px;box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--mc) 15%,var(--line))}
+.sk-seg button{--bc:var(--p-mach);border:0!important;border-radius:11px!important;min-height:44px;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;font-size:13.5px;color:var(--bc)!important;background:color-mix(in oklab,var(--bc) 9%,var(--surface))!important}
+.sk-seg button.sk-in{--bc:var(--p-ready)}.sk-seg button.sk-adj{--bc:var(--p-assy)}
+.sk-seg button i{font-style:normal;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:13px;background:color-mix(in oklab,var(--bc) 16%,var(--surface))}
+.sk-seg button[aria-pressed=true]{color:#fff!important;background:linear-gradient(135deg,color-mix(in oklab,var(--bc) 78%,#fff),color-mix(in oklab,var(--bc) 90%,#000))!important;box-shadow:0 8px 16px -8px var(--bc)}
+.sk-seg button[aria-pressed=true] i{background:rgba(255,255,255,.25);animation:pop .35s cubic-bezier(.3,1.6,.5,1)}
+.sk-seg button:not([aria-pressed=true]):hover{background:color-mix(in oklab,var(--bc) 16%,var(--surface))!important}
+.smv-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:2px 2px 0}
+.smv-h b{font:700 15px var(--f-display);color:color-mix(in oklab,var(--mc) 85%,var(--ink))}
+.smv-h small{font-size:12px;color:var(--muted)}
+.sm-qty input{border:2px solid color-mix(in oklab,var(--mc) 30%,var(--line));color:color-mix(in oklab,var(--mc) 80%,var(--ink));transition:border-color .2s,box-shadow .2s}
+.sm-qty input:focus{outline:0;border-color:var(--mc);box-shadow:0 0 0 4px color-mix(in oklab,var(--mc) 18%,transparent)}
+.sm-qty input::placeholder{color:var(--muted);font-weight:600;font-size:16px}
+.sm-step{border:0;color:#fff;background:linear-gradient(135deg,color-mix(in oklab,var(--mc) 75%,#fff),var(--mc));box-shadow:0 8px 16px -10px var(--mc)}
+.sm-step:hover{background:linear-gradient(135deg,color-mix(in oklab,var(--mc) 65%,#fff),var(--mc));filter:brightness(1.05)}
+.sm-quick{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sm-quick button{border:0;border-radius:999px;padding:5px 12px;font-weight:700;font-size:13px;color:var(--mc);background:color-mix(in oklab,var(--mc) 12%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--mc) 25%,transparent);cursor:pointer;transition:transform .15s,background .15s}
+.sm-quick button:hover{background:color-mix(in oklab,var(--mc) 20%,var(--surface));transform:translateY(-1px)}
+.sm-quick button.pop{animation:pop .3s cubic-bezier(.3,1.8,.5,1)}
+.sm-after{margin-left:auto;font-size:12.5px;color:var(--muted);opacity:0;transform:translateY(3px);transition:opacity .2s,transform .2s}
+.sm-after.on{opacity:1;transform:none}.sm-after b{color:var(--mc);font-size:14px}.sm-after.bad{color:var(--late);font-weight:700}
+.sk-move>input{border:1px solid color-mix(in oklab,var(--mc) 20%,var(--line))}
+.sk-move>input:focus{outline:0;border-color:var(--mc);box-shadow:0 0 0 3px color-mix(in oklab,var(--mc) 15%,transparent)}
+.btn.sk-go{border:0;min-height:50px;font-size:15.5px;border-radius:14px;color:#fff!important;background:linear-gradient(120deg,color-mix(in oklab,var(--mc) 78%,#fff),var(--mc) 55%,color-mix(in oklab,var(--mc2) 70%,var(--mc)))!important;box-shadow:0 12px 24px -12px var(--mc)}
+.btn.sk-go:hover,.btn.sk-go:focus-visible{color:#fff!important;background:linear-gradient(120deg,color-mix(in oklab,var(--mc) 70%,#fff),var(--mc) 50%,color-mix(in oklab,var(--mc2) 70%,var(--mc)))!important;transform:translateY(-1px);box-shadow:0 16px 28px -12px var(--mc)}
+.btn.sk-go:active{transform:scale(.98)}
+.btn.sk-go:disabled{opacity:.7}
+@media (prefers-reduced-motion:reduce){.smv-blob{animation:none}}
