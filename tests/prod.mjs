@@ -21,7 +21,7 @@ eq('nav has company + production', await pg.evaluate(() => ['flow', 'prod'].map(
 eq('nav dept headings', await pg.locator('#nav .nav-h').allTextContents(), ['ฝ่ายแบบ', 'ฝ่ายผลิต', 'ฝ่ายสต็อก', 'ทั่วไป']);
 await pg.click('#nav [data-view="flow"]'); await pg.waitForTimeout(700);
 eq('company pipeline steps', await pg.locator('.co-step').count(), 9);
-eq('pipeline grouped: design 1 · prod 6 · stock 2', await pg.evaluate(() => ['d', 'p', 's'].map(k => document.querySelectorAll('.co-grp.d-' + k + ' .co-step').length)), [1, 6, 2]);
+eq('pipeline grouped: design 1 · prod 7 · stock (ส่งแล้ว) 1', await pg.evaluate(() => ['d', 'p', 's'].map(k => document.querySelectorAll('.co-grp.d-' + k + ' .co-step').length)), [1, 7, 1]);
 const rows = await pg.locator('.co-row').count(); eq('company rows shown', rows > 5, true);
 await pg.screenshot({ path: out + 'prod-company.png', fullPage: true });
 await pg.click('.co-step[data-cf="machine"]'); await pg.waitForTimeout(300);

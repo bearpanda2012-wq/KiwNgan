@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.63.1';
+const APP_VERSION = '2.64.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4808,12 +4808,14 @@ const CO_STEPS = [
   { k: 'ready', label: 'พร้อมส่ง', sub: '', ic: 'ready', dept: 's' }
 ];
 /* แถบขั้นตอนด้านบน: แบ่งกลุ่มตามฝ่าย ฝ่ายแบบ → ฝ่ายผลิต → ฝ่ายสต็อก (พร้อมส่ง + ส่งแล้ว) */
-const PIPE_STEPS = CO_STEPS.concat([{ k: 'shipped', label: 'ส่งแล้ว', sub: '', ic: 'shipped', dept: 's' }]);
-const PIPE_DEPTS = [['d', 'ฝ่ายแบบ', 'design'], ['p', 'ฝ่ายผลิต', 'machine'], ['s', 'ฝ่ายสต็อก · ส่งมอบ', 'stock']];
-function pipeHtml(tile) {
-  return '<div class="co-pipe co-pipe2">' + PIPE_DEPTS.map((d, gi) => { const ss = PIPE_STEPS.filter(x => x.dept === d[0]);
-    return (gi ? '<span class="co-garrow" aria-hidden="true"><i></i></span>' : '') + '<div class="co-grp d-' + d[0] + '" style="--n:' + ss.length + '"><span class="dl d-' + d[0] + '">' + (d[2] === 'stock' ? ROLE_IC.stock : PIC[d[2]]) + d[1] + '<em>' + ss.length + ' ขั้น</em></span>' +
-      '<div class="co-steps">' + ss.map((x, i) => (i ? '<span class="co-arrow" aria-hidden="true"></span>' : '') + tile(x)).join('') + '</div></div>'; }).join('') + '</div>';
+/* พร้อมส่ง = งานของฝ่ายผลิต (รอฝ่ายสต็อกมารับ) · ฝ่ายสต็อกมีขั้นเดียวคือ ส่งแล้ว */
+const PIPE_STEPS = CO_STEPS.map(x => x.k === 'ready' ? Object.assign({}, x, { dept: 'p' }) : x).concat([{ k: 'shipped', label: 'ส่งแล้ว', sub: '', ic: 'shipped', dept: 's' }]);
+const PIPE_DEPTS = [['d', 'ฝ่ายแบบ', 'design'], ['p', 'ฝ่ายผลิต', 'machine'], ['s', 'ฝ่ายสต็อก', 'stock']];
+function pipeHtml(tile, anim) {
+  let k = 0;
+  return '<div class="co-pipe co-pipe2' + (anim ? ' in' : '') + '">' + PIPE_DEPTS.map((d, gi) => { const ss = PIPE_STEPS.filter(x => x.dept === d[0]);
+    return (gi ? '<span class="co-garrow" aria-hidden="true"><i></i><i></i></span>' : '') + '<div class="co-grp d-' + d[0] + '" style="--n:' + ss.length + ';--gi:' + gi + '"><span class="dl d-' + d[0] + '"><b>' + (d[2] === 'stock' ? ROLE_IC.stock : PIC[d[2]]) + '</b>' + d[1] + '<em>' + ss.length + ' ขั้น</em></span>' +
+      '<div class="co-steps">' + ss.map((x, i) => (i ? '<span class="co-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '') + tile(x).replace('<button type="button" class="co-step ', '<button type="button" style="--i:' + (k++) + '" class="co-step ')).join('') + '</div></div>'; }).join('') + '</div>';
 }
 function coRows() {
   const byCode = {}, pool = S.jobs, cutoff = addDays(today(), -14);   // ภาพรวมบริษัท: ทุกคนเห็นงานทั้งหมด (แก้ได้เฉพาะงานตัวเอง)
@@ -4918,8 +4920,8 @@ function viewFlow() {
   const shipToday = rows.filter(r => r.step === 'shipped' && r.prod && String(r.prod.shippedAt).slice(0, 10) === today()).length;
   const stepTile = s => { const c = n(s.k), lt = rows.filter(r => r.step === s.k && r.late).length;
     const sub = s.k === 'shipped' ? (shipToday ? 'วันนี้ ' + shipToday + ' · 7 วัน' : '7 วันล่าสุด') : s.sub || '';
-    return '<button type="button" class="co-step d-' + s.dept + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" data-cf="' + s.k + '" aria-pressed="' + (F === s.k) + '"><span class="flow-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><b>' + c + '</b><span>' + s.label + '</span>' + (lt ? '<em>' + STI.fire + lt + ' ค้าง</em>' : '<small>' + esc(sub) + '</small>') + '</button>'; };
-  const depts = pipeHtml(stepTile);
+    return '<button type="button" class="co-step ' + (c ? 'has' : 'zero') + ' d-' + s.dept + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" data-cf="' + s.k + '" aria-pressed="' + (F === s.k) + '"><i class="co-shine" aria-hidden="true"></i><span class="flow-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><b>' + c + '</b><span>' + s.label + '</span>' + (lt ? '<em>' + STI.fire + lt + ' ค้าง</em>' : '<small>' + esc(sub) + '</small>') + '</button>'; };
+  const depts = pipeHtml(stepTile, S.animIn);
   const shipped7 = rows.filter(r => r.step === 'shipped').length, late = rows.filter(r => r.late).length;
   const kpis = '<div class="co-kpis"><div class="kpi"><span>งานในสายทั้งหมด</span><b>' + rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length + '</b><small>เลข Job ที่ยังไม่ส่ง</small></div>' +
     '<div class="kpi k-late"><span>ค้างนาน / เลยกำหนด</span><b>' + late + '</b><small>ฝ่ายแบบเลยกำหนด · ผลิตค้าง ≥2–3 วัน</small></div>' +
@@ -5808,8 +5810,8 @@ function saleFlowHtml(d, sel) {
   const t = today(), all = saleRows(d).filter(r => !SF.sale || r.sale === SF.sale), qq = SF.q.trim().toLowerCase();
   const n = k => all.filter(r => k === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === k).length;
   const live = all.filter(r => r.step !== 'shipped' && !r.old), late = all.filter(r => r.late).length;
-  const tile = s => '<button type="button" class="co-step d-' + s.dept + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" data-sfstep="' + s.k + '" aria-pressed="' + (SF.step === s.k) + '"><span class="flow-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><b>' + n(s.k) + '</b><span>' + s.label + '</span><small>' + esc(s.k === 'shipped' ? '60 วันล่าสุด' : s.sub || '') + '</small></button>';
-  const pipe = pipeHtml(tile);
+  const tile = s => '<button type="button" class="co-step ' + (n(s.k) ? 'has' : 'zero') + ' d-' + s.dept + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" data-sfstep="' + s.k + '" aria-pressed="' + (SF.step === s.k) + '"><i class="co-shine" aria-hidden="true"></i><span class="flow-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><b>' + n(s.k) + '</b><span>' + s.label + '</span><small>' + esc(s.k === 'shipped' ? '60 วันล่าสุด' : s.sub || '') + '</small></button>';
+  const pipe = pipeHtml(tile, SF.anim);
   const kpis = '<div class="co-kpis"><button type="button" class="kpi" data-sfstep="all"><span>งานที่ยังไม่ส่ง</span><b>' + live.length + '</b><small>เลข Job ที่อยู่ระหว่างทำ</small></button>' +
     '<button type="button" class="kpi k-late" data-sfstep="late"><span>เลยกำหนด (ฝ่ายแบบ)</span><b>' + late + '</b><small>ควรติดตามกับทีม</small></button>' +
     '<button type="button" class="kpi k-done" data-sfstep="shipped"><span>ส่งแล้ว</span><b>' + n('shipped') + '</b><small>ปิดงานถึงลูกค้า (60 วันล่าสุด)</small></button></div>';
@@ -5838,7 +5840,7 @@ function saleFlowHtml(d, sel) {
     (['all', 'late', 'shipped'].indexOf(SF.step) < 0 ? '<button class="qchip" data-sfstep="all" aria-pressed="true">' + esc(SF.step === 'design' ? 'ฝ่ายแบบ' : PSTG[SF.step].label) + ' ✕</button>' : '') + '</div>';
   const tools = '<div class="sp-tools"><label class="sp-search">' + I.search + '<input id="sfQ" type="search" placeholder="ค้นหาเลข Job, ชื่อลูกค้า…" value="' + esc(SF.q) + '" autocomplete="off"></label>' +
     (sel ? '' : '<div class="sp-filters"><label class="spf' + (SF.sale ? ' on' : '') + '"><span class="spf-ic">' + STI.user + '</span><select data-sfsale="1"><option value="">ทุก Sale</option>' + sales.map(x => '<option' + (SF.sale === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select></label></div>') + '</div>';
-  const legend = '<div class="co-legend"><span><i class="d-d"></i>ฝ่ายแบบ</span><span><i class="d-p"></i>ฝ่ายผลิต</span><span><i class="d-s"></i>ฝ่ายสต็อก · ส่งมอบ</span><span><i class="now"></i>ตอนนี้อยู่ที่</span><span><i class="now late"></i>เลยกำหนด</span></div>';
+  const legend = '<div class="co-legend"><span><i class="d-d"></i>ฝ่ายแบบ</span><span><i class="d-p"></i>ฝ่ายผลิต</span><span><i class="d-s"></i>ฝ่ายสต็อก</span><span><i class="now"></i>ตอนนี้อยู่ที่</span><span><i class="now late"></i>เลยกำหนด</span></div>';
   SF.anim = false;
   return pipe + kpis + '<section class="panel sf-panel"><div class="panel-h"><h2>งานตามเลข Job</h2>' + legend + '</div>' + tools + chips + rows + '</section>';
 }

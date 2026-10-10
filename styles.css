@@ -3969,8 +3969,6 @@ body.more-open .fab,body.more-open #chatHeads,body.more-open .msg-fab{opacity:0!
 .co-grp>.dl svg{width:15px;height:15px}
 .co-grp>.dl em{font-style:normal;font-weight:500;font-size:11px;color:var(--muted);margin-left:2px}
 .co-grp .co-steps{flex:1}
-.co-grp.d-s .co-step.p-shipped{background:linear-gradient(135deg,color-mix(in oklab,var(--p-ship) 14%,var(--surface)),color-mix(in oklab,var(--p-ship) 5%,var(--surface)))}
-.co-grp.d-s .co-step.p-shipped .flow-ic svg{animation:pulseBig 2.6s ease-in-out infinite}
 .co-garrow{flex:none;align-self:center;width:14px;display:grid;place-items:center;color:var(--muted)}
 .co-garrow i{width:9px;height:9px;border-top:2.5px solid currentColor;border-right:2.5px solid currentColor;transform:rotate(45deg);opacity:.5}
 @media (max-width:1100px){
@@ -4017,3 +4015,57 @@ body.more-open .fab,body.more-open #chatHeads,body.more-open .msg-fab{opacity:0!
 .scan-f .btn{color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.06)}
 .qr-copies small{font-size:11px;color:var(--muted)}
 @media (prefers-reduced-motion:reduce){.scan-frame u{animation:none;top:50%}}
+/* ===== v2.64: แถบขั้นตอนแบบสีสด + แอนิเมชัน ===== */
+.co-pipe2{position:relative;overflow:hidden;background:linear-gradient(120deg,color-mix(in oklab,var(--doing) 7%,var(--surface)),var(--surface) 35%,var(--surface) 65%,color-mix(in oklab,var(--p-ship) 8%,var(--surface)))}
+.co-grp{background:linear-gradient(160deg,color-mix(in oklab,var(--g) 10%,var(--surface)),color-mix(in oklab,var(--g) 3%,var(--surface)));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--g) 22%,transparent);flex-basis:0}
+.co-grp.d-s{--g:var(--p-ship)}
+.co-grp.d-d,.co-grp.d-s{flex-grow:1.25}
+.co-grp>.dl{gap:7px;padding:4px 12px 4px 4px;color:#fff;background:linear-gradient(120deg,var(--g),color-mix(in oklab,var(--g) 70%,#000));box-shadow:0 6px 16px -8px var(--g)}
+.co-grp>.dl b{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.22)}
+.co-grp>.dl b svg{width:13px;height:13px}
+.co-grp>.dl em{color:rgba(255,255,255,.78)}
+/* การ์ดขั้นที่มีงาน: พื้นไล่สีเต็ม ตัวขาว */
+.co-pipe2 .co-step{position:relative;overflow:hidden;isolation:isolate;border:0;border-radius:16px;transition:transform .22s cubic-bezier(.3,1.4,.5,1),box-shadow .22s,filter .2s}
+.co-pipe2 .co-step.has{background:linear-gradient(145deg,color-mix(in oklab,var(--s) 92%,#fff),color-mix(in oklab,var(--s) 78%,#000));box-shadow:0 10px 22px -12px var(--s),inset 0 1px 0 rgba(255,255,255,.35)}
+.co-pipe2 .co-step.has b,.co-pipe2 .co-step.has>span:not(.flow-ic){color:#fff}
+.co-pipe2 .co-step.has small{color:rgba(255,255,255,.82)}
+.co-pipe2 .co-step.has em{color:#fff;background:rgba(0,0,0,.22);padding:1px 7px;border-radius:999px;justify-self:start}
+.co-pipe2 .co-step.has .flow-ic{background:rgba(255,255,255,.2);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.45)}
+.co-pipe2 .co-step.has .flow-ic svg{animation:coBob 2.4s ease-in-out infinite;animation-delay:calc(var(--i,0) * -.3s)}
+.co-pipe2 .co-step.has::before{content:'';position:absolute;z-index:-1;right:-26px;top:-26px;width:84px;height:84px;border-radius:50%;background:rgba(255,255,255,.12);animation:coFloat 6s ease-in-out infinite;animation-delay:calc(var(--i,0) * -.7s)}
+.co-shine{position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.38) 50%,transparent 65%);transform:translateX(-120%)}
+.co-pipe2 .co-step.has .co-shine{animation:coShine 5.5s ease-in-out infinite;animation-delay:calc(var(--i,0) * .45s + 1s)}
+/* ขั้นที่ว่าง: จาง ๆ ไม่แย่งสายตา */
+.co-pipe2 .co-step.zero{background:color-mix(in oklab,var(--s) 7%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--s) 18%,transparent)}
+.co-pipe2 .co-step.zero .flow-ic{filter:saturate(.55);opacity:.75}
+.co-pipe2 .co-step.zero b{color:color-mix(in oklab,var(--s) 70%,var(--muted))}
+.co-pipe2 .co-step:hover{transform:translateY(-4px) scale(1.03);z-index:1}
+.co-pipe2 .co-step.has:hover{box-shadow:0 16px 30px -12px var(--s),inset 0 1px 0 rgba(255,255,255,.35);filter:saturate(1.1)}
+.co-pipe2 .co-step[aria-pressed="true"]{box-shadow:0 0 0 3px var(--surface),0 0 0 5px var(--s),0 12px 26px -12px var(--s)}
+/* ลูกศรระหว่างขั้น: จุดไหลไปทางขวา */
+.co-pipe2 .co-arrow{flex:0 0 14px;width:14px;height:auto;border:0;transform:none;margin:0;display:flex;align-items:center;justify-content:center;gap:2px}
+.co-pipe2 .co-arrow i{width:3px;height:3px;border-radius:50%;background:color-mix(in oklab,var(--g) 60%,var(--muted));animation:coDots 1.2s ease-in-out infinite}
+.co-pipe2 .co-arrow i:nth-child(2){animation-delay:.15s}.co-pipe2 .co-arrow i:nth-child(3){animation-delay:.3s}
+/* ลูกศรระหว่างฝ่าย */
+.co-pipe2 .co-garrow{width:16px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.co-pipe2 .co-garrow i{position:absolute;width:8px;height:8px;border-top:2.5px solid currentColor;border-right:2.5px solid currentColor;transform:rotate(45deg);opacity:0;animation:coChev 1.6s ease-in-out infinite}
+.co-pipe2 .co-garrow i:nth-child(2){animation-delay:.8s}
+.co-pipe2 .co-garrow{position:relative}
+/* เข้าหน้า: การ์ดเด้งขึ้นทีละใบ */
+.co-pipe2.in .co-grp{animation:coGrpIn .5s cubic-bezier(.2,.9,.3,1.2) both;animation-delay:calc(var(--gi) * .08s)}
+.co-pipe2.in .co-step{animation:coIn .55s cubic-bezier(.3,1.5,.5,1) both;animation-delay:calc(var(--i,0) * .05s + .1s)}
+.co-pipe2.in .co-step b{animation:coNum .7s cubic-bezier(.3,1.8,.5,1) both;animation-delay:calc(var(--i,0) * .05s + .3s)}
+@keyframes coIn{from{opacity:0;transform:translateY(14px) scale(.9)}to{opacity:1;transform:none}}
+@keyframes coGrpIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes coNum{from{transform:scale(.4);opacity:0}to{transform:none;opacity:1}}
+@keyframes coShine{0%,70%{transform:translateX(-120%)}85%,100%{transform:translateX(120%)}}
+@keyframes coBob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-2px) rotate(-4deg)}}
+@keyframes coFloat{0%,100%{transform:translate(0,0)}50%{transform:translate(-8px,6px)}}
+@keyframes coDots{0%,100%{opacity:.25;transform:scale(.8)}50%{opacity:1;transform:scale(1.25)}}
+@keyframes coChev{0%{opacity:0;transform:translateX(-6px) rotate(45deg)}40%{opacity:.8}100%{opacity:0;transform:translateX(6px) rotate(45deg)}}
+/* โหมดมืด: สีเข้มลง ตัวขาวยังอ่านชัด */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .co-pipe2 .co-step.has{background:linear-gradient(145deg,color-mix(in oklab,var(--s) 62%,#000),color-mix(in oklab,var(--s) 38%,#000))}}
+:root[data-theme="dark"] .co-pipe2 .co-step.has{background:linear-gradient(145deg,color-mix(in oklab,var(--s) 62%,#000),color-mix(in oklab,var(--s) 38%,#000))}
+@media (max-width:1100px){.co-pipe2 .co-garrow{height:14px;width:auto;transform:rotate(90deg)}.co-pipe2 .co-arrow{display:none}.co-grp.d-d,.co-grp.d-s{flex-grow:1}.co-grp.d-d .co-step,.co-grp.d-s .co-step{flex:1 1 100%}}
+@media (prefers-reduced-motion:reduce){.co-pipe2 *,.co-pipe2 *::before{animation:none!important}}
+@media (min-width:1101px) and (max-width:1500px){.co-pipe2{gap:4px;padding:8px}.co-grp{padding:7px}.co-grp .co-step{padding:8px 8px 7px;column-gap:6px}.co-grp .co-step .flow-ic{width:28px;height:28px}.co-grp .co-step .flow-ic svg{width:16px;height:16px}.co-grp .co-step b{font-size:21px}.co-pipe2 .co-arrow{flex-basis:8px;width:8px}.co-pipe2 .co-arrow i:nth-child(3){display:none}.co-grp .co-step>span:not(.flow-ic){font-size:12.5px}}
