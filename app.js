@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.67.0';
+const APP_VERSION = '2.67.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5105,10 +5105,9 @@ function stViewHtml(it, ed, x) {
     '<input id="smNote" placeholder="' + (k === 'in' ? 'หมายเหตุ เช่น รับจากซัพพลายเออร์ / เลขใบส่งของ' : k === 'out' ? 'หมายเหตุ เช่น ตัดผนังล็อบบี้' : 'หมายเหตุ เช่น นับสต็อกสิ้นเดือน') + '">' +
     '<button type="button" class="btn sk-go ' + (SK[k] || SK.out).cls + '" data-sgo="' + esc(it.id) + '"' + (SM.busy ? ' disabled' : '') + '>' + (SM.busy ? '<span class="spin-dot"></span>' : '') + 'บันทึก' + (SK[k] || SK.out).label + '</button></section>' : '';
   const hist = logs.length ? '<ol class="sk-log mini">' + logs.map(l => { const sk = SK[l.kind] || SK.adj; return '<li class="' + sk.cls + '"><span class="sl-k">' + sk.label + '</span><div><small>' + esc(fdt(String(l.ts).slice(0, 16))) + ' · ' + esc(l.who || '') + (l.job ? ' · Job ' + esc(l.job) : '') + (l.kind === 'out' && logPrice(l) ? ' · ' + baht(logPrice(l) * (+l.qty || 0)) : '') + (l.note ? ' · ' + esc(l.note) : '') + '</small></div><span class="sl-q"><b class="tnum">' + (l.kind === 'adj' ? (+l.qty >= 0 ? '+' : '−') : sk.sign) + stNum(Math.abs(+l.qty)) + '</b><em>เหลือ ' + stNum(l.bal) + '</em></span></li>'; }).join('') + '</ol>' : '<p class="sub">ยังไม่มีประวัติ</p>';
-  return '<div class="sk-mh">' + stGallery(it, ed) + x + '</div><div class="pm-b sk-mb">' +
-    '<div class="sk-title"><div><span class="sk-pill s-' + st.k + '">' + st.label + '</span>' + (it.cat ? '<span class="sk-cat" style="--ch:' + stHue(it.cat) + '"><i class="sk-dot"></i>' + esc(it.cat) + '</span>' : '') + '<h3>' + esc(it.name) + '</h3>' +
-      '<small>' + [it.loc ? '📍 ที่เก็บ ' + it.loc : '', it.updatedAt ? 'อัปเดต ' + fdt(String(it.updatedAt).slice(0, 16)) + (it.updatedBy ? ' โดย ' + it.updatedBy : '') : ''].filter(Boolean).map(esc).join(' · ') + '</small></div>' +
-      '<div class="sk-big s-' + st.k + '"><b class="tnum">' + stNum(it.qty) + '</b><small>' + esc(it.unit || '') + '</small></div></div>' +
+  return '<div class="sk-mh sk-hero">' + stGallery(it, ed) + '<div class="skh-info"><div class="skh-tags"><span class="sk-pill s-' + st.k + '">' + st.label + '</span>' + (it.cat ? '<span class="sk-cat" style="--ch:' + stHue(it.cat) + '"><i class="sk-dot"></i>' + esc(it.cat) + '</span>' : '') + '</div><h3>' + esc(it.name) + '</h3>' +
+      '<small>' + [it.loc ? '📍 ที่เก็บ ' + it.loc : '', it.updatedAt ? 'อัปเดต ' + fdt(String(it.updatedAt).slice(0, 16)) + (it.updatedBy ? ' โดย ' + it.updatedBy : '') : ''].filter(Boolean).map(esc).join(' · ') + '</small>' +
+      '<div class="sk-big s-' + st.k + '"><span>คงเหลือ</span><b class="tnum">' + stNum(it.qty) + '</b><small>' + esc(it.unit || '') + '</small></div></div>' + x + '</div><div class="pm-b sk-mb">' +
     stLevel(it) + '<div class="sk-mins"><span>จุดสั่งซื้อ <b>' + ((+it.min || 0) ? stNum(it.min) + ' ' + esc(it.unit || '') : '–') + '</b></span>' + ((+it.price || 0) ? '<span>ราคา <b>' + baht(it.price) + '</b> / ' + esc(it.unit || 'หน่วย') + '</span><span>มูลค่าคงเหลือ <b>' + baht((+it.price || 0) * (+it.qty || 0)) + '</b></span>' : '') + (it.note ? '<span>' + esc(it.note) + '</span>' : '') + '</div>' +
     move + '<div class="f"><span class="lbl">ประวัติของวัสดุนี้</span>' + hist + '</div></div>' +
     '<div class="pm-f">' + (ed ? '<button type="button" class="btn ghost sm" data-sedit="' + esc(it.id) + '">' + STI.pen + 'แก้ไขข้อมูล</button>' : '') + '<span style="flex:1"></span><button type="button" class="btn" data-sclose="1">ปิด</button></div>';
