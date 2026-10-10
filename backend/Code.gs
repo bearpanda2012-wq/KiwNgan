@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.29.0';
+const VERSION = '1.30.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -985,7 +985,12 @@ function imageMeta_() {
 const IMG_FILE_COL_ = SHEETS.Images.indexOf('fileId') + 1;
 function addImage_(p, u) {
   let job;
-  if (/^p_/.test(String(p.jobId || ''))) {   // รูปของงานฝ่ายผลิต (งานที่ไม่ได้ผ่านฝ่ายแบบ)
+  if (/^s_/.test(String(p.jobId || ''))) {   // รูปสินค้า/วัสดุในคลัง (ฝ่ายสต็อก)
+    const sr = rowOf_('Stock', p.jobId);
+    if (sr < 0) throw new Error('ไม่พบวัสดุนี้');
+    if (!can_(u, 'stock.edit')) throw new Error('เพิ่มรูปวัสดุได้เฉพาะคนที่จัดการคลังวัสดุได้');
+    job = { code: 'คลังวัสดุ' };
+  } else if (/^p_/.test(String(p.jobId || ''))) {   // รูปของงานฝ่ายผลิต (งานที่ไม่ได้ผ่านฝ่ายแบบ)
     const pr = rowOf_('Prod', p.jobId);
     if (pr < 0) throw new Error('ไม่พบงานนี้ในฝ่ายผลิต');
     if (!canProd_(u)) throw new Error('เพิ่มรูปงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน');
@@ -1015,7 +1020,7 @@ function deleteImage_(id, u) {
   if (row < 0) throw new Error('ไม่พบรูปนี้');
   const meta = sheet_('Images').getRange(row, 1, 1, 4).getDisplayValues()[0];
   const jr = rowOf_('Jobs', meta[1]), job = jr > 0 ? readRow_('Jobs', jr) : null;
-  const isProdImg = /^p_/.test(meta[1]) && canProd_(u);
+  const isProdImg = (/^p_/.test(meta[1]) && canProd_(u)) || (/^s_/.test(meta[1]) && can_(u, 'stock.edit'));
   if (!isAdmin_(u) && meta[2] !== u.name && !isProdImg && !(job && ownsJob_(u, job))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง');
   const fid = sheet_('Images').getRange(row, IMG_FILE_COL_).getDisplayValue();
   sheet_('Images').deleteRow(row);

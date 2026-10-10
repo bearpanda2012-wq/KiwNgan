@@ -44,6 +44,13 @@ s = m.call('stockMove', { itemId: it.id, kind: 'adj', qty: 15 }, ST).data; eq('a
 eq('zero qty rejected', !!m.call('stockMove', { itemId: it.id, kind: 'in', qty: 0 }, ST).error, true);
 eq('admin can move', m.call('stockMove', { itemId: it.id, kind: 'out', qty: 1 }, A).data.items[0].qty, 14);
 s = m.call('stockSave', { item: Object.assign({}, it, { min: 20, qty: 999 }) }, ST).data; eq('edit keeps qty', [s.items[0].min, s.items[0].qty], [20, 14]);
+const IMG = 'data:image/jpeg;base64,' + 'A'.repeat(200);
+eq('designer cannot add stock photo', !!m.call('addImage', { jobId: it.id, thumb: IMG, full: IMG }, U).error, true);
+const im = m.call('addImage', { jobId: it.id, thumb: IMG, full: IMG }, ST).data;
+eq('stock user adds photo', !!(im && im.image && im.image.id), true);
+eq('photo listed in bootstrap', m.call('bootstrap', {}, U).data.images.some(x => x.jobId === it.id), true);
+eq('designer cannot delete stock photo', !!m.call('deleteImage', { id: im.image.id }, U).error, true);
+eq('stock user deletes photo', m.call('deleteImage', { id: im.image.id }, ST).data.id, im.image.id);
 eq('delete item', m.call('stockDelete', { id: it.id }, ST).data.items.length, 0);
 console.log(ok + ' ok, ' + bad + ' failed');
 if (bad) process.exit(1);
