@@ -3961,3 +3961,32 @@ html,body{overflow-x:hidden}
 .qr-card .eyebrow,.ship-card .eyebrow{display:inline-flex;align-items:center;gap:6px}.qr-card .eyebrow svg,.ship-card .eyebrow svg{width:16px;height:16px;flex:none}
 body.more-open .fab,body.more-open #chatHeads,body.more-open .msg-fab{opacity:0!important;pointer-events:none!important;transition:opacity .2s}
 @media (max-width:520px){.ship-card .pm-f{flex-wrap:wrap}.ship-card .ship-hint{flex-basis:100%;text-align:center}.ship-card .pm-f>span[style]{display:none}.ship-card .pm-f .btn{flex:1}}
+/* v2.63: แถบขั้นตอนแบ่งกลุ่มตามฝ่าย (ฝ่ายแบบ → ฝ่ายผลิต → ฝ่ายสต็อก) */
+.co-pipe2{flex-direction:row;align-items:stretch;gap:6px;padding:10px}
+.co-grp{flex:var(--n) 1 0;min-width:0;display:flex;flex-direction:column;gap:8px;padding:8px;border-radius:16px;--g:var(--doing);background:color-mix(in oklab,var(--g) 5%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--g) 16%,transparent)}
+.co-grp.d-p{--g:var(--p-mach)}.co-grp.d-s{--g:var(--p-ready)}
+.co-grp>.dl{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 8px;border-radius:999px;font-size:12.5px;font-weight:700;color:var(--g);background:color-mix(in oklab,var(--g) 13%,var(--surface))}
+.co-grp>.dl svg{width:15px;height:15px}
+.co-grp>.dl em{font-style:normal;font-weight:500;font-size:11px;color:var(--muted);margin-left:2px}
+.co-grp .co-steps{flex:1}
+.co-grp.d-s .co-step.p-shipped{background:linear-gradient(135deg,color-mix(in oklab,var(--p-ship) 14%,var(--surface)),color-mix(in oklab,var(--p-ship) 5%,var(--surface)))}
+.co-grp.d-s .co-step.p-shipped .flow-ic svg{animation:pulseBig 2.6s ease-in-out infinite}
+.co-garrow{flex:none;align-self:center;width:14px;display:grid;place-items:center;color:var(--muted)}
+.co-garrow i{width:9px;height:9px;border-top:2.5px solid currentColor;border-right:2.5px solid currentColor;transform:rotate(45deg);opacity:.5}
+@media (max-width:1100px){
+  .co-pipe2{flex-direction:column;gap:8px}
+  .co-garrow{transform:rotate(90deg);height:10px;width:auto}
+  .co-grp .co-steps{flex-wrap:wrap}
+  .co-grp.d-d .co-step,.co-grp.d-s .co-step{flex:1 1 40%}
+}
+@media (max-width:760px){.co-grp{padding:6px;gap:6px}.co-grp .co-step{flex:1 1 30%}.co-grp.d-d .co-step,.co-grp.d-s .co-step{flex:1 1 40%}}
+@media (prefers-reduced-motion:reduce){.co-grp.d-s .co-step.p-shipped .flow-ic svg{animation:none}}
+@media (min-width:1101px){
+  .co-grp .co-step{grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto auto auto;align-content:start;row-gap:5px;column-gap:8px;padding:9px 10px 8px}
+  .co-grp .co-step .flow-ic{grid-row:1;width:34px;height:34px}
+  .co-grp .co-step b{grid-row:1;align-self:center;font-size:24px}
+  .co-grp .co-step>span:not(.flow-ic),.co-grp .co-step small,.co-grp .co-step em{grid-column:1/-1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .co-grp .co-step>span:not(.flow-ic){font-size:13.5px}
+  .co-grp .co-arrow{flex:0 0 10px;width:10px;margin:0 -2px}
+  .co-grp .co-steps{gap:6px}
+}

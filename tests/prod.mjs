@@ -20,7 +20,8 @@ await login('แอดมิน', true);
 eq('nav has company + production', await pg.evaluate(() => ['flow', 'prod'].map(v => !!document.querySelector('#nav [data-view="' + v + '"]'))), [true, true]);
 eq('nav dept headings', await pg.locator('#nav .nav-h').allTextContents(), ['ฝ่ายแบบ', 'ฝ่ายผลิต', 'ฝ่ายสต็อก', 'ทั่วไป']);
 await pg.click('#nav [data-view="flow"]'); await pg.waitForTimeout(700);
-eq('company pipeline steps', await pg.locator('.co-step').count(), 8);
+eq('company pipeline steps', await pg.locator('.co-step').count(), 9);
+eq('pipeline grouped: design 1 · prod 6 · stock 2', await pg.evaluate(() => ['d', 'p', 's'].map(k => document.querySelectorAll('.co-grp.d-' + k + ' .co-step').length)), [1, 6, 2]);
 const rows = await pg.locator('.co-row').count(); eq('company rows shown', rows > 5, true);
 await pg.screenshot({ path: out + 'prod-company.png', fullPage: true });
 await pg.click('.co-step[data-cf="machine"]'); await pg.waitForTimeout(300);
@@ -122,7 +123,7 @@ await pg.click('.sx-tile'); await pg.fill('#salePin', '0000'); await pg.waitForT
 eq('wrong sale pin', await pg.locator('#saleForm .sx-err').textContent(), 'PIN ไม่ถูกต้อง');
 await pg.fill('#salePin', '5678'); await pg.waitForTimeout(1500);
 eq('sale page opened', /salek=/.test(pg.url()), true);
-eq('sale overview pipeline', await pg.locator('.sf-wrap .co-step').count(), 8);
+eq('sale overview pipeline', await pg.locator('.sf-wrap .co-step').count(), 9);
 eq('sale overview rows', (await pg.locator('.sf-list .co-row').count()) > 5, true);
 await pg.waitForTimeout(1200); await pg.screenshot({ path: out + 'prod-sale.png', fullPage: true });
 await pg.click('.sf-wrap .co-step[data-sfstep="machine"]'); await pg.waitForTimeout(300);
