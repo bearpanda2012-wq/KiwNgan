@@ -4168,3 +4168,43 @@ body.more-open .fab,body.more-open #chatHeads,body.more-open .msg-fab{opacity:0!
 .btn.sk-go:active{transform:scale(.98)}
 .btn.sk-go:disabled{opacity:.7}
 @media (prefers-reduced-motion:reduce){.smv-blob{animation:none}}
+/* ===== v2.67: แถบขั้นตอนโทนสะอาด (สีเป็นจุดเน้น ไม่ใช่พื้น) ===== */
+.cj{display:flex;gap:14px;align-items:stretch;background:var(--surface);border:1px solid var(--line);border-radius:var(--r,16px);padding:14px 16px 16px;box-shadow:var(--shadow-sm,0 1px 2px rgba(0,0,0,.04))}
+.cj-seg{--g:var(--doing);flex:var(--n) 1 0;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cj-seg.d-p{--g:var(--p-mach)}.cj-seg.d-s{--g:var(--p-ship)}
+.cj-seg.d-d,.cj-seg.d-s{flex-grow:1.2}
+.cj-dept{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--g);min-width:0}
+.cj-dept b{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;flex:none;background:color-mix(in oklab,var(--g) 13%,var(--surface))}
+.cj-dept b svg{width:13px;height:13px}
+.cj-dept span{white-space:nowrap}
+.cj-dept i{flex:1;height:3px;border-radius:3px;background:linear-gradient(90deg,var(--g),color-mix(in oklab,var(--g) 15%,transparent));transform-origin:left}
+.cj-row{display:flex;align-items:stretch;gap:6px;flex:1}
+.cj-arr{flex:0 0 10px;align-self:center;width:7px;height:7px;border-top:2px solid var(--line);border-right:2px solid var(--line);transform:rotate(45deg);margin:0 2px 0 -2px}
+.cj-tile{position:relative;flex:1;min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto auto auto;align-content:start;column-gap:9px;row-gap:4px;padding:13px 11px 10px;text-align:left;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;overflow:hidden;transition:transform .2s cubic-bezier(.3,1.4,.5,1),box-shadow .2s,border-color .2s,background .2s}
+.cj-tile::before{content:'';position:absolute;left:0;right:0;top:0;height:3px;background:var(--s);opacity:.35;transition:opacity .2s,height .2s}
+.cj-tile.has::before{opacity:1}
+.cj-ic{grid-row:1;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:var(--s);background:color-mix(in oklab,var(--s) 12%,var(--surface))}
+.cj-ic svg{width:18px;height:18px}
+.cj-n{grid-row:1;align-self:center;font:700 26px/1 var(--f-display);font-variant-numeric:tabular-nums;color:var(--s)}
+.cj-l{grid-column:1/-1;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cj-tile small,.cj-tile em{grid-column:1/-1;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:normal}
+.cj-tile em{justify-self:start;display:inline-flex;align-items:center;gap:3px;color:var(--late);font-weight:600;background:var(--late-soft);padding:1px 7px;border-radius:999px}
+.cj-tile em svg{width:11px;height:11px}
+.cj-tile.zero .cj-n{color:color-mix(in oklab,var(--muted) 70%,var(--surface))}
+.cj-tile.zero .cj-ic{filter:grayscale(.6);opacity:.65}
+.cj-tile.zero .cj-l{color:var(--muted)}
+.cj-tile.has .cj-ic svg{animation:bob 2.6s ease-in-out infinite;animation-delay:calc(var(--i) * -.35s)}
+.cj-tile:hover{transform:translateY(-3px);border-color:color-mix(in oklab,var(--s) 45%,var(--line));box-shadow:0 12px 24px -16px var(--s)}
+.cj-tile:hover::before{opacity:1}
+.cj-tile[aria-pressed="true"]{background:color-mix(in oklab,var(--s) 8%,var(--surface));border-color:var(--s);box-shadow:0 0 0 1px var(--s),0 12px 24px -16px var(--s)}
+.cj-tile[aria-pressed="true"]::before{height:4px;opacity:1}
+.cj-tile:focus-visible{outline:2px solid var(--s);outline-offset:2px}
+/* เข้าหน้า */
+.cj.in .cj-dept i{animation:cjLine .7s cubic-bezier(.2,.8,.2,1) both .1s}
+.cj.in .cj-tile{animation:cjIn .5s cubic-bezier(.2,.9,.3,1.15) both;animation-delay:calc(var(--i) * .045s)}
+@keyframes cjIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes cjLine{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media (min-width:1101px) and (max-width:1500px){.cj{gap:10px;padding:12px}.cj-row{gap:4px}.cj-tile{padding:12px 8px 9px;column-gap:6px}.cj-ic{width:28px;height:28px;border-radius:9px}.cj-ic svg{width:15px;height:15px}.cj-n{font-size:22px}.cj-l{font-size:12.5px}.cj-arr{flex-basis:6px;width:6px;height:6px}}
+@media (max-width:1100px){.cj{flex-direction:column;gap:14px}.cj-row{flex-wrap:wrap}.cj-arr{display:none}.cj-row .cj-tile{flex:1 1 calc(33.3% - 6px)}.cj-seg.d-d .cj-tile,.cj-seg.d-s .cj-tile{flex-basis:100%}}
+@media (max-width:760px){.cj{padding:12px}.cj-row .cj-tile{flex:1 1 calc(50% - 6px)}.cj-n{font-size:22px}}
+@media (prefers-reduced-motion:reduce){.cj *{animation:none!important}}

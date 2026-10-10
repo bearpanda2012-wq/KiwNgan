@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.66.1';
+const APP_VERSION = '2.67.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -92,7 +92,7 @@ function decorate(root) {
 }
 // count numbers up from zero when a page opens
 function countUp(root) {
-  root.querySelectorAll('.kpi b, .mini b, .rkpi b, .tstats b, .skt b').forEach(el => {
+  root.querySelectorAll('.kpi b, .mini b, .rkpi b, .tstats b, .skt b, .cj-n').forEach(el => {
     const txt = el.textContent, m = txt.match(/^(\d+)(.*)$/); if (!m) return;
     const end = +m[1], rest = m[2]; if (end < 2) return;
     const t0 = performance.now(), dur = Math.min(900, 380 + end * 18);
@@ -4822,11 +4822,18 @@ const CO_STEPS = [
 /* พร้อมส่ง = งานของฝ่ายผลิต (รอฝ่ายสต็อกมารับ) · ฝ่ายสต็อกมีขั้นเดียวคือ ส่งแล้ว */
 const PIPE_STEPS = CO_STEPS;
 const PIPE_DEPTS = [['d', 'ฝ่ายแบบ', 'design'], ['p', 'ฝ่ายผลิต', 'machine'], ['s', 'ฝ่ายสต็อก', 'stock']];
+/* แถบขั้นตอน: การ์ดพื้นเรียบ ใช้สีขั้นเป็นจุดเน้น (แถบบน ไอคอน ตัวเลข) · หัวฝ่ายเป็นเส้นสีบาง ๆ เหนือกลุ่ม — โทนเดียวกับรายการงานด้านล่าง */
 function pipeHtml(tile, anim) {
   let k = 0;
-  return '<div class="co-pipe co-pipe2' + (anim ? ' in' : '') + '">' + PIPE_DEPTS.map((d, gi) => { const ss = PIPE_STEPS.filter(x => x.dept === d[0]);
-    return (gi ? '<span class="co-garrow" aria-hidden="true"><i></i><i></i></span>' : '') + '<div class="co-grp d-' + d[0] + '" style="--n:' + ss.length + ';--gi:' + gi + '"><span class="dl d-' + d[0] + '"><b>' + (d[2] === 'stock' ? ROLE_IC.stock : PIC[d[2]]) + '</b>' + d[1] + '<em>' + ss.length + ' ขั้น</em></span>' +
-      '<div class="co-steps">' + ss.map((x, i) => (i ? '<span class="co-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '') + tile(x).replace('<button type="button" class="co-step ', '<button type="button" style="--i:' + (k++) + '" class="co-step ')).join('') + '</div></div>'; }).join('') + '</div>';
+  return '<div class="cj' + (anim ? ' in' : '') + '">' + PIPE_DEPTS.map(d => { const ss = PIPE_STEPS.filter(x => x.dept === d[0]);
+    return '<div class="cj-seg d-' + d[0] + '" style="--n:' + ss.length + '"><div class="cj-dept"><b>' + (d[2] === 'stock' ? ROLE_IC.stock : PIC[d[2]]) + '</b><span>' + d[1] + '</span><i></i></div>' +
+      '<div class="cj-row">' + ss.map((x, i) => (i ? '<span class="cj-arr" aria-hidden="true"></span>' : '') + tile(x, k++)).join('') + '</div></div>'; }).join('') + '</div>';
+}
+/* การ์ด 1 ขั้น (ใช้ทั้งภาพรวมบริษัทและหน้า Sale) */
+function cjTile(s, i, n, attr, pressed, note, late) {
+  return '<button type="button" class="cj-tile ' + (n ? 'has' : 'zero') + (late ? ' late' : '') + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" style="--i:' + i + '" ' + attr + ' aria-pressed="' + pressed + '">' +
+    '<span class="cj-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><span class="cj-n">' + n + '</span><span class="cj-l">' + s.label + '</span>' +
+    (late ? '<em>' + STI.fire + late + ' ค้าง</em>' : '<small>' + esc(note || '') + '</small>') + '</button>';
 }
 function coRows() {
   const byCode = {}, pool = S.jobs, cutoff = addDays(today(), -14);   // ภาพรวมบริษัท: ทุกคนเห็นงานทั้งหมด (แก้ได้เฉพาะงานตัวเอง)
@@ -4929,9 +4936,7 @@ function viewFlow() {
   const rows = coRows(), F = S.cf || 'all', q = String(S.cq || '').trim().toLowerCase();
   const n = k => rows.filter(r => k === 'design' ? r.step === 'design' : r.step === k).length;
   const shipToday = rows.filter(r => r.step === 'shipped' && r.prod && String(r.prod.shippedAt).slice(0, 10) === today()).length;
-  const stepTile = s => { const c = n(s.k), lt = rows.filter(r => r.step === s.k && r.late).length;
-    const sub = s.k === 'shipped' ? (shipToday ? 'วันนี้ ' + shipToday + ' · 7 วัน' : '7 วันล่าสุด') : s.sub || '';
-    return '<button type="button" class="co-step ' + (c ? 'has' : 'zero') + ' d-' + s.dept + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" data-cf="' + s.k + '" aria-pressed="' + (F === s.k) + '"><i class="co-shine" aria-hidden="true"></i><span class="flow-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><b>' + c + '</b><span>' + s.label + '</span>' + (lt ? '<em>' + STI.fire + lt + ' ค้าง</em>' : '<small>' + esc(sub) + '</small>') + '</button>'; };
+  const stepTile = (s, i) => cjTile(s, i, n(s.k), 'data-cf="' + s.k + '"', F === s.k, s.k === 'shipped' ? (shipToday ? 'วันนี้ ' + shipToday + ' · 7 วัน' : '7 วันล่าสุด') : s.sub, rows.filter(r => r.step === s.k && r.late).length);
   const depts = pipeHtml(stepTile, S.animIn);
   const shipped7 = rows.filter(r => r.step === 'shipped').length, late = rows.filter(r => r.late).length;
   const kpis = '<div class="co-kpis"><div class="kpi"><span>งานในสายทั้งหมด</span><b>' + rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length + '</b><small>เลข Job ที่ยังไม่ส่ง</small></div>' +
@@ -5838,7 +5843,7 @@ function saleFlowHtml(d, sel) {
   const t = today(), all = saleRows(d).filter(r => !SF.sale || r.sale === SF.sale), qq = SF.q.trim().toLowerCase();
   const n = k => all.filter(r => k === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === k).length;
   const live = all.filter(r => r.step !== 'shipped' && !r.old), late = all.filter(r => r.late).length;
-  const tile = s => '<button type="button" class="co-step ' + (n(s.k) ? 'has' : 'zero') + ' d-' + s.dept + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" data-sfstep="' + s.k + '" aria-pressed="' + (SF.step === s.k) + '"><i class="co-shine" aria-hidden="true"></i><span class="flow-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><b>' + n(s.k) + '</b><span>' + s.label + '</span><small>' + esc(s.k === 'shipped' ? '60 วันล่าสุด' : s.sub || '') + '</small></button>';
+  const tile = (s, i) => cjTile(s, i, n(s.k), 'data-sfstep="' + s.k + '"', SF.step === s.k, s.k === 'shipped' ? '60 วันล่าสุด' : s.sub, 0);
   const pipe = pipeHtml(tile, SF.anim);
   const kpis = '<div class="co-kpis"><button type="button" class="kpi" data-sfstep="all"><span>งานที่ยังไม่ส่ง</span><b>' + live.length + '</b><small>เลข Job ที่อยู่ระหว่างทำ</small></button>' +
     '<button type="button" class="kpi k-late" data-sfstep="late"><span>เลยกำหนด (ฝ่ายแบบ)</span><b>' + late + '</b><small>ควรติดตามกับทีม</small></button>' +
