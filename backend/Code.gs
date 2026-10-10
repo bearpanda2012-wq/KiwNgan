@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.32.0';
+const VERSION = '1.32.1';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -637,9 +637,11 @@ function setPhoto_(userId, photo, u) {
 
 function changePin_(u, oldPin, newPin) {
   if (!validPin_(newPin)) throw new Error('PIN ใหม่ต้องเป็นตัวเลข 4–6 หลัก');
-  if (hash_(u.salt, oldPin) !== u.pinHash) throw new Error('PIN เดิมไม่ถูกต้อง');
   const row = rowOf_('Users', u.id);
-  const fresh = readRow_('Users', row);
+  if (row < 1) throw new Error('ไม่พบบัญชีนี้');
+  const fresh = readRow_('Users', row);   // ผู้ใช้จาก auth_ เป็นฉบับย่อในแคช (ไม่มี salt/pinHash) → ต้องเทียบกับแถวในชีต
+  if (!fresh.pinHash || hash_(fresh.salt, String(oldPin || '')) !== fresh.pinHash) throw new Error('PIN เดิมไม่ถูกต้อง');
+  if (String(oldPin) === String(newPin)) throw new Error('PIN ใหม่ต้องไม่ซ้ำกับ PIN เดิม');
   fresh.salt = Utilities.getUuid(); fresh.pinHash = hash_(fresh.salt, newPin);
   writeRow_('Users', fresh, row);
   log_('', u.name, 'user', 'เปลี่ยน PIN');
