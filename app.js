@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.60.0';
+const APP_VERSION = '2.61.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2008,7 +2008,7 @@ function helpCard(m) {
   const lab = st === 'open' ? 'รอคนช่วย' : st === 'taken' ? (m.helper ? m.helper + ' กำลังช่วย' : 'มีคนรับช่วยแล้ว') : 'เรียบร้อยแล้ว';
   const canTake = st === 'open' && !mine, canClose = st !== 'done' && (mine || isAdmin() || m.helper === S.me);
   return '<div class="help-card hc-' + st + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบคำขอนี้">' + I.trash + '</button>' : '') + '<div class="hc-top"><span class="hc-ic">' + MSG_IC.sos + '</span><div><b>' + (mine ? 'คุณขอความช่วยเหลือ' : esc(m.from) + ' ขอความช่วยเหลือ') + '</b><small>' + (m.to === 'team' ? 'ถึงทั้งทีม' : m.to === 'admin' ? 'ถึง' + ADMIN_LABEL : 'ถึง ' + esc(m.to)) + ' · ' + msgTime(m.ts) + '</small></div><span class="hc-st">' + lab + '</span></div>' +
-    '<p>' + esc(m.text) + '</p>' + (j ? '<button class="hc-job" data-open="' + esc(j.id) + '">' + stBadge(j) + '<b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '') + '</small></button>' : '') +
+    '<p>' + msgRich(m.text) + '</p>' + (!j ? (cs => cs.length ? '<div class="bub-jobs">' + cs.slice(0, 2).map(jobMini).join('') + '</div>' : '')(jobsInText(m.text)) : '') + (j ? '<button class="hc-job" data-open="' + esc(j.id) + '">' + stBadge(j) + '<b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '') + '</small></button>' : '') +
     (canTake || canClose ? '<div class="hc-act">' + (canTake ? '<button class="btn sm primary" data-helptake="' + esc(m.id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + (canClose ? '<button class="btn sm" data-helpdone="' + esc(m.id) + '">' + STI.done + 'ปิดคำขอ</button>' : '') + '</div>' : '') + '</div>';
 }
 const EMO = [
@@ -2055,7 +2055,7 @@ function renderMsgPanel() {
     if (m.kind === 'help') return sep + helpCard(m);
     const mine = (m.from === S.me && !m.fromAdmin) || (isAdmin() && m.from === S.me);
     return sep + '<div class="bub' + (mine ? ' me' : '') + (m.pending ? ' pending' : '') + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบข้อความนี้">' + I.trash + '</button>' : '') + (mine ? '' : (m.fromAdmin && !isAdmin() ? '<span class="av bub-av adm">' + MSG_IC.shield + '</span>' : av(m.from, 'bub-av'))) +
-      '<div class="bub-b">' + (mine || M.ch !== 'team' ? '' : '<small class="bub-n">' + esc(m.from) + '</small>') + msgImg(m) + (m.text ? '<p>' + esc(m.text).replace(/\n/g, '<br>') + '</p>' : '') + (m.jobId && jobById(m.jobId) ? '<button class="bub-job" data-open="' + esc(m.jobId) + '">' + esc(jobById(m.jobId).code) + '</button>' : '') + '<time>' + msgTime(m.ts) + '</time></div></div>';
+      '<div class="bub-b">' + (mine || M.ch !== 'team' ? '' : '<small class="bub-n">' + esc(m.from) + '</small>') + msgImg(m) + (m.text ? '<p>' + msgRich(m.text) + '</p>' : '') + (m.jobId && jobById(m.jobId) ? '<button class="bub-job" data-open="' + esc(m.jobId) + '">' + esc(jobById(m.jobId).code) + '</button>' : (cs => cs.length ? '<div class="bub-jobs">' + cs.slice(0, 2).map(jobMini).join('') + '</div>' : '')(jobsInText(m.text))) + '<time>' + msgTime(m.ts) + '</time></div></div>';
   }).join('') : '<div class="mp-empty"><span class="e-ic">' + MSG_IC.chat + '</span><b>ยังไม่มีข้อความ</b><small>' + (M.ch === 'team' ? 'ส่งข้อความถึงทุกคนในทีมได้ที่นี่' : 'เริ่มคุยกับ ' + esc(cur.name)) + '</small></div>';
   const helpForm = M.help ? '<div class="mp-help"><div class="mp-help-h"><span class="hc-ic">' + MSG_IC.sos + '</span><b>ขอความช่วยเหลือ</b><button class="icon-btn sm" data-act="helpoff" aria-label="ยกเลิก">✕</button></div>' +
       '<div class="seg"><button data-helpto="team" aria-pressed="' + (M.helpTo === 'team') + '">' + MSG_IC.team + 'ทั้งทีม</button>' + (!isAdmin() ? '<button data-helpto="admin" aria-pressed="' + (M.helpTo === 'admin') + '">' + MSG_IC.shield + ADMIN_LABEL + '</button>' : '') + '</div>' +
@@ -2075,6 +2075,7 @@ function renderMsgPanel() {
     '<form class="mp-compose' + (M.help ? ' helping' : '') + '" id="msgForm">' + helpForm +
       '<div class="emo-pop" id="emoPop"' + (M.emoji ? '' : ' hidden') + '>' + (M.emoji ? emoPopHtml() : '') + '</div>' +
       (M.att ? '<div class="mp-att"><img alt="" src="' + M.att.data + '"><div><b>' + STI.camera + 'รูปที่จะส่ง</b><small>พิมพ์ข้อความเพิ่มได้ แล้วกด Enter หรือปุ่มส่ง</small></div><button type="button" class="icon-btn" data-act="msgattdel" aria-label="เอารูปออก">✕</button></div>' : '') +
+      '<div class="msg-peek" id="msgPeek"></div>' +
       '<div class="mp-row">' + (M.help ? '' : '<button type="button" class="mp-sos-btn" data-act="helpon" title="ขอความช่วยเหลือ">' + MSG_IC.sos + '<span>ขอช่วย</span></button>') +
       '<label class="mp-att-btn" title="แนบรูป (หรือกด Print Screen แล้ว Ctrl+V ในช่องพิมพ์)" aria-label="แนบรูป">' + STI.camera + '<input type="file" id="msgImg" accept="image/*" hidden></label>' +
       '<button type="button" class="mp-emo-btn" id="emoBtn" data-act="emoji" title="ใส่อีโมจิ" aria-label="ใส่อีโมจิ" aria-pressed="' + !!M.emoji + '">😊</button>' +
@@ -2083,6 +2084,7 @@ function renderMsgPanel() {
   const b = $('#mpBody'); if (b) b.scrollTop = b.scrollHeight;
   const nt = $('#msgText');
   if (nt && draft && draft.v) { nt.value = draft.v; nt.style.height = 'auto'; nt.style.height = Math.min(140, nt.scrollHeight) + 'px'; if (draft.f) { nt.focus(); try { nt.setSelectionRange(draft.a, draft.b); } catch (x) {} } }
+  msgPeek();
 }
 /* รูปในแชท: Print Screen → Ctrl+V ในกล่องข้อความ, ลากรูปมาวาง หรือกดปุ่มกล้อง */
 const MSGIMG = {};
@@ -5252,7 +5254,7 @@ function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ
   if (d.pclose || (t.id === 'pModal')) { pModalClose(); return true; }
   if (d.pm) { S.pm = d.pm; render(); return true; }
   if (d.cf) { S.cf = S.cf === d.cf && d.cf !== 'all' ? 'all' : d.cf; S.animIn = true; render(); return true; }
-  if (d.coopen) { coOpen(d.coopen); return true; }
+  if (d.coopen) { if (t.closest && t.closest('#msgPanel')) { hideHover(); closeMsgPanel(); } coOpen(d.coopen); return true; }   // เปิดจากแชท: ปิดแผงข้อความก่อน งานจะได้ไม่ถูกบัง
   if (d.pship) { S.pship = !S.pship; render(); return true; }
   if (d.pjob) { pModalClose(); openEditor(d.pjob); return true; }
   if (d.paddm) { const i = P2.ms.indexOf(d.paddm); if (i >= 0) P2.ms.splice(i, 1); else P2.ms.push(d.paddm); pAddRead(); pModalDraw(); return true; }
@@ -5332,6 +5334,34 @@ function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ
   }
   if (d.popen) { if (e.stopPropagation) e.stopPropagation(); pModalOpen(d.popen); return true; }
   return false;
+}
+
+/* ---- เลข Job ในข้อความ: กลายเป็นปุ่มเปิดงาน + การ์ดสรุปงาน (ดูได้ทุกคน · แก้ได้ตามสิทธิ์เดิม) ---- */
+let JCODE_ = { k: '', m: null };
+function jobCodeMap() {
+  const k = (S.jobs || []).length + ':' + ((S.prods || []).length) + ':' + ((S.jobs || [])[0] || {}).id;
+  if (JCODE_.k === k && JCODE_.m) return JCODE_.m;
+  const m = {}; (S.jobs || []).concat(S.prods || []).forEach(x => { const c = String(x.code || '').trim(); if (c.length >= 4) m[c.toLowerCase()] = c; });
+  JCODE_ = { k: k, m: m }; return m;
+}
+const JTOK_RE = /[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?/g;
+function jobsInText(text) { const m = jobCodeMap(), out = []; String(text || '').replace(JTOK_RE, t => { const c = m[t.toLowerCase()]; if (c && out.indexOf(c) < 0) out.push(c); return t; }); return out; }
+function msgRich(text) {   // ข้อความที่ escape แล้ว + เลข Job เป็นปุ่ม
+  const m = jobCodeMap();
+  return esc(text).replace(JTOK_RE, t => { const c = m[t.toLowerCase()]; return c ? '<button type="button" class="jlink" data-coopen="' + esc(c) + '" title="เปิดงาน ' + esc(c) + '">' + STI.layers + esc(t) + '</button>' : t; }).replace(/\n/g, '<br>');
+}
+function jobMini(code) {   // การ์ดเล็ก: ตอนนี้งานอยู่ขั้นไหน
+  const js = designJobsOf(code), p = typeof prodOfCode === 'function' ? prodOfCode(code) : null, open = js.find(j => j.status !== 'done'), ref = open || js[0] || null;
+  const title = (ref && ref.title) || (p && p.title) || '', urg = js.some(j => j.priority === 'urgent') || (p && p.priority === 'urgent');
+  const st = stageOf(open || ref, open ? null : p);
+  return '<button type="button" class="jmini" data-coopen="' + esc(code) + '"' + (open ? ' data-hov="' + esc(open.id) + '"' : p ? ' data-phov="' + esc(p.id) + '"' : '') + '>' + stgHtml(st, 'sm') +
+    '<span class="jm-t"><b class="mono">' + esc(code) + (urg ? ' <i class="jm-u">' + STI.fire + 'ด่วน</i>' : '') + '</b><small>' + esc(title || '–') + '</small></span><span class="jm-go">' + I.next + '</span></button>';
+}
+function msgPeek() {   // ระหว่างพิมพ์: เจอเลข Job → โชว์การ์ดงานเหนือช่องพิมพ์ กดเปิดได้เลย
+  const t = $('#msgText'), box = $('#msgPeek'); if (!t || !box) return;
+  const cs = jobsInText(t.value).slice(0, 3);
+  box.innerHTML = cs.length ? '<small class="mpk-h">' + STI.layers + 'พบงานในข้อความ · กดเพื่อเปิดดู</small>' + cs.map(jobMini).join('') : '';
+  box.classList.toggle('on', !!cs.length);
 }
 
 /* ---- ปุ่ม Sale ที่หน้าเข้าสู่ระบบ ---- */
@@ -5597,7 +5627,7 @@ $('#scrim').addEventListener('click', closeEditor);
 
 document.addEventListener('input', e => {
   const t = e.target;
-  if (t.id === 'msgText') { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; return; }
+  if (t.id === 'msgText') { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; msgPeek(); return; }
   if (t.id === 'adminName') { S.login.adminName = t.value; const w = t.closest('.name-in'); if (w) { w.classList.toggle('has', !!t.value.trim()); w.classList.remove('typing'); void w.offsetWidth; w.classList.add('typing'); } return; }
   if (t.id === 'pinIn') { S.login.pin = t.value.replace(/\D/g, '').slice(0, 4); S.login.err = ''; const dots = document.querySelectorAll('.pin-dots i'); dots.forEach((el, i) => el.classList.toggle('on', i < S.login.pin.length)); const sb = document.querySelector('#pinForm [type=submit]'); if (sb) sb.disabled = S.login.pin.length < 4; if (S.login.pin.length === 4) setTimeout(() => { if (S.login.pin.length === 4 && !S.login.submitting && (!S.login.adminMode || ($('#adminName') && $('#adminName').value.trim()))) doLogin(); }, 160); return; }
   if (t.id === 'sq') { SV.q = t.value; const pos = t.selectionStart; render(); const q = $('#sq'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }

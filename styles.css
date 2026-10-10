@@ -3796,3 +3796,27 @@ html,body{overflow-x:hidden}
 .pm-urg.on .sw::after{transform:translateX(18px)}
 .pm-urg:disabled{cursor:default;opacity:.85}
 @media (prefers-reduced-motion:reduce){.pcard.is-urgent .tag.urgent{animation:none}}
+
+/* v2.61: เลข Job ในแชท → ปุ่มเปิดงาน + การ์ดสรุปงาน · ระหว่างพิมพ์โชว์การ์ดเหนือช่องพิมพ์ */
+.jlink{display:inline-flex;align-items:center;gap:3px;border:0;padding:1px 7px 1px 5px;margin:0 1px;border-radius:7px;font:700 .95em var(--f-mono, ui-monospace,monospace);color:var(--brand);background:color-mix(in oklab,var(--brand) 12%,transparent);cursor:pointer;vertical-align:baseline;transition:background .15s,transform .15s}
+.jlink svg{width:12px;height:12px}
+.jlink:hover{background:color-mix(in oklab,var(--brand) 22%,transparent);transform:translateY(-1px)}
+.bub.me .jlink{color:#fff;background:rgba(255,255,255,.2)}
+.bub.me .jlink:hover{background:rgba(255,255,255,.32)}
+.bub-jobs{display:flex;flex-direction:column;gap:6px;margin:6px 0 2px}
+.jmini{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;width:100%;min-width:200px;padding:8px 10px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);text-align:left;font:inherit;cursor:pointer;box-shadow:0 6px 14px -12px rgba(0,0,0,.35);transition:transform .15s,box-shadow .15s,border-color .15s;animation:jmIn .3s ease-out both}
+.jmini:hover{transform:translateY(-1px);border-color:color-mix(in oklab,var(--brand) 40%,var(--line));box-shadow:0 10px 20px -12px var(--brand)}
+.jm-t{display:flex;flex-direction:column;min-width:0}
+.jm-t b{font-size:13px;display:flex;align-items:center;gap:5px}
+.jm-t small{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jm-u{display:inline-flex;align-items:center;gap:2px;font-style:normal;font-size:10.5px;font-weight:700;color:#fff;background:var(--urgent);border-radius:999px;padding:1px 6px}
+.jm-u svg{width:10px;height:10px}
+.jm-go{color:var(--muted);display:grid;place-items:center}
+.jm-go svg{width:16px;height:16px}
+.jmini:hover .jm-go{color:var(--brand)}
+.msg-peek{display:none;flex-direction:column;gap:6px;padding:8px 10px 0}
+.msg-peek.on{display:flex}
+.mpk-h{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);font-weight:600}
+.mpk-h svg{width:13px;height:13px}
+@keyframes jmIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.jmini{animation:none}}
