@@ -92,7 +92,7 @@ await pg.click('#nav [data-view="settings"]'); await pg.waitForTimeout(600);
 eq('machines list in settings', await pg.locator('[data-d^="machines."]').count(), 4);
 eq('ส่งผลิต toggles', await pg.locator('.prod-tog input:checked').count(), 2);
 await pg.fill('#salePinSet', '5678'); await pg.click('[data-act="salepin"]'); await pg.waitForTimeout(500);
-eq('sale pin on', await pg.locator('#s-salelink .pill.s-done').count(), 1);
+eq('sale pin on', await pg.locator('#s-salelink .spp-all .pill.s-done').count(), 1);
 // production staff
 await login('ช่างเอ');
 eq('prod role lands on board', await pg.evaluate(() => S.view), 'prod');

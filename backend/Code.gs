@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.32.1';
+const VERSION = '1.33.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -40,10 +40,11 @@ const SHEETS = {
   Files: ['id', 'jobId', 'name', 'mime', 'size', 'fileId', 'createdBy', 'createdAt'],
   Comments: ['id', 'jobId', 'ts', 'from', 'text'],
   // ฝ่ายผลิต: 1 แถว = 1 เลข Job ที่ออกแบบเสร็จแล้ว เดินต่อ รอผลิต → ลงเครื่อง → ทำสี → ประกอบติดตั้ง → แพ็ค → พร้อมส่ง → ส่งแล้ว (paint/assy = 'no' คือข้ามขั้นนั้น)
-  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due', 'qc', 'priority'],   // priority = 'urgent' ติดธงด่วนไปจนส่งมอบ (สืบจากงานฝ่ายแบบเลขเดียวกันด้วย)
+  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due', 'qc', 'priority', 'ship'],   // ship = หลักฐานส่งมอบ {to ผู้รับ, note, sig รหัสรูปลายเซ็น, by, at} (รูปถ่ายเก็บที่ jobId d_<id>)
+  // priority = 'urgent' ติดธงด่วนไปจนส่งมอบ (สืบจากงานฝ่ายแบบเลขเดียวกันด้วย)
   // คลังวัสดุ (ฝ่ายสต็อก): 1 แถว = 1 รายการวัสดุ · StockLog = ประวัติรับเข้า/เบิกออก/ปรับยอด
-  Stock: ['id', 'name', 'cat', 'unit', 'qty', 'min', 'loc', 'note', 'updatedAt', 'updatedBy'],
-  StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note']
+  Stock: ['id', 'name', 'cat', 'unit', 'qty', 'min', 'loc', 'note', 'updatedAt', 'updatedBy', 'price'],   // price = ราคาต่อหน่วย (บาท) ใช้คิดต้นทุนวัสดุต่อเลข Job
+  StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note', 'price']   // price = ราคาต่อหน่วยตอนเบิก
 };
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
@@ -104,7 +105,7 @@ function rtReply_(topic, rid, text) {
 const PUBLIC = {
   ping: () => ({ version: VERSION, app: 'KiwNgan', brand: publicBrand_() }),
   // แอดมินไม่แสดงในรายชื่อหน้าเข้าสู่ระบบ (เข้าทางลิงก์ "ผู้ดูแลระบบ" ด้วยชื่อ + PIN)
-  roster: () => ({ users: readAll_('Users').filter(u => u.active && u.role !== 'admin').map(publicUser_), brand: publicBrand_(), sale: !!PropertiesService.getScriptProperties().getProperty('SALE_PIN'), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null }),
+  roster: () => ({ users: readAll_('Users').filter(u => u.active && u.role !== 'admin').map(publicUser_), brand: publicBrand_(), sale: saleOn_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null }),
   // ไม่ล็อก: เข้าสู่ระบบแค่เขียน Script Property 1 ค่า · ส่งข้อมูลเริ่มต้นกลับไปด้วยเลย ไม่ต้องเรียก bootstrap อีกรอบ
   login: p => login_(p.userId, p.pin, p.name),
   // ลิงก์ให้ Sale ดูสถานะงาน (อ่านอย่างเดียว ไม่ต้องเข้าสู่ระบบ) — ต้องมีกุญแจที่แอดมินสร้าง
@@ -148,7 +149,7 @@ const ACTIONS = {
   addComment: (p, u) => withLock_(() => addComment_(p, u)),
   deleteComment: (p, u) => withLock_(() => deleteComment_(p.id, u)),
   saleLink: (p, u) => { admin_(u); return { key: saleKey_(!!p.reset) }; },
-  salePin: (p, u) => withLock_(() => { admin_(u); return salePin_(p.pin); }),
+  salePin: (p, u) => withLock_(() => { admin_(u); return salePin_(p.pin, p.sale); }),
   prodSave: (p, u) => withLock_(() => ({ prod: maskProd_(prodSave_(p.prod, u), u) })),
   prodDelete: (p, u) => withLock_(() => prodDelete_(p.id, u)),
   // คลังวัสดุ (ฝ่ายสต็อก)
@@ -517,25 +518,34 @@ function saleKey_(reset) {
   return k;
 }
 function saleView_(k, sale) {
-  const key = PropertiesService.getScriptProperties().getProperty('SALE_KEY');
-  if (!key || !k || String(k) !== key) throw new Error('ลิงก์นี้ใช้ไม่ได้แล้ว ขอลิงก์ใหม่จากแอดมิน');
+  const key = PropertiesService.getScriptProperties().getProperty('SALE_KEY'), keys = jsonProp_('SALE_KEYS');
+  const own = k ? Object.keys(keys).find(n => keys[n] === String(k)) : '';   // กุญแจรายคน → เห็นเฉพาะงานของ Sale คนนั้น
+  if (!k || (String(k) !== key && !own)) throw new Error('ลิงก์นี้ใช้ไม่ได้แล้ว ขอลิงก์ใหม่จากแอดมิน');
+  if (own) sale = own;
   // แคชตามเวอร์ชันข้อมูล: ข้อมูลไม่เปลี่ยน = ตอบทันทีไม่ต้องอ่านชีต
   const cache = CacheService.getScriptCache(), ck = 'sale:' + VERSION + ':' + stamp_('data') + ':' + encodeURIComponent(String(sale || '')).slice(0, 120);
   try { const hit = cache.get(ck); if (hit) return JSON.parse(hit); } catch (e) {}
   const s = settings_(), since = Utilities.formatDate(new Date(Date.now() - 45 * 864e5), tz_(), 'yyyy-MM-dd');
   const prods = prodsRecent_().filter(x => !sale || x.sale === sale), live = {};
   prods.forEach(x => { if (x.stage !== 'shipped') live[x.code.toLowerCase()] = 1; });
-  const im = {};   // รูปงานที่เก็บใน Drive (แชร์แบบมีลิงก์) ให้ Sale ดูในการ์ดลอยได้
-  try { imageMeta_().forEach(m => { if (m.fileId) (im[m.jobId] = im[m.jobId] || []).push(m.fileId); }); } catch (e) {}
+  const im = {}; let metas = [];   // รูปงานที่เก็บใน Drive (แชร์แบบมีลิงก์) ให้ Sale ดูในการ์ดลอยได้
+  try { metas = imageMeta_(); metas.forEach(m => { if (m.fileId) (im[m.jobId] = im[m.jobId] || []).push(m.fileId); }); } catch (e) {}
   const jobs = readAll_('Jobs').filter(j => (!sale || j.sale === sale) && (j.status !== 'done' || String(j.finishedAt).slice(0, 10) >= since || live[j.code.toLowerCase()]))
     .map(j => { let cl = []; try { cl = JSON.parse(j.checklist || '[]'); } catch (e) {}
       return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', assignee: maskName_(j.assignee, { role: 'user' }) || '', helpers: helpersOf_(j).map(n => maskName_(n, { role: 'user' })).join(','),
                steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '', imgs: (im[j.id] || []).slice(-6) }; });
   const people = usersLite_().filter(x => x.active && x.role !== 'admin').map(x => ({ name: x.name, color: x.color }));
-  const pv = prods.map(x => ({ code: x.code, priority: x.priority === 'urgent' ? 'urgent' : '', title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6), qc: (q => ({ res: q.res, at: q.at, fails: q.fails, ok: q.ok, ng: q.ng }))(prodQc_(x.qc)) }));
-  const out = { brand: publicBrand_(), sales: s.sales || [], sale: sale || '', jobs: jobs, prods: pv, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
+  const pv = prods.map(x => ({ code: x.code, priority: x.priority === 'urgent' ? 'urgent' : '', title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6), qc: (q => ({ res: q.res, at: q.at, fails: q.fails, ok: q.ok, ng: q.ng }))(prodQc_(x.qc)), ship: x.stage === 'shipped' ? saleShip_(x, metas) : null }));
+  const out = { brand: publicBrand_(), sales: own ? [own] : s.sales || [], sale: sale || '', own: own ? 1 : 0, jobs: jobs, prods: pv, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(ck, t, 600); } catch (e) {}
   return out;
+}
+
+/** หลักฐานส่งมอบสำหรับหน้า Sale: ผู้รับ เวลา หมายเหตุ รูปของที่ส่ง และลายเซ็น (รหัสไฟล์ Drive ที่แชร์แบบมีลิงก์) */
+function saleShip_(x, all) {
+  let sp = {}; try { sp = JSON.parse(x.ship || '{}') || {}; } catch (e) { sp = {}; }
+  const metas = (all || []).filter(m => m.jobId === 'd_' + x.id), sig = metas.find(m => m.id === sp.sig);
+  return { to: sp.to || '', note: sp.note || '', at: sp.at || x.shippedAt || '', by: maskName_(sp.by || '', { role: 'user' }), sig: sig ? sig.fileId : '', photos: metas.filter(m => m.id !== sp.sig && m.fileId).map(m => m.fileId).slice(-6) };
 }
 
 /* ======================= Users ======================= */
@@ -667,6 +677,7 @@ function bootstrap_(u, stamp) {
     prods: prodsRecent_().map(x => maskProd_(x, u)),
     stock: can_(u, 'stock.view') ? stockView_(u) : null,
     salePin: isAdmin_(u) ? !!PropertiesService.getScriptProperties().getProperty('SALE_PIN') : undefined,
+    salePins: isAdmin_(u) ? Object.keys(salePins_()) : undefined,
     me: publicUser_(meFull), serverTime: nowIso_(), version: VERSION,
     rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY, secret: rtSecret_() } : null,
     archivedBefore: PropertiesService.getScriptProperties().getProperty('ARCHIVED_BEFORE') || ''
@@ -821,8 +832,9 @@ function prodSave_(data, u) {
   if (!edit && !ship) throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน');
   if (!edit) {   // ฝ่ายสต็อก: กด "ส่งแล้ว" (หรือย้อนกลับเป็นพร้อมส่ง) ได้อย่างเดียว
     const r0 = data.id ? rowOf_('Prod', data.id) : -1, b0 = r0 > 0 ? readRow_('Prod', r0) : null;
-    if (!b0 || ['ready', 'shipped'].indexOf(b0.stage) < 0 || ['ready', 'shipped'].indexOf(data.stage) < 0) throw new Error('ฝ่ายสต็อกกดได้เฉพาะ "ส่งแล้ว" ของงานที่พร้อมส่ง');
-    data = { id: data.id, baseUpdatedAt: data.baseUpdatedAt, stage: data.stage, why: data.why };
+    const addProof = data.stage === undefined && !!b0 && b0.stage === 'shipped' && !!data.ship;   // เพิ่มหลักฐานส่งมอบทีหลังได้
+    if (!addProof && (!b0 || ['ready', 'shipped'].indexOf(b0.stage) < 0 || ['ready', 'shipped'].indexOf(data.stage) < 0)) throw new Error('ฝ่ายสต็อกกดได้เฉพาะ "ส่งแล้ว" ของงานที่พร้อมส่ง');
+    data = { id: data.id, baseUpdatedAt: data.baseUpdatedAt, stage: data.stage, why: data.why, ship: data.ship };
   }
   const now = nowIso_(), row = data.id ? rowOf_('Prod', data.id) : -1;
   let before = null, cur;
@@ -850,6 +862,10 @@ function prodSave_(data, u) {
   if (data.qc !== undefined) qc = Object.assign(prodQc_(data.qc), { fails: qc.fails, last: qc.last });
   if (data.stage !== undefined) { if (PROD_STAGES.indexOf(data.stage) < 0) throw new Error('ขั้นงานผลิตไม่ถูกต้อง'); cur.stage = data.stage; }
   if (!ship && (cur.stage === 'shipped') !== (!!before && before.stage === 'shipped')) throw new Error('ขั้น "ส่งแล้ว" ให้ฝ่ายสต็อกเป็นคนกด (ฝ่ายผลิตทำได้ถึง "พร้อมส่ง")');
+  if (data.ship !== undefined && ship && cur.stage === 'shipped') {   // หลักฐานส่งมอบ: ผู้รับ ลายเซ็น หมายเหตุ (รูปถ่ายอัปโหลดแยกที่ jobId d_<id>)
+    const sp = data.ship && typeof data.ship === 'object' ? data.ship : {};
+    cur.ship = JSON.stringify({ to: String(sp.to || '').trim().slice(0, 80), note: String(sp.note || '').slice(0, 300), sig: /^i_[a-z0-9]{6,20}$/.test(String(sp.sig || '')) ? String(sp.sig) : '', by: u.name, at: now.slice(0, 16) });
+  }
   const ms = prodMachines_(cur.machines);
   if (cur.stage === 'machine' && !ms.length) throw new Error('เลือกเครื่องอย่างน้อย 1 เครื่องก่อนเริ่มลงเครื่อง');
   if (cur.stage === 'machine' && ms.every(x => x.d)) cur.stage = 'paint';   // ครบทุกเครื่อง → ไปขั้นต่อเอง
@@ -904,8 +920,11 @@ function prodDelete_(id, u) {
 const STOCK_KINDS_ = { in: 'รับเข้า', out: 'เบิกออก', adj: 'ปรับยอด' };
 const stockNum_ = v => { const n = Math.round(Number(String(v === undefined ? '' : v).replace(/,/g, '')) * 100) / 100; return isFinite(n) ? n : NaN; };
 function stockView_(u) {
-  const items = readAll_('Stock').map(x => Object.assign(x, { qty: stockNum_(x.qty) || 0, min: stockNum_(x.min) || 0 }));
-  const logs = readAll_('StockLog').slice(-300).reverse().map(l => Object.assign(l, { qty: stockNum_(l.qty) || 0, bal: stockNum_(l.bal) || 0, who: maskName_(l.who, u) }));
+  const items = readAll_('Stock').map(x => Object.assign(x, { qty: stockNum_(x.qty) || 0, min: stockNum_(x.min) || 0, price: stockNum_(x.price) || 0 }));
+  // ล่าสุด 300 รายการ + การเบิกที่ระบุเลข Job ย้อนหลัง 1 ปี (ใช้คิดต้นทุนวัสดุต่อเลข Job ในหน้าสรุปรายงาน)
+  const all = readAll_('StockLog'), since = Utilities.formatDate(new Date(Date.now() - 366 * 864e5), tz_(), 'yyyy-MM-dd'), cut = Math.max(0, all.length - 300);
+  const logs = all.filter((l, i) => i >= cut || (l.kind === 'out' && l.job && String(l.ts).slice(0, 10) >= since)).reverse()
+    .map(l => Object.assign(l, { qty: stockNum_(l.qty) || 0, bal: stockNum_(l.bal) || 0, price: stockNum_(l.price) || 0, who: maskName_(l.who, u) }));
   return { items: items.map(x => Object.assign(x, { updatedBy: maskName_(x.updatedBy, u) })), logs: logs };
 }
 function stockEdit_(u) { if (!can_(u, 'stock.edit')) throw new Error('ไม่มีสิทธิ์แก้คลังวัสดุ (แอดมินเปิดได้ที่ ตั้งค่า > ผู้ใช้งานและสิทธิ์)'); }
@@ -915,6 +934,7 @@ function stockSave_(item, u) {
   const name = String(item.name).trim().slice(0, 120), all = readAll_('Stock');
   if (all.some(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== item.id)) throw new Error('มีวัสดุชื่อ ' + name + ' อยู่แล้ว');
   const min = stockNum_(item.min || 0); if (isNaN(min) || min < 0) throw new Error('จุดสั่งซื้อต้องเป็นตัวเลข 0 ขึ้นไป');
+  const price = item.price === undefined ? undefined : stockNum_(item.price || 0); if (price !== undefined && (isNaN(price) || price < 0)) throw new Error('ราคาต่อหน่วยต้องเป็นตัวเลข 0 ขึ้นไป');
   const now = nowIso_(), row = item.id ? rowOf_('Stock', item.id) : -1;
   let cur;
   if (row > 0) cur = readRow_('Stock', row);
@@ -925,6 +945,7 @@ function stockSave_(item, u) {
   }
   Object.assign(cur, { name: name, cat: String(item.cat || '').trim().slice(0, 60), unit: String(item.unit || '').trim().slice(0, 20) || 'ชิ้น', min: min,
     loc: String(item.loc || '').trim().slice(0, 60), note: String(item.note || '').slice(0, 300), updatedAt: now, updatedBy: u.name });
+  if (price !== undefined) cur.price = price;
   writeRow_('Stock', cur, row);
   if (row < 0 && cur.qty) writeRow_('StockLog', { id: uid_('sl_'), ts: now, itemId: cur.id, kind: 'adj', qty: cur.qty, bal: cur.qty, job: '', who: u.name, note: 'ยอดเริ่มต้น' }, -1);
   log_(cur.id, u.name, 'stock', (row > 0 ? 'แก้ไขวัสดุ ' : 'เพิ่มวัสดุ ') + name);
@@ -944,9 +965,19 @@ function stockMove_(p, u) {
   it.qty = r2; it.updatedAt = now; it.updatedBy = u.name;
   writeRow_('Stock', it, row);
   writeRow_('StockLog', { id: uid_('sl_'), ts: now, itemId: it.id, kind: kind, qty: kind === 'adj' ? Math.round((r2 - have) * 100) / 100 : n, bal: r2,
-    job: String(p.job || '').trim().slice(0, 60), who: u.name, note: String(p.note || '').slice(0, 200) }, -1);
+    job: String(p.job || '').trim().slice(0, 60), who: u.name, note: String(p.note || '').slice(0, 200), price: stockNum_(it.price) || '' }, -1);
   log_(it.id, u.name, 'stock', STOCK_KINDS_[kind] + ' ' + it.name + ' ' + n + ' ' + (it.unit || '') + ' (คงเหลือ ' + r2 + ')');
+  stockLowPush_(it, have, r2, u);
   return stockView_(u);
+}
+/** ของใกล้หมด: ยอดลดลงจนถึงจุดสั่งซื้อ (หรือหมด) → เด้งแจ้งเตือนเข้ามือถือคนที่จัดการคลังได้ (ยกเว้นคนที่เบิกเอง) */
+function stockLowPush_(it, before, after, u) {
+  try {
+    const mn = stockNum_(it.min) || 0, zero = after <= 0 && before > 0;
+    if (!zero && !(mn > 0 && before > mn && after <= mn)) return;
+    const names = usersLite_().filter(x => x.active && x.name !== u.name && can_(x, 'stock.edit')).map(x => x.name);
+    if (names.length) pushTo_(names, { kind: zero ? 'nostock' : 'low', from: maskName_(u.name, { role: 'user' }), title: it.name, code: String(after) + ' ' + (it.unit || ''), count: after });
+  } catch (e) { /* แจ้งเตือนเป็นของเสริม */ }
 }
 function stockDelete_(id, u) {
   stockEdit_(u);
@@ -958,24 +989,43 @@ function stockDelete_(id, u) {
   return stockView_(u);
 }
 
-/* PIN ของ Sale: เก็บเป็นค่าแฮชใน Script Properties (ไม่อยู่ในชีต ไม่ส่งไปให้ใคร) */
-function salePin_(pin) {
+/* PIN ของ Sale: เก็บเป็นค่าแฮชใน Script Properties (ไม่อยู่ในชีต ไม่ส่งไปให้ใคร)
+   - PIN รวม (SALE_PIN) → เห็นงานทุก Sale (เช่น หัวหน้าฝ่ายขาย)
+   - PIN รายคน (SALE_PINS {ชื่อ Sale: salt:hash}) → เห็นเฉพาะงานของตัวเอง · มีกุญแจเปิดหน้าแยกรายคน (SALE_KEYS) เปลี่ยน/ลบ PIN แล้วลิงก์เก่าของคนนั้นใช้ไม่ได้ทันที */
+function jsonProp_(k) { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(k) || '{}') || {}; } catch (e) { return {}; } }
+function setJsonProp_(k, o) { const pr = PropertiesService.getScriptProperties(); if (Object.keys(o).length) pr.setProperty(k, JSON.stringify(o)); else pr.deleteProperty(k); }
+const salePins_ = () => jsonProp_('SALE_PINS');
+const saleOn_ = () => !!PropertiesService.getScriptProperties().getProperty('SALE_PIN') || Object.keys(salePins_()).length > 0;
+const pinMatch_ = (raw, pin) => { const i = String(raw || '').indexOf(':'); return i > 0 && hash_(raw.slice(0, i), String(pin)) === raw.slice(i + 1); };
+function salePin_(pin, sale) {
   const pr = PropertiesService.getScriptProperties();
-  if (!pin) { pr.deleteProperty('SALE_PIN'); return { on: false }; }
-  if (!validPin_(pin)) throw new Error('PIN ต้องเป็นตัวเลข 4–6 หลัก');
-  const salt = Utilities.getUuid();
-  pr.setProperty('SALE_PIN', salt + ':' + hash_(salt, String(pin)));
-  saleKey_(false);
-  return { on: true };
+  sale = String(sale || '').trim();
+  if (pin && !validPin_(pin)) throw new Error('PIN ต้องเป็นตัวเลข 4–6 หลัก');
+  const pins = salePins_(), keys = jsonProp_('SALE_KEYS');
+  if (pin) {   // PIN ต้องไม่ซ้ำกับ PIN อื่น (เข้าด้วย PIN อย่างเดียว ไม่มีชื่อ)
+    const clash = Object.keys(pins).some(n => n !== sale && pinMatch_(pins[n], pin)) || (sale && pinMatch_(pr.getProperty('SALE_PIN'), pin));
+    if (clash) throw new Error('PIN นี้มีคนใช้แล้ว เลือก PIN อื่น');
+  }
+  if (!sale) {
+    if (!pin) pr.deleteProperty('SALE_PIN');
+    else { const salt = Utilities.getUuid(); pr.setProperty('SALE_PIN', salt + ':' + hash_(salt, String(pin))); saleKey_(false); }
+    return { on: !!pr.getProperty('SALE_PIN'), pins: Object.keys(pins) };
+  }
+  if (!pin) { delete pins[sale]; delete keys[sale]; }
+  else { const salt = Utilities.getUuid(); pins[sale] = salt + ':' + hash_(salt, String(pin)); keys[sale] = Utilities.getUuid().replace(/-/g, '').slice(0, 24); }   // PIN ใหม่ = กุญแจใหม่ ลิงก์เก่าของคนนี้ใช้ไม่ได้
+  setJsonProp_('SALE_PINS', pins); setJsonProp_('SALE_KEYS', keys);
+  return { on: !!pr.getProperty('SALE_PIN'), pins: Object.keys(pins) };
 }
 function saleOpen_(pin) {
-  const raw = PropertiesService.getScriptProperties().getProperty('SALE_PIN');
-  if (!raw) throw new Error('แอดมินยังไม่ได้ตั้ง PIN สำหรับ Sale');
+  if (!saleOn_()) throw new Error('แอดมินยังไม่ได้ตั้ง PIN สำหรับ Sale');
   const c = CacheService.getScriptCache(), fails = Number(c.get('salefail') || 0);
   if (fails >= 10) throw new Error('ใส่ PIN ผิดหลายครั้ง รอ 10 นาทีแล้วลองใหม่');
-  const i = raw.indexOf(':'), salt = raw.slice(0, i);
-  if (!validPin_(pin) || hash_(salt, String(pin)) !== raw.slice(i + 1)) { c.put('salefail', String(fails + 1), 600); throw new Error('PIN ไม่ถูกต้อง'); }
-  return { key: saleKey_(false) };
+  if (validPin_(pin)) {
+    if (pinMatch_(PropertiesService.getScriptProperties().getProperty('SALE_PIN'), pin)) return { key: saleKey_(false), sale: '' };
+    const pins = salePins_(), keys = jsonProp_('SALE_KEYS'), who = Object.keys(pins).find(n => pinMatch_(pins[n], pin));
+    if (who && keys[who]) return { key: keys[who], sale: who };
+  }
+  c.put('salefail', String(fails + 1), 600); throw new Error('PIN ไม่ถูกต้อง');
 }
 
 /* ---------- รูปงาน (เก็บในชีต Images แบ่งเป็นช่วง ๆ เพราะ 1 ช่องเก็บได้ไม่เกิน 50,000 ตัวอักษร) ---------- */
@@ -994,6 +1044,11 @@ function addImage_(p, u) {
     if (sr < 0) throw new Error('ไม่พบวัสดุนี้');
     if (!can_(u, 'stock.edit')) throw new Error('เพิ่มรูปวัสดุได้เฉพาะคนที่จัดการคลังวัสดุได้');
     job = { code: 'คลังวัสดุ' };
+  } else if (/^d_p_/.test(String(p.jobId || ''))) {   // หลักฐานส่งมอบ (รูปของที่ส่ง + ลายเซ็นผู้รับ) ของงานผลิต
+    const dr = rowOf_('Prod', String(p.jobId).slice(2));
+    if (dr < 0) throw new Error('ไม่พบงานนี้ในฝ่ายผลิต');
+    if (!can_(u, 'prod.ship') && !canProd_(u)) throw new Error('เพิ่มหลักฐานส่งมอบได้เฉพาะฝ่ายสต็อกหรือแอดมิน');
+    job = { code: readRow_('Prod', dr).code + ' ส่งมอบ' };
   } else if (/^p_/.test(String(p.jobId || ''))) {   // รูปของงานฝ่ายผลิต (งานที่ไม่ได้ผ่านฝ่ายแบบ)
     const pr = rowOf_('Prod', p.jobId);
     if (pr < 0) throw new Error('ไม่พบงานนี้ในฝ่ายผลิต');
@@ -1024,7 +1079,7 @@ function deleteImage_(id, u) {
   if (row < 0) throw new Error('ไม่พบรูปนี้');
   const meta = sheet_('Images').getRange(row, 1, 1, 4).getDisplayValues()[0];
   const jr = rowOf_('Jobs', meta[1]), job = jr > 0 ? readRow_('Jobs', jr) : null;
-  const isProdImg = (/^p_/.test(meta[1]) && canProd_(u)) || (/^s_/.test(meta[1]) && can_(u, 'stock.edit'));
+  const isProdImg = (/^p_/.test(meta[1]) && canProd_(u)) || (/^s_/.test(meta[1]) && can_(u, 'stock.edit')) || (/^d_p_/.test(meta[1]) && can_(u, 'prod.ship'));
   if (!isAdmin_(u) && meta[2] !== u.name && !isProdImg && !(job && ownsJob_(u, job))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง');
   const fid = sheet_('Images').getRange(row, IMG_FILE_COL_).getDisplayValue();
   sheet_('Images').deleteRow(row);

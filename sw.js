@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.61.1';
+const CACHE = 'kiwngan-v2.62.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -35,7 +35,9 @@ const PUSH_TEXT = {
   fix: (f, i) => ['🔧 ถูกส่งกลับไปแก้ไข · ' + (i.code || ''), (i.title ? i.title + ' · ' : '') + f + ' ส่งกลับมา'],
   msg: (f, i) => ['💬 ' + f + (i.team ? ' ถึงทั้งทีม' : ' ส่งข้อความถึงคุณ'), i.title || 'แตะเพื่อเปิดอ่าน'],
   sos: (f, i) => ['🛟 ' + f + ' ขอความช่วยเหลือ', i.title || 'แตะเพื่อเปิดดู'],
-  due: (f, i) => ['⏳ งานใกล้ถึงกำหนด ' + (i.count || '') + ' งาน', (i.late ? 'เลยกำหนดแล้ว ' + i.late + ' งาน · ' : '') + (i.code || '')]
+  due: (f, i) => ['⏳ งานใกล้ถึงกำหนด ' + (i.count || '') + ' งาน', (i.late ? 'เลยกำหนดแล้ว ' + i.late + ' งาน · ' : '') + (i.code || '')],
+  low: (f, i) => ['📦 ' + (i.title || 'วัสดุ') + ' ใกล้หมด', 'เหลือ ' + (i.code || '') + ' · ถึงจุดสั่งซื้อแล้ว (' + f + ' เบิกล่าสุด)'],
+  nostock: (f, i) => ['🚫 ' + (i.title || 'วัสดุ') + ' หมดสต็อก', 'เหลือ 0 · ' + f + ' เบิกล่าสุด — ต้องสั่งเพิ่ม']
 };
 self.addEventListener('push', e => {
   e.waitUntil((async () => {
@@ -56,7 +58,7 @@ self.addEventListener('push', e => {
     await self.registration.showNotification(t[0], {
       body: t[1], tag: 'kiwngan-' + k + (info && info.code ? '-' + info.code : ''), renotify: true, requireInteraction: k === 'call',
       vibrate: k === 'call' ? [500, 250, 500, 250, 500, 250, 500] : k === 'sos' ? [300, 120, 300, 120, 300] : [200, 100, 200],
-      icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './?from=push#' + (k === 'msg' || k === 'sos' ? 'msg' : k) }
+      icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './?from=push#' + (k === 'msg' || k === 'sos' ? 'msg' : k === 'low' || k === 'nostock' ? 'stock' : k) }
     });
   })());
 });
