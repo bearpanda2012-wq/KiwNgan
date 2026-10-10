@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.28.0';
+const VERSION = '1.29.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -33,14 +33,17 @@ const SHEETS = {
          'status', 'received', 'due', 'startedAt', 'finishedAt', 'minutes', 'note', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'helpers', 'checklist'],
   TimeLogs: ['id', 'jobId', 'member', 'start', 'end', 'minutes'],
   Activity: ['ts', 'jobId', 'who', 'action', 'detail'],
-  Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo'],
+  Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo', 'perms'],   // perms ว่าง = ใช้สิทธิ์เริ่มต้นของตำแหน่ง
   Settings: ['key', 'value'],
   Messages: ['id', 'ts', 'from', 'fromRole', 'to', 'kind', 'text', 'jobId', 'status', 'helper', 'readBy', 'img'],
   Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'fileId'],
   Files: ['id', 'jobId', 'name', 'mime', 'size', 'fileId', 'createdBy', 'createdAt'],
   Comments: ['id', 'jobId', 'ts', 'from', 'text'],
   // ฝ่ายผลิต: 1 แถว = 1 เลข Job ที่ออกแบบเสร็จแล้ว เดินต่อ รอผลิต → ลงเครื่อง → ทำสี → ประกอบติดตั้ง → แพ็ค → พร้อมส่ง → ส่งแล้ว (paint/assy = 'no' คือข้ามขั้นนั้น)
-  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due', 'qc']
+  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due', 'qc'],
+  // คลังวัสดุ (ฝ่ายสต็อก): 1 แถว = 1 รายการวัสดุ · StockLog = ประวัติรับเข้า/เบิกออก/ปรับยอด
+  Stock: ['id', 'name', 'cat', 'unit', 'qty', 'min', 'loc', 'note', 'updatedAt', 'updatedBy'],
+  StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note']
 };
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
@@ -148,6 +151,10 @@ const ACTIONS = {
   salePin: (p, u) => withLock_(() => { admin_(u); return salePin_(p.pin); }),
   prodSave: (p, u) => withLock_(() => ({ prod: maskProd_(prodSave_(p.prod, u), u) })),
   prodDelete: (p, u) => withLock_(() => prodDelete_(p.id, u)),
+  // คลังวัสดุ (ฝ่ายสต็อก)
+  stockSave: (p, u) => withLock_(() => stockSave_(p.item, u)),
+  stockMove: (p, u) => withLock_(() => stockMove_(p, u)),
+  stockDelete: (p, u) => withLock_(() => stockDelete_(p.id, u)),
   image: (p, u) => imageFull_(p.id),
   // admin
   saveSettings: (p, u) => withLock_(() => { admin_(u); return saveSettings_(p.settings, u); }),
@@ -158,7 +165,7 @@ const ACTIONS = {
 
 /* ===== ความเร็ว: ตัวบอกเวอร์ชันข้อมูล (stamp) ใน cache
    หน้าเว็บส่ง stamp ล่าสุดมาด้วย ถ้าไม่มีอะไรเปลี่ยนจะตอบกลับทันทีโดยไม่ต้องอ่านชีต ===== */
-const DATA_ACTIONS_ = { deleteFile: 1, addComment: 1, deleteComment: 1, copyImages: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
+const DATA_ACTIONS_ = { stockSave: 1, stockMove: 1, stockDelete: 1, deleteFile: 1, addComment: 1, deleteComment: 1, copyImages: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
 const MSG_ACTIONS_ = { sendMessage: 1, markRead: 1, helpUpdate: 1, deleteMessages: 1 };
 function stamp_(kind) {
   const c = CacheService.getScriptCache(), k = 'stamp:' + kind;
@@ -171,7 +178,7 @@ function bump_(kind) { try { CacheService.getScriptCache().put('stamp:' + kind, 
 function usersLite_() {
   const c = CacheService.getScriptCache();
   try { const hit = c.get('users:lite'); if (hit) return JSON.parse(hit); } catch (e) {}
-  const list = readAll_('Users').map(u => ({ id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active }));
+  const list = readAll_('Users').map(u => ({ id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, perms: u.perms || '' }));
   try { c.put('users:lite', JSON.stringify(list), 600); } catch (e) {}
   return list;
 }
@@ -195,7 +202,7 @@ function hash_(salt, pin) {
 }
 function validPin_(pin) { return /^\d{4,6}$/.test(String(pin || '')); }
 function randomPin_() { return String(Math.floor(1000 + Math.random() * 9000)); }
-function publicUser_(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '' }; }
+function publicUser_(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '', perms: u.perms || '' }; }
 
 function login_(userId, pin, name) {
   const users = readAll_('Users');
@@ -252,8 +259,32 @@ function dropSessionsOf_(uid) {
 
 function admin_(u) { if (u.role !== 'admin') throw new Error('เฉพาะแอดมินเท่านั้น'); }
 const isAdmin_ = u => u.role === 'admin';
-const ROLE_ = r => r === 'admin' || r === 'lead' || r === 'prod' ? r : 'user'; // admin = ผู้ดูแลระบบ, lead = หัวหน้างาน, prod = ฝ่ายผลิต, user = พนักงาน
-const canProd_ = u => !!u && (u.role === 'prod' || u.role === 'admin');   // บอร์ดผลิต: ฝ่ายผลิตและแอดมินแก้ได้ คนอื่นดูอย่างเดียว
+const ROLE_ = r => ['admin', 'lead', 'prod', 'stock'].indexOf(r) >= 0 ? r : 'user'; // admin = ผู้ดูแลระบบ, lead = หัวหน้างาน, prod = ฝ่ายผลิต, stock = ฝ่ายสต็อก, user = พนักงาน
+/* สิทธิ์แยกเรื่อง (แอดมินติ๊กเปิด/ปิดได้ทีละคน) — ช่อง perms ว่าง = ใช้ค่าเริ่มต้นของตำแหน่ง, "-" = ไม่มีสิทธิ์เพิ่มเติมเลย · แอดมินมีทุกสิทธิ์เสมอ */
+const PERM_KEYS_ = ['design.add', 'design.edit', 'design.assign', 'design.delete', 'prod.edit', 'prod.ship', 'stock.view', 'stock.edit', 'team.all'];
+const PERM_DEF_ = {
+  user: ['design.add', 'stock.view'],
+  lead: ['design.add', 'team.all', 'stock.view'],
+  prod: ['prod.edit', 'stock.view'],
+  stock: ['prod.ship', 'stock.view', 'stock.edit']
+};
+function permsOf_(u) {
+  if (!u) return [];
+  if (u.role === 'admin') return PERM_KEYS_.slice();
+  const raw = String(u.perms || '').trim();
+  if (!raw) return (PERM_DEF_[ROLE_(u.role)] || []).slice();
+  return raw.split(',').map(x => x.trim()).filter(k => PERM_KEYS_.indexOf(k) >= 0);
+}
+const can_ = (u, k) => !!u && (u.role === 'admin' || permsOf_(u).indexOf(k) >= 0);
+/** แปลงรายการสิทธิ์จากหน้าแอดมิน → ค่าที่เก็บในชีต (ตรงกับค่าเริ่มต้นของตำแหน่ง = เก็บว่าง เพื่อให้ตามค่าเริ่มต้นต่อไป) */
+function permsStore_(list, role) {
+  if (list === undefined || list === null) return undefined;
+  const arr = (Array.isArray(list) ? list : String(list).split(',')).map(x => String(x).trim()).filter((k, i, a) => PERM_KEYS_.indexOf(k) >= 0 && a.indexOf(k) === i);
+  const def = PERM_DEF_[ROLE_(role)] || [];
+  if (arr.length === def.length && def.every(k => arr.indexOf(k) >= 0)) return '';
+  return arr.length ? PERM_KEYS_.filter(k => arr.indexOf(k) >= 0).join(',') : '-';
+}
+const canProd_ = u => can_(u, 'prod.edit');   // บอร์ดผลิต: คนที่มีสิทธิ์ "อัปเดตบอร์ดผลิต" (ค่าเริ่มต้น = ฝ่ายผลิต) และแอดมิน · คนอื่นดูอย่างเดียว
 /* ผู้ร่วมทำงาน: เก็บเป็นชื่อคั่นด้วยจุลภาค "หมี,อีฟ" — ทำงาน/จับเวลา/เปลี่ยนสถานะได้เหมือนผู้รับผิดชอบ */
 const helpersOf_ = j => String((j && j.helpers) || '').split(',').map(x => x.trim()).filter(Boolean);
 const leadsJob_ = (u, j) => isAdmin_(u) || j.assignee === u.name || j.createdBy === u.name;
@@ -523,6 +554,7 @@ function saveUser_(data, admin) {
     if (u.id === admin.id && data.active === false) throw new Error('ปิดบัญชีตัวเองไม่ได้');
     if (data.role !== 'admin' && u.role === 'admin' && users.filter(x => x.role === 'admin' && x.active).length <= 1) throw new Error('ต้องมีแอดมินอย่างน้อย 1 คน');
     Object.assign(u, { name: name, full: String(data.full || ''), role: ROLE_(data.role), color: data.color || u.color, active: data.active !== false });
+    { const ps = permsStore_(data.perms, u.role); if (ps !== undefined) u.perms = ps; }
     writeRow_('Users', u, row);
     if (!u.active) dropSessionsOf_(u.id);
     if (oldName !== name) renameMember_(oldName, name);
@@ -532,6 +564,7 @@ function saveUser_(data, admin) {
     const salt = Utilities.getUuid();
     u = { id: uid_('u_'), name: name, full: String(data.full || ''), role: ROLE_(data.role),
           color: data.color || COLORS[users.length % COLORS.length], active: true, pinHash: hash_(salt, pin), salt: salt, createdAt: nowIso_() };
+    u.perms = permsStore_(data.perms, u.role) || '';
     writeRow_('Users', u, -1);
     log_('', admin.name, 'user', 'เพิ่มผู้ใช้ ' + name);
   }
@@ -630,6 +663,7 @@ function bootstrap_(u, stamp) {
     files: readAll_('Files').map(f => Object.assign(f, { createdBy: maskName_(f.createdBy, u) })),
     cmtCount: commentCounts_(),
     prods: prodsRecent_().map(x => maskProd_(x, u)),
+    stock: can_(u, 'stock.view') ? stockView_(u) : null,
     salePin: isAdmin_(u) ? !!PropertiesService.getScriptProperties().getProperty('SALE_PIN') : undefined,
     me: publicUser_(meFull), serverTime: nowIso_(), version: VERSION,
     rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY, secret: rtSecret_() } : null,
@@ -656,20 +690,20 @@ function saveJob_(job, u) {
 
   if (row > 0) {
     before = readRow_('Jobs', row);
-    if (!ownsJob_(u, before)) throw new Error('แก้ไขได้เฉพาะงานของตัวเอง งานนี้เป็นของ ' + (before.assignee || 'คนอื่น'));
-    if (!isAdmin_(u) && data.assignee !== undefined && data.assignee !== before.assignee && data.assignee !== u.name) {
-      throw new Error('มอบหมายงานให้คนอื่นได้เฉพาะแอดมิน');
+    if (!ownsJob_(u, before) && !can_(u, 'design.edit')) throw new Error('แก้ไขได้เฉพาะงานของตัวเอง งานนี้เป็นของ ' + (maskName_(before.assignee, u) || 'คนอื่น'));
+    if (!can_(u, 'design.assign') && data.assignee !== undefined && data.assignee !== before.assignee && data.assignee !== u.name) {
+      throw new Error('ไม่มีสิทธิ์มอบหมายงานให้คนอื่น (แอดมินเปิดสิทธิ์ได้ที่ ตั้งค่า > ผู้ใช้งานและสิทธิ์)');
     }
     if (data.helpers !== undefined) {
       // ผู้ใช้ทั่วไปเห็นชื่อแอดมินเป็น "ผู้ดูแลระบบ" → แปลงกลับเป็นชื่อเดิมก่อนบันทึก
       if (!isAdmin_(u)) { const adm = helpersOf_(before).filter(n => adminNames_().indexOf(n) >= 0); data.helpers = helpersOf_(data).map(n => n === ADMIN_LABEL ? adm.shift() || '' : n).filter(Boolean).join(','); }
-      if (helpersOf_(data).join(',') !== helpersOf_(before).join(',') && !leadsJob_(u, before)) throw new Error('เพิ่ม/ลบผู้ร่วมทำงานได้เฉพาะผู้รับผิดชอบงานหรือแอดมิน');
+      if (helpersOf_(data).join(',') !== helpersOf_(before).join(',') && !leadsJob_(u, before) && !can_(u, 'design.edit')) throw new Error('เพิ่ม/ลบผู้ร่วมทำงานได้เฉพาะผู้รับผิดชอบงานหรือแอดมิน');
     }
     if (job.baseUpdatedAt && before.updatedAt && job.baseUpdatedAt !== before.updatedAt) {
       throw new Error('งานนี้ถูกแก้โดย ' + (before.updatedBy || 'คนอื่น') + ' เมื่อสักครู่ กดรีเฟรชแล้วลองอีกครั้ง');
     }
   } else {
-    if (u.role === 'prod') throw new Error('ฝ่ายผลิตเพิ่มงานของฝ่ายแบบไม่ได้');
+    if (!can_(u, 'design.add')) throw new Error('ไม่มีสิทธิ์ลงงานใหม่ของฝ่ายแบบ');
     // เลข Job ซ้ำ: ทุกงานจบที่ CAM → เพิ่มงาน CAM ของเลขเดิมได้ถ้ายังไม่มีงาน CAM ของเลขนั้น · รายละเอียดอื่นซ้ำไม่ได้
     const same = readAll_('Jobs').filter(x => x.code.toLowerCase() === data.code.toLowerCase());
     if (same.length) {
@@ -681,7 +715,7 @@ function saveJob_(job, u) {
     data.id = uid_('j_');
     data.createdAt = now;
     data.createdBy = u.name;
-    if (!isAdmin_(u)) data.assignee = u.name; // ผู้ใช้ทั่วไปลงงานให้ตัวเอง
+    if (!can_(u, 'design.assign')) data.assignee = u.name; // ไม่มีสิทธิ์มอบหมาย = ลงงานให้ตัวเอง
   }
 
   const merged = Object.assign({}, before || { minutes: 0 }, data, { updatedAt: now, updatedBy: u.name });
@@ -708,7 +742,7 @@ function deleteJob_(id, u) {
   const row = rowOf_('Jobs', id);
   if (row < 0) throw new Error('ไม่พบงานนี้');
   const job = readRow_('Jobs', row);
-  if (!isAdmin_(u) && job.createdBy !== u.name) throw new Error('ลบได้เฉพาะงานที่ตัวเองสร้าง หรือให้แอดมินลบ');
+  if (!can_(u, 'design.delete') && job.createdBy !== u.name) throw new Error('ลบได้เฉพาะงานที่ตัวเองสร้าง หรือให้แอดมินลบ');
   sheet_('Jobs').deleteRow(row);
   // ลบเวลาทำงานของงานนี้
   const sh = sheet_('TimeLogs'), last = sh.getLastRow();
@@ -779,8 +813,14 @@ function ensureProd_(job, u) {
   return p;
 }
 function prodSave_(data, u) {
-  if (!canProd_(u)) throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน');
   if (!data || typeof data !== 'object') throw new Error('ข้อมูลไม่ถูกต้อง');
+  const ship = can_(u, 'prod.ship'), edit = canProd_(u);
+  if (!edit && !ship) throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน');
+  if (!edit) {   // ฝ่ายสต็อก: กด "ส่งแล้ว" (หรือย้อนกลับเป็นพร้อมส่ง) ได้อย่างเดียว
+    const r0 = data.id ? rowOf_('Prod', data.id) : -1, b0 = r0 > 0 ? readRow_('Prod', r0) : null;
+    if (!b0 || ['ready', 'shipped'].indexOf(b0.stage) < 0 || ['ready', 'shipped'].indexOf(data.stage) < 0) throw new Error('ฝ่ายสต็อกกดได้เฉพาะ "ส่งแล้ว" ของงานที่พร้อมส่ง');
+    data = { id: data.id, baseUpdatedAt: data.baseUpdatedAt, stage: data.stage, why: data.why };
+  }
   const now = nowIso_(), row = data.id ? rowOf_('Prod', data.id) : -1;
   let before = null, cur;
   if (row > 0) {
@@ -805,6 +845,7 @@ function prodSave_(data, u) {
   let qc = prodQc_(cur.qc);
   if (data.qc !== undefined) qc = Object.assign(prodQc_(data.qc), { fails: qc.fails, last: qc.last });
   if (data.stage !== undefined) { if (PROD_STAGES.indexOf(data.stage) < 0) throw new Error('ขั้นงานผลิตไม่ถูกต้อง'); cur.stage = data.stage; }
+  if (!ship && (cur.stage === 'shipped') !== (!!before && before.stage === 'shipped')) throw new Error('ขั้น "ส่งแล้ว" ให้ฝ่ายสต็อกเป็นคนกด (ฝ่ายผลิตทำได้ถึง "พร้อมส่ง")');
   const ms = prodMachines_(cur.machines);
   if (cur.stage === 'machine' && !ms.length) throw new Error('เลือกเครื่องอย่างน้อย 1 เครื่องก่อนเริ่มลงเครื่อง');
   if (cur.stage === 'machine' && ms.every(x => x.d)) cur.stage = 'paint';   // ครบทุกเครื่อง → ไปขั้นต่อเอง
@@ -854,6 +895,65 @@ function prodDelete_(id, u) {
   log_(id, u.name, 'prod', p.code + ' ลบออกจากฝ่ายผลิต');
   return { id: id };
 }
+/* ======================= คลังวัสดุ (ฝ่ายสต็อก) =======================
+   ดู: สิทธิ์ stock.view · รับเข้า/เบิกออก/ปรับยอด/เพิ่ม-แก้-ลบรายการ: สิทธิ์ stock.edit */
+const STOCK_KINDS_ = { in: 'รับเข้า', out: 'เบิกออก', adj: 'ปรับยอด' };
+const stockNum_ = v => { const n = Math.round(Number(String(v === undefined ? '' : v).replace(/,/g, '')) * 100) / 100; return isFinite(n) ? n : NaN; };
+function stockView_(u) {
+  const items = readAll_('Stock').map(x => Object.assign(x, { qty: stockNum_(x.qty) || 0, min: stockNum_(x.min) || 0 }));
+  const logs = readAll_('StockLog').slice(-300).reverse().map(l => Object.assign(l, { qty: stockNum_(l.qty) || 0, bal: stockNum_(l.bal) || 0, who: maskName_(l.who, u) }));
+  return { items: items.map(x => Object.assign(x, { updatedBy: maskName_(x.updatedBy, u) })), logs: logs };
+}
+function stockEdit_(u) { if (!can_(u, 'stock.edit')) throw new Error('ไม่มีสิทธิ์แก้คลังวัสดุ (แอดมินเปิดได้ที่ ตั้งค่า > ผู้ใช้งานและสิทธิ์)'); }
+function stockSave_(item, u) {
+  stockEdit_(u);
+  if (!item || !String(item.name || '').trim()) throw new Error('กรุณาใส่ชื่อวัสดุ');
+  const name = String(item.name).trim().slice(0, 120), all = readAll_('Stock');
+  if (all.some(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== item.id)) throw new Error('มีวัสดุชื่อ ' + name + ' อยู่แล้ว');
+  const min = stockNum_(item.min || 0); if (isNaN(min) || min < 0) throw new Error('จุดสั่งซื้อต้องเป็นตัวเลข 0 ขึ้นไป');
+  const now = nowIso_(), row = item.id ? rowOf_('Stock', item.id) : -1;
+  let cur;
+  if (row > 0) cur = readRow_('Stock', row);
+  else {
+    if (item.id) throw new Error('ไม่พบวัสดุนี้ อาจถูกลบไปแล้ว');
+    const q0 = stockNum_(item.qty || 0); if (isNaN(q0) || q0 < 0) throw new Error('ยอดเริ่มต้นต้องเป็นตัวเลข 0 ขึ้นไป');
+    cur = { id: uid_('s_'), qty: q0 };
+  }
+  Object.assign(cur, { name: name, cat: String(item.cat || '').trim().slice(0, 60), unit: String(item.unit || '').trim().slice(0, 20) || 'ชิ้น', min: min,
+    loc: String(item.loc || '').trim().slice(0, 60), note: String(item.note || '').slice(0, 300), updatedAt: now, updatedBy: u.name });
+  writeRow_('Stock', cur, row);
+  if (row < 0 && cur.qty) writeRow_('StockLog', { id: uid_('sl_'), ts: now, itemId: cur.id, kind: 'adj', qty: cur.qty, bal: cur.qty, job: '', who: u.name, note: 'ยอดเริ่มต้น' }, -1);
+  log_(cur.id, u.name, 'stock', (row > 0 ? 'แก้ไขวัสดุ ' : 'เพิ่มวัสดุ ') + name);
+  return stockView_(u);
+}
+function stockMove_(p, u) {
+  stockEdit_(u);
+  const row = rowOf_('Stock', p.itemId);
+  if (row < 0) throw new Error('ไม่พบวัสดุนี้');
+  const kind = STOCK_KINDS_[p.kind] ? p.kind : '', n = stockNum_(p.qty);
+  if (!kind) throw new Error('เลือก รับเข้า / เบิกออก / ปรับยอด');
+  if (isNaN(n) || (kind === 'adj' ? n < 0 : n <= 0)) throw new Error(kind === 'adj' ? 'ยอดคงเหลือจริงต้องเป็นตัวเลข 0 ขึ้นไป' : 'ใส่จำนวนมากกว่า 0');
+  const it = readRow_('Stock', row), have = stockNum_(it.qty) || 0;
+  const bal = kind === 'in' ? have + n : kind === 'out' ? have - n : n;
+  if (bal < 0) throw new Error('เบิกเกินยอดคงเหลือ (เหลือ ' + have + ' ' + (it.unit || '') + ')');
+  const now = nowIso_(), r2 = Math.round(bal * 100) / 100;
+  it.qty = r2; it.updatedAt = now; it.updatedBy = u.name;
+  writeRow_('Stock', it, row);
+  writeRow_('StockLog', { id: uid_('sl_'), ts: now, itemId: it.id, kind: kind, qty: kind === 'adj' ? Math.round((r2 - have) * 100) / 100 : n, bal: r2,
+    job: String(p.job || '').trim().slice(0, 60), who: u.name, note: String(p.note || '').slice(0, 200) }, -1);
+  log_(it.id, u.name, 'stock', STOCK_KINDS_[kind] + ' ' + it.name + ' ' + n + ' ' + (it.unit || '') + ' (คงเหลือ ' + r2 + ')');
+  return stockView_(u);
+}
+function stockDelete_(id, u) {
+  stockEdit_(u);
+  const row = rowOf_('Stock', id);
+  if (row < 0) throw new Error('ไม่พบวัสดุนี้');
+  const it = readRow_('Stock', row);
+  sheet_('Stock').deleteRow(row);
+  log_(id, u.name, 'stock', 'ลบวัสดุ ' + it.name);
+  return stockView_(u);
+}
+
 /* PIN ของ Sale: เก็บเป็นค่าแฮชใน Script Properties (ไม่อยู่ในชีต ไม่ส่งไปให้ใคร) */
 function salePin_(pin) {
   const pr = PropertiesService.getScriptProperties();

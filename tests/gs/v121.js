@@ -3,7 +3,7 @@ const path = require('path'); process.argv[2] = path.join(__dirname, '../../back
 const m = require('./mock.js'); const logs = []; const ol = console.log; console.log = (...a) => logs.push(a.join(' ')); m.ctx.setup(); console.log = ol;
 const pin = (logs.join('\n').match(/PIN[^0-9]*(\d{4})/) || [])[1]; const A = m.call('login', { name: 'แอดมิน', pin }).data.token;
 const mk = (n, role) => { const r = m.call('saveUser', { user: { name: n, role: role || 'user' } }, A).data; return [m.call('login', { userId: r.user.id, pin: r.pin }).data.token, r.user]; };
-const [U, uu] = mk('หมี'), [PR, pu] = mk('ช่างเอ', 'prod');
+const [U, uu] = mk('หมี'), [PR, pu] = mk('ช่างเอ', 'prod'), [ST, su] = mk('คลังบี', 'stock');
 let ok = 0, bad = 0; const eq = (lbl, a, b) => { const p = JSON.stringify(a) === JSON.stringify(b); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(b))); };
 eq('prod role saved', pu.role, 'prod');
 // CAD เสร็จ ไม่เข้า, CAM เสร็จ เข้ารอผลิต
@@ -32,7 +32,9 @@ r = m.call('prodSave', { prod: { id: P1.id, stage: 'qc' } }, PR).data.prod; eq('
 eq('cannot pack before QC passes', m.call('prodSave', { prod: { id: P1.id, stage: 'pack' } }, PR).error, 'งานต้องผ่าน QC ก่อนส่งไปแพ็ค');
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'pack', qc: { it: [{ t: 'ขนาดตรงแบบ', d: '1' }], res: 'pass', ok: 10, ng: 0 } } }, PR).data.prod; eq('QC pass → แพ็ค', [r.stage, JSON.parse(r.qc).res, JSON.parse(r.qc).by], ['pack', 'pass', 'ช่างเอ']);
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'ready' } }, PR).data.prod; eq('→ พร้อมส่ง has finishedAt', [r.stage, !!r.finishedAt], ['ready', true]);
-r = m.call('prodSave', { prod: { id: P1.id, stage: 'shipped' } }, PR).data.prod; eq('→ ส่งแล้ว', [r.stage, !!r.shippedAt], ['shipped', true]);
+eq('prod cannot ship (stock does)', m.call('prodSave', { prod: { id: P1.id, stage: 'shipped' } }, PR).error, 'ขั้น "ส่งแล้ว" ให้ฝ่ายสต็อกเป็นคนกด (ฝ่ายผลิตทำได้ถึง "พร้อมส่ง")');
+eq('stock cannot move other stages', m.call('prodSave', { prod: { id: P1.id, stage: 'pack' } }, ST).error, 'ฝ่ายสต็อกกดได้เฉพาะ "ส่งแล้ว" ของงานที่พร้อมส่ง');
+r = m.call('prodSave', { prod: { id: P1.id, stage: 'shipped', note: 'แอบแก้' } }, ST).data.prod; eq('stock → ส่งแล้ว (note ignored)', [r.stage, !!r.shippedAt, r.note, r.updatedBy], ['shipped', true, '', 'คลังบี']);
 eq('history kept', JSON.parse(r.history).map(h => h.s), ['wait', 'machine', 'machine', 'paint', 'assemble', 'qc', 'pack', 'ready', 'shipped']);
 // ข้ามทำสี
 r = m.call('prodSave', { prod: { code: 'P-3', paint: 'no', stage: 'machine', machines: [{ m: 'Laser', d: '2026-10-09T09:00' }] } }, PR).data.prod;
@@ -42,7 +44,7 @@ r = m.call('prodSave', { prod: { code: 'P-2', paint: 'no', assy: 'no', stage: 'm
 eq('manual add + no paint + no assembly + all done → QC', [r.code, r.stage, r.paint, r.assy], ['P-2', 'qc', 'no', 'no']);
 eq('duplicate active code', m.call('prodSave', { prod: { code: 'p-2' } }, PR).error, 'เลข Job p-2 อยู่ในฝ่ายผลิตแล้ว');
 eq('stale write blocked', !!m.call('prodSave', { prod: { id: r.id, stage: 'ready', baseUpdatedAt: '2000-01-01' } }, PR).error, true);
-eq('prod role cannot add design job', m.call('saveJob', { job: { code: 'X-9', taskType: 'ทำ CAD' } }, PR).error, 'ฝ่ายผลิตเพิ่มงานของฝ่ายแบบไม่ได้');
+eq('prod role cannot add design job', m.call('saveJob', { job: { code: 'X-9', taskType: 'ทำ CAD' } }, PR).error, 'ไม่มีสิทธิ์ลงงานใหม่ของฝ่ายแบบ');
 eq('admin can update prod', m.call('prodSave', { prod: { id: r.id, stage: 'ready', qc: { res: 'pass' } } }, A).data.prod.stage, 'ready');
 // QC ไม่ผ่าน → ส่งกลับไปแก้ แล้วเข้า QC ใหม่ต้องตรวจใหม่
 let q2 = m.call('prodSave', { prod: { code: 'Q-1', paint: 'no', assy: 'no', stage: 'machine', machines: [{ m: 'Laser', d: '2026-10-09T09:00' }] } }, PR).data.prod;

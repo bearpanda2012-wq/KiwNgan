@@ -1,0 +1,77 @@
+// v2.56: สิทธิ์แบบช่องติ๊ก, ภาพรวมบริษัทเห็นงานทุกคน, ฝ่ายสต็อกกดส่งแล้ว, คลังวัสดุ (โหมดทดลอง)
+const { chromium } = await import(process.env.PW);
+import http from 'http'; import fs from 'fs'; import path from 'path';
+const root = new URL('..', import.meta.url).pathname; fs.mkdirSync(new URL('out', import.meta.url).pathname, { recursive: true });
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,openEditor,coRows,pModalOpen};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8791);
+const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1300, height: 900 } });
+const errs = []; pg.on('pageerror', e => errs.push(e.message));
+await pg.addInitScript(() => { if (!sessionStorage.getItem('kn-init')) { localStorage.clear(); sessionStorage.setItem('kn-init', '1'); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
+const shot = n => pg.screenshot({ path: new URL('out/' + n + '.png', import.meta.url).pathname, fullPage: false });
+let ok = 0, bad = 0; const eq = (l, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + l + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
+const logout = async () => { await pg.evaluate(() => Object.keys(localStorage).filter(k => /token/.test(k)).forEach(k => localStorage.removeItem(k))); await pg.reload(); await pg.waitForTimeout(700); };
+const loginAs = async n => { await pg.click('.who:has-text("' + n + '")'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter').catch(() => {}); await pg.waitForTimeout(1200); await pg.evaluate(() => document.querySelectorAll('.ntf').forEach(e => e.remove())); };
+await pg.goto('http://127.0.0.1:8791/index.html'); await pg.waitForTimeout(600);
+// --- admin: perms UI
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('settings'); }); await pg.waitForTimeout(500);
+eq('stock role in role options', await pg.locator('#nuRole option[value="stock"]').count(), 1);
+eq('perm summary per user', await pg.locator('.perm-sum').count() >= 4, true);
+const tid = await pg.evaluate(() => S.users.find(u => u.name === 'ต้น').id);
+await pg.click(`[data-permedit="${tid}"]`); await pg.waitForTimeout(300);
+eq('perm box shows 9 boxes', await pg.locator('.perm-box [data-perm]').count(), 9);
+eq('defaults ticked (user)', await pg.evaluate(() => Array.from(document.querySelectorAll('.perm-box [data-perm]:checked')).map(x => x.dataset.perm)), ['design.add', 'stock.view']);
+await pg.locator('#s-users').scrollIntoViewIfNeeded(); await pg.evaluate(id => document.querySelector('[data-urow="' + id + '"]').scrollIntoView({ block: 'start' }), tid); await pg.waitForTimeout(200); await shot('perm-box');
+await pg.check('.perm-box [data-perm="design.assign"]'); await pg.uncheck('.perm-box [data-perm="stock.view"]');
+await pg.click(`[data-saveuser="${tid}"]`); await pg.waitForTimeout(700);
+eq('saved custom perms', await pg.evaluate(id => S.users.find(u => u.id === id).perms, tid), 'design.add,design.assign');
+eq('panel stays open after save', await pg.locator('.perm-box').count(), 1);
+await pg.selectOption(`[data-urow="${tid}"] [data-u="role"]`, 'stock'); await pg.waitForTimeout(200);
+eq('role change resets to role defaults', await pg.evaluate(() => Array.from(document.querySelectorAll('.perm-box [data-perm]:checked')).map(x => x.dataset.perm)), ['prod.ship', 'stock.view', 'stock.edit']);
+await pg.selectOption(`[data-urow="${tid}"] [data-u="role"]`, 'user'); await pg.click(`[data-saveuser="${tid}"]`); await pg.waitForTimeout(700);
+eq('back to default → stored empty', await pg.evaluate(id => S.users.find(u => u.id === id).perms, tid), '');
+// put one job in "ready" for the ship test
+await pg.evaluate(() => { const d = JSON.parse(localStorage.getItem('kiwngan:demo')); const p = d.prods.find(x => x.stage === 'ready'); p.code = 'SHIP-1'; localStorage.setItem('kiwngan:demo', JSON.stringify(d)); });
+// --- ต้น (user): company overview shows everyone's jobs, read-only for others
+await logout(); await loginAs('ต้น');
+const vis = await pg.evaluate(() => { T.go('flow'); const rows = T.coRows(); const owners = new Set(); rows.forEach(r => r.jobs.forEach(j => owners.add(j.assignee))); return { n: rows.length, owners: owners.size, all: S.jobs.length }; });
+eq('flow sees other people jobs', vis.owners > 1, true);
+const other = await pg.evaluate(() => S.jobs.find(j => j.assignee && j.assignee !== S.me && j.createdBy !== S.me && !(j.helpers || '').includes(S.me)).id);
+await pg.evaluate(id => T.openEditor(id), other); await pg.waitForTimeout(500);
+eq('other job: no edit button', await pg.locator('[data-act="editmode"]').count(), 0);
+await pg.evaluate(() => { document.querySelector('[data-act="close"]')?.click(); }); await pg.waitForTimeout(300);
+eq('user nav has stock', await pg.locator('.rail [data-view="stock"], nav [data-view="stock"]').count() > 0, true);
+await pg.evaluate(() => T.go('stock')); await pg.waitForTimeout(400);
+eq('user: stock view read-only', [await pg.locator('.st-row').count() > 0, await pg.locator('[data-smove]').count()], [true, 0]);
+// --- ช่างเอ (prod): cannot ship
+await logout(); await loginAs('ช่างเอ');
+await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(400);
+const shipId = await pg.evaluate(() => S.prods.find(p => p.code === 'SHIP-1').id);
+eq('prod: ready card has no ship button', await pg.locator(`.pcard[data-popen="${shipId}"] [data-padv]`).count(), 0);
+eq('prod: shows waiting-for-stock note', await pg.locator(`.pcard[data-popen="${shipId}"] .pc-wship`).count(), 1);
+// --- คลังบี (stock): ship + inventory
+await logout(); await loginAs('คลังบี');
+eq('stock lands on prod board', await pg.evaluate(() => S.view), 'prod');
+eq('stock nav', await pg.evaluate(() => Array.from(document.querySelectorAll('.rail [data-view]')).map(b => b.dataset.view).filter((v, i, a) => a.indexOf(v) === i)), ['flow', 'board', 'list', 'prod', 'stock', 'team', 'settings']);
+await shot('stock-prod');
+await pg.click(`.pcard[data-popen="${shipId}"] [data-padv]`); await pg.waitForTimeout(800);
+eq('stock shipped it', await pg.evaluate(id => S.prods.find(p => p.id === id).stage, shipId), 'shipped');
+await pg.evaluate(() => T.go('stock')); await pg.waitForTimeout(500);
+await shot('stock-page');
+const it = await pg.evaluate(() => S.stock.items.find(x => x.name === 'แผ่นอะลูมิเนียมคอมโพสิต 4 มม.'));
+await pg.click(`[data-smove="${it.id}"][data-sk="out"]`); await pg.waitForTimeout(200);
+await pg.fill('#smQty', '6'); await pg.fill('#smJob', 'R69-10012S'); await pg.fill('#smNote', 'ทดสอบเบิก');
+await shot('stock-move');
+await pg.click(`[data-sgo="${it.id}"]`); await pg.waitForTimeout(700);
+eq('withdraw 6 → 40', await pg.evaluate(id => S.stock.items.find(x => x.id === id).qty, it.id), 40);
+eq('log top = out', await pg.evaluate(() => [S.stock.logs[0].kind, S.stock.logs[0].job]), ['out', 'R69-10012S']);
+await pg.click('[data-sadd]'); await pg.waitForTimeout(200);
+await pg.fill('#sfName', 'กาวซิลิโคน'); await pg.fill('#sfCat', 'อุปกรณ์ยึด'); await pg.fill('#sfUnit', 'หลอด'); await pg.fill('#sfMin', '10'); await pg.fill('#sfQty', '4');
+await pg.click('[data-ssave]'); await pg.waitForTimeout(700);
+eq('new item low', await pg.evaluate(() => { const x = S.stock.items.find(i => i.name === 'กาวซิลิโคน'); return x && [x.qty, x.min]; }), [4, 10]);
+await pg.click('[data-scat="low"]'); await pg.waitForTimeout(200);
+eq('low filter shows only low', await pg.evaluate(() => Array.from(document.querySelectorAll('.st-row')).every(r => r.classList.contains('low'))), true);
+await pg.setViewportSize({ width: 390, height: 844 }); await pg.waitForTimeout(400); await shot('stock-mobile');
+eq('no horizontal scroll on phone', await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+console.log('errors', errs.join(' | ') || 'none');
+console.log(ok + ' ok, ' + bad + ' failed');
+await b.close(); srv.close(); if (bad || errs.length) process.exit(1);

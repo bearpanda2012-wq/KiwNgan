@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.55.0';
+const APP_VERSION = '2.56.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -36,6 +36,7 @@ const COLORS = ['#0B6B70', '#2D5FC4', '#B05A2A', '#7A4BB5', '#2B7F4A', '#B8435F'
 const BRAND_PRESETS = ['#0B6B70', '#1F4E9C', '#9A3D1F', '#5B3FA0', '#1E7A4C', '#2B2F36', '#B0402F'];
 
 const I = {
+  stock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8l8.5 4.6v9.2L12 21.2l-8.5-4.6V7.4z"/><path d="M3.8 7.6L12 12l8.2-4.4M12 12v9M7.9 5.1l8.4 4.6"/></svg>',
   flow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="6" height="6" rx="1.5"/><rect x="15.5" y="4" width="6" height="6" rx="1.5"/><rect x="9" y="14" width="6" height="6" rx="1.5"/><path d="M8.5 7h7M18.5 10v2.5a1.5 1.5 0 0 1-1.5 1.5h-2M5.5 10v2.5A1.5 1.5 0 0 0 7 14h2"/></svg>',
   prod: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V10l5 3V10l5 3V6l8 4v11z"/><path d="M7 17h2M12 17h2M17 17h1"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
@@ -133,11 +134,13 @@ const VIEWS = [
   { id: 'flow', label: 'ภาพรวมบริษัท', short: 'บริษัท' },
   { id: 'home', label: 'ภาพรวม', short: 'ภาพรวม', g: 'ฝ่ายแบบ' }, { id: 'board', label: 'บอร์ดงาน', short: 'บอร์ด', g: 'ฝ่ายแบบ' }, { id: 'list', label: 'รายการงาน', short: 'รายการ', g: 'ฝ่ายแบบ' },
   { id: 'prod', label: 'บอร์ดผลิต', short: 'ผลิต', g: 'ฝ่ายผลิต' },
+  { id: 'stock', label: 'คลังวัสดุ', short: 'สต็อก', g: 'ฝ่ายสต็อก' },
   { id: 'team', label: 'ทีมงาน', short: 'ทีม', g: 'ทั่วไป' }, { id: 'report', label: 'สรุปรายงาน', short: 'รายงาน', g: 'ทั่วไป' }, { id: 'settings', label: 'ตั้งค่า', short: 'ตั้งค่า', g: 'ทั่วไป' }
 ];
-/* ฝ่ายผลิตเห็นเฉพาะเมนูที่เกี่ยวกับงานผลิต */
-const PROD_VIEWS = ['flow', 'home', 'board', 'list', 'prod', 'team', 'settings'];
-const viewsFor = u => VIEWS.filter(v => !(u && u.role === 'prod') || PROD_VIEWS.indexOf(v.id) >= 0);
+/* ฝ่ายผลิต/ฝ่ายสต็อกเห็นเฉพาะเมนูที่เกี่ยวกับงานผลิต · หน้าคลังวัสดุ: คนที่มีสิทธิ์ "ดูคลังวัสดุ" */
+const PROD_VIEWS = ['flow', 'home', 'board', 'list', 'prod', 'stock', 'team', 'settings'];
+const STOCK_VIEWS = ['flow', 'prod', 'stock', 'board', 'list', 'team', 'settings'];
+const viewsFor = u => { const lim = u && u.role === 'prod' ? PROD_VIEWS : u && u.role === 'stock' ? STOCK_VIEWS : null; return VIEWS.filter(v => (v.id !== 'stock' || P.can(u, 'stock.view')) && (!lim || lim.indexOf(v.id) >= 0)); };
 
 /* ============ state ============ */
 const CFG = window.KIWNGAN_CONFIG || {};
@@ -160,29 +163,66 @@ const tokenKey = () => 'token:' + (mode() === 'sheet' ? S.conn.url : 'demo');
 /* ผู้ร่วมทำงาน: ชื่อคั่นจุลภาคในช่อง helpers — ทำงาน/จับเวลา/เปลี่ยนสถานะได้เหมือนผู้รับผิดชอบ */
 const helpersOf = j => String((j && j.helpers) || '').split(',').map(x => x.trim()).filter(Boolean);
 const inJob = (j, name) => !!name && (j.assignee === name || helpersOf(j).includes(name));
+/* สิทธิ์แยกเรื่อง: แอดมินติ๊กเปิด/ปิดให้แต่ละคนได้ที่ ตั้งค่า > ผู้ใช้งานและสิทธิ์ (หลังบ้านตรวจซ้ำด้วยกติกาเดียวกัน)
+   perms ว่าง = ใช้ค่าเริ่มต้นของตำแหน่ง · "-" = ปิดทุกข้อ · แอดมินมีทุกสิทธิ์ */
+const PERMS = [
+  { g: 'ฝ่ายแบบ', items: [['design.add', 'ลงงานใหม่', 'เพิ่มงานเข้าคิวฝ่ายแบบ'], ['design.edit', 'แก้ไขงานของคนอื่น', 'ปกติแก้ได้เฉพาะงานตัวเอง ติ๊กแล้วแก้/เลื่อนสถานะงานของทุกคนได้'], ['design.assign', 'มอบหมายงานให้คนอื่น', 'เลือกผู้รับผิดชอบงานเป็นใครก็ได้'], ['design.delete', 'ลบงานของคนอื่น', 'ปกติลบได้เฉพาะงานที่ตัวเองลง']] },
+  { g: 'ฝ่ายผลิต', items: [['prod.edit', 'อัปเดตบอร์ดผลิต', 'เพิ่มงานเข้าผลิต เลือกเครื่อง เลื่อนขั้น ตรวจ QC จนถึง "พร้อมส่ง"']] },
+  { g: 'ฝ่ายสต็อก', items: [['prod.ship', 'กด "ส่งแล้ว"', 'ปิดงานขั้นสุดท้าย ส่งถึงลูกค้า'], ['stock.view', 'ดูคลังวัสดุ', 'เห็นยอดคงเหลือและประวัติเบิก-รับ'], ['stock.edit', 'จัดการคลังวัสดุ', 'รับเข้า เบิกออก ปรับยอด เพิ่ม/แก้/ลบรายการวัสดุ']] },
+  { g: 'ดูข้อมูล', items: [['team.all', 'ดูผลงานทุกคน', 'บอร์ด/รายการงานของทุกคน ตารางงานรายคน สรุปรายงานทุกคน']] }
+];
+const PERM_KEYS = PERMS.reduce((a, g) => a.concat(g.items.map(x => x[0])), []);
+const PERM_DEF = { user: ['design.add', 'stock.view'], lead: ['design.add', 'team.all', 'stock.view'], prod: ['prod.edit', 'stock.view'], stock: ['prod.ship', 'stock.view', 'stock.edit'] };
+const permsOf = u => { if (!u) return []; if (u.role === 'admin') return PERM_KEYS.slice(); const raw = String(u.perms || '').trim(); return !raw ? (PERM_DEF[u.role] || PERM_DEF.user).slice() : raw.split(',').map(x => x.trim()).filter(k => PERM_KEYS.indexOf(k) >= 0); };
+/* ค่าที่เก็บ: ตรงกับค่าเริ่มต้นของตำแหน่ง = '' · ไม่มีเลย = '-' */
+const permsStore = (arr, role) => { const a = PERM_KEYS.filter(k => (arr || []).indexOf(k) >= 0), def = PERM_DEF[role] || PERM_DEF.user; return a.length === def.length && def.every(k => a.indexOf(k) >= 0) ? '' : a.length ? a.join(',') : '-'; };
 const P = {
+  can: (u, k) => !!u && (u.role === 'admin' || permsOf(u).indexOf(k) >= 0),
   admin: u => !!u && u.role === 'admin',
-  leads: (u, j) => !!u && (u.role === 'admin' || j.assignee === u.name || j.createdBy === u.name),
-  owns: (u, j) => !!u && (u.role === 'admin' || j.assignee === u.name || j.createdBy === u.name || helpersOf(j).includes(u.name)),
-  del: (u, j) => !!u && (u.role === 'admin' || j.createdBy === u.name),
-  lead: u => !!u && (u.role === 'admin' || u.role === 'lead')
+  leads: (u, j) => !!u && (u.role === 'admin' || j.assignee === u.name || j.createdBy === u.name || P.can(u, 'design.edit')),
+  owns: (u, j) => !!u && (u.role === 'admin' || j.assignee === u.name || j.createdBy === u.name || helpersOf(j).includes(u.name) || P.can(u, 'design.edit')),
+  del: (u, j) => !!u && (j.createdBy === u.name || P.can(u, 'design.delete')),
+  lead: u => P.can(u, 'team.all')
 };
 const isAdmin = () => P.admin(S.user);
-const isLead = () => P.lead(S.user);   // หัวหน้างาน/แอดมิน: see everyone's numbers and reports
-const ROLES = { admin: { label: 'ผู้ดูแลระบบ', cls: 'r-admin' }, lead: { label: 'หัวหน้างาน · ฝ่ายแบบ', short: 'หัวหน้างาน', dept: 'd', cls: 'r-lead' }, prod: { label: 'พนักงาน · ฝ่ายผลิต', short: 'พนักงาน', dept: 'p', cls: 'r-prod' }, user: { label: 'พนักงาน · ฝ่ายแบบ', short: 'พนักงาน', dept: 'd', cls: 'r-user' } };
-const DEPTS = { d: 'ฝ่ายแบบ', p: 'ฝ่ายผลิต' };
+const isLead = () => P.lead(S.user);   // สิทธิ์ "ดูผลงานทุกคน" (ค่าเริ่มต้น: หัวหน้างาน/แอดมิน): see everyone's numbers and reports
+const canAssign = () => P.can(S.user, 'design.assign');
+const canAddDesign = () => P.can(S.user, 'design.add');
+const ROLES = { admin: { label: 'ผู้ดูแลระบบ', cls: 'r-admin' }, lead: { label: 'หัวหน้างาน · ฝ่ายแบบ', short: 'หัวหน้างาน', dept: 'd', cls: 'r-lead' }, prod: { label: 'พนักงาน · ฝ่ายผลิต', short: 'พนักงาน', dept: 'p', cls: 'r-prod' }, stock: { label: 'พนักงาน · ฝ่ายสต็อก', short: 'พนักงาน', dept: 's', cls: 'r-stock' }, user: { label: 'พนักงาน · ฝ่ายแบบ', short: 'พนักงาน', dept: 'd', cls: 'r-user' } };
+const DEPTS = { d: 'ฝ่ายแบบ', p: 'ฝ่ายผลิต', s: 'ฝ่ายสต็อก' };
 const deptTag = u => { const r = ROLES[roleOf(u)]; return r.dept ? '<span class="dept-tag dept-' + r.dept + '">' + DEPTS[r.dept] + '</span>' : ''; };   // ป้ายแผนกบนการ์ดผู้ใช้
 const ROLE_IC = {
   admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.6-3.4 8-8 9-4.6-1-8-4.4-8-9V6z"/></svg>',
   lead: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17h18l-1.6-9.5-4.4 3.8L12 4l-3 7.3-4.4-3.8z"/><rect x="3" y="18.5" width="18" height="2.2" rx="1"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1-4 4-6 7.5-6s6.5 2 7.5 6"/></svg>',
-  prod: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M3 21V10l5 3V10l5 3V6l8 4v11z"/></svg>'
+  prod: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M3 21V10l5 3V10l5 3V6l8 4v11z"/></svg>',
+  stock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 2.8l8.5 4.6v9.2L12 21.2l-8.5-4.6V7.4z"/><path d="M3.8 7.6L12 12l8.2-4.4M12 12v9" stroke-linecap="round"/></svg>'
 };
 const roleOf = u => (u && ROLES[u.role]) ? u.role : 'user';
 const roleChip = (u, small) => { const r = roleOf(u); return '<span class="role-chip ' + ROLES[r].cls + (small ? ' sm' : '') + '" title="' + ROLES[r].label + '">' + ROLE_IC[r] + (small ? '' : '<span>' + (ROLES[r].short || ROLES[r].label) + '</span>') + '</span>'; };
-const roleOpts = cur => ['user', 'prod', 'lead', 'admin'].map(r => '<option value="' + r + '"' + ((cur || 'user') === r ? ' selected' : '') + '>' + ROLES[r].label + '</option>').join('');
+const roleOpts = cur => ['user', 'lead', 'prod', 'stock', 'admin'].map(r => '<option value="' + r + '"' + ((cur || 'user') === r ? ' selected' : '') + '>' + ROLES[r].label + '</option>').join('');
 const ADMIN_LABEL = 'ผู้ดูแลระบบ';
 const canEdit = j => P.owns(S.user, j);
+/* ---- หน้าแอดมิน: ช่องติ๊กสิทธิ์ ---- */
+const PERM_SHORT = { 'design.add': 'ลงงาน', 'design.edit': 'แก้งานคนอื่น', 'design.assign': 'มอบหมายงาน', 'design.delete': 'ลบงานคนอื่น', 'prod.edit': 'บอร์ดผลิต', 'prod.ship': 'กดส่งแล้ว', 'stock.view': 'ดูคลัง', 'stock.edit': 'จัดการคลัง', 'team.all': 'ดูผลงานทุกคน' };
+function permSum(u) {   // แถบสรุปสิทธิ์ใต้ชื่อ (เห็นทุกคนในหน้าเดียว)
+  if (u.role === 'admin') return '<div class="perm-sum"><span class="ps-all">ทุกสิทธิ์</span></div>';
+  const ps = permsOf(u), custom = !!String(u.perms || '').trim();
+  return '<div class="perm-sum">' + (ps.length ? ps.map(k => '<span>' + esc(PERM_SHORT[k] || k) + '</span>').join('') : '<span class="ps-none">ดูอย่างเดียว</span>') + (custom ? '<em title="ไม่ใช่ค่าเริ่มต้นของตำแหน่ง">ปรับเอง</em>' : '') + '</div>';
+}
+function permBox(u) {
+  const dr = S.permDraft && S.permDraft.id === u.id ? S.permDraft : null, role = (dr && dr.role) || u.role, admin = role === 'admin', cur = dr ? dr.list : permsOf(u);
+  return '<div class="perm-box" data-permbox="' + esc(u.id) + '"><div class="pb-h"><span class="pb-ic ' + ROLES[roleOf({ role: role })].cls + '">' + ROLE_IC[roleOf({ role: role })] + '</span><div><b>สิทธิ์ของ ' + esc(u.name) + '</b><small>' + (admin ? 'ผู้ดูแลระบบมีสิทธิ์ทุกข้อเสมอ (ปรับไม่ได้)' : 'ติ๊กแล้วกด "บันทึก" ในแถวนี้ · เปลี่ยนตำแหน่งแล้วช่องจะกลับเป็นค่าเริ่มต้นของตำแหน่งนั้น') + '</small></div>' +
+    (admin ? '' : '<button type="button" class="btn sm ghost" data-permdef="' + esc(u.id) + '">ใช้ค่าเริ่มต้น</button>') + '</div>' +
+    '<div class="pb-grid">' + PERMS.map(g => '<fieldset class="pb-g"><legend>' + esc(g.g) + '</legend>' + g.items.map(x => { const on = admin || cur.indexOf(x[0]) >= 0, def = (PERM_DEF[role] || PERM_DEF.user).indexOf(x[0]) >= 0;
+      return '<label class="pb-it' + (on ? ' on' : '') + '"><input type="checkbox" data-perm="' + x[0] + '"' + (on ? ' checked' : '') + (admin ? ' disabled' : '') + '><span><b>' + esc(x[1]) + (def && !admin ? ' <i>ค่าเริ่มต้น</i>' : '') + '</b><small>' + esc(x[2]) + '</small></span></label>'; }).join('') + '</fieldset>').join('') + '</div></div>';
+}
+function permLegend() {   // ตารางสรุปสิทธิ์เริ่มต้นของแต่ละตำแหน่ง
+  const roles = ['user', 'lead', 'prod', 'stock', 'admin'], hd = { user: 'พนักงาน<br>ฝ่ายแบบ', lead: 'หัวหน้างาน<br>ฝ่ายแบบ', prod: 'พนักงาน<br>ฝ่ายผลิต', stock: 'พนักงาน<br>ฝ่ายสต็อก', admin: 'ผู้ดูแล<br>ระบบ' };
+  return '<details class="perm-leg"><summary>ตารางสิทธิ์เริ่มต้นของแต่ละตำแหน่ง</summary><div class="pl-scroll"><table><thead><tr><th>สิทธิ์</th>' + roles.map(r => '<th><span class="pl-ic ' + ROLES[r].cls + '">' + ROLE_IC[r] + '</span>' + hd[r] + '</th>').join('') + '</tr></thead><tbody>' +
+    PERMS.map(g => '<tr class="pl-g"><td colspan="' + (roles.length + 1) + '">' + esc(g.g) + '</td></tr>' + g.items.map(x => '<tr><td>' + esc(x[1]) + '</td>' + roles.map(r => '<td>' + (r === 'admin' || (PERM_DEF[r] || []).indexOf(x[0]) >= 0 ? '<b class="pl-y">✓</b>' : '<span class="pl-n">–</span>') + '</td>').join('') + '</tr>').join('')).join('') +
+    '</tbody></table></div><p class="help">ทุกตำแหน่ง: เห็นงานทั้งหมดในภาพรวมบริษัท · แก้ไข/จับเวลางานที่ตัวเองรับผิดชอบหรือลงเอง · คุยในหน้าข้อความได้</p></details>';
+}
 
 /* ============ utils ============ */
 const $ = (s, el) => (el || document).querySelector(s);
@@ -222,7 +262,7 @@ function toast(msg, err) {
 
 /* ============ domain helpers ============ */
 const members = () => (S.users || []).filter(u => u.active);
-const designers = () => members().filter(u => u.role !== 'prod');   // ฝ่ายผลิตไม่อยู่ในรายชื่อรับงาน/ผู้ร่วมทำงาน/สรุปของฝ่ายแบบ
+const designers = () => members().filter(u => u.role !== 'prod' && u.role !== 'stock');   // ฝ่ายผลิตไม่อยู่ในรายชื่อรับงาน/ผู้ร่วมทำงาน/สรุปของฝ่ายแบบ
 const memberBy = name => (S.users || []).find(m => m.name === name);
 function avUser(u, cls, name) {
   name = name || (u && u.name) || '';
@@ -417,6 +457,17 @@ function seedDemo() {
 
 /* งานประเภทไหน "ส่งเข้าผลิต" เมื่อทำเสร็จ: ตั้งเองได้ในตั้งค่า (ค่าเริ่มต้น: ชื่อมีคำว่า CAM) */
 function toProdType(name, settings) { const t = ((settings || S.settings || {}).taskTypes || []).find(x => x.name === name); return t && t.prod !== undefined ? t.prod === true || t.prod === 'true' : /CAM/i.test(String(name || '')); }
+function seedStock() {   // คลังวัสดุตัวอย่าง (โหมดทดลอง)
+  const t = nowLocal() + ':00', ago = n => addDays(today(), -n) + 'T' + pad(8 + n) + ':15:00';
+  const items = [
+    ['แผ่นอะลูมิเนียมคอมโพสิต 4 มม.', 'แผ่น', 'แผ่น', 46, 20, 'ชั้น A1'], ['แผ่นอะลูมิเนียม 3 มม.', 'แผ่น', 'แผ่น', 12, 15, 'ชั้น A2'], ['แผ่นเหล็กซิงค์ 1.2 มม.', 'แผ่น', 'แผ่น', 30, 10, 'ชั้น B1'],
+    ['แผ่นอะคริลิค 5 มม.', 'แผ่น', 'แผ่น', 3, 5, 'ชั้น B2'], ['สีพ่นโพลียูรีเทน ดำด้าน', 'สี', 'ลิตร', 18, 8, 'ห้องสี'], ['สีพ่นโพลียูรีเทน ขาว', 'สี', 'ลิตร', 6, 8, 'ห้องสี'],
+    ['สกรูยึดแผ่น #10', 'อุปกรณ์ยึด', 'กล่อง', 24, 6, 'ตู้ 3'], ['ดอกเราเตอร์ 6 มม.', 'ดอกกัด/อะไหล่', 'ดอก', 9, 4, 'ตู้เครื่อง'], ['ฟิล์มกันรอย 1.25 ม.', 'บรรจุภัณฑ์', 'ม้วน', 5, 2, 'โซนแพ็ค']
+  ].map((x, i) => ({ id: 's_demo' + i, name: x[0], cat: x[1], unit: x[2], qty: x[3], min: x[4], loc: x[5], note: '', updatedAt: t, updatedBy: 'คลังบี' }));
+  const logs = [['s_demo0', 'in', 30, 46, '', 'รับจากซัพพลายเออร์', 3], ['s_demo1', 'out', 8, 12, 'R69-10012S', 'ตัดผนังล็อบบี้', 2], ['s_demo3', 'out', 4, 3, 'R69-10015S', '', 1], ['s_demo5', 'out', 3, 6, 'R69-10012S', 'พ่นสีขาว', 1], ['s_demo4', 'in', 10, 18, '', 'ซื้อเพิ่ม', 0]]
+    .map((x, i) => ({ id: 'sl_demo' + i, ts: ago(x[6]), itemId: x[0], kind: x[1], qty: x[2], bal: x[3], job: x[4], who: 'คลังบี', note: x[5] }));
+  return { items: items, logs: logs };
+}
 function seedProds(d) {   // ตัวอย่างงานผลิตในโหมดทดลอง: เอาเลข Job ที่ CAM เสร็จแล้วมากระจายตามขั้น
   const codes = [], seen = {}, u = 'ช่างเอ';
   d.jobs.filter(j => j.status === 'done' && /CAM/.test(j.taskType || '')).sort((a, b) => String(finDate(b)).localeCompare(String(finDate(a)))).forEach(j => { if (!seen[j.code]) { seen[j.code] = 1; codes.push(j); } });
@@ -432,9 +483,11 @@ function seedProds(d) {   // ตัวอย่างงานผลิตใน
 const Demo = {
   db() { let d = LS.get('demo', null); if (!d || !d.jobs || !d.users) { d = seedDemo(); LS.set('demo', d); }
     if (!d.users.some(u => u.role === 'prod')) { d.users.push({ id: 'u4', name: 'ช่างเอ', full: 'ฝ่ายผลิต', role: 'prod', color: '#B8435F', active: true, pin: '1234' }); LS.set('demo', d); }   // ผู้ใช้ฝ่ายผลิตตัวอย่าง
+    if (!d.users.some(u => u.role === 'stock')) { d.users.push({ id: 'u5', name: 'คลังบี', full: 'ฝ่ายสต็อก', role: 'stock', color: '#A07A12', active: true, pin: '1234' }); LS.set('demo', d); }   // ผู้ใช้ฝ่ายสต็อกตัวอย่าง
+    if (!d.stock) { d.stock = seedStock(); LS.set('demo', d); }
     return d; },
   save(d) { LS.set('demo', d); },
-  pub(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '' }; },
+  pub(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '', perms: u.perms || '' }; },
   async messages(p) { const d = this.db(), u = this.me(d); d.messages = d.messages || seedMsgs(d); this.save(d);
     const vis = m => m.to === 'team' || m.from === u.name || m.to === u.name || (m.to === 'admin' && P.admin(u));
     return { ids: d.messages.filter(vis).map(m => m.id), messages: d.messages.filter(m => vis(m) && (!p.since || m.ts > p.since || (m.kind === 'help' && m.status !== 'done'))).map(m => this.mmsg(d, u, m)), serverTime: nowLocal() + ':' + pad(new Date().getSeconds()) }; },
@@ -452,11 +505,11 @@ const Demo = {
     if (p.status === 'taken') { if (m.from === u.name) throw new Error('รับช่วยคำขอของตัวเองไม่ได้'); if (m.status !== 'open') throw new Error('มีคนรับช่วยแล้ว'); m.status = 'taken'; m.helper = u.name;
       const n = { id: uid('m_'), ts: nowLocal() + ':' + pad(new Date().getSeconds()), from: u.name, to: m.to === 'team' ? 'team' : m.from, kind: 'msg', text: '🙋 รับช่วยเรื่อง "' + m.text.slice(0, 60) + '" แล้ว', jobId: m.jobId, status: '', helper: '', readBy: [u.name] }; d.messages.push(n); this.save(d); return { message: this.mmsg(d, u, m), note: this.mmsg(d, u, n) }; }
     if (m.from !== u.name && m.helper !== u.name && !P.admin(u)) throw new Error('ปิดได้เฉพาะคนขอ คนที่รับช่วย หรือแอดมิน'); m.status = p.status; this.save(d); return { message: this.mmsg(d, u, m) }; },
-  async addImage(p) { const d = this.db(), u = this.me(d), pj = /^p_/.test(p.jobId || '') ? (d.prods || []).find(x => x.id === p.jobId) : null, j = pj || d.jobs.find(x => x.id === p.jobId); if (!j) throw new Error('ไม่พบงานนี้'); if (pj ? !(u.role === 'prod' || u.role === 'admin') : !P.owns(u, j)) throw new Error(pj ? 'เพิ่มรูปงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน' : 'เพิ่มรูปได้เฉพาะงานของตัวเอง'); d.images = d.images || []; if (d.images.filter(m => m.jobId === p.jobId).length >= IMG_MAX) throw new Error('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน');
+  async addImage(p) { const d = this.db(), u = this.me(d), pj = /^p_/.test(p.jobId || '') ? (d.prods || []).find(x => x.id === p.jobId) : null, j = pj || d.jobs.find(x => x.id === p.jobId); if (!j) throw new Error('ไม่พบงานนี้'); if (pj ? !P.can(u, 'prod.edit') : !P.owns(u, j)) throw new Error(pj ? 'เพิ่มรูปงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน' : 'เพิ่มรูปได้เฉพาะงานของตัวเอง'); d.images = d.images || []; if (d.images.filter(m => m.jobId === p.jobId).length >= IMG_MAX) throw new Error('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน');
     const m = { id: uid('i_'), jobId: p.jobId, createdBy: u.name, createdAt: nowLocal(), thumb: p.thumb, full: p.full }; d.images.push(m);
     try { this.save(d); } catch (e) { d.images.pop(); throw new Error('พื้นที่ในโหมดทดลองเต็ม ลบรูปเก่าก่อน'); }
     return { image: { id: m.id, jobId: m.jobId, createdBy: this.mask(d, u, { n: m.createdBy }, ['n']).n, createdAt: m.createdAt, thumb: m.thumb } }; },
-  async deleteImage(p) { const d = this.db(), u = this.me(d), m = (d.images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); const j = d.jobs.find(x => x.id === m.jobId); if (!P.admin(u) && m.createdBy !== u.name && !(/^p_/.test(m.jobId) && u.role === 'prod') && !(j && P.owns(u, j))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง'); d.images = d.images.filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
+  async deleteImage(p) { const d = this.db(), u = this.me(d), m = (d.images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); const j = d.jobs.find(x => x.id === m.jobId); if (!P.admin(u) && m.createdBy !== u.name && !(/^p_/.test(m.jobId) && P.can(u, 'prod.edit')) && !(j && P.owns(u, j))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง'); d.images = d.images.filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
   async copyImages(p) { const d = this.db(), u = this.me(d); d.images = d.images || []; const out = d.images.filter(m => m.jobId === p.from).slice(0, IMG_MAX).map(m => Object.assign({}, m, { id: uid('i_'), jobId: p.to, createdBy: u.name, createdAt: nowLocal() })); d.images = d.images.concat(out); this.save(d); return { images: out.map(m => ({ id: m.id, jobId: m.jobId, createdBy: m.createdBy, createdAt: m.createdAt })) }; },
   async archive() { return { jobs: [], logs: [] }; },
   async addFile(p) { const d = this.db(), u = this.me(d), j = d.jobs.find(x => x.id === p.jobId); if (!j) throw new Error('ไม่พบงานนี้'); if (!P.owns(u, j)) throw new Error('แนบไฟล์ได้เฉพาะงานของตัวเอง');
@@ -487,8 +540,11 @@ const Demo = {
     d.prods.push({ id: uid('p_'), code: j.code, title: j.title || '', sale: j.sale || '', group: j.group || '', stage: 'wait', machines: '[]', paint: '', note: '', enteredAt: t, startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, updatedAt: t + ':00', updatedBy: u.name, history: JSON.stringify([{ t: t, by: u.name, s: 'wait', x: 'ออกแบบเสร็จ ส่งเข้าผลิต' }]) }); },
   async prodSave(p) {
     const d = this.db(), u = this.me(d), data = p.prod || {}, now = nowLocal() + ':' + pad(new Date().getSeconds()); d.prods = d.prods || [];
-    if (u.role !== 'prod' && u.role !== 'admin') throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน');
+    const ship = P.can(u, 'prod.ship'), edit = P.can(u, 'prod.edit');
+    if (!edit && !ship) throw new Error('อัปเดตงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน');
     let cur = data.id ? d.prods.find(x => x.id === data.id) : null; const before = cur ? clone(cur) : null;
+    if (!edit) { const SH = ['ready', 'shipped']; if (!cur || SH.indexOf(cur.stage) < 0 || SH.indexOf(data.stage) < 0) throw new Error('ฝ่ายสต็อกกดได้เฉพาะ "ส่งแล้ว" ของงานที่พร้อมส่ง'); Object.keys(data).forEach(k => { if (['id', 'baseUpdatedAt', 'stage', 'why'].indexOf(k) < 0) delete data[k]; }); }
+    if (!ship && data.stage !== undefined && (data.stage === 'shipped') !== (!!cur && cur.stage === 'shipped')) throw new Error('ขั้น "ส่งแล้ว" ให้ฝ่ายสต็อกเป็นคนกด (ฝ่ายผลิตทำได้ถึง "พร้อมส่ง")');
     if (data.id && !cur) throw new Error('ไม่พบงานนี้ในฝ่ายผลิต อาจถูกลบไปแล้ว');
     if (cur && data.baseUpdatedAt && cur.updatedAt && data.baseUpdatedAt !== cur.updatedAt) throw new Error('งานนี้ถูกอัปเดตโดย ' + cur.updatedBy + ' เมื่อสักครู่ กดรีเฟรชแล้วลองอีกครั้ง');
     if (!cur) { const code = String(data.code || '').trim(); if (!code) throw new Error('กรุณาใส่เลข Job'); if (this.pfind(d, code)) throw new Error('เลข Job ' + code + ' อยู่ในฝ่ายผลิตแล้ว');
@@ -516,7 +572,28 @@ const Demo = {
     if (!before || before.stage !== cur.stage || before.machines !== cur.machines) cur.history = JSON.stringify(phist(cur).concat({ t: n16, by: u.name, s: cur.stage, x: String(data.why || '') }).slice(-40));
     cur.updatedAt = now; cur.updatedBy = u.name; this.save(d); return { prod: this.mask(d, u, clone(cur), ['createdBy', 'updatedBy']) };
   },
-  async prodDelete(p) { const d = this.db(), u = this.me(d); if (u.role !== 'prod' && u.role !== 'admin') throw new Error('ลบงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน'); d.prods = (d.prods || []).filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
+  async prodDelete(p) { const d = this.db(), u = this.me(d); if (!P.can(u, 'prod.edit')) throw new Error('ลบงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน'); d.prods = (d.prods || []).filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
+  /* คลังวัสดุ (โหมดทดลอง) — กติกาเดียวกับหลังบ้าน */
+  sview(d, u) { d.stock = d.stock || seedStock(); return { items: d.stock.items.map(x => this.mask(d, u, clone(x), ['updatedBy'])), logs: d.stock.logs.slice(-300).reverse().map(l => this.mask(d, u, clone(l), ['who'])) }; },
+  sedit(u) { if (!P.can(u, 'stock.edit')) throw new Error('ไม่มีสิทธิ์แก้คลังวัสดุ (แอดมินเปิดได้ที่ ตั้งค่า > ผู้ใช้งานและสิทธิ์)'); },
+  async stockSave(p) { const d = this.db(), u = this.me(d), it = p.item || {}; this.sedit(u); d.stock = d.stock || seedStock();
+    const name = String(it.name || '').trim(); if (!name) throw new Error('กรุณาใส่ชื่อวัสดุ');
+    if (d.stock.items.some(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== it.id)) throw new Error('มีวัสดุชื่อ ' + name + ' อยู่แล้ว');
+    const min = +it.min || 0; if (min < 0) throw new Error('จุดสั่งซื้อต้องเป็นตัวเลข 0 ขึ้นไป');
+    let cur = it.id ? d.stock.items.find(x => x.id === it.id) : null; const now = nowLocal() + ':00';
+    if (it.id && !cur) throw new Error('ไม่พบวัสดุนี้ อาจถูกลบไปแล้ว');
+    if (!cur) { const q0 = +it.qty || 0; if (q0 < 0) throw new Error('ยอดเริ่มต้นต้องเป็นตัวเลข 0 ขึ้นไป'); cur = { id: uid('s_'), qty: q0 }; d.stock.items.push(cur); if (q0) d.stock.logs.push({ id: uid('sl_'), ts: now, itemId: cur.id, kind: 'adj', qty: q0, bal: q0, job: '', who: u.name, note: 'ยอดเริ่มต้น' }); }
+    Object.assign(cur, { name: name, cat: String(it.cat || '').trim(), unit: String(it.unit || '').trim() || 'ชิ้น', min: min, loc: String(it.loc || '').trim(), note: String(it.note || ''), updatedAt: now, updatedBy: u.name });
+    this.save(d); return this.sview(d, u); },
+  async stockMove(p) { const d = this.db(), u = this.me(d); this.sedit(u); d.stock = d.stock || seedStock(); const it = d.stock.items.find(x => x.id === p.itemId); if (!it) throw new Error('ไม่พบวัสดุนี้');
+    const k = { in: 1, out: 1, adj: 1 }[p.kind] ? p.kind : '', n = Math.round(+p.qty * 100) / 100; if (!k) throw new Error('เลือก รับเข้า / เบิกออก / ปรับยอด');
+    if (!isFinite(n) || (k === 'adj' ? n < 0 : n <= 0)) throw new Error(k === 'adj' ? 'ยอดคงเหลือจริงต้องเป็นตัวเลข 0 ขึ้นไป' : 'ใส่จำนวนมากกว่า 0');
+    const have = +it.qty || 0, bal = Math.round((k === 'in' ? have + n : k === 'out' ? have - n : n) * 100) / 100;
+    if (bal < 0) throw new Error('เบิกเกินยอดคงเหลือ (เหลือ ' + have + ' ' + (it.unit || '') + ')');
+    const now = nowLocal() + ':' + pad(new Date().getSeconds()); it.qty = bal; it.updatedAt = now; it.updatedBy = u.name;
+    d.stock.logs.push({ id: uid('sl_'), ts: now, itemId: it.id, kind: k, qty: k === 'adj' ? Math.round((bal - have) * 100) / 100 : n, bal: bal, job: String(p.job || '').trim(), who: u.name, note: String(p.note || '') });
+    this.save(d); return this.sview(d, u); },
+  async stockDelete(p) { const d = this.db(), u = this.me(d); this.sedit(u); d.stock = d.stock || seedStock(); d.stock.items = d.stock.items.filter(x => x.id !== p.id); this.save(d); return this.sview(d, u); },
   async salePin(p) { const d = this.db(); this.admin(this.me(d)); d.salePin = p.pin ? String(p.pin) : ''; if (d.salePin && !d.saleKey) d.saleKey = uid('k'); this.save(d); return { on: !!d.salePin }; },
   async saleOpen(p) { const d = this.db(); if (String(p.pin) !== String(d.salePin || '1234')) throw new Error('PIN ไม่ถูกต้อง'); if (!d.saleKey) { d.saleKey = uid('k'); this.save(d); } return { key: d.saleKey }; },
   mask(d, viewer, o, keys) {
@@ -534,7 +611,7 @@ const Demo = {
     return { token: u.id, user: this.pub(u) };
   },
   async logout() { return {}; },
-  async bootstrap() { const d = this.db(), u = this.me(d); if (!d.prods) { d.prods = seedProds(d); this.save(d); } return { prods: (d.prods || []).map(x => this.mask(d, u, clone(x), ['createdBy', 'updatedBy'])), salePin: P.admin(u) ? !!d.salePin : undefined, settings: d.settings, users: d.users.filter(x => P.admin(u) || x.role !== 'admin').map(this.pub), jobs: d.jobs.map(j => this.mj(d, u, j)), files: d.files || [], cmtCount: (d.comments || []).reduce((o, c) => { o[c.jobId] = (o[c.jobId] || 0) + 1; return o; }, {}), logs: d.logs.map(l => this.ml(d, u, l)), images: (d.images || []).map(m => ({ id: m.id, jobId: m.jobId, createdBy: this.mask(d, u, { n: m.createdBy }, ['n']).n, createdAt: m.createdAt })), me: this.pub(u) }; },
+  async bootstrap() { const d = this.db(), u = this.me(d); if (!d.prods) { d.prods = seedProds(d); this.save(d); } return { prods: (d.prods || []).map(x => this.mask(d, u, clone(x), ['createdBy', 'updatedBy'])), salePin: P.admin(u) ? !!d.salePin : undefined, stock: P.can(u, 'stock.view') ? this.sview(d, u) : null, settings: d.settings, users: d.users.filter(x => P.admin(u) || x.role !== 'admin').map(this.pub), jobs: d.jobs.map(j => this.mj(d, u, j)), files: d.files || [], cmtCount: (d.comments || []).reduce((o, c) => { o[c.jobId] = (o[c.jobId] || 0) + 1; return o; }, {}), logs: d.logs.map(l => this.ml(d, u, l)), images: (d.images || []).map(m => ({ id: m.id, jobId: m.jobId, createdBy: this.mask(d, u, { n: m.createdBy }, ['n']).n, createdAt: m.createdAt })), me: this.pub(u) }; },
   async saveJob(p) {
     const d = this.db(), u = this.me(d), job = Object.assign({}, p.job);
     delete job.baseUpdatedAt; delete job.minutes; delete job.createdBy; delete job.createdAt;
@@ -545,12 +622,12 @@ const Demo = {
     const before = cur ? clone(cur) : null;
     if (cur) {
       if (!P.owns(u, cur)) throw new Error('แก้ไขได้เฉพาะงานของตัวเอง งานนี้เป็นของ ' + (cur.assignee || 'คนอื่น'));
-      if (!P.admin(u) && job.assignee !== undefined && job.assignee !== cur.assignee && job.assignee !== u.name) throw new Error('มอบหมายงานให้คนอื่นได้เฉพาะแอดมิน');
+      if (!P.can(u, 'design.assign') && job.assignee !== undefined && job.assignee !== cur.assignee && job.assignee !== u.name) throw new Error('ไม่มีสิทธิ์มอบหมายงานให้คนอื่น (แอดมินเปิดสิทธิ์ได้ที่ ตั้งค่า > ผู้ใช้งานและสิทธิ์)');
     } else {
-      if (u.role === 'prod') throw new Error('ฝ่ายผลิตเพิ่มงานของฝ่ายแบบไม่ได้');
+      if (!P.can(u, 'design.add')) throw new Error('ไม่มีสิทธิ์ลงงานใหม่ของฝ่ายแบบ');
       { const clash = codeClash(job.code, job.taskType, d.jobs); if (clash) throw new Error(clash); }
       cur = { id: uid('j_'), createdAt: now, createdBy: u.name, minutes: 0 }; d.jobs.push(cur); delete job.id;
-      if (!P.admin(u)) job.assignee = u.name;
+      if (!P.can(u, 'design.assign')) job.assignee = u.name;
     }
     if (before && job.helpers !== undefined && helpersOf(job).join(',') !== helpersOf(before).join(',') && !P.leads(u, before)) throw new Error('เพิ่ม/ลบผู้ร่วมทำงานได้เฉพาะผู้รับผิดชอบงานหรือแอดมิน');
     Object.assign(cur, job, { updatedAt: now, updatedBy: u.name });
@@ -619,11 +696,13 @@ const Demo = {
       if (u.id === me.id && data.active === false) throw new Error('ปิดบัญชีตัวเองไม่ได้');
       if (data.role !== 'admin' && u.role === 'admin' && d.users.filter(x => x.role === 'admin' && x.active).length <= 1) throw new Error('ต้องมีแอดมินอย่างน้อย 1 คน');
       const old = u.name;
-      Object.assign(u, { name: name, full: data.full || '', role: ['admin', 'lead', 'prod'].indexOf(data.role) >= 0 ? data.role : 'user', color: data.color || u.color, active: data.active !== false });
+      Object.assign(u, { name: name, full: data.full || '', role: ['admin', 'lead', 'prod', 'stock'].indexOf(data.role) >= 0 ? data.role : 'user', color: data.color || u.color, active: data.active !== false });
+      if (Array.isArray(data.perms)) u.perms = permsStore(data.perms, u.role);
       if (old !== name) { d.jobs.forEach(j => { ['assignee', 'createdBy', 'updatedBy'].forEach(k => { if (j[k] === old) j[k] = name; }); }); d.logs.forEach(l => { if (l.member === old) l.member = name; }); }
     } else {
       pin = /^\d{4,6}$/.test(String(data.pin || '')) ? String(data.pin) : String(Math.floor(1000 + Math.random() * 9000));
-      u = { id: uid('u_'), name: name, full: data.full || '', role: ['admin', 'lead', 'prod'].indexOf(data.role) >= 0 ? data.role : 'user', color: data.color || COLORS[d.users.length % COLORS.length], active: true, pin: pin };
+      u = { id: uid('u_'), name: name, full: data.full || '', role: ['admin', 'lead', 'prod', 'stock'].indexOf(data.role) >= 0 ? data.role : 'user', color: data.color || COLORS[d.users.length % COLORS.length], active: true, pin: pin };
+      u.perms = Array.isArray(data.perms) ? permsStore(data.perms, u.role) : '';
       d.users.push(u);
     }
     this.save(d); return { user: this.pub(u), pin: pin };
@@ -677,7 +756,7 @@ const Remote = {
     return data.data;
   }
 };
-['prodSave', 'prodDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
+['prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -765,7 +844,7 @@ function rtDataChanged() {
   if (S.edit || S.draftDirty || S.loading || S.saving) { clearTimeout(RT.chgT); RT.chgT = setTimeout(rtDataChanged, 1500); return; }
   load(true);
 }
-const RT_DATA = { saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, copyImages: 1, saveSettings: 1, saveUser: 1, resetPin: 1 };
+const RT_DATA = { stockSave: 1, stockMove: 1, stockDelete: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, copyImages: 1, saveSettings: 1, saveUser: 1, resetPin: 1 };
 const RT_MSG = { sendMessage: 1, markRead: 0, helpUpdate: 1, deleteMessages: 1 };
 function rtAfterWrite(action) { if (RT_DATA[action]) rtSend({ k: 'chg', what: 'data' }); else if (RT_MSG[action]) rtSend({ k: 'chg', what: 'msg' }); }
 function rtLoop() { if (typeof rtcLoop === 'function') rtcLoop(); }
@@ -793,7 +872,7 @@ async function load(silent, boot) {
     S.settings = normalizeSettings(d.settings);
     S.users = d.users || []; S.user = d.me; S.me = d.me.name;
     const prevJobs = S.loaded && S.me && S.jobs && S.jobs.length ? S.jobs : null;
-    S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || []; S.files = d.files || []; S.prods = d.prods || []; S.salePinOn = !!d.salePin;
+    S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || []; S.files = d.files || []; S.prods = d.prods || []; S.stock = d.stock || null; S.salePinOn = !!d.salePin;
     if (!viewsFor(S.user).some(v => v.id === S.view) || (S.screen !== 'app' && isProdRole() && S.view !== 'flow')) S.view = isProdRole() ? 'prod' : 'home';   // ฝ่ายผลิตเข้าระบบแล้วเปิดบอร์ดผลิตเลย
     { const pc = S.loaded ? S.cmtCount : null; S.cmtCount = d.cmtCount || {}; if (pc) setTimeout(() => cmtAlerts(pc), 0); }
     if (d.rt !== undefined) { rtSetup(d.rt); ibStart(d.rt); }
@@ -1011,7 +1090,7 @@ async function createCamFrom(id) {
   const src = jobById(id); const box = $('#askBox'); if (box) box.classList.remove('show');
   if (!src || !camFollowNeeded(src)) return toast('มีงาน CAM ของเลขนี้แล้ว', true);
   const t = camType(), job = { code: src.code, title: src.title, group: src.group, taskType: t.name, qty: src.qty, level: src.level, sale: src.sale, priority: src.priority, revision: false,
-    assignee: isAdmin() ? (src.assignee || S.me) : S.me, status: 'queue', received: today(), due: '', startedAt: '', finishedAt: '', note: '' };
+    assignee: canAssign() ? (src.assignee || S.me) : S.me, status: 'queue', received: today(), due: '', startedAt: '', finishedAt: '', note: '' };
   const sg = suggestDue(job); if (sg) job.due = sg.date;
   const tmpId = uid('tmp_'); S.jobs.push(Object.assign({}, job, { id: tmpId, minutes: 0, pending: true, createdBy: S.me })); render();
   S.saving = (S.saving || 0) + 1;
@@ -3425,7 +3504,8 @@ function navHtml(withCount, tabs) {
   const late = listPool().filter(isLate).length, vs = viewsFor(S.user);
   let g = '';
   return vs.map(v => (!tabs && v.g && v.g !== g && (g = v.g) && vs.length > 4 ? '<div class="nav-h">' + esc(v.g) + '</div>' : '') + '<button data-view="' + v.id + '" aria-current="' + (S.view === v.id) + '">' + I[v.id] + '<span>' + (tabs ? v.short || v.label : v.label) + '</span>' +
-    (withCount && v.id === 'prod' && typeof prodsAll === 'function' ? (n => n ? '<span class="count pc">' + n + '</span>' : '')(prodsAll().filter(p => p.stage === 'wait').length) : '') +
+    (withCount && v.id === 'prod' && typeof prodsAll === 'function' ? (n => n ? '<span class="count pc">' + n + '</span>' : '')(prodsAll().filter(p => p.stage === (!canProd() && canShip() ? 'ready' : 'wait')).length) : '') +
+    (withCount && v.id === 'stock' && S.stock ? (n => n ? '<span class="count" title="วัสดุใกล้หมด">' + n + '</span>' : '')(S.stock.items.filter(stLow).length) : '') +
     (withCount && v.id === 'board' && late ? '<span class="count">' + late + '</span>' : '') +
     (withCount && v.id === 'team' && typeof M !== 'undefined' ? teamBadge() : '') + '</button>').join('');
 }
@@ -3433,7 +3513,7 @@ function renderShell() {
   const s = S.settings || defaultSettings();
   $('#brand').innerHTML = brandMark(s) + '<div><b>' + esc(s.appName) + '</b><small>' + esc(s.company) + '</small></div>';
   $('#nav').innerHTML = navHtml(true);
-  { const fab = $('.fab'), pv = S.view === 'prod', lbl = pv ? 'เพิ่มงานเข้าผลิต' : 'เพิ่มงาน'; if (fab) { fab.style.display = (pv && !canProd()) || (!pv && isProdRole()) ? 'none' : ''; fab.dataset.tip = lbl; fab.setAttribute('aria-label', lbl); } }
+  { const fab = $('.fab'), pv = S.view === 'prod', lbl = pv ? 'เพิ่มงานเข้าผลิต' : 'เพิ่มงาน'; if (fab) { fab.style.display = (pv && !canProd()) || (!pv && !canAddDesign()) || S.view === 'stock' ? 'none' : ''; fab.dataset.tip = lbl; fab.setAttribute('aria-label', lbl); } }
   $('#tabbar').innerHTML = navHtml(true, true); $('#tabbar').style.setProperty('--tabs', viewsFor(S.user).length);
   const connCls = mode() === 'demo' ? '' : (S.sync === 'err' ? 'err' : 'ok');
   const connTxt = mode() === 'demo' ? 'โหมดทดลอง (เก็บในเครื่องนี้)' : (S.sync === 'err' ? 'เชื่อมต่อไม่ได้' : S.sync === 'busy' ? 'กำลังซิงก์…' : (isAdmin() ? 'เชื่อมต่อ Google Sheet' : 'ซิงก์ข้อมูลแล้ว'));
@@ -3459,6 +3539,7 @@ function render() {
   let h = banner();
   if (S.view === 'flow') h += viewFlow();
   else if (S.view === 'prod') h += viewProd();
+  else if (S.view === 'stock') h += viewStock();
   else if (S.view === 'board') h += viewBoard();
   else if (S.view === 'list') h += viewList();
   else if (S.view === 'team') h += viewTeam();
@@ -3487,7 +3568,7 @@ function banner() {
 
 function newBtn() {
   if (S.view === 'prod') return canProd() ? '<button class="btn primary new" data-act="new">' + I.plus + 'เพิ่มงานเข้าผลิต</button>' : '';
-  if (isProdRole()) return '';   // ฝ่ายผลิตดูงานฝ่ายแบบได้อย่างเดียว
+  if (!canAddDesign() || S.view === 'stock') return '';   // ไม่มีสิทธิ์ลงงาน (เช่นฝ่ายผลิต) ดูงานฝ่ายแบบได้อย่างเดียว
   return '<button class="btn primary new" data-act="new">' + I.plus + 'เพิ่มงาน</button>';
 }
 function topbar(title, sub, extra) {
@@ -3920,7 +4001,7 @@ function viewTeam() {
     const helpBox = hp.length ? '<div class="t-help' + (hOpen.length ? '' : ' taken') + '"><span class="th-ic">' + MSG_IC.sos + '</span><div class="th-b"><b>' + (hOpen.length ? 'ขอความช่วยเหลือ' : (hp[0].helper ? esc(hp[0].helper) + ' กำลังช่วย' : 'มีคนรับช่วยแล้ว')) + '</b><p>' + esc(hp[hp.length - 1].text) + '</p></div>' +
       '<div class="th-act">' + (hOpen.length && canChat ? '<button class="btn sm primary" data-helptake="' + esc(hOpen[hOpen.length - 1].id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + '<button class="btn sm" data-ch="' + esc(hp[hp.length - 1].to === 'team' ? 'team' : chanOf(hp[hp.length - 1])) + '">ดูข้อความ</button></div></div>' : '';
     const full = isLead() || x.name === S.me; // กดเข้าไปดูงาน: เฉพาะหัวหน้างาน/แอดมิน หรือของตัวเอง
-    const stats = x.role !== 'prod';            // ตัวเลขผลงานฝ่ายแบบ: ทุกคนเห็น (ฝ่ายผลิตไม่มีตัวเลขนี้)
+    const stats = x.role !== 'prod' && x.role !== 'stock';            // ตัวเลขผลงานฝ่ายแบบ: ทุกคนเห็น (ฝ่ายผลิตไม่มีตัวเลขนี้)
     return '<div class="tcard' + (hOpen.length ? ' needs-help' : '') + '" style="--c:' + esc(x.color || '#5B6B7A') + '"><div class="tcard-h"><span class="t-av">' + av(x.name, 'lg') + '<i class="av-role tl ' + ROLES[roleOf(x)].cls + '">' + ROLE_IC[roleOf(x)] + '</i>' + (hOpen.length ? '<i class="t-sos">' + MSG_IC.sos + '</i>' : unr ? '<i class="t-unread">' + unr + '</i>' : '') + '</span><div><b>' + esc(x.name) + (x.name === S.me ? ' <span class="tag rev">คุณ</span>' : '') + '</b><small>' + esc(x.full || '') + '</small><span class="t-roles">' + roleChip(x) + deptTag(x) + '</span></div></div>' +
       (rj ? (full ? '<button class="now-on" data-open="' + esc(rj.id) + '" style="border:0;text-align:left"><span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>กำลังทำ <b>' + esc(rj.code) + '</b></button>'
         : '<div class="now-on ro" title="ดูได้อย่างเดียว"><span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>กำลังทำ <b>' + esc(rj.code) + '</b></div>') : '') +
@@ -4112,14 +4193,15 @@ function viewSettings() {
       '<input value="' + esc(u.name) + '" data-u="name" aria-label="ชื่อเล่น" placeholder="ชื่อเล่น"><input class="opt" value="' + esc(u.full || '') + '" data-u="full" aria-label="ชื่อจริง" placeholder="ชื่อจริง">' +
       '<select data-u="role" aria-label="ตำแหน่ง">' + roleOpts(u.role) + '</select>' +
       '<label class="toggle sm"><input type="checkbox" data-u="active"' + (u.active ? ' checked' : '') + '>ใช้งาน</label>' +
-      '<div class="urow-act"><button class="btn sm" data-saveuser="' + esc(u.id) + '">บันทึก</button><button class="btn sm ghost" data-pinedit="' + esc(u.id) + '">' + STI.key + 'PIN</button>' +
+      '<div class="urow-act"><button class="btn sm" data-saveuser="' + esc(u.id) + '">บันทึก</button><button class="btn sm ghost perm-btn' + (S.permEdit === u.id ? ' on' : '') + '" data-permedit="' + esc(u.id) + '" aria-expanded="' + (S.permEdit === u.id) + '" title="ติ๊กเปิด/ปิดสิทธิ์ของ ' + esc(u.name) + '">' + ROLE_IC.admin + 'สิทธิ์</button><button class="btn sm ghost" data-pinedit="' + esc(u.id) + '">' + STI.key + 'PIN</button>' +
         (u.id !== (S.user && S.user.id) ? '<button class="icon-btn sm udel" data-udel="' + esc(u.id) + '" aria-label="ลบ ' + esc(u.name) + '" title="ลบผู้ใช้">' + I.trash + '</button>' : '') + '</div>' +
+      permSum(u) + (S.permEdit === u.id ? permBox(u) : '') +
       (S.userDel === u.id ? '<div class="confirm"><span>ลบบัญชี <b>' + esc(u.name) + '</b> ถาวร? เข้าระบบไม่ได้อีก แต่งานและเวลาที่เคยทำยังอยู่ในประวัติและรายงาน (ถ้าแค่พักใช้ ให้ปิด "ใช้งาน" แทน)</span><button class="btn sm danger" data-udelyes="' + esc(u.id) + '">ลบผู้ใช้</button><button class="btn sm" data-udel="">ไม่ลบ</button></div>' : '') +
       (S.pinEdit === u.id ? '<div class="pin-edit"><span class="pe-ic">' + STI.key + '</span><div class="pe-b"><b>เปลี่ยน PIN ของ ' + esc(u.name) + '</b><small>ระบบเก็บ PIN แบบเข้ารหัส จึงดู PIN เดิมไม่ได้ ตั้งใหม่ได้เลย</small></div>' +
         '<input id="pinSet" inputmode="numeric" maxlength="4" placeholder="PIN ใหม่ 4 หลัก" autocomplete="off"><button class="btn sm primary" data-pinsave="' + esc(u.id) + '">บันทึก PIN</button><button class="btn sm" data-resetpin="' + esc(u.id) + '">สุ่มให้</button><button class="icon-btn sm" data-pinedit="" aria-label="ปิด">✕</button></div>' : '') +
       (S.pinNote && S.pinNote.userId === u.id ? '<div class="pin-note">PIN ใหม่ของ ' + esc(u.name) + ': <b class="mono">' + esc(S.pinNote.pin) + '</b> <button class="btn sm" data-copypin="' + esc(S.pinNote.pin) + '">คัดลอก</button> แจ้งเจ้าตัว ใช้เข้าระบบได้ทันที (เจ้าตัวเปลี่ยนเองได้ในหน้าตั้งค่า)</div>' : '') + '</div>').join('');
     h += '<section class="panel sec" id="s-users"><div class="panel-h"><h2>ผู้ใช้งานและสิทธิ์</h2><span class="sub">' + S.users.filter(u => u.active).length + ' คนใช้งานอยู่</span></div>' +
-      '<p class="help"><b>แอดมิน</b> แก้ไขได้ทั้งหมด · <b>ผู้ใช้งาน</b> ลงงานและแก้ไขงานของตัวเองได้ ปิด "ใช้งาน" เพื่อระงับบัญชีโดยไม่ลบประวัติงาน</p>' +
+      '<p class="help"><b>ตำแหน่ง</b> กำหนดแผนกและสิทธิ์เริ่มต้น · กด <b>สิทธิ์</b> เพื่อติ๊กเปิด/ปิดทีละเรื่องให้แต่ละคน · ทุกคนดูงานทั้งหมดในภาพรวมบริษัทได้ แต่แก้ไขได้เฉพาะงานของตัวเอง (เว้นแต่ติ๊ก "แก้ไขงานของคนอื่น") · ปิด "ใช้งาน" เพื่อระงับบัญชีโดยไม่ลบประวัติงาน</p>' + permLegend() +
       '<div class="ulist">' + rows + '</div>' +
       '<div class="uadd"><b>เพิ่มผู้ใช้</b><span class="sub">ใส่รูปได้หลังเพิ่มแล้ว โดยกดที่วงกลมหน้าชื่อ</span><div class="urow"><input type="color" id="nuColor" value="' + COLORS[S.users.length % COLORS.length] + '" aria-label="สี"><input id="nuName" placeholder="ชื่อเล่น" aria-label="ชื่อเล่น"><input id="nuFull" class="opt" placeholder="ชื่อจริง" aria-label="ชื่อจริง">' +
       '<select id="nuRole" aria-label="ตำแหน่ง">' + roleOpts('user') + '</select><input id="nuPin" inputmode="numeric" maxlength="4" placeholder="PIN (ว่าง = สุ่ม)" aria-label="PIN เริ่มต้น">' +
@@ -4184,7 +4266,7 @@ function openEditor(id) {
   const j = id ? jobById(id) : null;
   if (j && j.pending) return toast('กำลังบันทึกงานนี้ รอสักครู่…');
   const base = j ? clone(j) : {
-    code: '', title: '', group: '', taskType: '', qty: 'single', level: '', assignee: isAdmin() && S.f.member !== 'all' && S.f.member.indexOf('__') !== 0 ? S.f.member : S.me,
+    code: '', title: '', group: '', taskType: '', qty: 'single', level: '', assignee: canAssign() && S.f.member !== 'all' && S.f.member.indexOf('__') !== 0 ? S.f.member : S.me,
     sale: '', priority: 'normal', revision: false, status: 'queue', received: today(), due: '', startedAt: '', finishedAt: '', note: ''
   };
   base.baseUpdatedAt = j ? j.updatedAt : '';
@@ -4233,7 +4315,7 @@ function renderEditor() {
   const levels = (s.levels && s.levels.length ? s.levels : defaultSettings().levels);
 
   $('#sheetBody').innerHTML =
-    (ro ? '<div class="banner"><span><b>ดูอย่างเดียว</b> งานของ ' + esc(j.assignee || 'คนอื่น') + ' แก้ไขได้เฉพาะผู้รับผิดชอบ คนที่ลงงาน หรือแอดมิน</span></div>' : '') +
+    (ro ? '<div class="banner"><span><b>ดูอย่างเดียว</b> งานของ ' + esc(j.assignee || 'คนอื่น') + ' แก้ไขได้เฉพาะผู้รับผิดชอบ คนที่ลงงาน หรือคนที่แอดมินให้สิทธิ์</span></div>' : '') +
     '<div class="f"><span class="lbl">สถานะ</span>' + statusSeg + '</div>' + timer +
     '<fieldset><legend>ข้อมูลงาน</legend>' +
       '<div class="f"><label for="e-code">เลข Job</label><input id="e-code" class="mono" data-e="code" value="' + esc(j.code) + '" placeholder="เช่น R69-10012S" autocomplete="off"></div>' +
@@ -4263,7 +4345,7 @@ function renderEditor() {
     '<div class="err" id="eErr" hidden></div>';
   $('#sheetFoot').innerHTML = '<button class="btn" data-act="close" type="button">ปิด</button>' + (ro ? '' : '<button class="btn primary" data-act="save" type="button">' + (E.isNew ? 'เพิ่มงาน' : 'บันทึก') + '</button>');
   if (ro) document.querySelectorAll('#sheetBody input, #sheetBody select, #sheetBody textarea, #sheetBody .seg button, #sheetBody .hint button').forEach(el => { el.disabled = true; });
-  else if (!isAdmin()) { const a = $('#e-assignee'); if (a) { a.disabled = true; a.title = 'มอบหมายงานให้คนอื่นได้เฉพาะแอดมิน'; } }
+  else if (!canAssign()) { const a = $('#e-assignee'); if (a) { a.disabled = true; a.title = 'ไม่มีสิทธิ์มอบหมายงานให้คนอื่น'; } }
 }
 function helpersField(j, locked) {
   const hs = helpersOf(j), pool = designers().filter(m => m.name !== j.assignee && (m.role !== 'admin' || hs.includes(m.name)));
@@ -4331,7 +4413,7 @@ async function saveEditor() {
   // งานใหม่: ขึ้นบนบอร์ดทันที (สถานะ "กำลังบันทึก") แล้วบันทึกเบื้องหลัง — ถ้าไม่สำเร็จเปิดฟอร์มคืนพร้อมข้อมูลเดิม
   if (S.edit.isNew) {
     const files = (S.edit.pending || []).map(p => p.file), docs = (S.edit.pfiles || []).slice(), cmt = (($('#eCmt') || {}).value || '').trim(), draft = clone(j), tmpId = uid('tmp_');
-    S.jobs.push(Object.assign({}, pre, { id: tmpId, minutes: 0, pending: true, createdBy: S.me, assignee: isAdmin() ? pre.assignee : S.me }));
+    S.jobs.push(Object.assign({}, pre, { id: tmpId, minutes: 0, pending: true, createdBy: S.me, assignee: canAssign() ? pre.assignee : S.me }));
     closeEditor(); render(); toast('กำลังเพิ่มงาน ' + j.code + '…');
     S.saving = (S.saving || 0) + 1;
     try {
@@ -4390,6 +4472,13 @@ const pSkipped = (p, st) => !!PSKIP[st] && !!p && p[PSKIP[st]] === 'no';
 function pNextOf(p) { let i = PORDER.indexOf(p.stage) + 1; while (PORDER[i] && pSkipped(p, PORDER[i])) i++; return PORDER[i] || ''; }
 function pPrevOf(p) { let i = PORDER.indexOf(p.stage) - 1; while (i > 0 && pSkipped(p, PORDER[i])) i--; return i >= 0 ? PORDER[i] : ''; }
 const PDONE = { paint: 'ทำสีเสร็จ', assemble: 'ประกอบเสร็จ', pack: 'แพ็คเสร็จ', ready: 'ส่งแล้ว' };
+/* ย้ายไปขั้น st ได้ไหม: ฝ่ายผลิตทำได้ถึง "พร้อมส่ง" · "ส่งแล้ว" (และย้อนกลับจากส่งแล้ว) เป็นของฝ่ายสต็อก */
+const SHIPZ = ['ready', 'shipped'];
+function pCanSet(p, st) {
+  const touchShip = st === 'shipped' || p.stage === 'shipped';
+  if (canProd()) return !touchShip || canShip();
+  return canShip() && SHIPZ.indexOf(p.stage) >= 0 && SHIPZ.indexOf(st) >= 0;
+}
 const PIC = {
   wait: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l8-5 8 5v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M9 20v-6h6v6"/></svg>',
   machine: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 13V9h10v4M12 9V4M9.5 6.5L12 4l2.5 2.5"/><circle cx="7.5" cy="16.5" r=".6" fill="currentColor"/><path d="M11 16.5h6"/></svg>',
@@ -4427,8 +4516,9 @@ function qcItemsFor(p) {
   const custom = (S.settings && Array.isArray(S.settings.qcItems) && S.settings.qcItems.filter(Boolean).length) ? S.settings.qcItems.filter(Boolean).map(t => ['', t]) : null;
   return (custom || QC_DEFAULT.filter(x => !(x[0] === 'paint' && p.paint === 'no') && !(x[0] === 'assy' && p.assy === 'no'))).map(x => ({ t: x[1], d: '' }));
 }
-const canProd = () => !!S.user && (S.user.role === 'prod' || S.user.role === 'admin');   // บอร์ดผลิต: ฝ่ายผลิตและแอดมินแก้ได้
-const isProdRole = () => !!S.user && S.user.role === 'prod';
+const canProd = () => P.can(S.user, 'prod.edit');   // บอร์ดผลิต: สิทธิ์ "อัปเดตบอร์ดผลิต" (ค่าเริ่มต้น ฝ่ายผลิต) และแอดมิน
+const canShip = () => P.can(S.user, 'prod.ship');   // ขั้นสุดท้าย "ส่งแล้ว": ฝ่ายสต็อก (และแอดมิน)
+const isProdRole = () => !!S.user && (S.user.role === 'prod' || S.user.role === 'stock');   // ไม่ใช่ฝ่ายแบบ
 const machinesList = () => { const m = (S.settings && S.settings.machines || []).map(x => String(x || '').trim()).filter(Boolean); return m.length ? m : DEF_MACHINES; };
 function pms(p) { try { const a = JSON.parse((p && p.machines) || '[]'); return Array.isArray(a) ? a.filter(x => x && x.m) : []; } catch (e) { return []; } }
 function phist(p) { try { const a = JSON.parse((p && p.history) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
@@ -4475,6 +4565,7 @@ async function prodWrite(id, patch, okMsg) {
 const pNow = () => nowLocal();
 function pAdvance(p) {   // ปุ่มหลักบนการ์ด: ทำสี → ประกอบ → แพ็ค → พร้อมส่ง → ส่งแล้ว (ข้ามขั้นที่ติ๊ก "ไม่ต้อง")
   const to = pNextOf(p); if (!PDONE[p.stage] || !to) return;
+  if (!pCanSet(p, to)) { toast(to === 'shipped' ? 'ขั้น "ส่งแล้ว" ให้ฝ่ายสต็อกเป็นคนกด' : 'ไม่มีสิทธิ์อัปเดตงานผลิต', true); return; }
   return prodWrite(p.id, { stage: to }, p.code + ' ' + PDONE[p.stage] + (to === 'shipped' ? ' 🎉' : ' → ' + PSTG[to].label));
 }
 function pBack(p) {
@@ -4521,7 +4612,9 @@ function pcard(p) {
   } else if (PDONE[p.stage]) {
     const nx = pNextOf(p);
     body = ms.length ? '<div class="pc-mdone">' + ms.map(m => '<span>' + PIC.check + esc(m.m) + '</span>').join('') + '</div>' : '';
-    if (!ro) body += '<button type="button" class="btn sm pc-go ' + (p.stage === 'ready' ? 'primary' : 'adv-' + p.stage) + '" data-padv="' + esc(p.id) + '" title="' + (nx && nx !== 'shipped' ? 'ไปขั้น ' + PSTG[nx].label : '') + '">' + PIC[nx || 'shipped'] + PDONE[p.stage] + '</button>';
+    const may = !p.pending && nx && pCanSet(p, nx);
+    if (may) body += '<button type="button" class="btn sm pc-go ' + (p.stage === 'ready' ? 'primary' : 'adv-' + p.stage) + '" data-padv="' + esc(p.id) + '" title="' + (nx && nx !== 'shipped' ? 'ไปขั้น ' + PSTG[nx].label : 'ฝ่ายสต็อกกดเมื่อส่งของถึงลูกค้าแล้ว') + '">' + PIC[nx || 'shipped'] + PDONE[p.stage] + '</button>';
+    else if (p.stage === 'ready' && !p.pending) body += '<div class="pc-note pc-wship">' + ROLE_IC.stock + 'รอฝ่ายสต็อกกด "ส่งแล้ว"</div>';
   }
   return '<div class="card pcard ' + PSTG[p.stage].cls + (p.pending ? ' is-pending' : '') + (stuck ? ' is-late' : '') + '" data-popen="' + esc(p.id) + '" tabindex="0" role="button">' +
     '<div class="card-top"><div class="code">' + esc(p.code) + '</div>' +
@@ -4562,7 +4655,7 @@ function viewProd() {
     const n = x[0] === 'all' ? open.filter(p => p.stage === 'machine').length : open.filter(p => inMachine(p, x[0])).length;
     return '<button class="qchip" data-pm="' + esc(x[0]) + '" aria-pressed="' + (F === x[0]) + '"><span class="qi">' + (x[0] === 'all' ? STI.all : PIC.machine) + '</span>' + esc(x[1]) + '<b>' + n + '</b></button>'; }).join('') + '</div>';
   const search = '<div class="filters"><label class="search">' + I.search + '<input id="pq" type="search" autocomplete="off" placeholder="ค้นหาเลข Job, ชื่องาน, sale…" value="' + esc(S.pq || '') + '" aria-label="ค้นหางานผลิต"></label></div>';
-  const sub = canProd() ? 'เลือกเครื่องแล้วกด "เริ่มลงเครื่อง" · ติ๊กแต่ละเครื่องเมื่อเสร็จ ครบแล้วไปทำสี → ประกอบติดตั้ง → แพ็ค เอง' : 'ดูสถานะงานผลิตได้อย่างเดียว · อัปเดตได้เฉพาะฝ่ายผลิตและแอดมิน';
+  const sub = !canProd() && canShip() ? 'ฝ่ายสต็อก: กด "ส่งแล้ว" ที่การ์ดในช่อง "พร้อมส่ง" เมื่อส่งของถึงลูกค้า · ขั้นอื่นดูได้อย่างเดียว' : canProd() ? 'เลือกเครื่องแล้วกด "เริ่มลงเครื่อง" · ติ๊กแต่ละเครื่องเมื่อเสร็จ ครบแล้วไปทำสี → ประกอบติดตั้ง → แพ็ค เอง' : 'ดูสถานะงานผลิตได้อย่างเดียว · อัปเดตได้เฉพาะฝ่ายผลิตและแอดมิน';
   return topbar('ฝ่ายผลิต', sub) + flow + search + chips + '<div class="board-scroll"><div class="board pboard">' + cols + '</div></div>';
 }
 
@@ -4578,7 +4671,7 @@ const CO_STEPS = [
   { k: 'ready', label: 'พร้อมส่ง', sub: '', ic: 'ready', dept: 's' }
 ];
 function coRows() {
-  const byCode = {}, pool = listPool(), cutoff = addDays(today(), -14);
+  const byCode = {}, pool = S.jobs, cutoff = addDays(today(), -14);   // ภาพรวมบริษัท: ทุกคนเห็นงานทั้งหมด (แก้ได้เฉพาะงานตัวเอง)
   const key = c => String(c || '').trim().toLowerCase();
   pool.forEach(j => { const k = key(j.code); if (!k) return; (byCode[k] = byCode[k] || { code: j.code, jobs: [], prod: null }).jobs.push(j); });
   prodsAll().forEach(p => { const k = key(p.code); const cur = byCode[k] || (byCode[k] = { code: p.code, jobs: designJobsOf(p.code), prod: null }); if (!cur.prod || (cur.prod.stage === 'shipped' && p.stage !== 'shipped')) cur.prod = p; });
@@ -4704,6 +4797,98 @@ function viewFlow() {
     '<section class="panel"><div class="panel-h"><h2>งานตามเลข Job</h2>' + legend + '</div>' + search + chips + table + '</section>';
 }
 
+/* ================= คลังวัสดุ (ฝ่ายสต็อก) =================
+   ดูได้: สิทธิ์ stock.view · รับเข้า/เบิกออก/ปรับยอด/เพิ่ม-แก้-ลบ: สิทธิ์ stock.edit */
+const SV = { q: '', cat: 'all', move: null, form: null, del: '', busy: false };
+const SK = { in: { label: 'รับเข้า', cls: 'sk-in', sign: '+' }, out: { label: 'เบิกออก', cls: 'sk-out', sign: '−' }, adj: { label: 'ปรับยอด', cls: 'sk-adj', sign: '±' } };
+const stLow = x => (+x.min || 0) > 0 && (+x.qty || 0) <= (+x.min || 0);
+const stNum = n => { n = +n || 0; return n.toLocaleString('th-TH', { maximumFractionDigits: 2 }); };
+const canStock = () => P.can(S.user, 'stock.edit');
+function stockItems() { return (S.stock && S.stock.items) || []; }
+function viewStock() {
+  if (!S.stock) return topbar('คลังวัสดุ', 'ยังไม่มีข้อมูล') + '<div class="empty">' + (P.can(S.user, 'stock.view') ? 'กำลังโหลด… ถ้าไม่ขึ้น ให้แอดมินอัปเดต Apps Script เป็นเวอร์ชันล่าสุด' : 'ไม่มีสิทธิ์ดูคลังวัสดุ') + '</div>';
+  const all = stockItems(), logs = S.stock.logs || [], ed = canStock(), q = SV.q.trim().toLowerCase();
+  const cats = Array.from(new Set(all.map(x => x.cat).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'th'));
+  const low = all.filter(stLow), out = all.filter(x => (+x.qty || 0) <= 0), wk = addDays(today(), -7), mv7 = logs.filter(l => String(l.ts).slice(0, 10) >= wk && l.kind === 'out').length;
+  const list = all.filter(x => (SV.cat === 'all' || (SV.cat === 'low' ? stLow(x) : x.cat === SV.cat)) && (!q || [x.name, x.cat, x.loc, x.note].join(' ').toLowerCase().indexOf(q) >= 0))
+    .sort((a, b) => (stLow(b) - stLow(a)) || String(a.cat).localeCompare(String(b.cat), 'th') || String(a.name).localeCompare(String(b.name), 'th'));
+  const kpis = '<div class="co-kpis st-kpis"><div class="kpi"><span>รายการวัสดุ</span><b>' + all.length + '</b><small>' + cats.length + ' หมวด</small></div>' +
+    '<div class="kpi k-late"><span>ใกล้หมด / ต่ำกว่าจุดสั่งซื้อ</span><b>' + low.length + '</b><small>' + (out.length ? 'หมดแล้ว ' + out.length + ' รายการ' : 'ยังไม่มีรายการที่หมด') + '</small></div>' +
+    '<div class="kpi k-done"><span>เบิกออก 7 วัน</span><b>' + mv7 + '</b><small>ครั้ง</small></div></div>';
+  const chips = '<div class="qchips">' + [['all', 'ทั้งหมด', all.length], ['low', 'ใกล้หมด', low.length]].concat(cats.map(c => [c, c, all.filter(x => x.cat === c).length])).map(x => '<button class="qchip' + (x[0] === 'low' ? ' q-late' : '') + '" data-scat="' + esc(x[0]) + '" aria-pressed="' + (SV.cat === x[0]) + '">' + esc(x[1]) + '<b>' + x[2] + '</b></button>').join('') + '</div>';
+  const search = '<div class="filters"><label class="search">' + I.search + '<input id="sq" type="search" autocomplete="off" placeholder="ค้นหาวัสดุ หมวด ที่เก็บ…" value="' + esc(SV.q) + '" aria-label="ค้นหาวัสดุ"></label></div>';
+  const rows = list.length ? '<div class="st-list">' + list.map((x, k) => stRow(x, k, ed)).join('') + '</div>' : '<div class="empty" style="padding:28px 0"><b>' + (all.length ? 'ไม่พบวัสดุที่ค้นหา' : 'ยังไม่มีรายการวัสดุ') + '</b>' + (ed && !all.length ? 'กด "เพิ่มวัสดุ" เพื่อเริ่ม' : '') + '</div>';
+  const nameOf = id => (all.find(x => x.id === id) || {}).name || 'วัสดุที่ลบแล้ว', unitOf = id => (all.find(x => x.id === id) || {}).unit || '';
+  const hist = logs.length ? '<ol class="st-log">' + logs.slice(0, 40).map(l => '<li class="' + (SK[l.kind] || SK.adj).cls + '"><span class="sl-k">' + (SK[l.kind] || SK.adj).label + '</span><div><b>' + esc(nameOf(l.itemId)) + '</b><small>' + esc(fdt(String(l.ts).slice(0, 16))) + ' · ' + esc(l.who || '') + (l.job ? ' · Job ' + esc(l.job) : '') + (l.note ? ' · ' + esc(l.note) : '') + '</small></div><span class="sl-q">' + (l.kind === 'adj' ? (+l.qty >= 0 ? '+' : '−') : SK[l.kind].sign) + stNum(Math.abs(+l.qty)) + ' <small>' + esc(unitOf(l.itemId)) + '</small><em>เหลือ ' + stNum(l.bal) + '</em></span></li>').join('') + '</ol>' : '<div class="empty" style="padding:20px 0">ยังไม่มีการเคลื่อนไหว</div>';
+  const addBtn = ed ? '<button class="btn primary" data-sadd="1">' + I.plus + '<span>เพิ่มวัสดุ</span></button>' : '';
+  return topbar('คลังวัสดุ', ed ? 'รับเข้า เบิกออก และดูยอดคงเหลือ · รายการที่ต่ำกว่าจุดสั่งซื้อขึ้นก่อนเสมอ' : 'ดูยอดคงเหลือได้อย่างเดียว · ฝ่ายสต็อกเป็นคนรับเข้า/เบิกออก', addBtn) + kpis +
+    (SV.form ? stForm() : '') +
+    '<div class="st-wrap"><section class="panel"><div class="panel-h"><h2>ยอดคงเหลือ</h2><span class="sub">' + list.length + ' รายการ</span></div>' + search + chips + rows + '</section>' +
+    '<section class="panel st-side"><div class="panel-h"><h2>ความเคลื่อนไหวล่าสุด</h2></div>' + hist + '</section></div>';
+}
+function stRow(x, k, ed) {
+  const qty = +x.qty || 0, min = +x.min || 0, lw = stLow(x), pct = Math.max(3, Math.min(100, min ? qty / (min * 2) * 100 : 100)), mv = SV.move && SV.move.id === x.id ? SV.move : null;
+  return '<div class="st-row' + (lw ? ' low' : '') + (qty <= 0 ? ' zero' : '') + '" style="--i:' + Math.min(k, 20) + '">' +
+    '<span class="st-ic">' + I.stock + '</span><div class="st-main"><b>' + esc(x.name) + (lw ? '<span class="tag urgent">' + (qty <= 0 ? 'หมด' : 'ใกล้หมด') + '</span>' : '') + '</b><small>' + [x.cat, x.loc ? 'ที่เก็บ ' + x.loc : '', min ? 'จุดสั่งซื้อ ' + stNum(min) + ' ' + (x.unit || '') : ''].filter(Boolean).map(esc).join(' · ') + '</small>' +
+    '<span class="st-bar"><i style="width:' + pct.toFixed(1) + '%"></i>' + (min ? '<u style="left:50%" title="จุดสั่งซื้อ"></u>' : '') + '</span></div>' +
+    '<div class="st-qty"><b class="tnum">' + stNum(qty) + '</b><small>' + esc(x.unit || '') + '</small></div>' +
+    (ed ? '<div class="st-act"><button type="button" class="btn sm sk-in" data-smove="' + esc(x.id) + '" data-sk="in" aria-pressed="' + !!(mv && mv.kind === 'in') + '">+ รับเข้า</button><button type="button" class="btn sm sk-out" data-smove="' + esc(x.id) + '" data-sk="out" aria-pressed="' + !!(mv && mv.kind === 'out') + '"' + (qty <= 0 ? ' disabled' : '') + '>− เบิก</button>' +
+      '<button type="button" class="icon-btn sm" data-sedit="' + esc(x.id) + '" title="แก้ไข / ปรับยอด" aria-label="แก้ไข ' + esc(x.name) + '">' + STI.pen + '</button></div>' : '') +
+    (mv ? '<div class="st-move ' + SK[mv.kind].cls + '"><b>' + SK[mv.kind].label + ' · ' + esc(x.name) + '</b><div class="sm-f"><label>จำนวน (' + esc(x.unit || '') + ')<input id="smQty" type="number" inputmode="decimal" min="0" step="any" placeholder="0"></label>' +
+      (mv.kind === 'out' ? '<label>ใช้กับเลข Job<input id="smJob" class="mono" list="smJobs" placeholder="เช่น R69-10012S" autocomplete="off"></label><datalist id="smJobs">' + Array.from(new Set(S.jobs.filter(j => j.status !== 'done' || prodOfCode(j.code)).map(j => j.code))).slice(0, 80).map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>' : '') +
+      '<label class="sm-note">หมายเหตุ<input id="smNote" placeholder="' + (mv.kind === 'in' ? 'เช่น รับจากซัพพลายเออร์ / เลขใบส่งของ' : 'เช่น ตัดผนังล็อบบี้') + '"></label></div>' +
+      '<div class="top-actions"><button type="button" class="btn sm" data-smove="">ยกเลิก</button><button type="button" class="btn sm primary" data-sgo="' + esc(x.id) + '"' + (SV.busy ? ' disabled' : '') + '>บันทึก' + SK[mv.kind].label + '</button></div></div>' : '') + '</div>';
+}
+function stForm() {
+  const f = SV.form, isNew = !f.id, x = isNew ? f : Object.assign({}, stockItems().find(i => i.id === f.id) || {}, f), cats = Array.from(new Set(stockItems().map(i => i.cat).filter(Boolean)));
+  return '<section class="panel st-form"><div class="panel-h"><h2>' + (isNew ? 'เพิ่มวัสดุใหม่' : 'แก้ไข ' + esc(x.name || '')) + '</h2><button type="button" class="icon-btn" data-sclose="1" aria-label="ปิด">✕</button></div>' +
+    '<div class="form-grid"><div class="f"><label for="sfName">ชื่อวัสดุ</label><input id="sfName" value="' + esc(x.name || '') + '" placeholder="เช่น แผ่นอะลูมิเนียม 3 มม."></div>' +
+    '<div class="f"><label for="sfCat">หมวด</label><input id="sfCat" list="sfCats" value="' + esc(x.cat || '') + '" placeholder="เช่น แผ่น / สี / อุปกรณ์ยึด"><datalist id="sfCats">' + cats.map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></div>' +
+    '<div class="f"><label for="sfUnit">หน่วย</label><input id="sfUnit" value="' + esc(x.unit || '') + '" placeholder="แผ่น / ลิตร / กล่อง"></div>' +
+    '<div class="f"><label for="sfMin">จุดสั่งซื้อ (เตือนเมื่อเหลือไม่เกิน)</label><input id="sfMin" type="number" min="0" step="any" inputmode="decimal" value="' + esc(x.min || '') + '" placeholder="0 = ไม่เตือน"></div>' +
+    (isNew ? '<div class="f"><label for="sfQty">ยอดเริ่มต้น</label><input id="sfQty" type="number" min="0" step="any" inputmode="decimal" value="' + esc(x.qty || '') + '" placeholder="0"></div>'
+      : '<div class="f"><label for="sfAdj">ปรับยอดคงเหลือจริง (นับสต็อก)</label><input id="sfAdj" type="number" min="0" step="any" inputmode="decimal" placeholder="ตอนนี้ ' + esc(stNum(x.qty)) + ' ' + esc(x.unit || '') + '"><span class="hint">เว้นว่าง = ไม่ปรับ · ระบบบันทึกส่วนต่างในประวัติ</span></div>') +
+    '<div class="f"><label for="sfLoc">ที่เก็บ</label><input id="sfLoc" value="' + esc(x.loc || '') + '" placeholder="เช่น ชั้น A1"></div>' +
+    '<div class="f full"><label for="sfNote">หมายเหตุ</label><input id="sfNote" value="' + esc(x.note || '') + '"></div></div>' +
+    '<div class="top-actions">' + (!isNew ? (SV.del === f.id ? '<span class="pm-del">ลบ ' + esc(x.name) + ' ออกจากคลัง? (ประวัติยังอยู่)</span><button type="button" class="btn sm" data-sdel="no">ไม่</button><button type="button" class="btn sm danger" data-sdel="yes">ลบ</button>' : '<button type="button" class="btn ghost sm" data-sdel="ask">' + I.trash + 'ลบ</button>') : '') +
+    '<span style="flex:1"></span><button type="button" class="btn" data-sclose="1">ยกเลิก</button><button type="button" class="btn primary" data-ssave="1"' + (SV.busy ? ' disabled' : '') + '>' + (isNew ? 'เพิ่มวัสดุ' : 'บันทึก') + '</button></div></section>';
+}
+function stockAddOpen() { if (!canStock()) return; SV.form = { name: '', cat: SV.cat !== 'all' && SV.cat !== 'low' ? SV.cat : '', unit: '', min: '', qty: '' }; SV.del = ''; render(); setTimeout(() => { const x = $('#sfName'); if (x) { x.focus(); x.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }, 40); }
+async function stockCall(fn, msg) { SV.busy = true; render(); try { const r = await mutate(fn, msg); if (r && r.items) S.stock = r; return r; } catch (e) { return null; } finally { SV.busy = false; render(); } }
+function stockClick(t, d) {
+  if (d.scat !== undefined) { SV.cat = SV.cat === d.scat && d.scat !== 'all' ? 'all' : d.scat; render(); return true; }
+  if (d.sadd) { stockAddOpen(); return true; }
+  if (d.sclose) { SV.form = null; SV.del = ''; render(); return true; }
+  if (d.sedit) { SV.form = { id: d.sedit }; SV.del = ''; SV.move = null; render(); setTimeout(() => { const x = $('#sfName'); if (x) x.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 40); return true; }
+  if (d.smove !== undefined) { SV.move = d.smove && !(SV.move && SV.move.id === d.smove && SV.move.kind === d.sk) ? { id: d.smove, kind: d.sk } : null; render(); setTimeout(() => { const x = $('#smQty'); if (x) x.focus(); }, 30); return true; }
+  if (d.sgo) {
+    const it = stockItems().find(x => x.id === d.sgo), mv = SV.move, n = +(($('#smQty') || {}).value || 0); if (!it || !mv) return true;
+    if (!(n > 0)) { toast('ใส่จำนวนมากกว่า 0', true); const x = $('#smQty'); if (x) x.focus(); return true; }
+    if (mv.kind === 'out' && n > (+it.qty || 0)) { toast('เบิกเกินยอดคงเหลือ (เหลือ ' + stNum(it.qty) + ' ' + (it.unit || '') + ')', true); return true; }
+    const p = { itemId: it.id, kind: mv.kind, qty: n, job: (($('#smJob') || {}).value || '').trim(), note: (($('#smNote') || {}).value || '').trim() };
+    stockCall(() => api().stockMove(p), SK[mv.kind].label + ' ' + it.name + ' ' + stNum(n) + ' ' + (it.unit || '')).then(r => { if (r) SV.move = null; render(); });
+    return true;
+  }
+  if (d.ssave) {
+    const v = id => (($('#' + id) || {}).value || '').trim(), f = SV.form || {}, item = { id: f.id || undefined, name: v('sfName'), cat: v('sfCat'), unit: v('sfUnit'), min: v('sfMin'), loc: v('sfLoc'), note: v('sfNote') };
+    if (!item.name) { toast('กรุณาใส่ชื่อวัสดุ', true); return true; }
+    if (!f.id) item.qty = v('sfQty');
+    const adj = f.id ? v('sfAdj') : '';
+    stockCall(() => api().stockSave({ item: item }), (f.id ? 'บันทึก ' : 'เพิ่ม ') + item.name + ' แล้ว').then(async r => {
+      if (!r) return;
+      if (adj !== '') { const it = stockItems().find(x => x.id === f.id); if (it && +adj !== +it.qty) await stockCall(() => api().stockMove({ itemId: f.id, kind: 'adj', qty: +adj, note: 'นับสต็อก' }), 'ปรับยอด ' + item.name + ' เป็น ' + stNum(adj)); }
+      SV.form = null; render();
+    });
+    return true;
+  }
+  if (d.sdel) {
+    if (d.sdel === 'ask') { SV.del = (SV.form || {}).id || ''; render(); return true; }
+    if (d.sdel === 'no') { SV.del = ''; render(); return true; }
+    const id = SV.del; stockCall(() => api().stockDelete({ id: id }), 'ลบวัสดุแล้ว').then(r => { if (r) { SV.form = null; SV.del = ''; render(); } }); return true;
+  }
+  return false;
+}
+
 /* ---- หน้าต่างรายละเอียดงานผลิต / เพิ่มงานเข้าผลิต ---- */
 const P2 = { id: '', add: false };
 function pModalOpen(id) { P2.id = id; P2.add = false; P2.edit = false; ['qcIt', 'qcOk', 'qcNg', 'qcNote', 'qcWhy', 'qcFail', 'qcBack'].forEach(k => { delete P2[k]; }); pModalDraw(); }
@@ -4825,7 +5010,7 @@ function pModalDraw() {
   const stepper = '<div class="pm-prog ' + PSTG[p.stage].cls + '" style="--s2:var(--' + PV[nxt || p.stage] + ');--p:' + (ci / (nSt - 1)).toFixed(4) + ';--n:' + nSt + ';--ci:' + ci + '">' +
     '<div class="pm-ph"><span class="pm-cur"><i></i>' + PIC[p.stage] + '</span><div class="pm-pt"><b>' + PSTG[p.stage].label + '</b><small>ขั้นที่ ' + (ci + 1) + ' จาก ' + nSt + (nxt ? ' · ถัดไป <u class="' + PSTG[nxt].cls + '">' + PSTG[nxt].label + '</u>' : ' · เสร็จครบทุกขั้น 🎉') + '</small></div><em style="--pc:' + pct + '"><b>' + pct + '%</b></em></div>' +
     '<div class="pm-steps"><div class="pm-rail"><i></i></div>' + (ci > 0 ? '<div class="pm-run"><i></i></div>' : '') + order.map((st, i) => { const sk = pSkipped(p, st) && i !== ci;
-      return '<button type="button" style="--i:' + i + '" class="pm-step ' + PSTG[st].cls + (i < ci ? ' past' : i === ci ? ' now' : '') + (sk ? ' skip' : '') + '"' + (ro || i === ci ? ' disabled' : '') + ' data-pset="' + st + '" title="' + (ro ? PSTG[st].label : 'ย้ายไปขั้น ' + PSTG[st].label) + '"><span>' + (sk ? '<i>ข้าม</i>' : i < ci ? PIC.check : PIC[st]) + (i === ci ? '<b class="pm-spk"></b>' : '') + '</span><small>' + PSTG[st].label + '</small></button>'; }).join('') + '</div></div>';
+      return '<button type="button" style="--i:' + i + '" class="pm-step ' + PSTG[st].cls + (i < ci ? ' past' : i === ci ? ' now' : '') + (sk ? ' skip' : '') + '"' + (i === ci || !pCanSet(p, st) ? ' disabled' : '') + ' data-pset="' + st + '" title="' + (!pCanSet(p, st) ? PSTG[st].label + (st === 'shipped' ? ' · ฝ่ายสต็อกเป็นคนกด' : '') : 'ย้ายไปขั้น ' + PSTG[st].label) + '"><span>' + (sk ? '<i>ข้าม</i>' : i < ci ? PIC.check : PIC[st]) + (i === ci ? '<b class="pm-spk"></b>' : '') + '</span><small>' + PSTG[st].label + '</small></button>'; }).join('') + '</div></div>';
   const mPick = '<div class="pc-pick">' + machinesList().concat(ms.map(x => x.m).filter(n => machinesList().indexOf(n) < 0)).map(n => { const cur = ms.find(x => x.m === n);
     return '<button type="button" class="mchip' + (cur ? ' on' : '') + (cur && cur.d ? ' done' : '') + '"' + (ro ? ' disabled' : '') + ' data-pmset="' + esc(n) + '" aria-pressed="' + !!cur + '">' + (cur ? PIC.check : '') + esc(n) + (cur && cur.d ? ' · เสร็จ ' + esc(fdt(cur.d).replace(/^.* /, '')) : '') + '</button>'; }).join('') + '</div>';
   m.innerHTML = '<div class="pm-card ' + PSTG[p.stage].cls + '"><div class="pm-h"><div><span class="eyebrow">' + pPill(p.stage) + ' · อยู่ขั้นนี้ ' + pAgeTxt(pAge(p)) + '</span><h3>' + esc(p.code) + '</h3>' + (p.title ? '<p class="sub">' + esc(p.title) + '</p>' : '') + '</div>' + x + '</div><div class="pm-b">' +
@@ -4839,7 +5024,7 @@ function pModalDraw() {
     '</div><div class="pm-f">' + (canProd() ? (P2.del ? '<span class="pm-del">ลบงานนี้ออกจากฝ่ายผลิต?</span><button type="button" class="btn sm" data-pdel="no">ไม่</button><button type="button" class="btn sm danger" data-pdel="yes">ลบ</button>' : '<button type="button" class="btn ghost sm" data-pdel="ask">' + I.trash + 'ลบ</button>') : '') +
     '<span style="flex:1"></span><button type="button" class="btn" data-pclose="1">ปิด</button>' +
     (!ro && p.stage === 'wait' ? '<button type="button" class="btn primary" data-pstart="' + esc(p.id) + '">' + PIC.machine + 'เริ่มลงเครื่อง</button>' : '') +
-    (!ro && PDONE[p.stage] ? '<button type="button" class="btn primary" data-padv="' + esc(p.id) + '">' + PDONE[p.stage] + '</button>' : '') + '</div></div>';
+    (PDONE[p.stage] && pNextOf(p) && pCanSet(p, pNextOf(p)) ? '<button type="button" class="btn primary" data-padv="' + esc(p.id) + '">' + PDONE[p.stage] + '</button>' : p.stage === 'ready' ? '<span class="pc-note pc-wship">' + ROLE_IC.stock + 'รอฝ่ายสต็อกกด "ส่งแล้ว"</span>' : '') + '</div></div>';
   paintAllThumbs(m);
 }
 function coOpen(code) {
@@ -4914,7 +5099,7 @@ function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ
     const v = id => (($('#' + id) || {}).value || '').trim();
     P2.edit = false; prodWrite(p.id, { title: v('pEdTitle'), sale: v('pEdSale'), group: v('pEdGroup'), due: v('pEdDue') }, 'บันทึกข้อมูลงานแล้ว'); return true;
   }
-  if (!canProd() && (d.pmt || d.ppaint || d.passy || d.pstart || d.pmd || d.padv || d.pback || d.pset || d.pmset || d.pnote || d.pdel)) return true;
+  if (!canProd() && (d.pmt || d.ppaint || d.passy || d.pstart || d.pmd || d.pback || d.pmset || d.pnote || d.pdel || ((d.padv || d.pset) && !canShip()))) return true;
   if (d.pmt) { e.stopPropagation(); const p = prodById(d.pid); if (!p) return true; S.psel = S.psel || {}; const a = (S.psel[p.id] || pms(p).map(m => m.m)).slice(), i = a.indexOf(d.pmt); if (i >= 0) a.splice(i, 1); else a.push(d.pmt); S.psel[p.id] = a; render(); return true; }
   if (d.passy) { e.stopPropagation(); const p = prodById(d.passy); if (p) prodWrite(p.id, { assy: p.assy === 'no' ? '' : 'no' }, p.assy === 'no' ? 'งานนี้ต้องประกอบติดตั้ง' : 'งานนี้ไม่ต้องประกอบติดตั้ง'); return true; }
   if (d.ppaint) { e.stopPropagation(); const p = prodById(d.ppaint); if (p) prodWrite(p.id, { paint: p.paint === 'no' ? '' : 'no' }, p.paint === 'no' ? 'งานนี้ต้องทำสี' : 'งานนี้ไม่ต้องทำสี'); return true; }
@@ -4922,7 +5107,7 @@ function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ
   if (d.pmd) { e.stopPropagation(); const p = prodById(d.pid); if (p) pMachineDone(p, d.pmd); return true; }
   if (d.padv) { e.stopPropagation(); const p = prodById(d.padv); if (p) pAdvance(p); return true; }
   if (d.pback) { e.stopPropagation(); const p = prodById(d.pback); if (p) pBack(p); return true; }
-  if (d.pset) { const p = prodById(P2.id); if (!p) return true; const patch = { stage: d.pset, why: 'ย้ายขั้นจากหน้ารายละเอียด' };
+  if (d.pset) { const p = prodById(P2.id); if (!p || !pCanSet(p, d.pset)) return true; const patch = { stage: d.pset, why: 'ย้ายขั้นจากหน้ารายละเอียด' };
     if (d.pset === 'machine' && !pms(p).length) { toast('เลือกเครื่องในช่อง "เครื่องที่ใช้" ก่อน', true); return true; }
     if (d.pset === 'machine') patch.machines = pms(p).map(m => ({ m: m.m, d: '' }));
     if (d.pset === 'wait') patch.machines = pms(p).map(m => ({ m: m.m, d: '' }));
@@ -5060,6 +5245,8 @@ document.addEventListener('click', async e => {
   if (d.hperson !== undefined) { S.hp = d.hperson; LS.set('homePerson', d.hperson); return render(); }
   if (d.hpreset) { homeRange(); S.hr.preset = d.hpreset; homeRange(); saveHomeRange(); return render(); }
   if (d.saveuser) return saveUserRow(d.saveuser);
+  if (d.permedit !== undefined) { S.permEdit = S.permEdit === d.permedit ? '' : d.permedit; S.permDraft = null; render(); return; }
+  if (d.permdef) { permReset(d.permdef); return; }
   if (d.udel !== undefined) { S.userDel = d.udel || ''; return render(); }
   if (d.udelyes) { const id = d.udelyes, u = S.users.find(x => x.id === id); try { await mutate(() => api().deleteUser({ userId: id }), 'ลบผู้ใช้ ' + (u ? u.name : '') + ' แล้ว'); S.users = S.users.filter(x => x.id !== id); S.userDel = ''; render(); } catch (x) {} return; }
   if (d.rmphoto) return setPhoto(d.rmphoto, null);
@@ -5106,10 +5293,11 @@ document.addEventListener('click', async e => {
   if (d.lb) { if (d.lb === 'close') return closeLightbox(); S.lb.i += d.lb === 'next' ? 1 : -1; return drawLightbox(); }
   if (d.lbdel) return deleteImage(d.lbdel);
   if (prodClick(t, d, e)) return;
+  if (stockClick(t, d)) return;
   if (d.open && !e.target.closest('.adv')) return openEditor(d.open);
 
   switch (d.act) {
-    case 'new': if (S.view === 'prod') return canProd() ? pAddOpen() : undefined; if (isProdRole()) return; return openEditor(null);
+    case 'new': if (S.view === 'prod') return canProd() ? pAddOpen() : undefined; if (S.view === 'stock') return stockAddOpen(); if (!canAddDesign()) return; return openEditor(null);
     case 'saleon': { const k = LS.get('saleKey', ''); if (k && mode() === 'sheet') { location.href = saleLinkUrl(k, ''); return; } S.login.sale = true; S.login.saleErr = ''; renderLogin(); setTimeout(() => { const x = $('#salePin'); if (x) x.focus(); }, 30); return; }
     case 'saleoff': S.login.sale = false; S.login.saleErr = ''; return renderLogin();
     case 'salepin': { const v = String(($('#salePinSet') || {}).value || '').trim(); if (v && !/^\d{4,6}$/.test(v)) { toast('PIN ต้องเป็นตัวเลข 4–6 หลัก', true); return; }
@@ -5185,7 +5373,7 @@ document.addEventListener('keydown', e => {
   if (S.lb) { if (e.key === 'Escape') return closeLightbox(); if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { S.lb.i += e.key === 'ArrowRight' ? 1 : -1; return drawLightbox(); } }
   if (e.key === 'Escape' && S.edit) closeEditor();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.card,.row') ) { e.preventDefault(); openEditor(e.target.dataset.open); }
-  if (e.key === 'n' && S.screen === 'app' && !S.edit && !P2.id && !P2.add && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !e.metaKey && !e.ctrlKey) { e.preventDefault(); if (S.view === 'prod') { if (canProd()) pAddOpen(); } else if (!isProdRole()) openEditor(null); }
+  if (e.key === 'n' && S.screen === 'app' && !S.edit && !P2.id && !P2.add && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !e.metaKey && !e.ctrlKey) { e.preventDefault(); if (S.view === 'prod') { if (canProd()) pAddOpen(); } else if (S.view !== 'stock' && canAddDesign()) openEditor(null); }
 });
 $('#scrim').addEventListener('click', closeEditor);
 
@@ -5194,6 +5382,7 @@ document.addEventListener('input', e => {
   if (t.id === 'msgText') { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; return; }
   if (t.id === 'adminName') { S.login.adminName = t.value; const w = t.closest('.name-in'); if (w) { w.classList.toggle('has', !!t.value.trim()); w.classList.remove('typing'); void w.offsetWidth; w.classList.add('typing'); } return; }
   if (t.id === 'pinIn') { S.login.pin = t.value.replace(/\D/g, '').slice(0, 4); S.login.err = ''; const dots = document.querySelectorAll('.pin-dots i'); dots.forEach((el, i) => el.classList.toggle('on', i < S.login.pin.length)); const sb = document.querySelector('#pinForm [type=submit]'); if (sb) sb.disabled = S.login.pin.length < 4; if (S.login.pin.length === 4) setTimeout(() => { if (S.login.pin.length === 4 && !S.login.submitting && (!S.login.adminMode || ($('#adminName') && $('#adminName').value.trim()))) doLogin(); }, 160); return; }
+  if (t.id === 'sq') { SV.q = t.value; const pos = t.selectionStart; render(); const q = $('#sq'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if (t.id === 'pq' || t.id === 'cq') { S[t.id] = t.value; const pos = t.selectionStart, id = t.id; render(); const q = $('#' + id); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if (t.id === 'q') { S.f.q = t.value; const pos = t.selectionStart; render(); const q = $('#q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if ((t.id === 'thC1' || t.id === 'thC2') && $('#thC1') && $('#thC2')) { // live preview while dragging the picker
@@ -5212,8 +5401,17 @@ document.addEventListener('input', e => {
   if (t.dataset.cltplf !== undefined && S.draft) { S.draft.checklists = Object.assign({}, S.draft.checklists || {}); S.draft.checklists[t.dataset.cltplf] = t.value; markDirty(); return; }
   if (t.dataset.sla && S.draft) { const p = t.dataset.sla.split('|'), g = S.draft.groups[+p[0]]; const r = (S.draft.sla[g] = S.draft.sla[g] || { cam: [1, 2], draw: [2, 3] }); r[p[1]][+p[2]] = Math.max(0, +t.value || 0); markDirty(); return; }
 });
+/* ช่องติ๊กสิทธิ์: เปลี่ยนเฉพาะกล่องสิทธิ์ ไม่วาดทั้งหน้า (ช่องอื่นที่แก้ค้างไว้ในแถวยังอยู่) */
+function permReset(id, role) {
+  const row = document.querySelector('[data-urow="' + id + '"]'), u = S.users.find(x => x.id === id); if (!row || !u) return;
+  role = role || row.querySelector('[data-u="role"]').value;
+  S.permDraft = { id: id, role: role, list: (PERM_DEF[role] || PERM_DEF.user).slice() };
+  const box = row.querySelector('[data-permbox]'); if (box) box.outerHTML = permBox(u);
+}
 document.addEventListener('change', e => {
   const t = e.target;
+  if (t.dataset && t.dataset.perm) { const it = t.closest('.pb-it'); if (it) it.classList.toggle('on', t.checked); const row = t.closest('[data-urow]'); if (row) S.permDraft = { id: row.dataset.urow, role: row.querySelector('[data-u="role"]').value, list: Array.from(row.querySelectorAll('[data-perm]')).filter(x => x.checked).map(x => x.dataset.perm) }; return; }
+  if (t.dataset && t.dataset.u === 'role') { const row = t.closest('[data-urow]'); if (row && row.querySelector('[data-permbox]')) permReset(row.dataset.urow, t.value); return; }
   if (t.dataset && t.dataset.dueahead) { LS.set('dueAhead', +t.value); LS.set('dueSeen:' + S.me, {}); renderDue(); return render(); }
   if (t.dataset && t.dataset.dueday === 'pick' && t.value) { S.dueDay = t.value; return renderDue(); }
   if (t.dataset && t.dataset.grange) { const cur = ganttRange(); S.gr = t.value === 'custom' ? { p: 'custom', from: cur.from || addDays(today(), -14), to: cur.to || addDays(today(), 14) } : { p: t.value }; LS.set('ganttRange', S.gr); return render(); }
@@ -5438,10 +5636,12 @@ async function saveUserRow(id) {
   const row = document.querySelector('[data-urow="' + id + '"]'); if (!row) return;
   const g = k => row.querySelector('[data-u="' + k + '"]');
   const data = { id: id, name: g('name').value.trim(), full: g('full').value.trim(), role: g('role').value, color: g('color').value, active: g('active').checked };
+  const box = row.querySelector('[data-permbox]');
+  if (box && data.role !== 'admin') data.perms = Array.from(box.querySelectorAll('[data-perm]')).filter(x => x.checked).map(x => x.dataset.perm);
   try {
     const r = await mutate(() => api().saveUser({ user: data }), 'บันทึกผู้ใช้ ' + data.name + ' แล้ว');
     const old = S.users.find(u => u.id === id), oldName = old && old.name;
-    upsert(S.users, r.user);
+    upsert(S.users, r.user); if (S.permDraft && S.permDraft.id === id) S.permDraft = null;
     if (oldName && oldName !== r.user.name) { S.jobs.forEach(j => { ['assignee', 'createdBy', 'updatedBy'].forEach(k => { if (j[k] === oldName) j[k] = r.user.name; }); }); S.logs.forEach(l => { if (l.member === oldName) l.member = r.user.name; }); if (S.me === oldName) { S.me = r.user.name; S.user = r.user; } }
     render();
   } catch (e) {}

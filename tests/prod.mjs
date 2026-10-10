@@ -18,7 +18,7 @@ eq('sale tile on login page', await pg.locator('.sale-tile').count(), 1);
 await pg.screenshot({ path: out + 'prod-login.png' });
 await login('แอดมิน', true);
 eq('nav has company + production', await pg.evaluate(() => ['flow', 'prod'].map(v => !!document.querySelector('#nav [data-view="' + v + '"]'))), [true, true]);
-eq('nav dept headings', await pg.locator('#nav .nav-h').allTextContents(), ['ฝ่ายแบบ', 'ฝ่ายผลิต', 'ทั่วไป']);
+eq('nav dept headings', await pg.locator('#nav .nav-h').allTextContents(), ['ฝ่ายแบบ', 'ฝ่ายผลิต', 'ฝ่ายสต็อก', 'ทั่วไป']);
 await pg.click('#nav [data-view="flow"]'); await pg.waitForTimeout(700);
 eq('company pipeline steps', await pg.locator('.co-step').count(), 8);
 const rows = await pg.locator('.co-row').count(); eq('company rows shown', rows > 5, true);
@@ -96,7 +96,7 @@ eq('sale pin on', await pg.locator('#s-salelink .pill.s-done').count(), 1);
 // production staff
 await login('ช่างเอ');
 eq('prod role lands on board', await pg.evaluate(() => S.view), 'prod');
-eq('prod role nav', await pg.evaluate(() => [...document.querySelectorAll('#nav [data-view]')].map(b => b.dataset.view)), ['flow', 'home', 'board', 'list', 'prod', 'team', 'settings']);
+eq('prod role nav', await pg.evaluate(() => [...document.querySelectorAll('#nav [data-view]')].map(b => b.dataset.view)), ['flow', 'home', 'board', 'list', 'prod', 'stock', 'team', 'settings']);
 await pg.evaluate(() => T.go('board')); await pg.waitForTimeout(500);
 eq('prod role sees all design jobs', await pg.evaluate(() => document.querySelectorAll('.board .card').length > 10), true);
 eq('prod role cannot move/edit design cards', await pg.locator('.board .card .adv, .board .card .tbtn').count(), 0);
