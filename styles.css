@@ -4346,17 +4346,17 @@ body.more-open .fab,body.more-open #chatHeads,body.more-open .msg-fab{opacity:0!
 @media (max-width:520px){.cpx{padding:12px}.cpx .co-steps{gap:6px}.cpx-step{grid-template-columns:1fr;justify-items:start;padding:9px 8px}.cpx-step .flow-ic{grid-row:auto;width:30px;height:30px}.cpx-step .flow-ic svg{width:15px;height:15px}}
 @media (prefers-reduced-motion:reduce){.cpx *{animation:none!important}}
 
-/* v2.70: ตัวเชื่อมระหว่างช่องในแบนเนอร์ภาพรวม มีเส้นประวิ่ง + ลูกศรเคลื่อนเป็นคลื่นจากซ้ายไปขวา */
-.cpx .co-steps,.cpx .co-depts{column-gap:14px}
-.cpx-step:not(:last-child)::before{content:'';position:absolute;right:-13px;top:50%;width:12px;height:2px;margin-top:-1px;border-radius:2px;z-index:1;pointer-events:none;
-  background:repeating-linear-gradient(90deg,var(--s) 0 3px,transparent 3px 6px);background-size:12px 2px;animation:cpxDash .9s linear infinite;opacity:.75}
-.cpx-step:not(:last-child)::after{right:-12px;width:7px;height:7px;margin-top:-3.5px;border:0;border-top:2px solid var(--s);border-right:2px solid var(--s);border-radius:1px;pointer-events:none;
-  animation:cpxArrow 2.4s ease-in-out infinite;animation-delay:calc(var(--i) * .22s)}
-.cpx-step.zero:not(:last-child)::before{opacity:.35}
-.cpx-step.zero:not(:last-child)::after{border-color:color-mix(in oklab,var(--s) 45%,var(--line))}
-@keyframes cpxDash{to{background-position-x:12px}}
-@keyframes cpxArrow{0%,100%{transform:translateX(-4px) rotate(45deg);opacity:.3}35%{transform:translateX(1px) rotate(45deg);opacity:1}55%{transform:translateX(3px) rotate(45deg);opacity:1}}
-@media (max-width:1100px){.cpx-step::before{display:none}.cpx .co-steps{column-gap:8px}}
-@media (min-width:1101px) and (max-width:1500px){.cpx .co-steps,.cpx .co-depts{column-gap:10px}.cpx-step{padding-left:7px;padding-right:6px;column-gap:5px}.cpx-step>span:not(.flow-ic){font-size:12px}.cpx-step:not(:last-child)::before{right:-9px;width:8px;background-size:6px 2px;animation-name:cpxDash6}.cpx-step:not(:last-child)::after{right:-9px;width:6px;height:6px;margin-top:-3px}}
-@keyframes cpxDash6{to{background-position-x:6px}}
+/* v2.70.1: ตัวเชื่อมระหว่างช่อง = วงกลมเล็กมีลูกศร เต้นเป็นจังหวะไล่จากซ้ายไปขวา (คลื่นแสงวิ่งตามลำดับงาน) */
+.cpx-step:not(:last-child)::before{content:'';position:absolute;right:-13px;top:50%;width:18px;height:18px;margin-top:-9px;border-radius:50%;z-index:2;pointer-events:none;
+  background:var(--surface);border:1px solid color-mix(in oklab,var(--s) 30%,var(--line));box-shadow:0 2px 6px -2px color-mix(in oklab,var(--s) 40%,transparent);
+  animation:cpxPulse 3.2s ease-out infinite;animation-delay:calc(var(--i) * .32s)}
+.cpx-step:not(:last-child)::after{right:-6px;width:5px;height:5px;margin-top:-2.5px;border:0;border-top:1.8px solid var(--s);border-right:1.8px solid var(--s);border-radius:1px;z-index:3;pointer-events:none;
+  animation:cpxNudge 3.2s ease-in-out infinite;animation-delay:calc(var(--i) * .32s)}
+.cpx-step.zero:not(:last-child)::before{border-color:var(--line);box-shadow:none}
+.cpx-step.zero:not(:last-child)::after{border-color:color-mix(in oklab,var(--s) 50%,var(--muted))}
+@keyframes cpxPulse{0%{box-shadow:0 0 0 0 color-mix(in oklab,var(--s) 45%,transparent)}22%{box-shadow:0 0 0 6px color-mix(in oklab,var(--s) 0%,transparent)}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes cpxNudge{0%,30%,100%{transform:translateX(0) rotate(45deg)}12%{transform:translateX(2px) rotate(45deg)}}
+.cpx-step:not(:last-child)::after{transform:rotate(45deg)}
+@media (max-width:1100px){.cpx-step::before{display:none}}
 @media (prefers-reduced-motion:reduce){.cpx-step::before,.cpx-step::after{animation:none!important}}
+@media (min-width:1101px) and (max-width:1500px){.cpx-step{padding-left:7px;padding-right:6px;column-gap:5px}.cpx-step>span:not(.flow-ic){font-size:12px}.cpx-step:not(:last-child)::before{width:16px;height:16px;margin-top:-8px;right:-12px}.cpx-step:not(:last-child)::after{right:-5.5px}}
