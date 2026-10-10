@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.61.0';
+const APP_VERSION = '2.61.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4285,7 +4285,17 @@ function openEditor(id) {
   if (j) loadCmts(j.id);
   if (j) api().activity({ jobId: j.id }).then(h => { if (S.edit && S.edit.job.id === j.id) { S.edit.hist = h; const el = $('#hist'); if (el) el.innerHTML = histHtml(h); } }).catch(() => {});
 }
-function closeEditor() { dropPending(S.edit); S.edit = null; $('#sheet').classList.remove('open'); $('#scrim').classList.remove('open'); }
+function closeEditor() { dropPending(S.edit); S.edit = null; $('#sheet').classList.remove('open'); $('#scrim').classList.remove('open'); chatReturn(); }
+/* เปิดงานจากเลข Job ในแชท → ปิดงาน (ทุกหน้าต่าง) แล้วกลับไปห้องแชทเดิม ตำแหน่งเดิม */
+let CHAT_RET = null;
+function chatReturn() {
+  if (!CHAT_RET) return;
+  setTimeout(() => {   // รอให้แน่ใจว่าไม่ได้เปิดหน้าต่างงานอื่นต่อ (เช่น จากงานผลิตกดไปงานฝ่ายแบบ)
+    const r = CHAT_RET; if (!r || S.edit || P2.id || P2.add || (S.lb && $('#lightbox.open'))) return;
+    CHAT_RET = null; openMsgPanel(r.ch);
+    setTimeout(() => { const b = $('#mpBody'); if (b && r.top) b.scrollTop = r.top; }, 60);
+  }, 80);
+}
 function opts(list, val, ph, labelFn) {
   const arr = (list || []).slice(); if (val && arr.indexOf(val) < 0) arr.unshift(val);
   return '<option value="">' + (ph || 'เลือก') + '</option>' + arr.map(x => '<option value="' + esc(x) + '"' + (x === val ? ' selected' : '') + '>' + esc(labelFn ? labelFn(x) : x) + '</option>').join('');
@@ -5124,7 +5134,7 @@ async function uploadProdImages(id, files) {
   }
   return ok;
 }
-function pModalClose() { (P2.files || []).forEach(x => URL.revokeObjectURL(x.url)); P2.files = []; P2.id = ''; P2.add = false; P2.edit = false; const m = $('#pModal'); if (m) m.remove(); document.body.classList.remove('pm-open'); }
+function pModalClose() { (P2.files || []).forEach(x => URL.revokeObjectURL(x.url)); P2.files = []; P2.id = ''; P2.add = false; P2.edit = false; const m = $('#pModal'); if (m) m.remove(); document.body.classList.remove('pm-open'); chatReturn(); }
 function pQcHtml(p, ro) {
   const q = pqc(p);
   if (p.stage !== 'qc') {   // สรุปผล QC ที่ผ่านมา
@@ -5254,7 +5264,7 @@ function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ
   if (d.pclose || (t.id === 'pModal')) { pModalClose(); return true; }
   if (d.pm) { S.pm = d.pm; render(); return true; }
   if (d.cf) { S.cf = S.cf === d.cf && d.cf !== 'all' ? 'all' : d.cf; S.animIn = true; render(); return true; }
-  if (d.coopen) { if (t.closest && t.closest('#msgPanel')) { hideHover(); closeMsgPanel(); } coOpen(d.coopen); return true; }   // เปิดจากแชท: ปิดแผงข้อความก่อน งานจะได้ไม่ถูกบัง
+  if (d.coopen) { if (t.closest && t.closest('#msgPanel')) { hideHover(); CHAT_RET = { ch: M.ch, top: ($('#mpBody') || {}).scrollTop || 0 }; closeMsgPanel(); } coOpen(d.coopen); return true; }   // เปิดจากแชท: ปิดแผงข้อความก่อน งานจะได้ไม่ถูกบัง · ปิดงานแล้วกลับมาห้องเดิม
   if (d.pship) { S.pship = !S.pship; render(); return true; }
   if (d.pjob) { pModalClose(); openEditor(d.pjob); return true; }
   if (d.paddm) { const i = P2.ms.indexOf(d.paddm); if (i >= 0) P2.ms.splice(i, 1); else P2.ms.push(d.paddm); pAddRead(); pModalDraw(); return true; }

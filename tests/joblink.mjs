@@ -27,6 +27,19 @@ eq('non-codes are not linked', await pg.evaluate(() => [...document.querySelecto
 await pg.locator('#mpBody .bub.me .jmini', { hasText: code }).last().click(); await pg.waitForTimeout(700);
 eq('click opens the job and closes chat', [await pg.locator('#msgPanel.open').count(), await pg.evaluate(() => !!S.edit || !!document.querySelector('#pModal'))], [0, true]);
 await pg.screenshot({ path: new URL('out/joblink-open.png', import.meta.url).pathname });
+await pg.evaluate(() => { const c = document.querySelector('#sheet [data-act="close"], #pModal [data-pclose]'); c.click(); }); await pg.waitForTimeout(700);
+eq('closing the job returns to the same chat room', [await pg.locator('#msgPanel.open').count(), await pg.evaluate(() => S.view && window.S && document.querySelector('#msgPanel.open') ? true : false)], [1, true]);
+// production job card → close → back to chat
+await pg.locator('#mpBody .bub.me .jmini', { hasText: pcode }).last().click(); await pg.waitForTimeout(700);
+eq('prod job opens from chat', [await pg.locator('#msgPanel.open').count(), await pg.locator('#pModal').count()], [0, 1]);
+await pg.click('#pModal [data-pclose]'); await pg.waitForTimeout(700);
+eq('closing prod job returns to chat', await pg.locator('#msgPanel.open').count(), 1);
+// opening a job normally (not from chat) does not pop the chat open afterwards
+await pg.click('[data-act="msgclose"]'); await pg.waitForTimeout(400);
+await pg.evaluate(() => T.go('board')); await pg.waitForTimeout(400);
+await pg.evaluate(() => document.querySelector('.card[data-open]').click()); await pg.waitForTimeout(500);
+await pg.evaluate(() => document.querySelector('#sheet [data-act="close"]').click()); await pg.waitForTimeout(600);
+eq('normal job open/close leaves chat closed', await pg.locator('#msgPanel.open').count(), 0);
 console.log('errors', errs.join(' | ') || 'none');
 console.log(ok + ' ok, ' + bad + ' failed');
 await b.close(); srv.close(); if (bad || errs.length) process.exit(1);

@@ -3820,3 +3820,14 @@ html,body{overflow-x:hidden}
 .mpk-h svg{width:13px;height:13px}
 @keyframes jmIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.jmini{animation:none}}
+
+/* v2.61.1: มือถือ — รูปโปรไฟล์ที่หัวหน้าอยู่มุมล่างขวา แถวเดียวกับปุ่ม ไม่ทับวันที่/ชื่อบริษัท */
+@media (max-width:760px){
+  .topbar{position:relative}
+  .topbar .hero-me{position:absolute;top:auto;bottom:16px;right:16px;margin:0;padding:3px;border-radius:50%;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);box-shadow:0 10px 22px -10px rgba(0,0,0,.45);backdrop-filter:blur(4px);z-index:2;transition:transform .2s}
+  .topbar .hero-me:active{transform:scale(.94)}
+  .topbar .hero-me .av{width:44px;height:44px;font-size:17px;box-shadow:0 0 0 2px rgba(255,255,255,.9)}
+  .topbar .hero-me .hm-on{width:12px;height:12px;right:1px;bottom:1px}
+  .topbar:has(.hero-me) .top-actions{padding-right:62px}
+  .topbar:has(.hero-me) .eyebrow{padding-right:0}
+}
