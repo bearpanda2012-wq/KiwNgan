@@ -52,5 +52,11 @@ eq('photo listed in bootstrap', m.call('bootstrap', {}, U).data.images.some(x =>
 eq('designer cannot delete stock photo', !!m.call('deleteImage', { id: im.image.id }, U).error, true);
 eq('stock user deletes photo', m.call('deleteImage', { id: im.image.id }, ST).data.id, im.image.id);
 eq('delete item', m.call('stockDelete', { id: it.id }, ST).data.items.length, 0);
+// งาน CAD+CAM: นับว่ามี CAM แล้ว → เพิ่ม CAM เลขเดิมไม่ได้, เสร็จแล้วเข้ารอผลิต
+{ const st = m.call('bootstrap', {}, A).data.settings; st.taskTypes = st.taskTypes.map(t => t.name === 'ทำ CAD+CAM' ? Object.assign({}, t, { cat: 'cadcam', prod: true }) : t); m.call('saveSettings', { settings: st }, A);
+  const cc = m.call('saveJob', { job: { code: 'CC-1', taskType: 'ทำ CAD+CAM', status: 'queue' } }, U).data.job;
+  eq('CAM after CAD+CAM blocked', m.call('saveJob', { job: { code: 'CC-1', taskType: 'ทำ CAM' } }, U).error, 'เลข Job CC-1 มีงาน CAM (CAD+CAM) อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1');
+  m.call('saveJob', { job: Object.assign({}, cc, { status: 'done' }) }, U);
+  eq('CAD+CAM done → รอผลิต', (m.call('bootstrap', {}, U).data.prods.find(p => p.code === 'CC-1') || {}).stage, 'wait'); }
 console.log(ok + ' ok, ' + bad + ' failed');
 if (bad) process.exit(1);

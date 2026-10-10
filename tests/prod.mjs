@@ -14,7 +14,7 @@ const login = async (name, admin) => {
   await pg.evaluate(() => document.querySelectorAll('.ntf').forEach(e => e.remove()));
 };
 await pg.goto('http://127.0.0.1:8790/index.html'); await pg.waitForTimeout(800);
-eq('sale tile on login page', await pg.locator('.sale-tile').count(), 1);
+eq('sale tile on login page', await pg.locator('.sx-tile').count(), 1);
 await pg.screenshot({ path: out + 'prod-login.png' });
 await login('แอดมิน', true);
 eq('nav has company + production', await pg.evaluate(() => ['flow', 'prod'].map(v => !!document.querySelector('#nav [data-view="' + v + '"]'))), [true, true]);
@@ -118,8 +118,8 @@ await pg.screenshot({ path: out + 'prod-board-m.png', fullPage: true });
 // sale tile → PIN → sale page
 await pg.setViewportSize({ width: 1400, height: 900 });
 await pg.evaluate(() => Object.keys(localStorage).filter(k => /token/.test(k)).forEach(k => localStorage.removeItem(k))); await pg.goto('http://127.0.0.1:8790/index.html'); await pg.waitForTimeout(700);
-await pg.click('.sale-tile'); await pg.fill('#salePin', '0000'); await pg.press('#salePin', 'Enter'); await pg.waitForTimeout(400);
-eq('wrong sale pin', await pg.locator('#saleForm .err').textContent(), 'PIN ไม่ถูกต้อง');
+await pg.click('.sx-tile'); await pg.fill('#salePin', '0000'); await pg.press('#salePin', 'Enter'); await pg.waitForTimeout(400);
+eq('wrong sale pin', await pg.locator('#saleForm .sx-err').textContent(), 'PIN ไม่ถูกต้อง');
 await pg.fill('#salePin', '5678'); await pg.press('#salePin', 'Enter'); await pg.waitForTimeout(1500);
 eq('sale page opened', /salek=/.test(pg.url()), true);
 eq('sale overview pipeline', await pg.locator('.sf-wrap .co-step').count(), 8);

@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.30.0';
+const VERSION = '1.31.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -447,7 +447,7 @@ function defaultSettings_() {
     company: 'บริษัทของคุณ', appName: 'KiwNgan คิวงาน', accent: '#0B6B70', logo: '',
     sales: [],
     groups: ['งาน 2D', 'งาน 2.5D', 'งาน 3D', 'งาน โครงการ', 'งาน ตัวอย่าง'],
-    taskTypes: [{ name: 'ทำ CAD', cat: 'draw' }, { name: 'ทำ CAM', cat: 'cam' }, { name: 'ทำ CAD+CAM', cat: 'draw' },
+    taskTypes: [{ name: 'ทำ CAD', cat: 'draw' }, { name: 'ทำ CAM', cat: 'cam' }, { name: 'ทำ CAD+CAM', cat: 'cadcam', prod: true },
                 { name: 'ทำ แบบผลิต', cat: 'draw' }, { name: 'ทำ แบบติดตั้ง', cat: 'draw' }],
     levels: [{ level: 1, label: 'มีไฟล์ลูกค้า / แบบพร้อม' }, { level: 2, label: 'ดราฟลายเอง' }, { level: 3, label: 'ดราฟลาย + ขึ้น 3D' }],
     sla: {
@@ -710,7 +710,7 @@ function saveJob_(job, u) {
       const types = settings_().taskTypes || [];
       const cat = t => { const f = types.find(x => x.name === t); return f ? f.cat : (/CAM$/.test(t || '') ? 'cam' : 'draw'); };
       if (cat(data.taskType) !== 'cam') throw new Error('มีเลข Job ' + data.code + ' อยู่แล้ว — เพิ่มซ้ำได้เฉพาะงาน "ทำ CAM" ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1');
-      if (same.some(x => cat(x.taskType) === 'cam')) throw new Error('เลข Job ' + data.code + ' มีงาน CAM อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1');
+      if (same.some(x => ['cam', 'cadcam'].indexOf(cat(x.taskType)) >= 0)) throw new Error('เลข Job ' + data.code + ' มีงาน CAM' + (same.some(x => cat(x.taskType) === 'cadcam') ? ' (CAD+CAM)' : '') + ' อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1');
     }
     data.id = uid_('j_');
     data.createdAt = now;

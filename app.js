@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.58.0';
+const APP_VERSION = '2.59.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -328,12 +328,15 @@ const typeChip = (name, cls) => name ? '<span class="tchip ' + (cls || '') + '" 
 const groupChip = (g, cls) => g ? '<span class="gchip ' + (cls || '') + '" style="--c:' + groupColor(g) + '">' + STI.layers + esc(groupShort(g)) + '</span>' : '';
 /* งาน CAM ไม่ต้องรอตรวจ: กำลังทำ → เสร็จแล้ว ทันที */
 const isCam = j => !!j && taskCat(j.taskType) === 'cam';
+/* งาน CAD+CAM (cat = cadcam): เขียนแบบและทำ CAM ในงานเดียว แล้วส่งผลิต — นับว่ามีส่วน CAM แล้ว (ไม่ต้องเปิดงาน CAM ต่อ) */
+const hasCamPart = j => !!j && ['cam', 'cadcam'].indexOf(taskCat(j.taskType)) >= 0;
+const CAT_LABEL = { draw: 'เขียนแบบ', cam: 'CAM', cadcam: 'CAD+CAM' };
 /* เลข Job ซ้ำ: ทุกงานจบที่ CAM → เพิ่มงาน "ทำ CAM" ของเลขเดิมได้ (ถ้ายังไม่มีงาน CAM ของเลขนั้น) · รายละเอียดอื่นซ้ำไม่ได้ */
 function codeClash(code, taskType, jobs, skipId) {
   const same = (jobs || []).filter(x => x.id !== skipId && String(x.code).toLowerCase() === String(code).toLowerCase());
   if (!same.length) return '';
   if (taskCat(taskType) !== 'cam') return 'มีเลข Job ' + code + ' อยู่แล้ว — เพิ่มซ้ำได้เฉพาะงาน "ทำ CAM" ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1';
-  if (same.some(x => taskCat(x.taskType) === 'cam')) return 'เลข Job ' + code + ' มีงาน CAM อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1';
+  if (same.some(x => ['cam', 'cadcam'].indexOf(taskCat(x.taskType)) >= 0)) return 'เลข Job ' + code + ' มีงาน CAM' + (same.some(x => taskCat(x.taskType) === 'cadcam') ? ' (CAD+CAM)' : '') + ' อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1';
   return '';
 }
 const flowOf = j => isCam(j) ? ['queue', 'doing', 'done'] : FLOW;
@@ -342,8 +345,9 @@ function flowIdxOf(j) { const f = flowOf(j); if (f === FLOW) return flowIdx(j.st
 function suggestDue(j) {
   if (!j.received || !j.group || !j.taskType) return null;
   const row = (S.settings.sla || {})[j.group]; if (!row) return null;
-  const cat = taskCat(j.taskType); const pair = row[cat]; if (!pair) return null;
-  const days = +pair[j.qty === 'multi' ? 1 : 0]; if (!(days >= 0)) return null;
+  const cat = taskCat(j.taskType), k = j.qty === 'multi' ? 1 : 0;
+  const days = cat === 'cadcam' ? (row.draw && row.cam ? +row.draw[k] + +row.cam[k] : NaN) : row[cat] ? +row[cat][k] : NaN;   // CAD+CAM = วันเขียนแบบ + วัน CAM
+  if (!(days >= 0)) return null;
   return { date: addWorkDays(j.received, days, S.settings.skipWeekends !== false), days: days, cat: cat };
 }
 function sortOpen(a, b) {
@@ -360,7 +364,7 @@ function defaultSettings() {
     company: 'บริษัทของคุณ', appName: 'KiwNgan คิวงาน', accent: '#0B6B70', logo: '',
     members: [], sales: [],
     groups: ['งาน 2D', 'งาน 2.5D', 'งาน 3D', 'งาน โครงการ', 'งาน ตัวอย่าง'],
-    taskTypes: [{ name: 'ทำ CAD', cat: 'draw' }, { name: 'ทำ CAM', cat: 'cam' }, { name: 'ทำ CAD+CAM', cat: 'draw' }, { name: 'ทำ แบบผลิต', cat: 'draw' }, { name: 'ทำ แบบติดตั้ง', cat: 'draw' }],
+    taskTypes: [{ name: 'ทำ CAD', cat: 'draw' }, { name: 'ทำ CAM', cat: 'cam' }, { name: 'ทำ CAD+CAM', cat: 'cadcam', prod: true }, { name: 'ทำ แบบผลิต', cat: 'draw' }, { name: 'ทำ แบบติดตั้ง', cat: 'draw' }],
     levels: [{ level: 1, label: 'มีไฟล์ลูกค้า / แบบพร้อม' }, { level: 2, label: 'ดราฟลายเอง' }, { level: 3, label: 'ดราฟลาย + ขึ้น 3D' }],
     sla: {
       'งาน 2D': { cam: [1, 2], draw: [1, 3] }, 'งาน 2.5D': { cam: [1, 2], draw: [2, 3] }, 'งาน 3D': { cam: [1, 2], draw: [4, 5] },
@@ -1074,7 +1078,7 @@ async function saveJob(job, msg) {
    ทุกงานจบที่ CAM: งานเขียนแบบ (CAD/แบบผลิต/…) เสร็จ → ถามว่าจะเปิดงาน CAM ต่อไหม แล้วสร้างให้ในคลิกเดียว */
 const camType = () => (S.settings.taskTypes || []).find(t => t.cat === 'cam');
 function camFollowNeeded(j) {
-  return !!j && !isCam(j) && !!camType() && j.status === 'done' && !S.jobs.some(x => x.id !== j.id && String(x.code).toLowerCase() === String(j.code).toLowerCase() && isCam(x));
+  return !!j && !hasCamPart(j) && !!camType() && j.status === 'done' && !S.jobs.some(x => x.id !== j.id && String(x.code).toLowerCase() === String(j.code).toLowerCase() && hasCamPart(x));
 }
 function offerCam(j) {
   if (!camFollowNeeded(j)) return;
@@ -1892,7 +1896,7 @@ async function pollMessages(first) {
     const sig = M.list.map(m => m.id + (m.read ? 1 : 0) + m.status).join('|');
     fresh.forEach(notifyMsg);
     if (M.open) { renderMsgPanel(); markChanRead(M.ch); }
-    if (sig !== M.sig) { M.sig = sig; if (!first && !S.edit && !S.lb) render(); else { renderMsgFab(); if (S.screen === 'app') { $('#nav').innerHTML = navHtml(true); $('#tabbar').innerHTML = navHtml(true); } } } else renderMsgFab();
+    if (sig !== M.sig) { M.sig = sig; if (!first && !S.edit && !S.lb) render(); else { renderMsgFab(); if (S.screen === 'app') { $('#nav').innerHTML = navHtml(true); $('#tabbar').innerHTML = navHtml(true, true); } } } else renderMsgFab();
     fresh.forEach(m => peekHead(m));
   } catch (e) { /* offline: try again next tick */ }
   M.polling = false;
@@ -1911,7 +1915,7 @@ async function markChanRead(ch) {
   const ids = M.list.filter(m => !m.read && chanOf(m) === ch).map(m => m.id);
   if (!ids.length) return;
   M.list.forEach(m => { if (ids.indexOf(m.id) >= 0) m.read = true; });
-  renderMsgFab(); if (S.screen === 'app') { $('#nav').innerHTML = navHtml(true); $('#tabbar').innerHTML = navHtml(true); }
+  renderMsgFab(); if (S.screen === 'app') { $('#nav').innerHTML = navHtml(true); $('#tabbar').innerHTML = navHtml(true, true); }
   try { await api().markRead({ ids: ids }); } catch (e) {}
 }
 
@@ -4209,7 +4213,7 @@ function viewSettings() {
       (S.pinNote && S.pinNote.userId === 'new' ? '<div class="pin-note">เพิ่ม ' + esc(S.pinNote.name) + ' แล้ว PIN: <b class="mono">' + esc(S.pinNote.pin) + '</b></div>' : '') + '</div></div></section>';
 
     const simpleRows = key => d[key].map((x, i) => '<div class="erow two"><input value="' + esc(x) + '" data-d="' + key + '.' + i + '" aria-label="ชื่อ"><button class="icon-btn" data-del="' + key + '.' + i + '" aria-label="ลบ">' + I.trash + '</button></div>').join('');
-    const typeRows = d.taskTypes.map((x, i) => '<div class="erow tt"><input type="color" value="' + esc(/^#[0-9a-f]{6}$/i.test(x.color || '') ? x.color : TYPE_COLORS[i % TYPE_COLORS.length]) + '" data-d="taskTypes.' + i + '.color" aria-label="สีของงานนี้" title="สีที่แสดงบนการ์ด"><input value="' + esc(x.name) + '" data-d="taskTypes.' + i + '.name" aria-label="ชื่องาน"><select data-d="taskTypes.' + i + '.cat" aria-label="ประเภท"><option value="draw"' + (x.cat !== 'cam' ? ' selected' : '') + '>งานเขียนแบบ</option><option value="cam"' + (x.cat === 'cam' ? ' selected' : '') + '>งาน CAM</option></select><label class="prod-tog" title="ทำเสร็จแล้วเข้า &quot;รอผลิต&quot; ของฝ่ายผลิตเอง"><input type="checkbox" data-d="taskTypes.' + i + '.prod"' + (toProdType(x.name, d) ? ' checked' : '') + '>ส่งผลิต</label><button class="icon-btn" data-del="taskTypes.' + i + '" aria-label="ลบ">' + I.trash + '</button></div>').join('');
+    const typeRows = d.taskTypes.map((x, i) => '<div class="erow tt"><input type="color" value="' + esc(/^#[0-9a-f]{6}$/i.test(x.color || '') ? x.color : TYPE_COLORS[i % TYPE_COLORS.length]) + '" data-d="taskTypes.' + i + '.color" aria-label="สีของงานนี้" title="สีที่แสดงบนการ์ด"><input value="' + esc(x.name) + '" data-d="taskTypes.' + i + '.name" aria-label="ชื่องาน"><select data-d="taskTypes.' + i + '.cat" aria-label="ประเภท"><option value="draw"' + (x.cat !== 'cam' && x.cat !== 'cadcam' ? ' selected' : '') + '>งานเขียนแบบ</option><option value="cam"' + (x.cat === 'cam' ? ' selected' : '') + '>งาน CAM</option><option value="cadcam"' + (x.cat === 'cadcam' ? ' selected' : '') + '>งาน CAD+CAM</option></select><label class="prod-tog" title="ทำเสร็จแล้วเข้า &quot;รอผลิต&quot; ของฝ่ายผลิตเอง"><input type="checkbox" data-d="taskTypes.' + i + '.prod"' + (toProdType(x.name, d) ? ' checked' : '') + '>ส่งผลิต</label><button class="icon-btn" data-del="taskTypes.' + i + '" aria-label="ลบ">' + I.trash + '</button></div>').join('');
     const levelRows = d.levels.map((x, i) => '<div class="erow two"><input value="' + esc(x.label) + '" data-d="levels.' + i + '.label" aria-label="ระดับ ' + x.level + '"><span class="tag rev">ระดับ ' + x.level + '</span></div>').join('');
     const slaRows = d.groups.map((g, gi) => {
       const r = (d.sla[g] = d.sla[g] || { cam: [1, 2], draw: [2, 3] });
@@ -4297,7 +4301,7 @@ function renderEditor() {
   $('#sheetTitle').textContent = E.isNew ? 'เพิ่มงานใหม่' : j.code;
   $('#sheet').classList.toggle('viewing', E.mode === 'view');
   const sg = suggestDue(j);
-  const dueHint = sg ? '<span class="hint">แนะนำ ' + fdY(sg.date) + ' (' + (sg.cat === 'cam' ? 'CAM' : 'เขียนแบบ') + ' ' + sg.days + ' วันทำการ)' + (j.due !== sg.date ? ' · <button type="button" data-act="usesg">ใช้วันนี้</button>' : '') + '</span>' : '<span class="hint">เลือกกลุ่มงานและรายละเอียดเพื่อให้ระบบแนะนำกำหนดส่ง</span>';
+  const dueHint = sg ? '<span class="hint">แนะนำ ' + fdY(sg.date) + ' (' + (sg.cat === 'cadcam' ? 'CAD+CAM = เขียนแบบ + CAM' : CAT_LABEL[sg.cat] || 'เขียนแบบ') + ' ' + sg.days + ' วันทำการ)' + (j.due !== sg.date ? ' · <button type="button" data-act="usesg">ใช้วันนี้</button>' : '') + '</span>' : '<span class="hint">เลือกกลุ่มงานและรายละเอียดเพื่อให้ระบบแนะนำกำหนดส่ง</span>';
 
   let timer = '';
   if (!E.isNew && live) {
@@ -5326,20 +5330,33 @@ function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ
 /* ---- ปุ่ม Sale ที่หน้าเข้าสู่ระบบ ---- */
 function saleTile() {
   const L = S.login;   // แสดงเสมอ — ถ้าแอดมินยังไม่ตั้ง PIN จะบอกตอนกด
-  if (!L.sale) return '<button type="button" class="sale-tile" data-act="saleon"><span class="st-ic">' + PIC.sale + '</span><span><b>สำหรับ Sale</b><small>ดูสถานะงานทุกฝ่าย ไม่ต้องมีบัญชี</small></span><span class="st-go">' + I.next + '</span></button>';
-  return '<form class="sale-pin" id="saleForm"><div class="sp-row"><span class="st-ic">' + PIC.sale + '</span><b>PIN สำหรับ Sale</b><button type="button" class="icon-btn sm" data-act="saleoff" aria-label="ยกเลิก">✕</button></div>' +
-    '<div class="sp-row"><input id="salePin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="PIN 4–6 หลัก" aria-label="PIN สำหรับ Sale"><button class="btn primary sm" type="submit"' + (L.saleBusy ? ' disabled' : '') + '>' + (L.saleBusy ? 'กำลังเปิด…' : 'เปิดหน้า Sale') + '</button></div>' +
-    (L.saleErr ? '<div class="err" role="alert">' + esc(L.saleErr) + '</div>' : '<small class="sub">ขอ PIN ได้จากแอดมิน' + (mode() === 'demo' ? ' (โหมดทดลองใช้ 1234)' : '') + '</small>') + '</form>';
+  const flow = '<span class="sx-flow" aria-hidden="true"><i class="d">' + PIC.design + '</i><u></u><i class="p">' + PIC.machine + '</i><u></u><i class="s">' + PIC.shipped + '</i></span>';
+  if (!L.sale) return '<button type="button" class="sx-tile" data-act="saleon"><span class="sx-ic">' + PIC.sale + '</span><span class="sx-t"><b>สำหรับ Sale</b><small>ดูสถานะงานทุกฝ่าย · ไม่ต้องมีบัญชี</small>' + flow + '</span><span class="sx-go">' + I.next + '</span></button>';
+  const n = String(L.salePinV || '').length;
+  return '<form class="sx-pin' + (L.saleErr ? ' bad' : '') + '" id="saleForm"><div class="sx-band"><div class="sx-h"><span class="sx-ic">' + PIC.sale + '</span><div><b>เข้าหน้า Sale</b><small>ใส่ PIN ที่ได้จากแอดมิน' + (mode() === 'demo' ? ' (โหมดทดลองใช้ 1234)' : '') + '</small></div><button type="button" class="icon-btn sm sx-x" data-act="saleoff" aria-label="ยกเลิก">✕</button></div>' +
+    flow + '</div>' +
+    '<label class="sx-in"><input id="salePin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="PIN สำหรับ Sale" value="' + esc(L.salePinV || '') + '"><span class="sx-dots" aria-hidden="true">' + [0, 1, 2, 3, 4, 5].map(i => '<i class="' + (i < n ? 'on' : '') + (i >= 4 ? ' opt' : '') + '"></i>').join('') + '</span></label>' +
+    (L.saleErr ? '<div class="sx-err" role="alert">' + esc(L.saleErr) + '</div>' : '<small class="sx-hint">PIN 4–6 หลัก · กด Enter หรือปุ่มด้านล่าง</small>') +
+    '<button class="btn sx-btn" type="submit"' + (L.saleBusy || n < 4 ? ' disabled' : '') + '>' + (L.saleBusy ? '<span class="spin-dot"></span>กำลังเปิด…' : 'เปิดหน้าสถานะงาน ' + I.next) + '</button></form>';
 }
 async function saleSubmit() {
-  const L = S.login, pin = String(($('#salePin') || {}).value || '').trim();
+  const L = S.login, pin = String(($('#salePin') || {}).value || L.salePinV || '').trim();
   if (!/^\d{4,6}$/.test(pin)) { L.saleErr = 'PIN ต้องเป็นตัวเลข 4–6 หลัก'; renderLogin(); return; }
   L.saleBusy = true; L.saleErr = ''; renderLogin();
   try {
     const r = mode() === 'sheet' ? await Remote.call('saleOpen', { pin: pin }) : await Demo.saleOpen({ pin: pin });
     LS.set('saleKey', r.key); location.href = saleLinkUrl(r.key, '');
-  } catch (e) { L.saleBusy = false; L.saleErr = e.message; renderLogin(); const x = $('#salePin'); if (x) x.focus(); }
+  } catch (e) { L.saleBusy = false; L.saleErr = e.message; L.salePinV = ''; renderLogin(); const x = $('#salePin'); if (x) x.focus(); }
 }
+/* PIN ของ Sale: จุดแสดงจำนวนหลักที่พิมพ์ · ใส่ครบ 6 หลักแล้วเปิดเลย */
+document.addEventListener('input', e => {
+  const t = e.target; if (!t || t.id !== 'salePin') return;
+  const L = S.login, v = t.value.replace(/\D/g, '').slice(0, 6); if (t.value !== v) t.value = v; L.salePinV = v; L.saleErr = '';
+  const f = $('#saleForm'); if (!f) return; f.classList.remove('bad'); f.querySelectorAll('.sx-dots i').forEach((d, i) => d.classList.toggle('on', i < v.length));
+  const btn = f.querySelector('.sx-btn'); if (btn) btn.disabled = v.length < 4 || L.saleBusy;
+  const er = f.querySelector('.sx-err'); if (er) er.outerHTML = '<small class="sx-hint">PIN 4–6 หลัก · กด Enter หรือปุ่มด้านล่าง</small>';
+  if (v.length === 6) saleSubmit();
+});
 
 /* ===== หน้า Sale: มุมมอง "ภาพรวมสถานะ" แบบเดียวกับหน้าภาพรวมบริษัท (1 เลข Job = 1 แถว เดินตั้งแต่ฝ่ายแบบจนส่งลูกค้า) ===== */
 const SF = { v: LS.get('saleView', 'flow'), step: 'all', q: '', sale: '', open: {}, anim: true };
@@ -5492,8 +5509,8 @@ document.addEventListener('click', async e => {
 
   switch (d.act) {
     case 'new': if (S.view === 'prod') return canProd() ? pAddOpen() : undefined; if (S.view === 'stock') return canStock() ? stockAddOpen() : undefined; if (!canAddDesign()) return; return openEditor(null);
-    case 'saleon': { const k = LS.get('saleKey', ''); if (k && mode() === 'sheet') { location.href = saleLinkUrl(k, ''); return; } S.login.sale = true; S.login.saleErr = ''; renderLogin(); setTimeout(() => { const x = $('#salePin'); if (x) x.focus(); }, 30); return; }
-    case 'saleoff': S.login.sale = false; S.login.saleErr = ''; return renderLogin();
+    case 'saleon': { const k = LS.get('saleKey', ''); if (k && mode() === 'sheet') { location.href = saleLinkUrl(k, ''); return; } S.login.sale = true; S.login.saleErr = ''; S.login.salePinV = ''; renderLogin(); setTimeout(() => { const x = $('#salePin'); if (x) x.focus(); }, 30); return; }
+    case 'saleoff': S.login.sale = false; S.login.saleErr = ''; S.login.salePinV = ''; return renderLogin();
     case 'salepin': { const v = String(($('#salePinSet') || {}).value || '').trim(); if (v && !/^\d{4,6}$/.test(v)) { toast('PIN ต้องเป็นตัวเลข 4–6 หลัก', true); return; }
       try { const r = await mutate(() => api().salePin({ pin: d.clear ? '' : v }), d.clear ? 'ปิดปุ่ม Sale ที่หน้าเข้าสู่ระบบแล้ว' : 'ตั้ง PIN ของ Sale แล้ว'); S.salePinOn = !!r.on; render(); } catch (x) {} return; }
     case 'close': return closeEditor();
@@ -5739,7 +5756,7 @@ function suggPick(i) {
   if (id === 'e-code' && S.edit && S.edit.isNew && it.jobs) {   // เลือกเลข Job เดิม → ดึงข้อมูลงานเดิมมาให้ (เช่น ต่อ CAM จากงาน CAD)
     readEditor(); const j = S.edit.job, src = it.jobs[0];
     j.code = it.v; ['title', 'group', 'sale', 'qty', 'level'].forEach(k => { if (src[k] !== undefined && src[k] !== '') j[k] = src[k]; });
-    if (!it.jobs.some(x => isCam(x))) { const cam = (S.settings.taskTypes || []).find(t => t.cat === 'cam'); if (cam) j.taskType = cam.name; }
+    if (!it.jobs.some(x => hasCamPart(x))) { const cam = (S.settings.taskTypes || []).find(t => t.cat === 'cam'); if (cam) j.taskType = cam.name; }
     autoDue(); renderEditor(); const n = $('#e-title'); if (n) n.focus();
     return toast('ดึงข้อมูลจากงานเดิม ' + it.v + (isCam(j) ? ' · ตั้งเป็น ' + j.taskType : ''));
   }
