@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.63.0';
+const APP_VERSION = '2.63.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3643,7 +3643,7 @@ function topbar(title, sub, extra) {
   const hr = d.getHours(), tod = hr < 6 || hr >= 18 ? 'moon' : hr < 11 ? 'sunrise' : 'sun';
   return '<div class="topbar"><span class="hero-ic" aria-hidden="true">' + (I[S.view] || I.home) + '</span><span class="hero-dots" aria-hidden="true"><i></i><i></i><i></i></span><div><div class="eyebrow"><span class="tod ' + tod + '" aria-hidden="true">' + DECO[tod] + '</span>' + esc(s.company) + ' · วัน' + TH_D[d.getDay()] + ' ' + fdY(today()) + '</div><h1>' + title + '</h1>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
     (S.user ? (u => '<button type="button" class="hero-me" data-view="settings" title="บัญชีของฉัน · เปลี่ยนรูปโปรไฟล์ได้ที่ตั้งค่า">' + '<span class="hm-av">' + avUser(u, 'lg') + '<i class="hm-on"></i></span><span class="hm-t"><b>' + esc(u.name || S.me) + '</b><small>' + esc(ROLES[roleOf(u)].short || ROLES[roleOf(u)].label) + '</small></span></button>')(Object.assign({}, S.user, (typeof memberBy === 'function' && memberBy(S.me)) || {})) : '') +
-    '<div class="top-actions">' + (extra || '') + (S.me ? (n => '<button class="btn top-due' + (n ? ' has' : '') + '" data-act="dueopen" title="กำหนดส่งงาน">' + STI.hourglass + '<span>กำหนดส่ง</span>' + (n ? '<b class="badge">' + n + '</b>' : '') + '</button>')(dueCount()) : '') + '<button class="btn top-msg' + (unreadAll() ? ' has' : '') + '" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span>' + (unreadAll() ? '<b class="badge msg-n">' + (unreadAll() > 99 ? '99+' : unreadAll()) + '</b>' : '') + '</button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
+    '<div class="top-actions">' + (extra || '') + (S.me && ['prod', 'flow', 'stock'].indexOf(S.view) >= 0 ? '<button class="btn top-scan" data-act="scan" title="สแกน QR ฉลากงาน เปิดงานในแอป">' + SCAN_IC + '<span>สแกน QR</span></button>' : '') + (S.me ? (n => '<button class="btn top-due' + (n ? ' has' : '') + '" data-act="dueopen" title="กำหนดส่งงาน">' + STI.hourglass + '<span>กำหนดส่ง</span>' + (n ? '<b class="badge">' + n + '</b>' : '') + '</button>')(dueCount()) : '') + '<button class="btn top-msg' + (unreadAll() ? ' has' : '') + '" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span>' + (unreadAll() ? '<b class="badge msg-n">' + (unreadAll() > 99 ? '99+' : unreadAll()) + '</b>' : '') + '</button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
     newBtn() + '</div></div>';
 }
 
@@ -5416,20 +5416,21 @@ function qrDraw() {
   m.innerHTML = '<div class="pm-card qr-card"><div class="pm-h"><div><span class="eyebrow">' + I.print + 'ฉลากติดชิ้นงาน</span><h3>' + esc(p.code) + '</h3><p class="sub">ช่างสแกน QR ด้วยกล้องมือถือ → เปิดงานนี้ในแอปทันที กดอัปเดตขั้นผลิตได้เลย</p></div><button type="button" class="icon-btn" data-qrx="1" aria-label="ปิด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
     '<div class="pm-b"><div class="qr-prev">' + qrLabelHtml(p, svg) + '</div>' +
     '<div class="qr-opts"><div class="seg" role="group" aria-label="ขนาดกระดาษ">' + [['label', 'ฉลาก 100×70 มม.'], ['a4', 'กระดาษ A4 (8 ดวง)']].map(o => '<button type="button" data-qrsize="' + o[0] + '" aria-pressed="' + (QRL.size === o[0]) + '">' + o[1] + '</button>').join('') + '</div>' +
-      '<label class="qr-copies">จำนวนดวง<span class="sf-step"><button type="button" data-qrn="-1" aria-label="ลด">−</button><input id="qrN" type="number" min="1" max="40" inputmode="numeric" value="' + QRL.copies + '"><button type="button" data-qrn="1" aria-label="เพิ่ม">+</button></span></label></div>' +
+      '<label class="qr-copies">' + (QRL.size === 'a4' ? 'จำนวนแผ่น <small>(แผ่นละ 8 ดวง)</small>' : 'จำนวนดวง') + '<span class="sf-step"><button type="button" data-qrn="-1" aria-label="ลด">−</button><input id="qrN" type="number" min="1" max="40" inputmode="numeric" value="' + QRL.copies + '"><button type="button" data-qrn="1" aria-label="เพิ่ม">+</button></span></label></div>' +
     '<div class="qr-link"><span class="mono">' + esc(jobLinkUrl(p.code).replace(/^https?:\/\//, '')) + '</span><button type="button" class="btn sm ghost" data-qrcopy="1">คัดลอกลิงก์</button></div></div>' +
     '<div class="pm-f"><span style="flex:1"></span><button type="button" class="btn" data-qrx="1">ปิด</button><button type="button" class="btn primary" data-qrprint="1">' + I.print + 'พิมพ์ฉลาก</button></div></div>';
 }
 function qrPrint() {
   const p = prodById(QRL.id); if (!p || !window.qrcode) return;
   const n = Math.max(1, Math.min(40, Math.round(+(($('#qrN') || {}).value || QRL.copies) || 1))); QRL.copies = n;
-  const a4 = QRL.size === 'a4', one = qrLabelHtml(p, qrSvg(jobLinkUrl(p.code)));
-  const css = '@page{size:' + (a4 ? 'A4 portrait;margin:10mm' : '100mm 70mm;margin:0') + '}*{box-sizing:border-box}body{margin:0;font-family:Anuphan,"Noto Sans Thai",Tahoma,sans-serif;color:#111}' +
-    '.sheet{display:' + (a4 ? 'grid;grid-template-columns:1fr 1fr;gap:6mm' : 'block') + '}' +
+  const a4 = QRL.size === 'a4', one = qrLabelHtml(p, qrSvg(jobLinkUrl(p.code))), labels = a4 ? n * 8 : n;   // A4: นับเป็นแผ่น (แผ่นละ 8 ดวง)
+  const fs = Math.max(10, Math.min(17, Math.floor(17 * 11 / Math.max(11, String(p.code).length))));
+  const css = '@page{size:' + (a4 ? 'A4 portrait' : '100mm 70mm') + ';margin:0}*{box-sizing:border-box}html,body{margin:0}body{font-family:Anuphan,"Noto Sans Thai",Tahoma,sans-serif;color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +   // margin 0 = ไม่มีหัว/ท้ายกระดาษของเบราว์เซอร์ (วันที่ ลิงก์)
+    '.sheet{display:' + (a4 ? 'grid;grid-template-columns:1fr 1fr;grid-auto-rows:62mm;gap:6mm;padding:10mm' : 'block') + '}.sheet .ql:nth-child(8n){page-break-after:always}' +
     '.ql{width:' + (a4 ? '100%' : '100mm') + ';height:' + (a4 ? '62mm' : '70mm') + ';padding:5mm;display:flex;gap:4mm;align-items:center;border:' + (a4 ? '.3mm dashed #999' : '0') + ';page-break-after:' + (a4 ? 'auto' : 'always') + ';break-inside:avoid;overflow:hidden}' +
     '.ql-qr{width:' + (a4 ? '40mm' : '46mm') + ';flex:none}.ql-qr svg{width:100%;height:auto;display:block}.ql-t{min-width:0;display:flex;flex-direction:column;gap:1.2mm}' +
-    '.ql-t small{font-size:8pt;color:#555}.ql-t b{font-family:"IBM Plex Mono",monospace;font-size:17pt;line-height:1.1;word-break:break-all}.ql-t span{font-size:10pt;font-weight:600;line-height:1.25;max-height:3.8em;overflow:hidden}.ql-t em{font-style:normal;font-size:9pt}.ql-t i{font-style:normal;font-size:7.5pt;color:#666;margin-top:1mm}';
-  const html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(p.code) + '</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap"><style>' + css + '</style></head><body><div class="sheet">' + Array.from({ length: n }, () => one).join('') + '</div></body></html>';
+    '.ql-t small{font-size:8pt;color:#555}.ql-t b{font-family:"IBM Plex Mono",monospace;font-size:' + fs + 'pt;line-height:1.1;white-space:nowrap}.ql-t span{font-size:10pt;font-weight:600;line-height:1.25;max-height:3.8em;overflow:hidden}.ql-t em{font-style:normal;font-size:9pt}.ql-t i{font-style:normal;font-size:7.5pt;color:#666;margin-top:1mm}';
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(p.code) + '</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap"><style>' + css + '</style></head><body><div class="sheet">' + Array.from({ length: labels }, () => one).join('') + '</div></body></html>';
   let f = $('#qrFrame'); if (f) f.remove();
   f = document.createElement('iframe'); f.id = 'qrFrame'; f.setAttribute('aria-hidden', 'true'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
   f.onload = () => setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { toast('เบราว์เซอร์นี้สั่งพิมพ์ไม่ได้', true); } try { window.focus(); const bt = $('#qrModal [data-qrprint]'); if (bt) bt.focus(); } catch (e) {} }, 350);   // พิมพ์เสร็จ: คืนโฟกัสให้หน้าแอป (กด Esc ปิดได้)
@@ -5438,7 +5439,7 @@ function qrPrint() {
 function qrClick(t, d) {
   if (d.qrlabel) { qrOpen(d.qrlabel); return true; }
   if (d.qrx || t.id === 'qrModal') { qrClose(); return true; }
-  if (d.qrsize) { QRL.size = d.qrsize; QRL.copies = +(($('#qrN') || {}).value || QRL.copies) || 1; qrDraw(); return true; }
+  if (d.qrsize) { if (QRL.size !== d.qrsize) QRL.copies = 1; QRL.size = d.qrsize; qrDraw(); return true; }
   if (d.qrn) { const x = $('#qrN'); if (x) { x.value = Math.max(1, Math.min(40, (+x.value || 1) + (+d.qrn))); QRL.copies = +x.value; } return true; }
   if (d.qrcopy) { const p = prodById(QRL.id); if (p) navigator.clipboard.writeText(jobLinkUrl(p.code)).then(() => toast('คัดลอกลิงก์แล้ว'), () => toast(jobLinkUrl(p.code))); return true; }
   if (d.qrprint) { qrPrint(); return true; }
@@ -5541,6 +5542,75 @@ function shipAdd(files) {
   shipDraw();
 }
 document.addEventListener('change', e => { if (e.target && e.target.id === 'shipImg') { shipAdd(e.target.files); e.target.value = ''; } });
+
+/* ---- สแกน QR ในแอป: กล้องมือถือของเครื่องจะเปิดลิงก์ในเบราว์เซอร์เสมอ (iPhone บังคับ) → สแกนจากในแอปแทน เปิดงานในแอปเลย ---- */
+const SCAN = { stream: null, raf: 0, det: null, busy: false };
+const SCAN_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M4 12h16"/></svg>';
+function scanCode(text) {   // ข้อความจาก QR → เลข Job (ลิงก์ ?job= หรือเลข Job ตรง ๆ)
+  const t = String(text || '').trim(); let c = '';
+  try { const u = new URL(t); c = u.searchParams.get('job') || ''; } catch (e) {}
+  if (!c) c = (jobCodeMap()[t.toLowerCase()] || '');
+  return c;
+}
+function scanLoadLib() { return window.jsQR ? Promise.resolve() : new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'vendor/jsqr.js'; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc); }); }
+async function scanOpen() {
+  let m = $('#scanModal'); if (!m) { m = document.createElement('div'); m.id = 'scanModal'; m.className = 'scan-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'สแกน QR'); document.body.appendChild(m); }
+  m.innerHTML = '<div class="scan-card"><div class="scan-h"><b>' + SCAN_IC + 'สแกน QR ฉลากงาน</b><button type="button" class="icon-btn" data-scanx="1" aria-label="ปิด">✕</button></div>' +
+    '<div class="scan-stage"><video id="scanVid" autoplay playsinline muted></video><span class="scan-frame"><i></i><i></i><i></i><i></i><u></u></span><span class="scan-load"><span class="spin-dot"></span>กำลังเปิดกล้อง…</span></div>' +
+    '<p class="scan-hint">หันกล้องไปที่ QR บนฉลากงาน · เจอแล้วเปิดงานให้เอง</p><div class="scan-f"><button type="button" class="btn ghost" data-scanfile="1">' + PICK_IC + 'ถ่าย/เลือกรูป QR</button></div></div>';
+  m.classList.add('open');
+  if ('BarcodeDetector' in window) { try { SCAN.det = new window.BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { SCAN.det = null; } }
+  if (!SCAN.det) scanLoadLib().catch(() => {});
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return scanNoCam('เครื่องนี้เปิดกล้องในแอปไม่ได้');
+  try {
+    SCAN.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    const v = $('#scanVid'); if (!v) return scanStop();
+    v.srcObject = SCAN.stream; await v.play().catch(() => {});
+    const l = $('#scanModal .scan-load'); if (l) l.remove();
+    scanLoop();
+  } catch (e) { scanNoCam(e.name === 'NotAllowedError' ? 'ยังไม่ได้อนุญาตให้ใช้กล้อง' : 'เปิดกล้องไม่ได้'); }
+}
+function scanNoCam(why) { const st = $('#scanModal .scan-stage'); if (st) st.innerHTML = '<div class="scan-nocam">' + CAM_IC + '<b>' + esc(why) + '</b><small>กด "ถ่าย/เลือกรูป QR" ด้านล่างแทน</small></div>'; }
+async function scanFrame(src, w, h) {
+  if (SCAN.det) { try { const r = await SCAN.det.detect(src); return r && r[0] ? r[0].rawValue : ''; } catch (e) { SCAN.det = null; } }
+  if (!window.jsQR) return '';
+  const k = Math.min(1, 720 / Math.max(w, h)), c = scanFrame.c || (scanFrame.c = document.createElement('canvas')); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0, c.width, c.height);
+  const d = g.getImageData(0, 0, c.width, c.height), r = window.jsQR(d.data, d.width, d.height, { inversionAttempts: 'dontInvert' });
+  return r ? r.data : '';
+}
+function scanLoop() {
+  const v = $('#scanVid'); if (!v || !SCAN.stream) return;
+  SCAN.raf = setTimeout(async () => {
+    if (!SCAN.busy && v.videoWidth) { SCAN.busy = true; const t = await scanFrame(v, v.videoWidth, v.videoHeight); SCAN.busy = false; if (t && scanHit(t)) return; }
+    scanLoop();
+  }, 160);
+}
+function scanHit(text) {
+  const code = scanCode(text);
+  if (!code) { const h = $('#scanModal .scan-hint'); if (h) { h.textContent = 'QR นี้ไม่ใช่ฉลากงานของระบบ'; h.classList.add('bad'); } return false; }
+  try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) {}
+  const fr = $('#scanModal .scan-frame'); if (fr) fr.classList.add('hit');
+  setTimeout(() => { scanClose(); if (prodOfCode(code) || designJobsOf(code).length) coOpen(code); else toast('ไม่พบเลข Job ' + code + ' ในระบบ', true); }, 220);
+  return true;
+}
+function scanStop() { clearTimeout(SCAN.raf); if (SCAN.stream) { SCAN.stream.getTracks().forEach(t => t.stop()); SCAN.stream = null; } }
+function scanClose() { scanStop(); const m = $('#scanModal'); if (m) m.remove(); }
+function scanFromFile() {
+  const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.setAttribute('capture', 'environment');
+  i.onchange = async () => { const f = i.files && i.files[0]; if (!f) return;
+    try { await scanLoadLib(); } catch (e) {}
+    const im = new Image(); im.onload = async () => { const t = await scanFrame(im, im.naturalWidth, im.naturalHeight); URL.revokeObjectURL(im.src); if (!t || !scanHit(t)) { const h = $('#scanModal .scan-hint'); if (h) { h.textContent = 'อ่าน QR จากรูปนี้ไม่ได้ ลองถ่ายให้ใกล้และชัดขึ้น'; h.classList.add('bad'); } } }; im.src = URL.createObjectURL(f); };
+  i.click();
+}
+function scanClick(t, d) {
+  if (d.act === 'scan') { scanOpen(); return true; }
+  if (d.scanx || t.id === 'scanModal') { scanClose(); return true; }
+  if (d.scanfile) { scanFromFile(); return true; }
+  return false;
+}
+/* แอปที่ติดตั้งแล้ว (Android/คอม): เปิดลิงก์ ?job= ในหน้าต่างแอปเดิม */
+try { if (window.launchQueue && window.launchQueue.setConsumer) window.launchQueue.setConsumer(p => { try { const c = new URL(p.targetURL).searchParams.get('job'); if (c) { LS.set('pendJob', c.slice(0, 60)); if (S.screen === 'app') openPendingLink(); } } catch (e) {} }); } catch (e) {}
 
 /* เปิดจากลิงก์ ?job= (สแกน QR) หรือแจ้งเตือน #stock — จำไว้ก่อน เผื่อต้องเข้าสู่ระบบก่อน แล้วเปิดหลังโหลดข้อมูลเสร็จ */
 function openPendingLink() {
@@ -5856,6 +5926,7 @@ document.addEventListener('click', async e => {
   if (d.lbgo !== undefined) { S.lb.i = +d.lbgo; return drawLightbox(); }
   if (d.lb) { if (d.lb === 'close') return closeLightbox(); S.lb.i += d.lb === 'next' ? 1 : -1; return drawLightbox(); }
   if (d.lbdel) return deleteImage(d.lbdel);
+  if (scanClick(t, d)) return;
   if (qrClick(t, d)) return;
   if (shipClick(t, d)) return;
   if (prodClick(t, d, e)) return;
@@ -5930,10 +6001,11 @@ document.addEventListener('click', async e => {
   }
 });
 
-document.addEventListener('click', e => { if (e.target && e.target.id === 'moreSheet') { moreClose(); return; } if (e.target && e.target.id === 'qrModal') { qrClose(); return; } if (e.target && e.target.id === 'shipModal') { shipClose(); return; } if (e.target && e.target.id === 'pModal') pModalClose(); if (e.target && e.target.id === 'sModal') stClose(); if (e.target && e.target.id === 'camModal') camClose(); });
+document.addEventListener('click', e => { if (e.target && e.target.id === 'scanModal') { scanClose(); return; } if (e.target && e.target.id === 'moreSheet') { moreClose(); return; } if (e.target && e.target.id === 'qrModal') { qrClose(); return; } if (e.target && e.target.id === 'shipModal') { shipClose(); return; } if (e.target && e.target.id === 'pModal') pModalClose(); if (e.target && e.target.id === 'sModal') stClose(); if (e.target && e.target.id === 'camModal') camClose(); });
 document.addEventListener('submit', e => { if (e.target.id === 'saleForm') { e.preventDefault(); saleSubmit(); return; } if (e.target.id === 'pinForm') { e.preventDefault(); doLogin(); } if (e.target.id === 'msgForm') { e.preventDefault(); sendMsg(); } });
 document.addEventListener('keydown', e => {
   if (e.target && e.target.id === 'msgText' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMsg(); return; }
+  if (e.key === 'Escape' && $('#scanModal')) { scanClose(); return; }
   if (e.key === 'Escape' && $('#camModal')) return;
   if (e.key === 'Escape' && $('#moreSheet')) { moreClose(); return; }
   if (e.key === 'Escape' && $('#qrModal')) { qrClose(); return; }
