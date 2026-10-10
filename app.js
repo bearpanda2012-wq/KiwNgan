@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.65.0';
+const APP_VERSION = '2.66.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4815,11 +4815,12 @@ const CO_STEPS = [
   { k: 'assemble', label: 'ประกอบ', sub: 'ประกอบติดตั้ง', ic: 'assemble', dept: 'p' },
   { k: 'qc', label: 'QC', sub: 'ตรวจคุณภาพ', ic: 'qc', dept: 'p' },
   { k: 'pack', label: 'แพ็ค', sub: '', ic: 'pack', dept: 'p' },
-  { k: 'ready', label: 'พร้อมส่ง', sub: '', ic: 'ready', dept: 's' }
+  { k: 'ready', label: 'พร้อมส่ง', sub: '', ic: 'ready', dept: 'p' },
+  { k: 'shipped', label: 'ส่งแล้ว', sub: '', ic: 'shipped', dept: 's' }   // ฝ่ายสต็อก
 ];
 /* แถบขั้นตอนด้านบน: แบ่งกลุ่มตามฝ่าย ฝ่ายแบบ → ฝ่ายผลิต → ฝ่ายสต็อก (พร้อมส่ง + ส่งแล้ว) */
 /* พร้อมส่ง = งานของฝ่ายผลิต (รอฝ่ายสต็อกมารับ) · ฝ่ายสต็อกมีขั้นเดียวคือ ส่งแล้ว */
-const PIPE_STEPS = CO_STEPS.map(x => x.k === 'ready' ? Object.assign({}, x, { dept: 'p' }) : x).concat([{ k: 'shipped', label: 'ส่งแล้ว', sub: '', ic: 'shipped', dept: 's' }]);
+const PIPE_STEPS = CO_STEPS;
 const PIPE_DEPTS = [['d', 'ฝ่ายแบบ', 'design'], ['p', 'ฝ่ายผลิต', 'machine'], ['s', 'ฝ่ายสต็อก', 'stock']];
 function pipeHtml(tile, anim) {
   let k = 0;
