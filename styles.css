@@ -3852,7 +3852,22 @@ html,body{overflow-x:hidden}
 .qr-link{display:flex;gap:8px;align-items:center;background:var(--surface-2);border-radius:10px;padding:6px 6px 6px 12px;font-size:12px;color:var(--muted)}
 .qr-link .mono{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pm-qr svg{width:17px;height:17px}
-.pm-mdone .pc-ms{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+/* v2.62.2: ติ๊กเครื่องที่เสร็จในหน้ารายละเอียด — แถวเต็มกว้าง กดง่าย ไม่ทับกัน */
+.pm-mdone .pc-ms{display:flex;flex-direction:column;gap:8px}
+.pm-mdone .mrow{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:10px 12px 10px 14px;border-radius:14px;border:1.5px solid color-mix(in oklab,var(--p-mach) 28%,var(--line));background:color-mix(in oklab,var(--p-mach) 6%,var(--surface));cursor:pointer;transition:background .18s,border-color .18s,transform .12s}
+.pm-mdone .mrow:not(:disabled):hover{border-color:var(--p-mach);background:color-mix(in oklab,var(--p-mach) 11%,var(--surface))}
+.pm-mdone .mrow:not(:disabled):active{transform:scale(.985)}
+.pm-mdone .mr-box{width:26px;height:26px;border-radius:8px;flex:none;border-width:2.5px;transition:background .2s,border-color .2s}
+.pm-mdone .mr-box svg{width:16px;height:16px}
+.pm-mdone .mr-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;line-height:1.25}
+.pm-mdone .mr-t b{font:700 15px var(--f-display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pm-mdone .mr-t small{font-size:12px;color:var(--muted)}
+.pm-mdone .mrow:not(.done) .mr-t small{color:var(--p-mach);font-weight:600}
+.pm-mdone .mr-act{flex:none;font-style:normal;font-size:12.5px;font-weight:700;padding:6px 12px;border-radius:999px;background:var(--p-mach);color:#fff;white-space:nowrap;box-shadow:0 4px 12px -6px var(--p-mach)}
+.pm-mdone .mrow.done{border-color:color-mix(in oklab,var(--p-ready) 35%,var(--line));background:color-mix(in oklab,var(--p-ready) 9%,var(--surface))}
+.pm-mdone .mrow.done .mr-t small{color:var(--p-ready);font-weight:600}
+.pm-mdone .mrow.done .mr-act{background:transparent;color:var(--muted);box-shadow:none;border:1px solid var(--line);font-weight:600}
+.pm-mdone .mrow.done .mr-box svg{animation:pop .35s cubic-bezier(.3,1.6,.5,1)}
 /* หลักฐานส่งมอบ */
 .ship-card{border-top-color:var(--p-ship);width:min(600px,100%)}
 .sig-box{position:relative;border-radius:14px;background:#fff;box-shadow:0 0 0 1.5px var(--line) inset;overflow:hidden;touch-action:none}

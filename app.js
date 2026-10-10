@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.62.1';
+const APP_VERSION = '2.62.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5367,7 +5367,7 @@ function pModalDraw() {
     (canProd() ? (fromD => '<button type="button" class="pm-urg' + (pUrgent(p) ? ' on' : '') + '" data-purg="' + esc(p.id) + '" aria-pressed="' + pUrgent(p) + '"' + (fromD ? ' disabled' : '') + '>' + STI.fire + '<span><b>งานด่วน</b><small>' + (fromD ? 'ติดด่วนจากงานฝ่ายแบบ · ติดไปจนส่งมอบ' : 'ติดธงด่วนไปทุกขั้นจนส่งมอบ · งานด่วนขึ้นก่อนในทุกช่อง') + '</small></span><i class="sw"></i></button>')(p.priority !== 'urgent' && pUrgent(p)) : '') +
     stepper + pShipHtml(p) + pQcHtml(p, ro) +
     pInfoHtml(p, ro) + pImgsHtml(p, ro) +
-    (p.stage === 'machine' ? '<div class="f pm-mdone"><label>ติ๊กเครื่องที่ทำเสร็จ</label><div class="pc-ms">' + ms.map(mm => '<button type="button" class="mrow' + (mm.d ? ' done' : '') + '"' + (ro ? ' disabled' : '') + ' data-pmd="' + esc(mm.m) + '" data-pid="' + esc(p.id) + '"><span class="mr-box">' + (mm.d ? PIC.check : '') + '</span><b>' + esc(mm.m) + '</b><small>' + (mm.d ? 'เสร็จ ' + esc(fdt(mm.d).replace(/^.* /, '')) : 'กำลังทำ · กดเมื่อเสร็จ') + '</small></button>').join('') + '</div></div>' : '') +
+    (p.stage === 'machine' ? '<div class="f pm-mdone"><label>ติ๊กเครื่องที่ทำเสร็จ</label><div class="pc-ms">' + ms.map(mm => '<button type="button" class="mrow' + (mm.d ? ' done' : '') + '"' + (ro ? ' disabled' : '') + ' data-pmd="' + esc(mm.m) + '" data-pid="' + esc(p.id) + '"><span class="mr-box">' + (mm.d ? PIC.check : '') + '</span><span class="mr-t"><b>' + esc(mm.m) + '</b><small>' + (mm.d ? 'เสร็จ ' + esc(fdt(mm.d).replace(/^.* /, '')) : 'กำลังทำ') + '</small></span>' + (ro ? '' : '<em class="mr-act">' + (mm.d ? 'ยกเลิก' : 'กดเมื่อเสร็จ') + '</em>') + '</button>').join('') + '</div></div>' : '') +
     '<div class="f"><label>เครื่องที่ใช้</label>' + mPick + (p.stage === 'machine' && !ro ? '<div class="hint">ติ๊กเครื่องที่ทำเสร็จได้ที่การ์ดบนบอร์ด ครบทุกเครื่องแล้วงานไปขั้นต่อเอง</div>' : '') + '</div>' +
     '<div class="pc-skips">' + pSkipTogs(p, ro) + '</div>' +
     '<div class="f"><label for="pNote">โน้ตฝ่ายผลิต</label><textarea id="pNote" rows="2" placeholder="เช่น สีตามตัวอย่าง, ระวังขอบบาง"' + (ro ? ' readonly' : '') + '>' + esc(p.note || '') + '</textarea>' + (ro ? '' : '<div class="top-actions"><button type="button" class="btn sm" data-pnote="1">บันทึกโน้ต</button></div>') + '</div>' +
