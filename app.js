@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.57.0';
+const APP_VERSION = '2.58.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -92,7 +92,7 @@ function decorate(root) {
 }
 // count numbers up from zero when a page opens
 function countUp(root) {
-  root.querySelectorAll('.kpi b, .mini b, .rkpi b, .tstats b').forEach(el => {
+  root.querySelectorAll('.kpi b, .mini b, .rkpi b, .tstats b, .skt b').forEach(el => {
     const txt = el.textContent, m = txt.match(/^(\d+)(.*)$/); if (!m) return;
     const end = +m[1], rest = m[2]; if (end < 2) return;
     const t0 = performance.now(), dur = Math.min(900, 380 + end * 18);
@@ -4800,7 +4800,7 @@ function viewFlow() {
 /* ================= คลังวัสดุ (ฝ่ายสต็อก) =================
    ดูได้: สิทธิ์ stock.view · รับเข้า/เบิกออก/ปรับยอด/เพิ่ม-แก้-ลบ/ใส่รูป: สิทธิ์ stock.edit
    รูปสินค้าใช้ระบบรูปเดียวกับงาน (ชีต Images, jobId = รหัสวัสดุ s_…) เก็บใน Drive โฟลเดอร์ รูปงาน/คลังวัสดุ */
-const SV = { q: '', cat: 'all', sort: 'status' };
+const SV = { q: '', cat: 'all', sort: 'status', anim: false };
 const SM = { id: '', mode: '', kind: 'out', pend: [], del: false, busy: false, f: null };
 const SK = { in: { label: 'รับเข้า', cls: 'sk-in', sign: '+' }, out: { label: 'เบิกออก', cls: 'sk-out', sign: '−' }, adj: { label: 'ปรับยอด', cls: 'sk-adj', sign: '±' } };
 const stLow = x => (+x.min || 0) > 0 && (+x.qty || 0) <= (+x.min || 0);
@@ -4844,6 +4844,7 @@ function stLevel(x) {
 function viewStock() {
   if (!S.stock) return topbar('คลังวัสดุ', 'ยังไม่มีข้อมูล') + '<div class="empty">' + (P.can(S.user, 'stock.view') ? 'กำลังโหลด… ถ้าไม่ขึ้น ให้แอดมินอัปเดต Apps Script เป็นเวอร์ชันล่าสุด' : 'ไม่มีสิทธิ์ดูคลังวัสดุ') + '</div>';
   const all = stockItems(), logs = S.stock.logs || [], ed = canStock(), q = SV.q.trim().toLowerCase();
+  const an = S.animIn || SV.anim; SV.anim = false;   // เล่นแอนิเมชันเฉพาะตอนเข้าหน้า/เปลี่ยนตัวกรอง (ซิงก์ข้อมูลแล้วไม่เด้ง)
   const cats = Array.from(new Set(all.map(x => x.cat).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'th'));
   const low = all.filter(x => stLow(x) && !stZero(x)), zero = all.filter(stZero), td = today(), wk = addDays(td, -7);
   const lw = logs.filter(l => String(l.ts).slice(0, 10) >= wk), nIn = lw.filter(l => l.kind === 'in').length, nOut = lw.filter(l => l.kind === 'out').length;
@@ -4852,7 +4853,7 @@ function viewStock() {
     .sort((a, b) => SV.sort === 'name' ? String(a.name).localeCompare(String(b.name), 'th') : SV.sort === 'qty' ? (+a.qty || 0) - (+b.qty || 0) : SV.sort === 'recent' ? String(b.updatedAt).localeCompare(String(a.updatedAt))
       : (rank(a) - rank(b)) || String(a.cat).localeCompare(String(b.cat), 'th') || String(a.name).localeCompare(String(b.name), 'th'));
   const kpi = (cls, ic, lab, n, sub, cf) => '<button type="button" class="sk-kpi ' + cls + '"' + (cf ? ' data-scat="' + cf + '"' : '') + '><span class="ski">' + ic + '</span><span class="skt"><small>' + lab + '</small><b class="tnum">' + n + '</b><em>' + sub + '</em></span></button>';
-  const kpis = '<div class="sk-kpis">' + kpi('k-all', I.stock, 'วัสดุทั้งหมด', all.length, cats.length + ' หมวด', 'all') + kpi('k-low', STI.fire, 'ใกล้หมด', low.length, 'ต่ำกว่าจุดสั่งซื้อ', 'low') +
+  const kpis = '<div class="sk-kpis' + (an ? ' in' : '') + '">' + kpi('k-all', I.stock, 'วัสดุทั้งหมด', all.length, cats.length + ' หมวด', 'all') + kpi('k-low', STI.fire, 'ใกล้หมด', low.length, 'ต่ำกว่าจุดสั่งซื้อ', 'low') +
     kpi('k-zero', PIC.xmark, 'หมดสต็อก', zero.length, zero.length ? 'ต้องสั่งด่วน' : 'ไม่มี', zero.length ? 'low' : '') + kpi('k-mv', STI.clock, 'เคลื่อนไหว 7 วัน', nIn + nOut, 'รับ ' + nIn + ' · เบิก ' + nOut, '') + '</div>';
   const alert = low.length + zero.length ? '<button type="button" class="sk-alert" data-scat="low"><span>' + STI.fire + '</span><b>ต้องสั่งเพิ่ม ' + (low.length + zero.length) + ' รายการ</b><small>' + esc(zero.concat(low).slice(0, 4).map(x => x.name).join(' · ')) + (low.length + zero.length > 4 ? ' …' : '') + '</small><em>ดูทั้งหมด ›</em></button>' : '';
   const chips = '<div class="qchips sk-chips">' + [['all', 'ทั้งหมด', all.length], ['low', 'ต้องสั่งเพิ่ม', low.length + zero.length]].concat(cats.map(c => [c, c, all.filter(x => x.cat === c).length])).map(x => '<button class="qchip' + (x[0] === 'low' ? ' q-late' : '') + '" data-scat="' + esc(x[0]) + '" aria-pressed="' + (SV.cat === x[0]) + '"' + (x[0] !== 'all' && x[0] !== 'low' ? ' style="--ch:' + stHue(x[0]) + '"' : '') + '>' + (x[0] !== 'all' && x[0] !== 'low' ? '<i class="sk-dot"></i>' : '') + esc(x[1]) + '<b>' + x[2] + '</b></button>').join('') + '</div>';
@@ -4866,13 +4867,12 @@ function viewStock() {
       '<small class="sk-min">' + ((+x.min || 0) ? 'จุดสั่งซื้อ ' + stNum(x.min) + ' ' + esc(x.unit || '') : 'ไม่ได้ตั้งจุดสั่งซื้อ') + '</small></div>' +
       (ed ? '<div class="sk-acts"><button type="button" class="sk-b in" data-squick="in" data-sid="' + esc(x.id) + '">+ รับเข้า</button><button type="button" class="sk-b out" data-squick="out" data-sid="' + esc(x.id) + '"' + (stZero(x) ? ' disabled' : '') + '>− เบิก</button></div>' : '') + '</article>'; }).join('');
   const addCard = ed && SV.cat === 'all' && !q ? '<button type="button" class="sk-card sk-add" data-sadd="1" style="--i:' + Math.min(list.length, 24) + '"><span class="ska-ic">' + I.plus + '</span><b>เพิ่มวัสดุใหม่</b><small>ใส่รูป ถ่ายรูป ตั้งจุดสั่งซื้อ</small></button>' : '';
-  const grid = list.length || addCard ? '<div class="sk-grid">' + cards + addCard + '</div>' : '<div class="sk-empty"><span>' + I.stock + '</span><b>' + (all.length ? 'ไม่พบวัสดุที่ค้นหา' : 'ยังไม่มีรายการวัสดุ') + '</b>' + (ed && !all.length ? '<button class="btn primary" data-sadd="1">' + I.plus + 'เพิ่มวัสดุชิ้นแรก</button>' : '') + '</div>';
+  const grid = list.length || addCard ? '<div class="sk-grid' + (an ? ' in' : '') + '">' + cards + addCard + '</div>' : '<div class="sk-empty"><span>' + I.stock + '</span><b>' + (all.length ? 'ไม่พบวัสดุที่ค้นหา' : 'ยังไม่มีรายการวัสดุ') + '</b>' + (ed && !all.length ? '<button class="btn primary" data-sadd="1">' + I.plus + 'เพิ่มวัสดุชิ้นแรก</button>' : '') + '</div>';
   const nameOf = id => (stItem(id) || {}).name || 'วัสดุที่ลบแล้ว';
-  const hist = logs.length ? '<ol class="sk-log">' + logs.slice(0, 30).map(l => { const it = stItem(l.itemId), sk = SK[l.kind] || SK.adj;
-    return '<li class="' + sk.cls + '"' + (it ? ' data-sopen="' + esc(it.id) + '"' : '') + '>' + (it ? stPhoto(it, 'mini') : '<span class="sk-ph none mini"><i>' + I.stock + '</i></span>') + '<div><b>' + esc(nameOf(l.itemId)) + '</b><small>' + esc(fdt(String(l.ts).slice(0, 16))) + ' · ' + esc(l.who || '') + (l.job ? ' · Job ' + esc(l.job) : '') + '</small>' + (l.note ? '<small class="sl-note">' + esc(l.note) + '</small>' : '') + '</div>' +
+  const hist = logs.length ? '<ol class="sk-log' + (an ? ' in' : '') + '">' + logs.slice(0, 30).map(l => { const it = stItem(l.itemId), sk = SK[l.kind] || SK.adj;
+    return '<li class="' + sk.cls + '" style="--i:' + Math.min(30, logs.indexOf(l)) + '"' + (it ? ' data-sopen="' + esc(it.id) + '"' : '') + '>' + (it ? stPhoto(it, 'mini') : '<span class="sk-ph none mini"><i>' + I.stock + '</i></span>') + '<div><b>' + esc(nameOf(l.itemId)) + '</b><small>' + esc(fdt(String(l.ts).slice(0, 16))) + ' · ' + esc(l.who || '') + (l.job ? ' · Job ' + esc(l.job) : '') + '</small>' + (l.note ? '<small class="sl-note">' + esc(l.note) + '</small>' : '') + '</div>' +
       '<span class="sl-q"><span class="sl-k">' + sk.label + '</span><b class="tnum">' + (l.kind === 'adj' ? (+l.qty >= 0 ? '+' : '−') : sk.sign) + stNum(Math.abs(+l.qty)) + '</b><em>เหลือ ' + stNum(l.bal) + '</em></span></li>'; }).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ยังไม่มีการเคลื่อนไหว</b></div>';
-  const addBtn = ed ? '<button class="btn primary" data-sadd="1">' + I.plus + '<span>เพิ่มวัสดุ</span></button>' : '';
-  return topbar('คลังวัสดุ', ed ? 'กดการ์ดเพื่อดูรายละเอียด รับเข้า เบิกออก หรือเพิ่มรูป · รายการที่ต้องสั่งเพิ่มขึ้นก่อนเสมอ' : 'ดูยอดคงเหลือได้อย่างเดียว · ฝ่ายสต็อกเป็นคนรับเข้า/เบิกออก', addBtn) + kpis + alert +
+  return topbar('คลังวัสดุ', ed ? 'กดการ์ดเพื่อดูรายละเอียด รับเข้า เบิกออก หรือเพิ่มรูป · เพิ่มวัสดุด้วยปุ่ม + มุมขวาล่าง' : 'ดูยอดคงเหลือได้อย่างเดียว · ฝ่ายสต็อกเป็นคนรับเข้า/เบิกออก') + kpis + alert +
     '<div class="sk-wrap"><section class="panel sk-main"><div class="panel-h"><h2>วัสดุในคลัง</h2><span class="sub">' + list.length + ' รายการ</span></div>' + tools + chips + grid + '</section>' +
     '<section class="panel sk-side"><div class="panel-h"><h2>ความเคลื่อนไหวล่าสุด</h2></div>' + hist + '</section></div>';
 }
@@ -4888,10 +4888,14 @@ function stDraw() {
   if (!SM.mode) { if (m) m.remove(); return; }
   const it = SM.id ? stItem(SM.id) : null;
   if (SM.mode === 'view' && !it) return stClose();
-  if (!m) { m = document.createElement('div'); m.id = 'sModal'; m.className = 'pmodal sk-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); document.body.classList.add('pm-open'); }
+  if (!m) { m = document.createElement('div'); m.id = 'sModal'; m.className = 'pmodal sk-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.innerHTML = '<div class="pm-card sk-mcard"></div>'; document.body.appendChild(m); document.body.classList.add('pm-open'); }
   const keep = SM.mode === 'view' ? stMoveRead() : null;
   const ed = canStock(), x = '<button type="button" class="icon-btn sk-x" data-sclose="1" aria-label="ปิด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
-  m.innerHTML = '<div class="pm-card sk-mcard" style="--h:' + stHue((SM.f && SM.f.cat) || (it && it.cat)) + '">' + (SM.mode === 'form' ? stFormHtml(it, x) : stViewHtml(it, ed, x)) + '</div>';
+  const card = m.querySelector('.sk-mcard'), key = SM.mode + ':' + SM.id, same = card.dataset.k === key, ob = card.querySelector('.pm-b'), top = same && ob ? ob.scrollTop : 0;   // วาดซ้ำ: ไม่เด้ง ไม่เลื่อนกลับขึ้นบน
+  card.style.setProperty('--h', stHue((SM.f && SM.f.cat) || (it && it.cat)));
+  card.innerHTML = SM.mode === 'form' ? stFormHtml(it, x) : stViewHtml(it, ed, x);
+  card.classList.toggle('swap', !!card.dataset.k && !same); card.dataset.k = key;
+  { const nb = card.querySelector('.pm-b'); if (nb && top) nb.scrollTop = top; }
   if (keep && (keep.qty || keep.job || keep.note)) { const s = (id, v) => { const e = $('#' + id); if (e) e.value = v; }; s('smQty', keep.qty); s('smJob', keep.job); s('smNote', keep.note); }
   paintAllThumbs(m);
 }
@@ -4937,6 +4941,14 @@ function stFormHtml(it, x) {
     '<div class="f full"><label for="sfNote">หมายเหตุ</label><input id="sfNote" value="' + esc(f.note || '') + '" placeholder="เช่น สั่งจากร้าน… / ขนาด 1220×2440 มม."></div></div></div>' +
     '<div class="pm-f">' + (!isNew ? (SM.del ? '<span class="pm-del">ลบ ' + esc(it.name) + '? (ประวัติยังอยู่)</span><button type="button" class="btn sm" data-sdel="no">ไม่</button><button type="button" class="btn sm danger" data-sdel="yes">ลบ</button>' : '<button type="button" class="btn ghost sm" data-sdel="ask">' + I.trash + 'ลบ</button>') : '') +
     '<span style="flex:1"></span><button type="button" class="btn" data-' + (isNew ? 'sclose' : 'sback') + '="1">ยกเลิก</button><button type="button" class="btn primary" data-ssave="1"' + (SM.busy ? ' disabled' : '') + '>' + (SM.busy ? '<span class="spin-dot"></span>' : '') + (isNew ? 'เพิ่มวัสดุ' : 'บันทึก') + '</button></div>';
+}
+function stBump(id, q0) {   // ตัวเลขคงเหลือเด้ง + ป้าย +/− ลอยขึ้น
+  const it = stItem(id), b = $('#sModal .sk-big'); if (!it || !b) return;
+  const dq = Math.round(((+it.qty || 0) - q0) * 100) / 100; if (!dq) return;
+  b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump');
+  const f = document.createElement('span'); f.className = 'sk-fly ' + (dq > 0 ? 'up' : 'down'); f.textContent = (dq > 0 ? '+' : '−') + stNum(Math.abs(dq)); b.appendChild(f); setTimeout(() => f.remove(), 1200);
+  const n = b.querySelector('b'), t0 = performance.now(), from = q0, to = +it.qty || 0;
+  if (n && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) { const step = now => { const k = Math.min(1, (now - t0) / 600), e = 1 - Math.pow(1 - k, 3); n.textContent = stNum(from + (to - from) * e); if (k < 1) requestAnimationFrame(step); else n.textContent = stNum(to); }; requestAnimationFrame(step); }
 }
 async function stockCall(fn, msg) { SM.busy = true; stDraw(); try { const r = await mutate(fn, msg); if (r && r.items) S.stock = r; return r; } catch (e) { return null; } finally { SM.busy = false; render(); stDraw(); } }
 async function uploadStockImages(id, files) {
@@ -5008,15 +5020,22 @@ function stockClick(t, d) {
   if (d.camflip) { CAM.facing = CAM.facing === 'user' ? 'environment' : 'user'; camStart(); return true; }
   if (d.camfile) { const cb = CAM.cb; camClose(); const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = () => cb && cb(i.files); i.click(); return true; }
   if (t.id === 'sModal') { stClose(); return true; }
-  if (d.scat !== undefined) { if (!d.scat) return true; SV.cat = SV.cat === d.scat && d.scat !== 'all' ? 'all' : d.scat; render(); return true; }
+  if (d.scat !== undefined) { if (!d.scat) return true; SV.cat = SV.cat === d.scat && d.scat !== 'all' ? 'all' : d.scat; SV.anim = true; render(); return true; }
   if (d.sadd) { stockAddOpen(); return true; }
   if (d.sclose) { stClose(); return true; }
   if (d.squick) { stockOpen(d.sid, d.squick); return true; }
   if (d.sopen) { stockOpen(d.sopen); return true; }
   if (d.scam) { stFormRead(); camOpen(stAddFiles); return true; }
   if (d.spendx) { stFormRead(); const p = SM.pend.find(x => x.id === d.spendx); if (p) URL.revokeObjectURL(p.url); SM.pend = SM.pend.filter(x => x.id !== d.spendx); stDraw(); return true; }
-  if (d.sfcat !== undefined) { stFormRead(); SM.f.cat = SM.f.cat === d.sfcat ? '' : d.sfcat; stDraw(); return true; }
-  if (d.sfunit !== undefined) { stFormRead(); SM.f.unit = SM.f.unit === d.sfunit ? '' : d.sfunit; const e = $('#sfUnit'); if (e) e.value = ''; stDraw(); return true; }
+  if (d.sfcat !== undefined || d.sfunit !== undefined) {   // เลือกหมวด/หน่วย: เปลี่ยนเฉพาะปุ่ม ไม่วาดหน้าต่างใหม่
+    stFormRead(); const isCat = d.sfcat !== undefined, v = isCat ? d.sfcat : d.sfunit, k = isCat ? 'cat' : 'unit';
+    SM.f[k] = SM.f[k] === v ? '' : v;
+    t.parentNode.querySelectorAll('.sf-chip').forEach(b => { const on = (isCat ? b.dataset.sfcat : b.dataset.sfunit) === SM.f[k]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+    if (SM.f[k]) { t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop'); }
+    if (isCat) { const e = $('#sfCat'); if (e) e.value = SM.f.cat; const c = $('#sModal .sk-mcard'); if (c) c.style.setProperty('--h', stHue(SM.f.cat)); const cv = $('#sModal .skg-cover.none i'); if (cv) cv.innerHTML = stIcon(SM.f.cat); }
+    else { const e = $('#sfUnit'); if (e) e.value = ''; }
+    return true;
+  }
   if (d.sfstep) { const e = $('#' + d.sfstep); if (e) { e.value = Math.max(0, Math.round(((+e.value || 0) + (+d.d)) * 100) / 100); e.focus(); } return true; }
   if (d.skind) { SM.kind = d.skind; stDraw(); setTimeout(() => { const x = $('#smQty'); if (x) x.focus(); }, 30); return true; }
   if (d.sstep) { const x = $('#smQty'); if (x) { x.value = Math.max(0, (+x.value || 0) + (+d.sstep)); x.focus(); } return true; }
@@ -5026,7 +5045,8 @@ function stockClick(t, d) {
     const it = stItem(d.sgo), k = SM.kind, mv = stMoveRead(), n = +mv.qty; if (!it || !SK[k]) return true;
     if (!(n > 0) && !(k === 'adj' && mv.qty !== '' && n === 0)) { toast(k === 'adj' ? 'ใส่ยอดจริงที่นับได้' : 'ใส่จำนวนมากกว่า 0', true); const x = $('#smQty'); if (x) x.focus(); return true; }
     if (k === 'out' && n > (+it.qty || 0)) { toast('เบิกเกินยอดคงเหลือ (เหลือ ' + stNum(it.qty) + ' ' + (it.unit || '') + ')', true); return true; }
-    stockCall(() => api().stockMove({ itemId: it.id, kind: k, qty: n, job: mv.job, note: mv.note }), SK[k].label + ' ' + it.name + ' ' + stNum(n) + ' ' + (it.unit || '')).then(r => { if (r) { ['smQty', 'smJob', 'smNote'].forEach(i => { const e = $('#' + i); if (e) e.value = ''; }); } });
+    const q0 = +it.qty || 0;
+    stockCall(() => api().stockMove({ itemId: it.id, kind: k, qty: n, job: mv.job, note: mv.note }), SK[k].label + ' ' + it.name + ' ' + stNum(n) + ' ' + (it.unit || '')).then(r => { if (r) { ['smQty', 'smJob', 'smNote'].forEach(i => { const e = $('#' + i); if (e) e.value = ''; }); stBump(it.id, q0); } });
     return true;
   }
   if (d.ssave) {
@@ -5207,7 +5227,7 @@ function coOpen(code) {
 document.addEventListener('change', e => {
   const t = e.target;
   if (t && (t.id === 'skImgIn' || t.id === 'skPendIn')) { stAddFiles(t.files); t.value = ''; return; }
-  if (t && t.id === 'sSort') { SV.sort = t.value; render(); return; }
+  if (t && t.id === 'sSort') { SV.sort = t.value; SV.anim = true; render(); return; }
   if (t && t.id === 'pAddImg') { pAddRead(); Array.from(t.files || []).filter(f => /^image\//.test(f.type)).slice(0, IMG_MAX - P2.files.length).forEach(f => P2.files.push({ f: f, url: URL.createObjectURL(f) })); pModalDraw(); }
   if (t && t.id === 'pImgIn' && P2.id) { const id = P2.id; uploadProdImages(id, t.files).then(n => { if (n) toast('เพิ่มรูปแล้ว ' + n + ' รูป'); }); }
 });

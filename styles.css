@@ -3631,3 +3631,87 @@ html,body{overflow-x:hidden}
 .sk-log .sl-q{min-width:max-content}
 .sk-mb>.sk-lv{width:100%;align-self:stretch;flex:none}
 .skg-cover.none{aspect-ratio:5/2}
+
+/* v2.58: คลังวัสดุ — สีสันและแอนิเมชัน (เล่นเฉพาะตอนเข้าหน้า/เปลี่ยนตัวกรอง ซิงก์แล้วไม่เด้ง) */
+.sk-card,.sk-log li{animation:none}
+.sk-grid.in .sk-card{animation:skCardIn .5s cubic-bezier(.2,.9,.3,1.15) both;animation-delay:calc(var(--i) * 35ms)}
+@keyframes skCardIn{from{opacity:0;transform:translateY(16px) scale(.96)}to{opacity:1;transform:none}}
+.sk-grid.in .sk-lv i{animation:skGrow .9s cubic-bezier(.3,.8,.3,1) both;animation-delay:calc(var(--i) * 35ms + .2s);transform-origin:left}
+@keyframes skGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.sk-log.in li{animation:skSlide .4s ease-out both;animation-delay:calc(var(--i) * 30ms + .1s)}
+@keyframes skSlide{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+.sk-kpis.in .sk-kpi{animation:skCardIn .5s cubic-bezier(.2,.9,.3,1.15) both}
+.sk-kpis.in .sk-kpi:nth-child(2){animation-delay:.06s}.sk-kpis.in .sk-kpi:nth-child(3){animation-delay:.12s}.sk-kpis.in .sk-kpi:nth-child(4){animation-delay:.18s}
+/* การ์ด: แถบสีหมวดด้านบน, ไอคอนลอย, เงาสีตามหมวด */
+.sk-card::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;z-index:3;background:linear-gradient(90deg,var(--h),color-mix(in oklab,var(--h) 35%,#fff),var(--h));background-size:200% 100%;transition:height .2s}
+.sk-card:hover::before{height:6px;animation:skSheen 1.6s linear infinite}
+@keyframes skSheen{to{background-position:-200% 0}}
+.sk-ph.none i{animation:skFloat 4.5s ease-in-out infinite;animation-delay:calc(var(--i, 0) * -.45s)}
+@keyframes skFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-6px) rotate(-4deg)}}
+.sk-card:hover .sk-ph.none i{animation-duration:1.6s;box-shadow:0 14px 28px -12px var(--h)}
+.sk-ph.none::after{content:"";position:absolute;width:140px;height:140px;border-radius:50%;right:-40px;top:-50px;background:radial-gradient(circle,color-mix(in oklab,var(--h) 30%,transparent),transparent 70%);opacity:.8}
+.sk-card:hover{box-shadow:0 18px 34px -16px color-mix(in oklab,var(--h) 75%,#000),0 0 0 1px color-mix(in oklab,var(--h) 30%,transparent)}
+.sk-card:active{transform:translateY(-1px) scale(.99)}
+.s-low .sk-st,.s-zero .sk-st{animation:skPill 2s ease-in-out infinite}
+@keyframes skPill{0%,100%{box-shadow:0 0 0 0 color-mix(in oklab,currentColor 0%,transparent),0 4px 10px -4px rgba(0,0,0,.4)}50%{box-shadow:0 0 0 5px color-mix(in oklab,var(--urgent) 25%,transparent),0 4px 10px -4px rgba(0,0,0,.4)}}
+.s-zero .sk-st{--urgent:var(--late,#d4473f)}
+.sk-q{transition:transform .2s}
+.sk-card:hover .sk-q{transform:translateY(-2px) scale(1.05)}
+.sk-b{position:relative;overflow:hidden}
+.sk-b::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at center,currentColor 0%,transparent 60%);opacity:0;transform:scale(.2);transition:opacity .3s,transform .4s}
+.sk-b:active::after{opacity:.18;transform:scale(1.6);transition:0s}
+/* การ์ดเพิ่มวัสดุ: วงแหวนกระเพื่อม */
+.ska-ic{position:relative}
+.ska-ic::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--brand);opacity:0;animation:skRing 2.4s ease-out infinite}
+@keyframes skRing{0%{transform:scale(.8);opacity:.6}100%{transform:scale(1.5);opacity:0}}
+.sk-add{background:linear-gradient(135deg,color-mix(in oklab,var(--brand) 7%,var(--surface)),color-mix(in oklab,var(--accent, var(--brand)) 4%,var(--surface)))}
+/* KPI: ไอคอนไล่สี + แสงวิ่งตอนชี้ */
+.sk-kpi{position:relative;overflow:hidden}
+.ski{background:linear-gradient(140deg,color-mix(in oklab,var(--k) 75%,#fff),var(--k) 60%);transition:transform .25s cubic-bezier(.3,1.6,.5,1)}
+.sk-kpi:hover .ski{transform:rotate(-8deg) scale(1.08)}
+.sk-kpi::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);transform:skewX(-18deg);pointer-events:none}
+.sk-kpi:hover::after{animation:skShine .8s ease-out}
+@keyframes skShine{to{left:130%}}
+.sk-kpi.k-low .ski{animation:skWiggle 3.5s ease-in-out infinite}
+@keyframes skWiggle{0%,86%,100%{transform:rotate(0)}89%{transform:rotate(-10deg)}92%{transform:rotate(9deg)}95%{transform:rotate(-5deg)}}
+/* ชิปหมวดบนหน้า: เลือกแล้วเป็นสีหมวด */
+.sk-chips .qchip{transition:transform .15s,background .2s,color .2s}
+.sk-chips .qchip:hover{transform:translateY(-1px)}
+.sk-chips .qchip[style][aria-pressed=true]{background:var(--ch);border-color:var(--ch);color:#fff}
+.sk-chips .qchip[style][aria-pressed=true] .sk-dot{background:#fff}
+.sk-chips .qchip[style][aria-pressed=true] b{background:rgba(255,255,255,.25);color:#fff}
+/* หน้าต่างวัสดุ */
+.sk-mh{background:linear-gradient(160deg,color-mix(in oklab,var(--h) 22%,var(--surface)) 0%,var(--surface) 70%);transition:background .3s}
+.sk-mcard{transition:border-color .3s}
+.sk-mcard.swap .pm-b,.sk-mcard.swap .skg{animation:skSwap .28s ease-out}
+@keyframes skSwap{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.sf-chip{transition:background .2s,border-color .2s,transform .15s,box-shadow .2s}
+.sf-chip.on{box-shadow:0 6px 14px -8px var(--sc,var(--brand))}
+.sf-chip.on svg{transform:scale(1.15)}
+.sf-chip svg{transition:transform .2s}
+.sf-chip.pop{animation:skPop .32s cubic-bezier(.3,1.8,.5,1)}
+@keyframes skPop{40%{transform:scale(1.12)}100%{transform:scale(1)}}
+.skg-cover.none i{animation:skFloat 4.5s ease-in-out infinite;transition:color .3s}
+.skg-cam{background:linear-gradient(135deg,color-mix(in oklab,var(--h) 70%,#fff),var(--h));border:0;box-shadow:0 8px 16px -10px var(--h);transition:transform .15s}
+.skg-cam:hover{transform:translateY(-1px)}
+.sk-seg button{transition:background .2s,color .2s,transform .12s}
+.sk-seg button:active{transform:scale(.97)}
+.sk-move{transition:background .3s,border-color .3s}
+.sk-go{position:relative;overflow:hidden;background:linear-gradient(135deg,color-mix(in oklab,var(--mc) 75%,#fff),var(--mc) 65%);box-shadow:0 10px 20px -12px var(--mc)}
+.sk-go::after{content:"";position:absolute;top:0;bottom:0;width:35%;left:-50%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.4),transparent);transform:skewX(-18deg);animation:skShine 2.8s ease-in-out infinite 1s}
+.sk-big{position:relative;transition:background .3s}
+.sk-big.bump{animation:skBump .55s cubic-bezier(.3,1.7,.5,1)}
+@keyframes skBump{30%{transform:scale(1.14)}100%{transform:scale(1)}}
+.sk-fly{position:absolute;right:10px;top:-6px;font:800 18px var(--f-display);pointer-events:none;animation:skFly 1.15s ease-out forwards}
+.sk-fly.up{color:var(--done)}.sk-fly.down{color:var(--urgent)}
+@keyframes skFly{0%{opacity:0;transform:translateY(6px) scale(.8)}20%{opacity:1;transform:translateY(-8px) scale(1.1)}100%{opacity:0;transform:translateY(-38px) scale(1)}}
+.sk-mb>.sk-lv i{transition:width .6s cubic-bezier(.3,.8,.3,1)}
+.sm-step{transition:transform .12s,background .15s}
+.sm-step:hover{background:color-mix(in oklab,var(--mc) 10%,var(--surface))}
+@media (prefers-reduced-motion:reduce){.sk-grid.in .sk-card,.sk-grid.in .sk-lv i,.sk-log.in li,.sk-kpis.in .sk-kpi,.sk-ph.none i,.skg-cover.none i,.s-low .sk-st,.s-zero .sk-st,.ska-ic::after,.sk-kpi.k-low .ski,.sk-go::after,.sk-big.bump,.sk-fly,.sf-chip.pop,.sk-mcard.swap .pm-b,.sk-mcard.swap .skg{animation:none}}
+.sk-log li{grid-template-columns:38px minmax(0,1fr) 74px}
+.sk-log.mini li{grid-template-columns:auto minmax(0,1fr) 74px}
+.sk-log{overflow-x:hidden}
+.sk-log .sl-q{min-width:0;width:74px}
+.btn.sk-go,.btn.sk-go.sk-in,.btn.sk-go.sk-out,.btn.sk-go.sk-adj{color:#fff;font-weight:700}
+.sk-log .sl-k{display:inline-block;width:auto;height:auto;border-radius:999px;line-height:1.5;flex:none}

@@ -68,7 +68,8 @@ await shot('stock-move');
 await pg.click(`[data-sgo="${it.id}"]`); await pg.waitForTimeout(700);
 eq('withdraw 6 → 40', await pg.evaluate(id => S.stock.items.find(x => x.id === id).qty, it.id), 40);
 eq('log top = out', await pg.evaluate(() => [S.stock.logs[0].kind, S.stock.logs[0].job]), ['out', 'R69-10012S']);
-eq('popup stays open showing new qty', await pg.locator('#sModal .sk-big b').innerText(), '40');
+await pg.waitForTimeout(700); eq('popup stays open showing new qty', await pg.locator('#sModal .sk-big b').innerText(), '40');
+eq('page re-render after save does not replay card animation', await pg.locator('.sk-grid.in').count(), 0);
 // camera (fake webcam) → photo attached to the item
 await pg.click('#sModal [data-scam]'); await pg.waitForTimeout(1500);
 eq('camera window opens', await pg.locator('#camModal video').count(), 1);
@@ -79,9 +80,13 @@ eq('cover photo shown in popup', await pg.locator('#sModal .skg-cover img').coun
 await shot('stock-item');
 await pg.click('#sModal [data-sclose]'); await pg.waitForTimeout(300);
 eq('card shows the photo', await pg.locator(`.sk-card[data-sopen="${it.id}"] .sk-ph.has img`).count(), 1);
+eq('no add button in the banner', await pg.locator('.hero [data-sadd], .topbar [data-sadd], header [data-sadd]').count(), 0);
 eq('stock: floating + shown', await pg.evaluate(() => [getComputedStyle(document.querySelector('.fab')).display !== 'none', document.querySelector('.fab').getAttribute('aria-label')]), [true, 'เพิ่มวัสดุ']);
 await pg.click('.fab'); await pg.waitForTimeout(300);
 eq('floating + opens add popup', await pg.locator('#sModal #sfName').count(), 1);
+await pg.evaluate(() => { window.__card = document.querySelector('#sModal .sk-mcard'); const b = document.querySelector('#sModal .pm-b'); b.scrollTop = 200; window.__top = b.scrollTop; });
+await pg.click('#sModal [data-sfunit="ลิตร"]'); await pg.click('#sModal [data-sfcat="สี"]'); await pg.waitForTimeout(150);
+eq('chip click: same window, no re-pop, scroll kept', await pg.evaluate(() => [document.querySelector('#sModal .sk-mcard') === window.__card, document.querySelector('#sModal .pm-b').scrollTop === window.__top, document.querySelector('#sModal [data-sfunit="ลิตร"]').classList.contains('on'), document.querySelector('#sfCat').value]), [true, true, true, 'สี']);
 await pg.click('#sModal [data-sfcat="อุปกรณ์ยึด"]'); await pg.fill('#sfName', 'กาวซิลิโคน'); await pg.fill('#sfUnit', 'หลอด'); await pg.fill('#sfMin', '10'); await pg.fill('#sfQty', '4');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC', 'base64');
 await pg.setInputFiles('#skPendIn', { name: 'glue.png', mimeType: 'image/png', buffer: png }); await pg.waitForTimeout(300);
