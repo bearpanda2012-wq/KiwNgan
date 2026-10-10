@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.64.0';
+const APP_VERSION = '2.64.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5386,7 +5386,7 @@ function pModalDraw() {
     (dj.length ? '<div class="f"><label>งานฝ่ายแบบของเลขนี้</label><div class="pm-jobs">' + dj.map(j => '<button type="button" class="pm-job" data-pjob="' + esc(j.id) + '">' + stBadge(j) + '<b>' + esc(j.taskType || 'งาน') + '</b><small>' + esc(j.assignee || '') + ' · ' + esc(j.status === 'done' ? 'เสร็จ ' + fd(finDate(j)) : ST[j.status].label) + '</small></button>').join('') + '</div></div>' : '') +
     (h.length ? '<div class="f"><label>ประวัติ</label><ol class="pm-hist">' + h.map(e => '<li class="' + (PSTG[e.s] ? PSTG[e.s].cls : '') + '"><i></i><b>' + esc(PSTG[e.s] ? PSTG[e.s].label : e.s) + '</b><span>' + esc(fdt(e.t)) + ' · ' + esc(e.by || '') + (e.x ? ' · ' + esc(e.x) : '') + '</span></li>').join('') + '</ol></div>' : '') +
     '</div><div class="pm-f">' + (canProd() ? (P2.del ? '<span class="pm-del">ลบงานนี้ออกจากฝ่ายผลิต?</span><button type="button" class="btn sm" data-pdel="no">ไม่</button><button type="button" class="btn sm danger" data-pdel="yes">ลบ</button>' : '<button type="button" class="btn ghost sm" data-pdel="ask">' + I.trash + 'ลบ</button>') : '') +
-    '<button type="button" class="btn ghost sm pm-qr" data-qrlabel="' + esc(p.id) + '" title="พิมพ์ฉลาก QR ติดชิ้นงาน">' + QR_IC + 'ฉลาก QR</button>' +
+    '<button type="button" class="btn pm-qr" data-qrlabel="' + esc(p.id) + '" title="พิมพ์ฉลาก QR ติดชิ้นงาน · ช่างสแกนแล้วเปิดงานนี้ได้ทันที"><span class="pq-ic">' + QR_IC + '</span><span class="pq-t"><b>พิมพ์ฉลาก QR</b><small>ติดชิ้นงาน</small></span></button>' +
     '<span style="flex:1"></span><button type="button" class="btn" data-pclose="1">ปิด</button>' +
     (!ro && p.stage === 'wait' ? '<button type="button" class="btn primary" data-pstart="' + esc(p.id) + '">' + PIC.machine + 'เริ่มลงเครื่อง</button>' : '') +
     (PDONE[p.stage] && pNextOf(p) && pCanSet(p, pNextOf(p)) ? '<button type="button" class="btn primary" data-padv="' + esc(p.id) + '">' + PDONE[p.stage] + '</button>' : p.stage === 'ready' ? '<span class="pc-note pc-wship">' + ROLE_IC.stock + 'รอฝ่ายสต็อกกด "ส่งแล้ว"</span>' : '') + '</div></div>';

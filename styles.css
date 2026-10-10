@@ -4069,3 +4069,16 @@ body.more-open .fab,body.more-open #chatHeads,body.more-open .msg-fab{opacity:0!
 @media (max-width:1100px){.co-pipe2 .co-garrow{height:14px;width:auto;transform:rotate(90deg)}.co-pipe2 .co-arrow{display:none}.co-grp.d-d,.co-grp.d-s{flex-grow:1}.co-grp.d-d .co-step,.co-grp.d-s .co-step{flex:1 1 100%}}
 @media (prefers-reduced-motion:reduce){.co-pipe2 *,.co-pipe2 *::before{animation:none!important}}
 @media (min-width:1101px) and (max-width:1500px){.co-pipe2{gap:4px;padding:8px}.co-grp{padding:7px}.co-grp .co-step{padding:8px 8px 7px;column-gap:6px}.co-grp .co-step .flow-ic{width:28px;height:28px}.co-grp .co-step .flow-ic svg{width:16px;height:16px}.co-grp .co-step b{font-size:21px}.co-pipe2 .co-arrow{flex-basis:8px;width:8px}.co-pipe2 .co-arrow i:nth-child(3){display:none}.co-grp .co-step>span:not(.flow-ic){font-size:12.5px}}
+/* v2.64.1: ปุ่มพิมพ์ฉลาก QR เด่นขึ้น */
+.btn.pm-qr{position:relative;overflow:hidden;isolation:isolate;display:inline-flex;align-items:center;gap:9px;min-height:44px;padding:5px 14px 5px 6px;border:0;border-radius:14px;color:#fff;background:linear-gradient(120deg,#7A4BB5,#2D5FC4 55%,#0B6B70);box-shadow:0 10px 22px -10px #4f46b8,inset 0 1px 0 rgba(255,255,255,.3);transition:transform .2s cubic-bezier(.3,1.5,.5,1),box-shadow .2s}
+.btn.pm-qr:hover{transform:translateY(-2px);box-shadow:0 14px 28px -10px #4f46b8,inset 0 1px 0 rgba(255,255,255,.3);background:linear-gradient(120deg,#7A4BB5,#2D5FC4 55%,#0B6B70)}
+.btn.pm-qr:active{transform:scale(.97)}
+.btn.pm-qr .pq-ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:#fff;color:#2D5FC4;box-shadow:0 3px 8px -3px rgba(0,0,0,.35)}
+.btn.pm-qr .pq-ic svg{width:20px;height:20px;animation:pqPulse 2.4s ease-in-out infinite}
+.btn.pm-qr .pq-t{display:flex;flex-direction:column;line-height:1.15;text-align:left}
+.btn.pm-qr .pq-t b{font:700 14px var(--f-display);color:#fff}
+.btn.pm-qr .pq-t small{font-size:11px;color:rgba(255,255,255,.82)}
+.btn.pm-qr::after{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.35) 50%,transparent 65%);transform:translateX(-120%);animation:coShine 4s ease-in-out infinite 1s}
+@keyframes pqPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+@media (max-width:520px){.btn.pm-qr .pq-t small{display:none}.btn.pm-qr{padding-right:12px}}
+@media (prefers-reduced-motion:reduce){.btn.pm-qr::after,.btn.pm-qr .pq-ic svg{animation:none}}
