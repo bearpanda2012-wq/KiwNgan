@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.68.1';
+const APP_VERSION = '2.69.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -92,7 +92,7 @@ function decorate(root) {
 }
 // count numbers up from zero when a page opens
 function countUp(root) {
-  root.querySelectorAll('.kpi b, .mini b, .rkpi b, .tstats b, .skt b, .cr-n').forEach(el => {
+  root.querySelectorAll('.kpi b, .mini b, .rkpi b, .tstats b, .skt b, .cpx .co-step b').forEach(el => {
     const txt = el.textContent, m = txt.match(/^(\d+)(.*)$/); if (!m) return;
     const end = +m[1], rest = m[2]; if (end < 2) return;
     const t0 = performance.now(), dur = Math.min(900, 380 + end * 18);
@@ -4822,20 +4822,17 @@ const CO_STEPS = [
 /* พร้อมส่ง = งานของฝ่ายผลิต (รอฝ่ายสต็อกมารับ) · ฝ่ายสต็อกมีขั้นเดียวคือ ส่งแล้ว */
 const PIPE_STEPS = CO_STEPS;
 const PIPE_DEPTS = [['d', 'ฝ่ายแบบ', 'design'], ['p', 'ฝ่ายผลิต', 'machine'], ['s', 'ฝ่ายสต็อก', 'stock']];
-/* แถบขั้นตอนแบบ "เส้นทาง" (ดีไซน์เดียวกับเส้นทางในรายการงาน): ราง 9 จุด ตัวเลขอยู่เหนือจุด ชื่อขั้นอยู่ใต้จุด
-   แถบฝ่ายด้านบนกว้างตามจำนวนขั้น · จุดเล็ก ๆ วิ่งบนรางแสดงงานที่ไหลต่อ · กดจุดเพื่อกรองรายการ */
+/* แถบขั้นตอน (ดีไซน์การ์ดสีอ่อน + ไอคอนวงกลมสี): หัวฝ่ายเป็นแถบเม็ดยาวตรงกับขั้นของฝ่ายนั้นพอดี (กริดเดียวกัน) */
 function pipeHtml(tile, anim) {
-  const N = PIPE_STEPS.length, col = d => { const a = PIPE_STEPS.findIndex(x => x.dept === d), b = PIPE_STEPS.length - PIPE_STEPS.slice().reverse().findIndex(x => x.dept === d); return (a + 1) + '/' + (b + 1); };
-  return '<div class="cr' + (anim ? ' in' : '') + '" style="--N:' + N + '">' +
-    '<div class="cr-depts">' + PIPE_DEPTS.map(d => '<span class="cr-dept d-' + d[0] + '" style="grid-column:' + col(d[0]) + '"><b>' + (d[2] === 'stock' ? ROLE_IC.stock : PIC[d[2]]) + '</b>' + d[1] + '</span>').join('') + '</div>' +
-    '<div class="cr-body"><div class="cr-rail" aria-hidden="true"><i class="cr-fill"></i>' + [0, 1, 2, 3].map(k => '<u style="--k:' + k + '"></u>').join('') + '</div>' +
-    '<div class="cr-stops">' + PIPE_STEPS.map((x, i) => tile(x, i)).join('') + '</div></div></div>';
+  const N = PIPE_STEPS.length, col = d => { const a = PIPE_STEPS.findIndex(x => x.dept === d), b = N - PIPE_STEPS.slice().reverse().findIndex(x => x.dept === d); return (a + 1) + '/' + (b + 1); };
+  return '<div class="co-pipe cpx' + (anim ? ' in' : '') + '" style="--N:' + N + '"><div class="co-depts">' + PIPE_DEPTS.map(d => '<span class="dl d-' + d[0] + '" style="grid-column:' + col(d[0]) + '">' + (d[2] === 'stock' ? ROLE_IC.stock : PIC[d[2]]) + d[1] + '</span>').join('') + '</div>' +
+    '<div class="co-steps">' + PIPE_STEPS.map((x, i) => tile(x, i)).join('') + '</div></div>';
 }
-/* 1 จุดบนเส้นทาง (ใช้ทั้งภาพรวมบริษัทและหน้า Sale) — คลาส cj-tile คงไว้ให้โค้ด/เทสเดิมหาเจอ */
+/* การ์ด 1 ขั้น (ใช้ทั้งภาพรวมบริษัทและหน้า Sale) — คลาส cj-tile คงไว้ให้เทสเดิมหาเจอ */
 function cjTile(s, i, n, attr, pressed, note, late) {
-  return '<button type="button" class="cj-tile cr-stop d-' + s.dept + ' ' + (n ? 'has' : 'zero') + (late ? ' late' : '') + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" style="--i:' + i + '" ' + attr + ' aria-pressed="' + pressed + '" title="' + esc(s.label) + ' ' + n + ' งาน">' +
-    '<span class="cr-n">' + n + '</span><span class="cr-node ic-' + s.ic + '">' + PIC[s.ic] + '</span><span class="cr-l">' + s.label + '</span>' +
-    '<small>' + (late ? '<em>' + STI.fire + 'ค้าง ' + late + '</em>' : esc(note || '')) + '</small></button>';
+  return '<button type="button" class="co-step cpx-step d-' + s.dept + ' ' + (n ? 'has' : 'zero') + ' ' + (s.k === 'design' ? 's-doing' : PSTG[s.k].cls) + '" style="--i:' + i + '" ' + attr + ' aria-pressed="' + pressed + '">' +
+    '<span class="flow-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><b>' + n + '</b><span>' + s.label + '</span>' +
+    (late ? '<em>' + STI.fire + late + ' ค้าง</em>' : '<small>' + esc(note || '') + '</small>') + '</button>';
 }
 function coRows() {
   const byCode = {}, pool = S.jobs, cutoff = addDays(today(), -14);   // ภาพรวมบริษัท: ทุกคนเห็นงานทั้งหมด (แก้ได้เฉพาะงานตัวเอง)
