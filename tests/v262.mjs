@@ -108,7 +108,7 @@ await pg.setViewportSize({ width: 390, height: 844 }); await pg.evaluate(() => T
 eq('admin bottom bar: 4 tabs + เพิ่มเติม', [await pg.locator('#tabbar > button[data-view]').count(), await pg.locator('#tabbar .tab-more').count()], [4, 1]);
 eq('bar fits one row', await pg.evaluate(() => { const t = document.getElementById('tabbar'); return t.scrollWidth <= t.clientWidth + 1 && t.getBoundingClientRect().height < 90; }), true);
 await pg.click('#tabbar .tab-more'); await pg.waitForTimeout(500);
-eq('more sheet lists the other 5 menus', await pg.locator('#moreSheet .ms-grid button[data-view]').count(), 5);
+eq('more sheet lists the other 6 menus', await pg.locator('#moreSheet .ms-grid button[data-view]').count(), 6);
 await pg.screenshot({ path: shot('v262-more') });
 await pg.click('#moreSheet .ms-grid [data-view="report"]'); await pg.waitForTimeout(600);
 eq('picked menu opens & sheet closes', [await pg.evaluate(() => S.view), await pg.locator('#moreSheet.open').count()], ['report', 0]);

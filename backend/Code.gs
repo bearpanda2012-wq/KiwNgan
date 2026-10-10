@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.34.0';
+const VERSION = '1.35.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -45,7 +45,9 @@ const SHEETS = {
   // คลังวัสดุ (ฝ่ายสต็อก): 1 แถว = 1 รายการวัสดุ · StockLog = ประวัติรับเข้า/เบิกออก/ปรับยอด
   Stock: ['id', 'name', 'cat', 'unit', 'qty', 'min', 'loc', 'note', 'updatedAt', 'updatedBy', 'price', 'own', 'cust', 'job', 'grade', 'base', 'size'],   // price = ราคาต่อหน่วย (บาท) ใช้คิดต้นทุนวัสดุต่อเลข Job
   // own = 'cust' ของลูกค้า (cust = ชื่อลูกค้า, job = เลข Job) ไม่คิดมูลค่า · grade = 'ng' ตำหนิ / 'scrap' เศษ (base = วัสดุตั้งต้น, size = ขนาดเศษ) แยกจากยอดพร้อมใช้
-  StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note', 'price', 'cond', 'from']   // price = ราคาต่อหน่วยตอนเบิก · cond = สภาพของที่รับคืน ok/ng/scrap · from = ผู้ส่งคืน
+  StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note', 'price', 'cond', 'from'],
+  // คลังความรู้: 1 แถว = 1 เรื่อง · dept = d ฝ่ายแบบ / p ฝ่ายผลิต / s ฝ่ายสต็อก / g ทั่วไป (แอดมิน) · cat = tip/limit/warn/step · videos = ลิงก์วิดีโอ (JSON) ไม่เก็บไฟล์
+  Kb: ['id', 'dept', 'cat', 'title', 'body', 'videos', 'pin', 'createdBy', 'createdAt', 'updatedBy', 'updatedAt']   // price = ราคาต่อหน่วยตอนเบิก · cond = สภาพของที่รับคืน ok/ng/scrap · from = ผู้ส่งคืน
 };
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
@@ -157,6 +159,9 @@ const ACTIONS = {
   stockSave: (p, u) => withLock_(() => stockSave_(p.item, u)),
   stockMove: (p, u) => withLock_(() => stockMove_(p, u)),
   stockDelete: (p, u) => withLock_(() => stockDelete_(p.id, u)),
+  // คลังความรู้ (ทุกคนอ่านได้ · แก้ได้เฉพาะเรื่องของฝ่ายตัวเอง · แอดมินแก้ได้ทุกฝ่าย)
+  kbSave: (p, u) => withLock_(() => kbSave_(p.item, u)),
+  kbDelete: (p, u) => withLock_(() => kbDelete_(p.id, u)),
   image: (p, u) => imageFull_(p.id),
   // admin
   saveSettings: (p, u) => withLock_(() => { admin_(u); return saveSettings_(p.settings, u); }),
@@ -167,7 +172,7 @@ const ACTIONS = {
 
 /* ===== ความเร็ว: ตัวบอกเวอร์ชันข้อมูล (stamp) ใน cache
    หน้าเว็บส่ง stamp ล่าสุดมาด้วย ถ้าไม่มีอะไรเปลี่ยนจะตอบกลับทันทีโดยไม่ต้องอ่านชีต ===== */
-const DATA_ACTIONS_ = { stockSave: 1, stockMove: 1, stockDelete: 1, deleteFile: 1, addComment: 1, deleteComment: 1, copyImages: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
+const DATA_ACTIONS_ = { kbSave: 1, kbDelete: 1, stockSave: 1, stockMove: 1, stockDelete: 1, deleteFile: 1, addComment: 1, deleteComment: 1, copyImages: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
 const MSG_ACTIONS_ = { sendMessage: 1, markRead: 1, helpUpdate: 1, deleteMessages: 1 };
 function stamp_(kind) {
   const c = CacheService.getScriptCache(), k = 'stamp:' + kind;
@@ -537,7 +542,8 @@ function saleView_(k, sale) {
                steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '', imgs: (im[j.id] || []).slice(-6) }; });
   const people = usersLite_().filter(x => x.active && x.role !== 'admin').map(x => ({ name: x.name, color: x.color }));
   const pv = prods.map(x => ({ code: x.code, priority: x.priority === 'urgent' ? 'urgent' : '', title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6), qc: (q => ({ res: q.res, at: q.at, fails: q.fails, ok: q.ok, ng: q.ng }))(prodQc_(x.qc)), ship: x.stage === 'shipped' ? saleShip_(x, metas) : null }));
-  const out = { brand: publicBrand_(), sales: own ? [own] : s.sales || [], sale: sale || '', own: own ? 1 : 0, jobs: jobs, prods: pv, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
+  let kb = []; try { kb = kbList_({ role: 'user' }, metas); } catch (e) { kb = []; }
+  const out = { brand: publicBrand_(), sales: own ? [own] : s.sales || [], sale: sale || '', own: own ? 1 : 0, jobs: jobs, prods: pv, kb: kb, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(ck, t, 600); } catch (e) {}
   return out;
 }
@@ -677,6 +683,7 @@ function bootstrap_(u, stamp) {
     cmtCount: commentCounts_(),
     prods: prodsRecent_().map(x => maskProd_(x, u)),
     stock: can_(u, 'stock.view') ? stockView_(u) : null,
+    kb: kbList_(u),
     salePin: isAdmin_(u) ? !!PropertiesService.getScriptProperties().getProperty('SALE_PIN') : undefined,
     salePins: isAdmin_(u) ? Object.keys(salePins_()) : undefined,
     me: publicUser_(meFull), serverTime: nowIso_(), version: VERSION,
@@ -1017,6 +1024,51 @@ function stockDelete_(id, u) {
   return stockView_(u);
 }
 
+/* ======================= คลังความรู้ =======================
+   ทุกฝ่ายแชร์เทคนิค ข้อจำกัด ข้อควรระวัง ขั้นตอนงาน · ทุกคนอ่านได้ (Sale อ่านได้จากหน้า Sale)
+   เพิ่ม/แก้/ลบ: เฉพาะเรื่องของฝ่ายตัวเอง (ฝ่ายแบบ = พนักงาน/หัวหน้างานฝ่ายแบบ) · แอดมินแก้ได้ทุกฝ่าย + หมวด "ทั่วไป"
+   รูปใช้ระบบรูปเดิม (jobId = รหัสเรื่อง k_…) · วิดีโอเก็บแค่ลิงก์ (YouTube, Google Drive, Vimeo, Facebook, TikTok) ไม่เก็บไฟล์ */
+const KB_DEPTS_ = { d: 'ฝ่ายแบบ', p: 'ฝ่ายผลิต', s: 'ฝ่ายสต็อก', g: 'ทั่วไป' };
+const KB_CATS_ = { tip: 'เทคนิค', limit: 'ข้อจำกัด', warn: 'ข้อควรระวัง', step: 'ขั้นตอนงาน' };
+const deptOf_ = u => ({ user: 'd', lead: 'd', prod: 'p', stock: 's' })[u.role] || '';
+const kbCan_ = (u, dept) => isAdmin_(u) || (dept !== 'g' && !!KB_DEPTS_[dept] && deptOf_(u) === dept);
+function kbVideos_(v) {
+  let a = v; if (typeof a === 'string') { try { a = JSON.parse(a || '[]'); } catch (e) { a = String(v).split(/\s+/); } }
+  return (Array.isArray(a) ? a : []).map(x => String(x || '').trim()).filter(x => /^https:\/\/[^\s"'<>]+$/i.test(x) && x.length <= 500).slice(0, 8);
+}
+function kbList_(u, metas) {
+  const im = {}; (metas || imageMeta_()).forEach(m => { if (/^k_/.test(m.jobId)) (im[m.jobId] = im[m.jobId] || []).push(m); });
+  return readAll_('Kb').map(k => ({ id: k.id, dept: k.dept, cat: k.cat, title: k.title, body: k.body, videos: kbVideos_(k.videos), pin: k.pin === '1' ? 1 : 0,
+    createdBy: maskName_(k.createdBy, u), createdAt: k.createdAt, updatedBy: maskName_(k.updatedBy, u), updatedAt: k.updatedAt,
+    imgs: metas ? (im[k.id] || []).map(m => m.fileId).filter(Boolean).slice(0, 12) : undefined }))
+    .sort((a, b) => (b.pin - a.pin) || String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+function kbSave_(item, u) {
+  if (!item) throw new Error('ไม่มีข้อมูล');
+  const title = String(item.title || '').trim().slice(0, 160), body = String(item.body || '').slice(0, 20000);
+  if (!title) throw new Error('ใส่หัวข้อ');
+  const row = item.id ? rowOf_('Kb', item.id) : -1;
+  if (item.id && row < 0) throw new Error('ไม่พบเรื่องนี้ อาจถูกลบไปแล้ว');
+  const cur = row > 0 ? readRow_('Kb', row) : { id: uid_('k_'), createdBy: u.name, createdAt: nowIso_() };
+  if (row > 0 && !kbCan_(u, cur.dept)) throw new Error('แก้ได้เฉพาะความรู้ของฝ่ายตัวเอง');
+  const dept = KB_DEPTS_[item.dept] ? item.dept : (cur.dept || deptOf_(u));
+  if (!kbCan_(u, dept)) throw new Error(dept === 'g' ? 'หมวดทั่วไปเพิ่มได้เฉพาะแอดมิน' : 'เพิ่มได้เฉพาะความรู้ของฝ่ายตัวเอง');
+  Object.assign(cur, { dept: dept, cat: KB_CATS_[item.cat] ? item.cat : 'tip', title: title, body: body, videos: JSON.stringify(kbVideos_(item.videos)), pin: item.pin ? '1' : '', updatedBy: u.name, updatedAt: nowIso_() });
+  writeRow_('Kb', cur, row);
+  log_(cur.id, u.name, 'kb', (row > 0 ? 'แก้ไขความรู้ ' : 'เพิ่มความรู้ ') + title);
+  return { kb: kbList_(u), id: cur.id };
+}
+function kbDelete_(id, u) {
+  const row = rowOf_('Kb', id);
+  if (row < 0) throw new Error('ไม่พบเรื่องนี้');
+  const k = readRow_('Kb', row);
+  if (!kbCan_(u, k.dept)) throw new Error('ลบได้เฉพาะความรู้ของฝ่ายตัวเอง');
+  imageMeta_().filter(m => m.jobId === id).reverse().forEach(m => { try { deleteImage_(m.id, u); } catch (e) {} });   // ลบรูปของเรื่องนี้ด้วย (ไฟล์ไปถังขยะ กู้คืนได้ 30 วัน)
+  sheet_('Kb').deleteRow(rowOf_('Kb', id));
+  log_(id, u.name, 'kb', 'ลบความรู้ ' + k.title);
+  return { kb: kbList_(u) };
+}
+
 /* PIN ของ Sale: เก็บเป็นค่าแฮชใน Script Properties (ไม่อยู่ในชีต ไม่ส่งไปให้ใคร)
    - PIN รวม (SALE_PIN) → เห็นงานทุก Sale (เช่น หัวหน้าฝ่ายขาย)
    - PIN รายคน (SALE_PINS {ชื่อ Sale: salt:hash}) → เห็นเฉพาะงานของตัวเอง · มีกุญแจเปิดหน้าแยกรายคน (SALE_KEYS) เปลี่ยน/ลบ PIN แล้วลิงก์เก่าของคนนั้นใช้ไม่ได้ทันที */
@@ -1067,7 +1119,13 @@ function imageMeta_() {
 const IMG_FILE_COL_ = SHEETS.Images.indexOf('fileId') + 1;
 function addImage_(p, u) {
   let job;
-  if (/^r_sl_/.test(String(p.jobId || ''))) {   // รูปของที่รับคืนจากหน้างาน (ผูกกับรายการเคลื่อนไหว)
+  if (/^k_/.test(String(p.jobId || ''))) {   // รูปในคลังความรู้: แก้ได้เฉพาะฝ่ายเจ้าของเรื่อง
+    const kr = rowOf_('Kb', p.jobId);
+    if (kr < 0) throw new Error('ไม่พบเรื่องนี้ในคลังความรู้');
+    const k = readRow_('Kb', kr);
+    if (!kbCan_(u, k.dept)) throw new Error('แก้ได้เฉพาะความรู้ของฝ่ายตัวเอง');
+    job = { code: 'คลังความรู้' };
+  } else if (/^r_sl_/.test(String(p.jobId || ''))) {   // รูปของที่รับคืนจากหน้างาน (ผูกกับรายการเคลื่อนไหว)
     if (!can_(u, 'stock.edit')) throw new Error('เพิ่มรูปได้เฉพาะคนที่จัดการคลังวัสดุได้');
     if (rowOf_('StockLog', String(p.jobId).slice(2)) < 0) throw new Error('ไม่พบรายการรับคืนนี้');
     job = { code: 'คลังวัสดุ รับคืน' };
@@ -1111,7 +1169,8 @@ function deleteImage_(id, u) {
   if (row < 0) throw new Error('ไม่พบรูปนี้');
   const meta = sheet_('Images').getRange(row, 1, 1, 4).getDisplayValues()[0];
   const jr = rowOf_('Jobs', meta[1]), job = jr > 0 ? readRow_('Jobs', jr) : null;
-  const isProdImg = (/^p_/.test(meta[1]) && canProd_(u)) || (/^(s_|r_sl_)/.test(meta[1]) && can_(u, 'stock.edit')) || (/^d_p_/.test(meta[1]) && can_(u, 'prod.ship'));
+  const kbr = /^k_/.test(meta[1]) ? rowOf_('Kb', meta[1]) : -1;
+  const isProdImg = (kbr > 0 && kbCan_(u, readRow_('Kb', kbr).dept)) || (/^p_/.test(meta[1]) && canProd_(u)) || (/^(s_|r_sl_)/.test(meta[1]) && can_(u, 'stock.edit')) || (/^d_p_/.test(meta[1]) && can_(u, 'prod.ship'));
   if (!isAdmin_(u) && meta[2] !== u.name && !isProdImg && !(job && ownsJob_(u, job))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง');
   const fid = sheet_('Images').getRange(row, IMG_FILE_COL_).getDisplayValue();
   sheet_('Images').deleteRow(row);

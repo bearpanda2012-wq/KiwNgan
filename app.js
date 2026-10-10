@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.71.1';
+const APP_VERSION = '2.72.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -135,11 +135,11 @@ const VIEWS = [
   { id: 'home', label: 'ภาพรวม', short: 'ภาพรวม', g: 'ฝ่ายแบบ' }, { id: 'board', label: 'บอร์ดงาน', short: 'บอร์ด', g: 'ฝ่ายแบบ' }, { id: 'list', label: 'รายการงาน', short: 'รายการ', g: 'ฝ่ายแบบ' },
   { id: 'prod', label: 'บอร์ดผลิต', short: 'ผลิต', g: 'ฝ่ายผลิต' },
   { id: 'stock', label: 'คลังวัสดุ', short: 'สต็อก', g: 'ฝ่ายสต็อก' },
-  { id: 'team', label: 'ทีมงาน', short: 'ทีม', g: 'ทั่วไป' }, { id: 'report', label: 'สรุปรายงาน', short: 'รายงาน', g: 'ทั่วไป' }, { id: 'settings', label: 'ตั้งค่า', short: 'ตั้งค่า', g: 'ทั่วไป' }
+  { id: 'kb', label: 'คลังความรู้', short: 'ความรู้', g: 'ทั่วไป' }, { id: 'team', label: 'ทีมงาน', short: 'ทีม', g: 'ทั่วไป' }, { id: 'report', label: 'สรุปรายงาน', short: 'รายงาน', g: 'ทั่วไป' }, { id: 'settings', label: 'ตั้งค่า', short: 'ตั้งค่า', g: 'ทั่วไป' }
 ];
 /* ฝ่ายผลิต/ฝ่ายสต็อกเห็นเฉพาะเมนูที่เกี่ยวกับงานผลิต · หน้าคลังวัสดุ: คนที่มีสิทธิ์ "ดูคลังวัสดุ" */
-const PROD_VIEWS = ['flow', 'home', 'board', 'list', 'prod', 'stock', 'team', 'settings'];
-const STOCK_VIEWS = ['flow', 'prod', 'stock', 'board', 'list', 'team', 'settings'];
+const PROD_VIEWS = ['flow', 'home', 'board', 'list', 'prod', 'stock', 'kb', 'team', 'settings'];
+const STOCK_VIEWS = ['flow', 'prod', 'stock', 'board', 'list', 'kb', 'team', 'settings'];
 const viewsFor = u => { const lim = u && u.role === 'prod' ? PROD_VIEWS : u && u.role === 'stock' ? STOCK_VIEWS : null; return VIEWS.filter(v => (v.id !== 'stock' || P.can(u, 'stock.view')) && (!lim || lim.indexOf(v.id) >= 0)); };
 
 /* ============ state ============ */
@@ -461,6 +461,15 @@ function seedDemo() {
 
 /* งานประเภทไหน "ส่งเข้าผลิต" เมื่อทำเสร็จ: ตั้งเองได้ในตั้งค่า (ค่าเริ่มต้น: ชื่อมีคำว่า CAM) */
 function toProdType(name, settings) { const t = ((settings || S.settings || {}).taskTypes || []).find(x => x.name === name); return t && t.prod !== undefined ? t.prod === true || t.prod === 'true' : /CAM/i.test(String(name || '')); }
+function seedKb() {   // คลังความรู้ตัวอย่าง (โหมดทดลอง)
+  const at = n => addDays(today(), -n) + 'T' + pad(9 + n) + ':20:00';
+  return [
+    { id: 'k_demo1', dept: 'p', cat: 'limit', title: 'Router ตัด ACP หนาได้ไม่เกิน 20 มม. ต่อรอบ', body: 'ถ้าแผ่นหนากว่านี้ให้ตั้งตัด 2 รอบ (step down) ไม่อย่างนั้นดอกหักและขอบไหม้\n- ACP 4 มม.: ตัดรอบเดียวได้\n- ไม้อัด 20 มม.: ลึกรอบละ 6 มม.\n- เหล็ก: ห้ามใช้ Router ส่ง Laser หรือ WaterJet\n**แจ้งฝ่ายแบบ** ถ้าแบบระบุความหนาเกินเครื่อง', videos: ['https://www.youtube.com/watch?v=M7lc1UVf-VE'], pin: 1, createdBy: 'ช่างเอ', createdAt: at(6), updatedBy: 'ช่างเอ', updatedAt: at(2) },
+    { id: 'k_demo2', dept: 'd', cat: 'tip', title: 'เผื่อระยะ 3 มม. ระหว่างชิ้นตอนวาง nesting', body: 'ดอก 6 มม. กินเนื้อ 3 มม. ต่อข้าง ถ้าวางชิดกันชิ้นจะเล็กกว่าแบบ\n1. ตั้ง offset ใน CAM = รัศมีดอก\n2. เว้นขอบแผ่นอย่างน้อย 10 มม.\n3. ชิ้นเล็กกว่า 50 มม. ให้ใส่ tab ยึด', videos: [], pin: 0, createdBy: 'บอส', createdAt: at(5), updatedBy: 'บอส', updatedAt: at(5) },
+    { id: 'k_demo3', dept: 's', cat: 'warn', title: 'แผ่นอะคริลิคต้องวางนอนเท่านั้น', body: 'วางตั้งพิงผนังนาน ๆ แผ่นจะโก่ง ตัดแล้วขนาดเพี้ยน\n- เก็บชั้น B2 วางนอน ไม่เกิน 20 แผ่นต่อกอง\n- ห้ามลอกฟิล์มก่อนส่งเข้าเครื่อง', videos: [], pin: 0, createdBy: 'คลังบี', createdAt: at(3), updatedBy: 'คลังบี', updatedAt: at(3) },
+    { id: 'k_demo4', dept: 'g', cat: 'step', title: 'ขั้นตอนรับงานด่วนจาก Sale', body: '1. Sale แจ้งในแอป ติดธง "งานด่วน"\n2. หัวหน้าฝ่ายแบบยืนยันกำหนดส่งภายใน 1 ชม.\n3. ฝ่ายผลิตจัดคิวเครื่องก่อนงานปกติ', videos: [], pin: 0, createdBy: 'แอดมิน', createdAt: at(8), updatedBy: 'แอดมิน', updatedAt: at(8) }
+  ];
+}
 function seedStock() {   // คลังวัสดุตัวอย่าง (โหมดทดลอง)
   const t = nowLocal() + ':00', ago = n => addDays(today(), -n) + 'T' + pad(8 + n) + ':15:00';
   const items = [
@@ -490,6 +499,7 @@ const Demo = {
     if (!d.users.some(u => u.role === 'prod')) { d.users.push({ id: 'u4', name: 'ช่างเอ', full: 'ฝ่ายผลิต', role: 'prod', color: '#B8435F', active: true, pin: '1234' }); LS.set('demo', d); }   // ผู้ใช้ฝ่ายผลิตตัวอย่าง
     if (!d.users.some(u => u.role === 'stock')) { d.users.push({ id: 'u5', name: 'คลังบี', full: 'ฝ่ายสต็อก', role: 'stock', color: '#A07A12', active: true, pin: '1234' }); LS.set('demo', d); }   // ผู้ใช้ฝ่ายสต็อกตัวอย่าง
     if (!d.stock) { d.stock = seedStock(); LS.set('demo', d); }
+    if (!d.kb) { d.kb = seedKb(); LS.set('demo', d); }
     return d; },
   save(d) { LS.set('demo', d); },
   pub(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '', perms: u.perms || '' }; },
@@ -510,11 +520,11 @@ const Demo = {
     if (p.status === 'taken') { if (m.from === u.name) throw new Error('รับช่วยคำขอของตัวเองไม่ได้'); if (m.status !== 'open') throw new Error('มีคนรับช่วยแล้ว'); m.status = 'taken'; m.helper = u.name;
       const n = { id: uid('m_'), ts: nowLocal() + ':' + pad(new Date().getSeconds()), from: u.name, to: m.to === 'team' ? 'team' : m.from, kind: 'msg', text: '🙋 รับช่วยเรื่อง "' + m.text.slice(0, 60) + '" แล้ว', jobId: m.jobId, status: '', helper: '', readBy: [u.name] }; d.messages.push(n); this.save(d); return { message: this.mmsg(d, u, m), note: this.mmsg(d, u, n) }; }
     if (m.from !== u.name && m.helper !== u.name && !P.admin(u)) throw new Error('ปิดได้เฉพาะคนขอ คนที่รับช่วย หรือแอดมิน'); m.status = p.status; this.save(d); return { message: this.mmsg(d, u, m) }; },
-  async addImage(p) { const d = this.db(), u = this.me(d), dj = /^d_p_/.test(p.jobId || '') ? (d.prods || []).find(x => x.id === p.jobId.slice(2)) : null, sj = /^s_/.test(p.jobId || '') ? ((d.stock || {}).items || []).find(x => x.id === p.jobId) : /^r_sl_/.test(p.jobId || '') ? ((d.stock || {}).logs || []).find(l => 'r_' + l.id === p.jobId) : null, pj = /^p_/.test(p.jobId || '') ? (d.prods || []).find(x => x.id === p.jobId) : null, j = dj || sj || pj || d.jobs.find(x => x.id === p.jobId); if (!j) throw new Error('ไม่พบงานนี้'); if (dj ? !P.can(u, 'prod.ship') && !P.can(u, 'prod.edit') : sj ? !P.can(u, 'stock.edit') : pj ? !P.can(u, 'prod.edit') : !P.owns(u, j)) throw new Error(dj ? 'เพิ่มหลักฐานส่งมอบได้เฉพาะฝ่ายสต็อกหรือแอดมิน' : pj ? 'เพิ่มรูปงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน' : 'เพิ่มรูปได้เฉพาะงานของตัวเอง'); d.images = d.images || []; if (d.images.filter(m => m.jobId === p.jobId).length >= IMG_MAX) throw new Error('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน');
+  async addImage(p) { const d = this.db(), u = this.me(d), dj = /^d_p_/.test(p.jobId || '') ? (d.prods || []).find(x => x.id === p.jobId.slice(2)) : null, kj = /^k_/.test(p.jobId || '') ? (d.kb || []).find(x => x.id === p.jobId) : null, sj = /^s_/.test(p.jobId || '') ? ((d.stock || {}).items || []).find(x => x.id === p.jobId) : /^r_sl_/.test(p.jobId || '') ? ((d.stock || {}).logs || []).find(l => 'r_' + l.id === p.jobId) : null, pj = /^p_/.test(p.jobId || '') ? (d.prods || []).find(x => x.id === p.jobId) : null, j = kj || dj || sj || pj || d.jobs.find(x => x.id === p.jobId); if (!j) throw new Error('ไม่พบงานนี้'); if (kj && !kbCanU(u, kj.dept)) throw new Error('แก้ได้เฉพาะความรู้ของฝ่ายตัวเอง'); if (kj ? false : dj ? !P.can(u, 'prod.ship') && !P.can(u, 'prod.edit') : sj ? !P.can(u, 'stock.edit') : pj ? !P.can(u, 'prod.edit') : !P.owns(u, j)) throw new Error(dj ? 'เพิ่มหลักฐานส่งมอบได้เฉพาะฝ่ายสต็อกหรือแอดมิน' : pj ? 'เพิ่มรูปงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน' : 'เพิ่มรูปได้เฉพาะงานของตัวเอง'); d.images = d.images || []; if (d.images.filter(m => m.jobId === p.jobId).length >= IMG_MAX) throw new Error('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน');
     const m = { id: uid('i_'), jobId: p.jobId, createdBy: u.name, createdAt: nowLocal(), thumb: p.thumb, full: p.full }; d.images.push(m);
     try { this.save(d); } catch (e) { d.images.pop(); throw new Error('พื้นที่ในโหมดทดลองเต็ม ลบรูปเก่าก่อน'); }
     return { image: { id: m.id, jobId: m.jobId, createdBy: this.mask(d, u, { n: m.createdBy }, ['n']).n, createdAt: m.createdAt, thumb: m.thumb } }; },
-  async deleteImage(p) { const d = this.db(), u = this.me(d), m = (d.images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); const j = d.jobs.find(x => x.id === m.jobId); if (!P.admin(u) && m.createdBy !== u.name && !(/^p_/.test(m.jobId) && P.can(u, 'prod.edit')) && !(/^s_/.test(m.jobId) && P.can(u, 'stock.edit')) && !(/^d_p_/.test(m.jobId) && P.can(u, 'prod.ship')) && !(j && P.owns(u, j))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง'); d.images = d.images.filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
+  async deleteImage(p) { const d = this.db(), u = this.me(d), m = (d.images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); const j = d.jobs.find(x => x.id === m.jobId); if (!P.admin(u) && m.createdBy !== u.name && !(/^p_/.test(m.jobId) && P.can(u, 'prod.edit')) && !(/^k_/.test(m.jobId) && (k => k && kbCanU(u, k.dept))((d.kb || []).find(x => x.id === m.jobId))) && !(/^s_/.test(m.jobId) && P.can(u, 'stock.edit')) && !(/^d_p_/.test(m.jobId) && P.can(u, 'prod.ship')) && !(j && P.owns(u, j))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง'); d.images = d.images.filter(x => x.id !== p.id); this.save(d); return { id: p.id }; },
   async copyImages(p) { const d = this.db(), u = this.me(d); d.images = d.images || []; const out = d.images.filter(m => m.jobId === p.from).slice(0, IMG_MAX).map(m => Object.assign({}, m, { id: uid('i_'), jobId: p.to, createdBy: u.name, createdAt: nowLocal() })); d.images = d.images.concat(out); this.save(d); return { images: out.map(m => ({ id: m.id, jobId: m.jobId, createdBy: m.createdBy, createdAt: m.createdAt })) }; },
   async archive() { return { jobs: [], logs: [] }; },
   async addFile(p) { const d = this.db(), u = this.me(d), j = d.jobs.find(x => x.id === p.jobId); if (!j) throw new Error('ไม่พบงานนี้'); if (!P.owns(u, j)) throw new Error('แนบไฟล์ได้เฉพาะงานของตัวเอง');
@@ -527,7 +537,7 @@ const Demo = {
   async saleLink(p) { const d = this.db(); this.admin(this.me(d)); if (!d.saleKey || p.reset) { d.saleKey = uid('k'); this.save(d); } return { key: d.saleKey }; },
   async saleView(p) { const d = this.db(), keys = d.saleKeys || {}, own = Object.keys(keys).find(n => keys[n] === p.k) || ''; if (!own && (!d.saleKey || p.k !== d.saleKey)) throw new Error('ลิงก์นี้ใช้ไม่ได้แล้ว ขอลิงก์ใหม่จากแอดมิน'); const since = addDays(today(), -45); if (own) p = Object.assign({}, p, { sale: own });
     const ims = id => (d.images || []).filter(m => m.jobId === id), ship = x => { if (x.stage !== 'shipped') return null; let sp = {}; try { sp = JSON.parse(x.ship || '{}') || {}; } catch (e) {} const ds = ims('d_' + x.id), sg = ds.find(m => m.id === sp.sig); return { to: sp.to || '', note: sp.note || '', at: sp.at || x.shippedAt || '', by: sp.by || '', sig: sg ? sg.thumb : '', photos: ds.filter(m => m !== sg).map(m => m.thumb).filter(Boolean).slice(-6) }; };
-    return { own: own ? 1 : 0, prods: (d.prods || []).filter(x => !p.sale || x.sale === p.sale).map(x => ({ ship: ship(x), priority: x.priority === 'urgent' ? 'urgent' : '', code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: pms(x), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (d.images || []).filter(m => m.jobId === x.id).map(m => m.thumb).filter(Boolean).slice(-6) })), machines: d.settings.machines || DEF_MACHINES, brand: (await this.ping()).brand, people: d.users.filter(u => u.active && u.role !== 'admin').map(u => ({ name: u.name, color: u.color })), sales: own ? [own] : d.settings.sales || [], sale: p.sale || '', jobs: d.jobs.filter(j => (!p.sale || j.sale === p.sale) && (j.status !== 'done' || finDate(j) >= since)).map(j => { const c = clOf(j); return { assignee: j.assignee || '', helpers: j.helpers || '', code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', steps: c.length ? c.filter(x => x.d).length + '/' + c.length : '', imgs: (d.images || []).filter(m => m.jobId === j.id).map(m => m.thumb).filter(Boolean).slice(-6) }; }) }; },
+    return { kb: this.kbList(d, { role: 'user', name: '' }, true), own: own ? 1 : 0, prods: (d.prods || []).filter(x => !p.sale || x.sale === p.sale).map(x => ({ ship: ship(x), priority: x.priority === 'urgent' ? 'urgent' : '', code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: pms(x), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (d.images || []).filter(m => m.jobId === x.id).map(m => m.thumb).filter(Boolean).slice(-6) })), machines: d.settings.machines || DEF_MACHINES, brand: (await this.ping()).brand, people: d.users.filter(u => u.active && u.role !== 'admin').map(u => ({ name: u.name, color: u.color })), sales: own ? [own] : d.settings.sales || [], sale: p.sale || '', jobs: d.jobs.filter(j => (!p.sale || j.sale === p.sale) && (j.status !== 'done' || finDate(j) >= since)).map(j => { const c = clOf(j); return { assignee: j.assignee || '', helpers: j.helpers || '', code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', steps: c.length ? c.filter(x => x.d).length + '/' + c.length : '', imgs: (d.images || []).filter(m => m.jobId === j.id).map(m => m.thumb).filter(Boolean).slice(-6) }; }) }; },
   async thumbs(p) { const d = this.db(), out = {}; (d.images || []).forEach(m => { if ((p.ids || []).indexOf(m.id) >= 0) out[m.id] = m.thumb; }); return { thumbs: out }; },
   async image(p) { const m = (this.db().images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); return { id: m.id, full: m.full }; },
   async setPhoto(p) { const d = this.db(), me = this.me(d), id = p.userId || me.id; if (id !== me.id) this.admin(me); const u = d.users.find(x => x.id === id); if (!u) throw new Error('ไม่พบผู้ใช้'); u.photo = String(p.photo || ''); this.save(d); return { user: this.pub(u) }; },
@@ -616,6 +626,16 @@ const Demo = {
     const now = nowLocal() + ':' + pad(new Date().getSeconds()), logId = uid('sl_'); it.qty = bal; it.updatedAt = now; it.updatedBy = u.name;
     d.stock.logs.push({ id: logId, ts: now, itemId: it.id, kind: k, qty: k === 'adj' ? Math.round((bal - have) * 100) / 100 : n, bal: bal, job: job, who: u.name, note: String(p.note || ''), price: k === 'ret' ? +base.price || 0 : +it.price || 0, cond: cond, from: from });
     this.save(d); return Object.assign(this.sview(d, u), { logId: logId, itemId: it.id }); },
+  kbList(d, u, sale) { const ims = id => (d.images || []).filter(m => m.jobId === id); return (d.kb || []).map(k => Object.assign(this.mask(d, u, clone(k), ['createdBy', 'updatedBy']), sale ? { imgs: ims(k.id).map(m => m.thumb).filter(Boolean) } : {})).sort((a, b) => (b.pin - a.pin) || String(b.updatedAt).localeCompare(String(a.updatedAt))); },
+  async kbSave(p) { const d = this.db(), u = this.me(d), it = p.item || {}; d.kb = d.kb || [];
+    const title = String(it.title || '').trim(); if (!title) throw new Error('ใส่หัวข้อ');
+    let cur = it.id ? d.kb.find(x => x.id === it.id) : null; if (it.id && !cur) throw new Error('ไม่พบเรื่องนี้ อาจถูกลบไปแล้ว');
+    if (cur && !kbCanU(u, cur.dept)) throw new Error('แก้ได้เฉพาะความรู้ของฝ่ายตัวเอง');
+    const dept = KB_DEPT[it.dept] ? it.dept : (cur ? cur.dept : kbUserDept(u)); if (!kbCanU(u, dept)) throw new Error(dept === 'g' ? 'หมวดทั่วไปเพิ่มได้เฉพาะแอดมิน' : 'เพิ่มได้เฉพาะความรู้ของฝ่ายตัวเอง');
+    const now = nowLocal() + ':00'; if (!cur) { cur = { id: uid('k_'), createdBy: u.name, createdAt: now }; d.kb.push(cur); }
+    Object.assign(cur, { dept: dept, cat: KB_CAT[it.cat] ? it.cat : 'tip', title: title, body: String(it.body || ''), videos: (it.videos || []).filter(x => /^https:\/\//.test(x)).slice(0, 8), pin: it.pin ? 1 : 0, updatedBy: u.name, updatedAt: now });
+    this.save(d); return { kb: this.kbList(d, u), id: cur.id }; },
+  async kbDelete(p) { const d = this.db(), u = this.me(d), k = (d.kb || []).find(x => x.id === p.id); if (!k) throw new Error('ไม่พบเรื่องนี้'); if (!kbCanU(u, k.dept)) throw new Error('ลบได้เฉพาะความรู้ของฝ่ายตัวเอง'); d.kb = d.kb.filter(x => x.id !== p.id); d.images = (d.images || []).filter(m => m.jobId !== p.id); this.save(d); return { kb: this.kbList(d, u) }; },
   async stockDelete(p) { const d = this.db(), u = this.me(d); this.sedit(u); d.stock = d.stock || seedStock(); d.stock.items = d.stock.items.filter(x => x.id !== p.id); this.save(d); return this.sview(d, u); },
   async salePin(p) { const d = this.db(); this.admin(this.me(d)); const sale = String(p.sale || '').trim(), pin = p.pin ? String(p.pin) : '', pins = d.salePins = d.salePins || {}, keys = d.saleKeys = d.saleKeys || {};
     if (pin && (Object.keys(pins).some(n => n !== sale && pins[n] === pin) || (sale && pin === String(d.salePin || '')))) throw new Error('PIN นี้มีคนใช้แล้ว เลือก PIN อื่น');
@@ -639,7 +659,7 @@ const Demo = {
     return { token: u.id, user: this.pub(u) };
   },
   async logout() { return {}; },
-  async bootstrap() { const d = this.db(), u = this.me(d); if (!d.prods) { d.prods = seedProds(d); this.save(d); } return { prods: (d.prods || []).map(x => this.mask(d, u, clone(x), ['createdBy', 'updatedBy'])), salePin: P.admin(u) ? !!d.salePin : undefined, salePins: P.admin(u) ? Object.keys(d.salePins || {}) : undefined, stock: P.can(u, 'stock.view') ? this.sview(d, u) : null, settings: d.settings, users: d.users.filter(x => P.admin(u) || x.role !== 'admin').map(this.pub), jobs: d.jobs.map(j => this.mj(d, u, j)), files: d.files || [], cmtCount: (d.comments || []).reduce((o, c) => { o[c.jobId] = (o[c.jobId] || 0) + 1; return o; }, {}), logs: d.logs.map(l => this.ml(d, u, l)), images: (d.images || []).map(m => ({ id: m.id, jobId: m.jobId, createdBy: this.mask(d, u, { n: m.createdBy }, ['n']).n, createdAt: m.createdAt })), me: this.pub(u) }; },
+  async bootstrap() { const d = this.db(), u = this.me(d); if (!d.prods) { d.prods = seedProds(d); this.save(d); } return { prods: (d.prods || []).map(x => this.mask(d, u, clone(x), ['createdBy', 'updatedBy'])), salePin: P.admin(u) ? !!d.salePin : undefined, salePins: P.admin(u) ? Object.keys(d.salePins || {}) : undefined, stock: P.can(u, 'stock.view') ? this.sview(d, u) : null, kb: this.kbList(d, u), settings: d.settings, users: d.users.filter(x => P.admin(u) || x.role !== 'admin').map(this.pub), jobs: d.jobs.map(j => this.mj(d, u, j)), files: d.files || [], cmtCount: (d.comments || []).reduce((o, c) => { o[c.jobId] = (o[c.jobId] || 0) + 1; return o; }, {}), logs: d.logs.map(l => this.ml(d, u, l)), images: (d.images || []).map(m => ({ id: m.id, jobId: m.jobId, createdBy: this.mask(d, u, { n: m.createdBy }, ['n']).n, createdAt: m.createdAt })), me: this.pub(u) }; },
   async saveJob(p) {
     const d = this.db(), u = this.me(d), job = Object.assign({}, p.job);
     delete job.baseUpdatedAt; delete job.minutes; delete job.createdBy; delete job.createdAt;
@@ -784,7 +804,7 @@ const Remote = {
     return data.data;
   }
 };
-['prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
+['kbSave', 'kbDelete', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -872,7 +892,7 @@ function rtDataChanged() {
   if (S.edit || S.draftDirty || S.loading || S.saving) { clearTimeout(RT.chgT); RT.chgT = setTimeout(rtDataChanged, 1500); return; }
   load(true);
 }
-const RT_DATA = { stockSave: 1, stockMove: 1, stockDelete: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, copyImages: 1, saveSettings: 1, saveUser: 1, resetPin: 1 };
+const RT_DATA = { kbSave: 1, kbDelete: 1, stockSave: 1, stockMove: 1, stockDelete: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, copyImages: 1, saveSettings: 1, saveUser: 1, resetPin: 1 };
 const RT_MSG = { sendMessage: 1, markRead: 0, helpUpdate: 1, deleteMessages: 1 };
 function rtAfterWrite(action) { if (RT_DATA[action]) rtSend({ k: 'chg', what: 'data' }); else if (RT_MSG[action]) rtSend({ k: 'chg', what: 'msg' }); }
 function rtLoop() { if (typeof rtcLoop === 'function') rtcLoop(); }
@@ -900,7 +920,7 @@ async function load(silent, boot) {
     S.settings = normalizeSettings(d.settings);
     S.users = d.users || []; S.user = d.me; S.me = d.me.name;
     const prevJobs = S.loaded && S.me && S.jobs && S.jobs.length ? S.jobs : null, prevStock = S.loaded && S.me ? S.stock : null;
-    S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || []; S.files = d.files || []; S.prods = d.prods || []; S.stock = d.stock || null; S.salePinOn = !!d.salePin; S.salePins = d.salePins || []; S.apiV = d.version || '';
+    S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || []; S.files = d.files || []; S.prods = d.prods || []; S.stock = d.stock || null; S.kb = Array.isArray(d.kb) ? d.kb : null; S.salePinOn = !!d.salePin; S.salePins = d.salePins || []; S.apiV = d.version || '';
     if (!viewsFor(S.user).some(v => v.id === S.view) || (S.screen !== 'app' && isProdRole() && S.view !== 'flow')) S.view = isProdRole() ? 'prod' : 'home';   // ฝ่ายผลิตเข้าระบบแล้วเปิดบอร์ดผลิตเลย
     { const pc = S.loaded ? S.cmtCount : null; S.cmtCount = d.cmtCount || {}; if (pc) setTimeout(() => cmtAlerts(pc), 0); }
     if (d.rt !== undefined) { rtSetup(d.rt); ibStart(d.rt); }
@@ -1820,7 +1840,7 @@ async function salePage() {
     root.innerHTML = '<div class="sale-page"><header class="sp-h"><div class="sp-logo">' + (b.logo ? '<img src="' + esc(b.logo) + '" alt="">' : esc(initial(b.company || 'K'))) + '</div><div class="sp-ht"><b>' + esc(b.appName || 'คิวงาน') + ' · สถานะงาน</b><small>' + esc(b.company || '') + (sel ? ' · Sale ' + esc(sel) : ' · ทุก Sale') + '</small></div>' +
       (LS.get('saleKey', '') === SALE_Q.k ? '<a class="btn sm ghost sp-back" href="' + esc(location.pathname) + '">‹ หน้าเข้าสู่ระบบ</a>' : '') +
       '<span class="sp-live" title="อัปเดตเองทุก 1 นาที"><i></i>สด</span><button class="btn sm sp-ref' + (busy ? ' spin' : '') + '" data-sale-refresh="1">' + I.refresh + '<span>รีเฟรช</span></button></header>' +
-      (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="sp-skel">' + '<i></i>'.repeat(6) + '</div>' : saleTabs() + (SF.v === 'flow' ? '<div class="sf-wrap">' + saleFlowHtml(d, sel) + '</div><p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · กดที่งานเพื่อดูรายละเอียด · หน้านี้ดูได้อย่างเดียว</p>' :
+      (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="sp-skel">' + '<i></i>'.repeat(6) + '</div>' : saleTabs() + (SF.v === 'kb' ? saleKbHtml(d, () => draw(last, lastErr)) : SF.v === 'flow' ? '<div class="sf-wrap">' + saleFlowHtml(d, sel) + '</div><p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · กดที่งานเพื่อดูรายละเอียด · หน้านี้ดูได้อย่างเดียว</p>' :
         '<div class="sp-sum">' + cards.map(c => '<button type="button" data-spst="' + c[0] + '" class="sp-card c-' + c[0] + (F.st === c[0] ? ' on' : '') + '"><span class="sp-ci">' + c[3] + '</span><b class="' + c[2] + '" data-n="' + N[c[0]] + '" data-k="' + c[0] + '">' + (prevN[c[0]] !== undefined ? prevN[c[0]] : 0) + '</b><span>' + c[1] + '</span>' +
           (c[0] === 'done' && N.done ? '<small>ตรงเวลา ' + Math.round(okB / N.done * 100) + '%</small>' : c[0] === 'late' && N.act ? '<small>' + Math.round(N.late / N.act * 100) + '% ของงานค้าง</small>' : '') + '</button>').join('') + '</div>' + pstrip +
         '<div class="sp-tools"><label class="sp-search">' + I.search + '<input id="spQ" type="search" placeholder="ค้นหาเลข Job, ลูกค้า, คนทำ, หมายเหตุ…" value="' + esc(q) + '" autocomplete="off"></label>' +
@@ -3622,6 +3642,7 @@ function render() {
   else if (S.view === 'stock') h += viewStock();
   else if (S.view === 'board') h += viewBoard();
   else if (S.view === 'list') h += viewList();
+  else if (S.view === 'kb') h += viewKb();
   else if (S.view === 'team') h += viewTeam();
   else if (S.view === 'report') h += viewReport();
   else if (S.view === 'settings') h += viewSettings();
@@ -4996,6 +5017,297 @@ function viewFlow() {
     '<section class="panel"><div class="panel-h"><h2>งานตามเลข Job</h2>' + legend + '</div>' + search + chips + table + '</section>';
 }
 
+/* ================= คลังความรู้ =================
+   ทุกฝ่ายแชร์เทคนิค ข้อจำกัด ข้อควรระวัง ขั้นตอนงาน กันทำงานผิดพลาดและให้ทำไปทางเดียวกัน
+   อ่านได้ทุกคน (Sale อ่านได้จากหน้า Sale) · เพิ่ม/แก้/ลบได้เฉพาะเรื่องของฝ่ายตัวเอง · แอดมินแก้ได้ทุกฝ่าย + หมวด "ทั่วไป"
+   รูปใช้ระบบรูปเดิม (jobId = รหัสเรื่อง k_…) · วิดีโอเก็บแค่ลิงก์ แล้วเปิดดูในกรอบวิดีโอในหน้านี้ (ไม่เก็บไฟล์วิดีโอใน Drive) */
+const KB_IC = {
+  book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M9 8h7M9 11.5h5"/></svg>',
+  tip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg>',
+  limit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
+  warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.5v.01"/></svg>',
+  step: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 5.5l1.2-1V9M3.8 14.3c.3-.6 1-1 1.6-.8.8.2 1 1.1.4 1.7L3.8 17.5h2.4"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 2.5l6 6-2.2.7-3.6 3.6.4 4.6-1.6 1.6-3.7-3.7-5.3 5.3-.9-.9 5.3-5.3L6.2 10.7l1.6-1.6 4.6.4 3.6-3.6z"/></svg>',
+  expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+  ext: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
+  video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="M16.5 10l5-3v10l-5-3z"/></svg>'
+};
+I.kb = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10.3 5 7.8 4.3 4 4.5v13c3.8-.2 6.3.5 8 2 1.7-1.5 4.2-2.2 8-2v-13c-3.8-.2-6.3.5-8 2z"/><path d="M12 6.5v13"/></svg>';
+const KB_DEPT = { d: { label: 'ฝ่ายแบบ', col: 'var(--doing)', ic: 'design' }, p: { label: 'ฝ่ายผลิต', col: 'var(--p-mach)', ic: 'machine' }, s: { label: 'ฝ่ายสต็อก', col: 'var(--p-ship)', ic: 'stock' }, g: { label: 'ทั่วไป', col: '#6B5FB5', ic: 'book' } };
+const KB_CAT = { tip: { label: 'เทคนิค', col: '#2B8A5A' }, limit: { label: 'ข้อจำกัด', col: '#C2410C' }, warn: { label: 'ข้อควรระวัง', col: '#B91C1C' }, step: { label: 'ขั้นตอนงาน', col: '#2D5FC4' } };
+const kbDeptIc = k => k === 'stock' ? ROLE_IC.stock : k === 'book' ? KB_IC.book : PIC[k];
+const KV = { q: '', dept: 'all', cat: 'all', vid: false, anim: false };
+const KM = { id: '', mode: '', f: null, busy: false, pend: [], del: false, ctx: 'app', list: null };
+const kbUserDept = u => (ROLES[roleOf(u)] || {}).dept || '';
+const kbCanU = (u, dept) => P.admin(u) || (dept !== 'g' && !!KB_DEPT[dept] && kbUserDept(u) === dept);
+const kbCan = dept => KM.ctx === 'app' && !!S.user && kbCanU(S.user, dept);
+const kbMyDepts = () => !S.user ? [] : P.admin(S.user) ? ['d', 'p', 's', 'g'] : [kbUserDept(S.user)].filter(Boolean);
+const kbAll = () => (KM.ctx === 'sale' ? KM.list : S.kb) || [];
+const kbById = id => kbAll().find(x => x.id === id);
+/* รูปของเรื่อง: ในแอปใช้ระบบรูปเดิม · หน้า Sale ได้รหัสไฟล์ Drive (แชร์แบบมีลิงก์) */
+const kbImgs = a => KM.ctx === 'sale' ? (a.imgs || []) : imgsOf(a.id);
+const kbImgTag = (im, w) => KM.ctx === 'sale' ? '<img class="th ok" alt="" loading="lazy" referrerpolicy="no-referrer" src="' + esc(saleImgSrc(im, w || 600)) + '">' : thumbImg(im, w > 500 ? 'big' : '');
+
+/* ลิงก์วิดีโอ → กรอบเล่นในหน้า (YouTube, Google Drive, Vimeo, Facebook, TikTok) · อื่น ๆ = ปุ่มเปิดลิงก์ */
+function vidParse(url) {
+  let u; try { u = new URL(String(url || '').trim()); } catch (e) { return null; }
+  if (u.protocol !== 'https:') return null;
+  const h = u.hostname.replace(/^(www|m)\./, ''), p = u.pathname;
+  let id = '';
+  if (h === 'youtu.be') id = p.slice(1).split('/')[0];
+  else if (/(^|\.)youtube(-nocookie)?\.com$/.test(h)) id = u.searchParams.get('v') || (p.match(/^\/(?:shorts|embed|live|v)\/([\w-]{6,})/) || [])[1] || '';
+  if (id && /^[\w-]{6,20}$/.test(id)) {
+    const t = parseInt(String(u.searchParams.get('t') || u.searchParams.get('start') || '').replace(/s$/, ''), 10) || 0;
+    return { kind: 'yt', label: 'YouTube', vert: /^\/shorts\//.test(p), thumb: 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg', embed: 'https://www.youtube-nocookie.com/embed/' + id + '?rel=0&modestbranding=1&playsinline=1' + (t ? '&start=' + t : ''), auto: '&autoplay=1' };
+  }
+  if (h === 'drive.google.com') { const d = (p.match(/\/file\/d\/([\w-]{10,})/) || [])[1] || u.searchParams.get('id'); if (d) return { kind: 'gd', label: 'Google Drive', thumb: 'https://drive.google.com/thumbnail?id=' + d + '&sz=w800', embed: 'https://drive.google.com/file/d/' + d + '/preview', auto: '' }; }
+  if (h === 'vimeo.com' || h === 'player.vimeo.com') { const d = (p.match(/(\d{6,})/) || [])[1]; if (d) return { kind: 'vm', label: 'Vimeo', embed: 'https://player.vimeo.com/video/' + d + '?dnt=1', auto: '&autoplay=1' }; }
+  if (/(^|\.)facebook\.com$/.test(h) || h === 'fb.watch') return { kind: 'fb', label: 'Facebook', vert: /\/reel\//.test(p), embed: 'https://www.facebook.com/plugins/video.php?show_text=false&href=' + encodeURIComponent(u.href), auto: '&autoplay=1' };
+  if (/(^|\.)tiktok\.com$/.test(h)) { const d = (p.match(/\/video\/(\d+)/) || [])[1]; if (d) return { kind: 'tt', label: 'TikTok', vert: true, embed: 'https://www.tiktok.com/embed/v2/' + d, auto: '' }; }
+  return { kind: 'link', label: h };
+}
+const vidFrame = (v, auto) => '<iframe src="' + esc(v.embed + (auto ? v.auto : '')) + '" title="วิดีโอ" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
+function vidHtml(url) {
+  const v = vidParse(url); if (!v) return '';
+  if (v.kind === 'link') return '<a class="kb-vlink" href="' + esc(url) + '" target="_blank" rel="noopener"><span class="kvl-ic">' + KB_IC.video + '</span><span><b>เปิดวิดีโอ</b><small>' + esc(v.label) + '</small></span>' + KB_IC.ext + '</a>';
+  return '<figure class="kb-vid' + (v.vert ? ' vert' : '') + '"><div class="kbv-box">' + (v.thumb ? '<img src="' + esc(v.thumb) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : '') +
+    '<button type="button" class="kbv-play" data-kbplay="' + esc(url) + '" aria-label="เล่นวิดีโอ"><i>' + KB_IC.play + '</i><span>กดเพื่อเล่น</span></button><span class="kbv-src">' + esc(v.label) + '</span></div>' +
+    '<figcaption><button type="button" class="kbv-big" data-kbbig="' + esc(url) + '">' + KB_IC.expand + 'ขยายเต็มจอ</button><a href="' + esc(url) + '" target="_blank" rel="noopener">เปิดใน ' + esc(v.label) + KB_IC.ext + '</a></figcaption></figure>';
+}
+/* ข้อความ: ขึ้นบรรทัดใหม่ได้ · บรรทัดขึ้นต้น "- " เป็นรายการ · "1. " เป็นลำดับขั้น · **ตัวหนา** · ลิงก์กดได้ */
+function kbBody(t) {
+  const inl = s => esc(s).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(https:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  let out = '', list = '';
+  const close = () => { if (list) { out += '</' + list + '>'; list = ''; } };
+  String(t || '').split(/\r?\n/).forEach(line => {
+    const ul = line.match(/^\s*[-•*]\s+(.*)$/), ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (ul || ol) { const k = ul ? 'ul' : 'ol'; if (list !== k) { close(); out += '<' + k + '>'; list = k; } out += '<li>' + inl((ul || ol)[1]) + '</li>'; return; }
+    close(); out += line.trim() ? '<p>' + inl(line) + '</p>' : '';
+  });
+  close(); return out;
+}
+const kbExcerpt = t => String(t || '').replace(/\*\*/g, '').replace(/^\s*([-•*]|\d+[.)])\s+/gm, '').replace(/\s+/g, ' ').trim().slice(0, 140);
+const kbChip = (k, txt) => { const c = KB_CAT[k]; return c ? '<span class="kb-cat" style="--kc:' + c.col + '">' + KB_IC[k] + (txt === false ? '' : c.label) + '</span>' : ''; };
+const kbDeptChip = k => { const d = KB_DEPT[k] || KB_DEPT.g; return '<span class="kb-dept" style="--kd:' + d.col + '">' + kbDeptIc(d.ic) + d.label + '</span>'; };
+function kbCover(a) {
+  const im = kbImgs(a)[0], v = (a.videos || []).map(vidParse).find(x => x && x.thumb), d = KB_DEPT[a.dept] || KB_DEPT.g;
+  if (im) return '<span class="kb-cv has">' + kbImgTag(im, 600) + ((a.videos || []).length ? '<i class="kb-cvplay">' + KB_IC.play + '</i>' : '') + '</span>';
+  if (v) return '<span class="kb-cv has vid"><img alt="" loading="lazy" referrerpolicy="no-referrer" src="' + esc(v.thumb) + '" onerror="this.remove()"><i class="kb-cvplay">' + KB_IC.play + '</i></span>';
+  return '<span class="kb-cv none" style="--kd:' + d.col + '"><i>' + (KB_IC[a.cat] || KB_IC.book) + '</i></span>';
+}
+function kbCard(a, k) {
+  const ni = kbImgs(a).length, nv = (a.videos || []).length, d = KB_DEPT[a.dept] || KB_DEPT.g;
+  return '<article class="kb-card' + (a.pin ? ' pinned' : '') + '" style="--i:' + Math.min(k, 24) + ';--kd:' + d.col + '" data-kbopen="' + esc(a.id) + '" tabindex="0" role="button" aria-label="' + esc(a.title) + '">' +
+    kbCover(a) + (a.pin ? '<span class="kb-pin" title="ปักหมุด">' + KB_IC.pin + '</span>' : '') +
+    '<div class="kb-cb"><div class="kb-tags">' + kbDeptChip(a.dept) + kbChip(a.cat) + '</div><b class="kb-t">' + esc(a.title) + '</b>' + (a.body ? '<p class="kb-ex">' + esc(kbExcerpt(a.body)) + '</p>' : '') +
+    '<div class="kb-foot">' + (KM.ctx === 'app' && a.updatedBy ? av(a.updatedBy, 'sm') : '') + '<small>' + esc((a.updatedBy ? a.updatedBy + ' · ' : '') + fdt(String(a.updatedAt || a.createdAt || '').slice(0, 16))) + '</small><span class="kb-cnt">' +
+      (ni ? '<em>' + PICK_IC + ni + '</em>' : '') + (nv ? '<em class="v">' + KB_IC.video + nv + '</em>' : '') + '</span></div></div></article>';
+}
+/* หน้ารวม (ในแอปและหน้า Sale ใช้ร่วมกัน) */
+function kbListHtml(an) {
+  const all = kbAll(), q = KV.q.trim().toLowerCase(), mine = kbMyDepts();
+  const hit = a => (KV.dept === 'all' || a.dept === KV.dept) && (KV.cat === 'all' || a.cat === KV.cat) && (!KV.vid || (a.videos || []).length) &&
+    (!q || [a.title, a.body, (KB_DEPT[a.dept] || {}).label, (KB_CAT[a.cat] || {}).label, a.updatedBy].join(' ').toLowerCase().indexOf(q) >= 0);
+  const list = all.filter(hit);
+  const deptN = k => all.filter(a => (k === 'all' || a.dept === k) && (KV.cat === 'all' || a.cat === KV.cat)).length;
+  const depts = '<div class="kb-depts' + (an ? ' in' : '') + '">' + [['all', 'ทั้งหมด', 'var(--accent)', KB_IC.book]].concat(['d', 'p', 's', 'g'].map(k => [k, KB_DEPT[k].label, KB_DEPT[k].col, kbDeptIc(KB_DEPT[k].ic)])).map((x, i) =>
+    '<button type="button" class="kb-dt' + (KV.dept === x[0] ? ' on' : '') + (mine.length === 1 && mine[0] === x[0] ? ' mine' : '') + '" style="--kd:' + x[2] + ';--i:' + i + '" data-kbdept="' + x[0] + '" aria-pressed="' + (KV.dept === x[0]) + '"><span class="kdt-ic">' + x[3] + '</span><span class="kdt-t"><b>' + x[1] + '</b><small>' + deptN(x[0]) + ' เรื่อง' + (mine.length === 1 && mine[0] === x[0] && KM.ctx === 'app' ? ' · ฝ่ายของคุณ' : '') + '</small></span></button>').join('') + '</div>';
+  const cats = '<div class="qchips kb-cats">' + [['all', 'ทุกประเภท']].concat(Object.keys(KB_CAT).map(k => [k, KB_CAT[k].label])).map(x => '<button type="button" class="qchip" data-kbcat="' + x[0] + '" aria-pressed="' + (KV.cat === x[0]) + '"' + (x[0] !== 'all' ? ' style="--ch:' + KB_CAT[x[0]].col + '"' : '') + '>' + (x[0] !== 'all' ? KB_IC[x[0]] : '') + x[1] + '<b>' + all.filter(a => (x[0] === 'all' || a.cat === x[0]) && (KV.dept === 'all' || a.dept === KV.dept)).length + '</b></button>').join('') +
+    '<button type="button" class="qchip kb-vf" data-kbvid="1" aria-pressed="' + KV.vid + '">' + KB_IC.video + 'มีวิดีโอ</button></div>';
+  const tools = '<div class="kb-tools"><label class="search">' + I.search + '<input id="kbQ" type="search" autocomplete="off" placeholder="ค้นหาความรู้ เทคนิค ข้อจำกัด…" value="' + esc(KV.q) + '" aria-label="ค้นหาความรู้"></label>' +
+    (mine.length && KM.ctx === 'app' ? '<button type="button" class="btn primary kb-add" data-kbadd="1">' + I.plus + 'เพิ่มความรู้</button>' : '') + '</div>';
+  const grid = list.length ? '<div class="kb-grid' + (an ? ' in' : '') + '">' + list.map(kbCard).join('') + '</div>'
+    : '<div class="kb-empty"><span>' + KB_IC.book + '</span><b>' + (all.length ? 'ไม่พบเรื่องที่ค้นหา' : 'ยังไม่มีความรู้ในคลัง') + '</b><small>' + (all.length ? 'ลองเปลี่ยนคำค้นหรือตัวกรอง' : mine.length && KM.ctx === 'app' ? 'เริ่มแชร์เทคนิคหรือข้อจำกัดของฝ่ายคุณเป็นเรื่องแรก' : 'แต่ละฝ่ายจะมาแชร์เทคนิคและข้อจำกัดของงานที่นี่') + '</small>' +
+      (!all.length && mine.length && KM.ctx === 'app' ? '<button class="btn primary" data-kbadd="1">' + I.plus + 'เพิ่มความรู้เรื่องแรก</button>' : '') + '</div>';
+  return depts + '<section class="panel kb-main">' + tools + cats + grid + '</section>';
+}
+function viewKb() {
+  KM.ctx = 'app';
+  const an = S.animIn || KV.anim; KV.anim = false;
+  const mine = kbMyDepts();
+  return topbar('คลังความรู้', mine.length ? 'แชร์เทคนิค ข้อจำกัด ข้อควรระวังของแต่ละฝ่าย · ทุกคนอ่านได้ · คุณเพิ่ม/แก้ได้เฉพาะ ' + (P.admin(S.user) ? 'ทุกฝ่าย (ผู้ดูแลระบบ)' : (KB_DEPT[mine[0]] || {}).label) : 'อ่านเทคนิคและข้อจำกัดของแต่ละฝ่าย') +
+    (S.kb ? kbListHtml(an) : '<div class="empty">กำลังโหลด… ถ้าไม่ขึ้น ให้แอดมินอัปเดต Apps Script เป็นเวอร์ชันล่าสุด</div>');
+}
+
+/* ---- หน้าต่างอ่าน / เขียน ---- */
+function kbOpen(id) { KM.id = id; KM.mode = 'view'; KM.del = false; KM.f = null; kbDraw(); }
+function kbAddOpen() {
+  const mine = kbMyDepts(); if (!mine.length) return;
+  kbPendClear(); KM.id = ''; KM.mode = 'form'; KM.del = false;
+  KM.f = { dept: mine.indexOf(KV.dept) >= 0 ? KV.dept : mine[0], cat: KV.cat !== 'all' ? KV.cat : 'tip', title: '', body: '', videos: [], pin: false };
+  kbDraw(); setTimeout(() => { const x = $('#kfTitle'); if (x) x.focus(); }, 60);
+}
+function kbEditOpen(id) { const a = kbById(id); if (!a || !kbCan(a.dept)) return; kbPendClear(); KM.id = id; KM.mode = 'form'; KM.del = false; KM.f = { dept: a.dept, cat: a.cat, title: a.title, body: a.body || '', videos: (a.videos || []).slice(), pin: !!a.pin }; kbDraw(); }
+function kbClose() { kbPendClear(); KM.id = ''; KM.mode = ''; KM.f = null; const m = $('#kbModal'); if (m) m.remove(); if (!P2.id && !P2.add && !SM.mode) document.body.classList.remove('pm-open'); }
+function kbPendClear() { (KM.pend || []).forEach(p => URL.revokeObjectURL(p.url)); KM.pend = []; }
+function kbFormRead() { if (KM.mode !== 'form' || !KM.f) return; const v = id => { const e = $('#' + id); return e ? e.value : undefined; }; const t = v('kfTitle'), b = v('kfBody'), p = $('#kfPin'); if (t !== undefined) KM.f.title = t; if (b !== undefined) KM.f.body = b; if (p) KM.f.pin = p.checked; }
+function kbDraw() {
+  let m = $('#kbModal');
+  if (!KM.mode) { if (m) m.remove(); return; }
+  const a = KM.id ? kbById(KM.id) : null;
+  if (KM.mode === 'view' && !a) return kbClose();
+  if (!m) { m = document.createElement('div'); m.id = 'kbModal'; m.className = 'pmodal kb-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.innerHTML = '<div class="pm-card kb-mcard"></div>'; document.body.appendChild(m); document.body.classList.add('pm-open'); }
+  const card = m.querySelector('.kb-mcard'), key = KM.mode + ':' + KM.id, same = card.dataset.k === key, ob = card.querySelector('.pm-b'), top = same && ob ? ob.scrollTop : 0;
+  const dk = (KM.f && KM.f.dept) || (a && a.dept) || 'g';
+  card.style.setProperty('--kd', (KB_DEPT[dk] || KB_DEPT.g).col);
+  card.innerHTML = KM.mode === 'form' ? kbFormHtml(a) : kbReadHtml(a);
+  card.classList.toggle('swap', !!card.dataset.k && !same); card.dataset.k = key;
+  { const nb = card.querySelector('.pm-b'); if (nb && top) nb.scrollTop = top; }
+  if (KM.ctx === 'app') paintAllThumbs(m);
+}
+const KB_X = '<button type="button" class="icon-btn kb-x" data-kbclose="1" aria-label="ปิด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+function kbGallery(a) {
+  const ims = kbImgs(a); if (!ims.length) return '';
+  const key = 'kb:' + a.id;
+  if (KM.ctx === 'sale') GALS[key] = ims.map(x => ({ full: saleImgSrc(x, 2000), th: saleImgSrc(x, 400), fb: /^data:/.test(x) ? '' : 'https://lh3.googleusercontent.com/d/' + x + '=w2000', cap: a.title }));
+  return '<div class="kb-gal n' + Math.min(ims.length, 4) + '">' + ims.map((im, k) => KM.ctx === 'sale'
+    ? '<button type="button" data-gal="' + esc(key) + '" data-gi="' + k + '" aria-label="ดูรูป">' + kbImgTag(im, 900) + '</button>'
+    : '<button type="button" data-lbopen="' + esc(im.id) + '" data-lbjob="' + esc(a.id) + '" aria-label="ดูรูป">' + kbImgTag(im, 900) + '</button>').join('') + '</div>';
+}
+function kbReadHtml(a) {
+  const d = KB_DEPT[a.dept] || KB_DEPT.g, can = kbCan(a.dept), vids = (a.videos || []);
+  return '<header class="kb-rh"><i class="kb-rh-ic">' + (KB_IC[a.cat] || KB_IC.book) + '</i><div class="kb-tags">' + kbDeptChip(a.dept) + kbChip(a.cat) + (a.pin ? '<span class="kb-pinchip">' + KB_IC.pin + 'ปักหมุด</span>' : '') + '</div>' +
+      '<h2>' + esc(a.title) + '</h2><small>' + esc([a.createdBy ? 'เขียนโดย ' + a.createdBy : '', a.updatedAt ? 'อัปเดต ' + fdt(String(a.updatedAt).slice(0, 16)) + (a.updatedBy && a.updatedBy !== a.createdBy ? ' โดย ' + a.updatedBy : '') : ''].filter(Boolean).join(' · ')) + '</small>' + KB_X + '</header>' +
+    '<div class="pm-b kb-rb">' + (a.body ? '<div class="kb-body">' + kbBody(a.body) + '</div>' : '') + kbGallery(a) +
+      (vids.length ? '<div class="kb-vids"><span class="lbl">' + KB_IC.video + 'วิดีโอ ' + vids.length + ' รายการ</span>' + vids.map(vidHtml).join('') + '</div>' : '') +
+      (!a.body && !kbImgs(a).length && !vids.length ? '<p class="sub">ยังไม่มีรายละเอียด</p>' : '') + '</div>' +
+    '<div class="pm-f">' + (can ? (KM.del ? '<span class="pm-del">ลบ "' + esc(a.title) + '"? (ลบรูปด้วย)</span><button type="button" class="btn sm" data-kbdel="no">ไม่</button><button type="button" class="btn sm danger" data-kbdel="yes"' + (KM.busy ? ' disabled' : '') + '>ลบ</button>'
+      : '<button type="button" class="btn ghost sm" data-kbedit="' + esc(a.id) + '">' + STI.pen + 'แก้ไข</button><button type="button" class="btn ghost sm" data-kbdel="ask">' + I.trash + 'ลบ</button>') : '<small class="kb-ro">' + (KM.ctx === 'sale' ? 'หน้านี้อ่านได้อย่างเดียว' : 'แก้ไขได้เฉพาะ' + d.label) + '</small>') +
+      '<span style="flex:1"></span><button type="button" class="btn" data-kbclose="1">ปิด</button></div>';
+}
+function kbFormHtml(a) {
+  const f = KM.f || {}, mine = kbMyDepts(), ims = a ? imgsOf(a.id) : [], pend = KM.pend || [], room = IMG_MAX - ims.length - pend.length - (KM.up || 0);
+  const vlist = (f.videos || []).map((u, i) => { const v = vidParse(u) || { kind: 'link', label: 'ลิงก์ไม่ถูกต้อง' }; return '<li class="kf-v ' + v.kind + '">' + (v.thumb ? '<img src="' + esc(v.thumb) + '" alt="" referrerpolicy="no-referrer" onerror="this.remove()">' : '<span class="kfv-ic">' + KB_IC.video + '</span>') + '<span class="kfv-t"><b>' + esc(v.kind === 'link' ? 'ลิงก์ (เปิดในแท็บใหม่)' : v.label) + '</b><small>' + esc(u) + '</small></span><button type="button" class="dz-x" data-kfvx="' + i + '" aria-label="เอาวิดีโอนี้ออก">✕</button></li>'; }).join('');
+  const imgs = ims.map(im => '<span class="skg-t"><button type="button" class="kf-im" data-lbopen="' + esc(im.id) + '" data-lbjob="' + esc(a.id) + '">' + thumbImg(im) + '</button><button type="button" class="dz-x" data-kfimx="' + esc(im.id) + '" aria-label="ลบรูปนี้">✕</button></span>').join('') +
+    Array.from({ length: KM.up || 0 }).map(() => '<span class="skg-t up"><span class="spin-dot dark"></span></span>').join('') +
+    pend.map(p => '<span class="skg-t pend"><img src="' + p.url + '" alt=""><button type="button" class="dz-x" data-kfpx="' + esc(p.id) + '" aria-label="เอารูปนี้ออก">✕</button></span>').join('');
+  return '<header class="kb-rh form"><i class="kb-rh-ic">' + (KB_IC[f.cat] || KB_IC.book) + '</i><h2>' + (a ? 'แก้ไขความรู้' : 'เพิ่มความรู้ใหม่') + '</h2><small>' + (mine.length > 1 ? 'เลือกฝ่ายที่เป็นเจ้าของเรื่องนี้' : 'บันทึกในหมวด ' + (KB_DEPT[mine[0]] || {}).label + ' · ฝ่ายอื่นอ่านได้แต่แก้ไม่ได้') + '</small>' + KB_X + '</header>' +
+    '<div class="pm-b kb-fb"><div class="form-grid kb-form">' +
+      (mine.length > 1 ? '<div class="f full"><span class="lbl">ฝ่าย</span><div class="kf-depts">' + mine.map(k => '<button type="button" style="--kd:' + KB_DEPT[k].col + '" data-kfdept="' + k + '" aria-pressed="' + (f.dept === k) + '">' + kbDeptIc(KB_DEPT[k].ic) + KB_DEPT[k].label + '</button>').join('') + '</div></div>' : '') +
+      '<div class="f full"><span class="lbl">ประเภท</span><div class="kf-cats">' + Object.keys(KB_CAT).map(k => '<button type="button" style="--kc:' + KB_CAT[k].col + '" data-kfcat="' + k + '" aria-pressed="' + (f.cat === k) + '">' + KB_IC[k] + '<b>' + KB_CAT[k].label + '</b></button>').join('') + '</div></div>' +
+      '<div class="f full"><label for="kfTitle">หัวข้อ</label><input id="kfTitle" maxlength="160" value="' + esc(f.title || '') + '" placeholder="เช่น Router ตัด ACP หนาได้ไม่เกิน 20 มม."></div>' +
+      '<div class="f full"><label for="kfBody">รายละเอียด</label><textarea id="kfBody" rows="8" placeholder="อธิบายเทคนิค ข้อจำกัด หรือขั้นตอน&#10;- ขึ้นต้นด้วย - เพื่อทำรายการ&#10;1. ขึ้นต้นด้วยตัวเลข เพื่อเรียงขั้นตอน&#10;**คำสำคัญ** เพื่อทำตัวหนา">' + esc(f.body || '') + '</textarea></div>' +
+      '<div class="f full"><span class="lbl">รูปภาพ <small class="muted">' + (ims.length + pend.length) + '/' + IMG_MAX + '</small></span><div class="kf-imgs">' + imgs +
+        (room > 0 ? '<button type="button" class="kf-add" data-kfcam="1">' + CAM_IC + '<span>ถ่ายรูป</span></button><label class="kf-add">' + PICK_IC + '<span>เลือกรูป</span><input type="file" accept="image/*" multiple hidden id="kfImgIn"></label>' : '') + '</div></div>' +
+      '<div class="f full"><span class="lbl">วิดีโอ <small class="muted">วางลิงก์ YouTube · Google Drive · Facebook · TikTok · Vimeo (ไม่อัปโหลดไฟล์ ไม่กินพื้นที่ Drive)</small></span>' +
+        '<div class="kf-vadd"><input id="kfVid" type="url" inputmode="url" placeholder="https://youtu.be/…" autocomplete="off"><button type="button" class="btn" data-kfvadd="1">' + I.plus + 'เพิ่มวิดีโอ</button></div>' + (vlist ? '<ul class="kf-vlist">' + vlist + '</ul>' : '') + '</div>' +
+      '<label class="f full kf-pin"><input type="checkbox" id="kfPin"' + (f.pin ? ' checked' : '') + '><span>' + KB_IC.pin + '<b>ปักหมุดไว้บนสุด</b><small>เรื่องสำคัญที่ทุกคนต้องรู้</small></span></label>' +
+    '</div></div>' +
+    '<div class="pm-f"><span style="flex:1"></span><button type="button" class="btn" data-' + (a ? 'kbback' : 'kbclose') + '="1">ยกเลิก</button><button type="button" class="btn primary" data-kbsave="1"' + (KM.busy ? ' disabled' : '') + '>' + (KM.busy ? '<span class="spin-dot"></span>' : '') + (a ? 'บันทึก' : 'เพิ่มความรู้') + '</button></div>';
+}
+/* ---- กรอบวิดีโอ: กดเล่นในหน้า · ขยายเต็มจอแบบโรงหนัง (เต็มจอจริงกดในตัวเล่นได้อีกที) ---- */
+function kbPlay(btn) {
+  const url = btn.dataset.kbplay, v = vidParse(url), box = btn.closest('.kbv-box'); if (!v || !box) return;
+  box.innerHTML = vidFrame(v, true); box.classList.add('on');
+}
+function kbTheater(url) {
+  const v = vidParse(url); if (!v || v.kind === 'link') return;
+  document.querySelectorAll('.kbv-box.on').forEach(b => { const u = b.closest('.kb-vid'); const pb = u && u.querySelector('[data-kbbig]'); if (pb) { const vv = vidParse(pb.dataset.kbbig); b.classList.remove('on'); b.innerHTML = (vv.thumb ? '<img src="' + esc(vv.thumb) + '" alt="" referrerpolicy="no-referrer">' : '') + '<button type="button" class="kbv-play" data-kbplay="' + esc(pb.dataset.kbbig) + '" aria-label="เล่นวิดีโอ"><i>' + KB_IC.play + '</i><span>กดเพื่อเล่น</span></button><span class="kbv-src">' + esc(vv.label) + '</span>'; } });   // หยุดตัวเล่นเล็กก่อน
+  let t = $('#kbTheater'); if (!t) { t = document.createElement('div'); t.id = 'kbTheater'; t.className = 'kb-theater'; t.setAttribute('role', 'dialog'); t.setAttribute('aria-label', 'วิดีโอเต็มจอ'); document.body.appendChild(t); }
+  t.innerHTML = '<div class="kbt-bar"><span>' + KB_IC.video + esc(v.label) + '</span><a href="' + esc(url) + '" target="_blank" rel="noopener">เปิดใน ' + esc(v.label) + KB_IC.ext + '</a><button type="button" class="kbt-x" data-kbtx="1" aria-label="ปิด">✕</button></div><div class="kbt-stage' + (v.vert ? ' vert' : '') + '">' + vidFrame(v, true) + '</div>';
+  requestAnimationFrame(() => t.classList.add('open'));
+}
+function kbTheaterClose() { const t = $('#kbTheater'); if (!t) return; t.classList.remove('open'); t.innerHTML = ''; t.remove(); }
+async function kbUpload(id, files) {
+  files = Array.from(files || []).filter(f => /^image\//.test(f.type)).slice(0, Math.max(0, IMG_MAX - imgsOf(id).length));
+  if (!files.length) return 0;
+  KM.up = (KM.up || 0) + files.length; kbDraw();
+  let ok = 0;
+  for (const f of files) {
+    try {
+      const thumb = await shrinkImage(f, 480, 44000, 0.74), full = await shrinkImage(f, 1800, 340000, 0.85);
+      const r = await api().addImage({ jobId: id, thumb: thumb, full: full });
+      THUMBS[r.image.id] = thumb; FULL[r.image.id] = full; saveThumbCache();
+      S.images = (S.images || []).concat([{ id: r.image.id, jobId: id, createdBy: r.image.createdBy, createdAt: r.image.createdAt, fileId: r.image.fileId || '' }]); ok++;
+    } catch (e) { toast(e.message || 'อัปโหลดรูปไม่สำเร็จ', true); }
+    KM.up--; render(); kbDraw();
+  }
+  if (ok) toast('เพิ่มรูปแล้ว ' + ok + ' รูป');
+  return ok;
+}
+function kbAddFiles(files) {
+  files = Array.from(files || []).filter(f => /^image\//.test(f.type)); if (!files.length) return;
+  kbFormRead();
+  if (KM.id) return kbUpload(KM.id, files);
+  files.slice(0, IMG_MAX - KM.pend.length).forEach(f => KM.pend.push({ id: uid('kp'), f: f, url: URL.createObjectURL(f) }));
+  kbDraw();
+}
+function kbVidAdd() {
+  const e = $('#kfVid'); if (!e) return; const u = e.value.trim(); if (!u) { e.focus(); return; }
+  const v = vidParse(u); if (!v) { toast('ลิงก์ต้องขึ้นต้นด้วย https://', true); e.focus(); return; }
+  kbFormRead(); KM.f.videos = (KM.f.videos || []); if (KM.f.videos.indexOf(u) >= 0) { toast('มีวิดีโอนี้แล้ว', true); return; }
+  if (KM.f.videos.length >= 8) { toast('ใส่วิดีโอได้สูงสุด 8 รายการ', true); return; }
+  KM.f.videos.push(u); kbDraw(); setTimeout(() => { const x = $('#kfVid'); if (x) x.focus(); }, 30);
+  if (v.kind === 'link') toast('ลิงก์นี้เปิดดูในหน้าไม่ได้ จะเป็นปุ่มเปิดลิงก์แทน');
+}
+async function kbSave() {
+  kbFormRead(); const f = KM.f || {}, a = KM.id ? kbById(KM.id) : null;
+  if (!String(f.title || '').trim()) { toast('ใส่หัวข้อ', true); const x = $('#kfTitle'); if (x) x.focus(); return; }
+  { const e = $('#kfVid'); if (e && e.value.trim()) { kbVidAdd(); kbFormRead(); } }
+  if (mode() === 'sheet' && !apiAtLeast('1.35.0')) { toast('ต้องอัปเดตหลังบ้าน (Apps Script) เป็นเวอร์ชันล่าสุดก่อน', true); return; }
+  const item = { id: a ? a.id : undefined, dept: f.dept, cat: f.cat, title: String(f.title).trim(), body: String(f.body || ''), videos: f.videos || [], pin: f.pin ? 1 : 0 };
+  const files = (KM.pend || []).map(p => p.f);
+  KM.busy = true; kbDraw();
+  try {
+    const r = await mutate(() => api().kbSave({ item: item }), (a ? 'บันทึก ' : 'เพิ่ม ') + item.title + ' แล้ว');
+    if (r && r.kb) S.kb = r.kb;
+    kbPendClear(); KM.id = r.id || (a && a.id) || ''; KM.mode = KM.id ? 'view' : ''; KM.f = null; KM.busy = false; render(); kbDraw();
+    if (KM.id && files.length) kbUpload(KM.id, files);
+  } catch (e) { KM.busy = false; kbDraw(); }
+}
+async function kbDelete() {
+  const a = kbById(KM.id); if (!a) return;
+  KM.busy = true; kbDraw();
+  try { const r = await mutate(() => api().kbDelete({ id: a.id }), 'ลบ ' + a.title + ' แล้ว'); if (r && r.kb) S.kb = r.kb; S.images = (S.images || []).filter(m => m.jobId !== a.id); KM.busy = false; kbClose(); render(); }
+  catch (e) { KM.busy = false; KM.del = false; kbDraw(); }
+}
+async function kbImgDelete(id) {
+  try { await mutate(() => api().deleteImage({ id: id }), 'ลบรูปแล้ว'); S.images = (S.images || []).filter(m => m.id !== id); render(); kbDraw(); } catch (e) {}
+}
+/* ใช้ได้ทั้งในแอปและหน้า Sale (หน้า Sale เรียก saleKbRerender เพื่อวาดรายการใหม่) */
+let saleKbRerender = null;
+function saleKbHtml(d, redraw) {   // หน้า Sale: อ่านคลังความรู้ได้อย่างเดียว
+  KM.ctx = 'sale'; KM.list = (d && d.kb) || []; saleKbRerender = redraw;
+  const an = SF.anim; SF.anim = false;
+  return '<div class="kb-sale">' + (Array.isArray(d && d.kb) ? kbListHtml(an) : '<div class="empty">ยังไม่เปิดคลังความรู้ (ให้แอดมินอัปเดตหลังบ้าน)</div>') + '<p class="sub sp-foot">ความรู้จากแต่ละฝ่าย · หน้านี้อ่านได้อย่างเดียว</p></div>';
+}
+const kbRerender = () => { if (KM.ctx === 'sale') { if (saleKbRerender) saleKbRerender(); } else render(); };
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-kbopen],[data-kbclose],[data-kbadd],[data-kbedit],[data-kbback],[data-kbdel],[data-kbsave],[data-kbdept],[data-kbcat],[data-kbvid],[data-kbplay],[data-kbbig],[data-kbtx],[data-kfdept],[data-kfcat],[data-kfvadd],[data-kfvx],[data-kfpx],[data-kfimx],[data-kfcam]');
+  if (!t) { if (e.target && e.target.id === 'kbModal') kbClose(); if (e.target && e.target.id === 'kbTheater') kbTheaterClose(); return; }
+  const d = t.dataset;
+  if (d.kbplay) { e.preventDefault(); return kbPlay(t); }
+  if (d.kbbig) { e.preventDefault(); return kbTheater(d.kbbig); }
+  if (d.kbtx) return kbTheaterClose();
+  if (d.kbopen) return kbOpen(d.kbopen);
+  if (d.kbclose) return kbClose();
+  if (d.kbadd) return kbAddOpen();
+  if (d.kbedit) return kbEditOpen(d.kbedit);
+  if (d.kbback) { kbPendClear(); KM.mode = 'view'; KM.f = null; return kbDraw(); }
+  if (d.kbdel) { if (d.kbdel === 'yes') return kbDelete(); KM.del = d.kbdel === 'ask'; return kbDraw(); }
+  if (d.kbsave) return kbSave();
+  if (d.kbdept) { KV.dept = KV.dept === d.kbdept && d.kbdept !== 'all' ? 'all' : d.kbdept; KV.anim = true; return kbRerender(); }
+  if (d.kbcat) { KV.cat = KV.cat === d.kbcat && d.kbcat !== 'all' ? 'all' : d.kbcat; KV.anim = true; return kbRerender(); }
+  if (d.kbvid) { KV.vid = !KV.vid; KV.anim = true; return kbRerender(); }
+  if (d.kfdept) { kbFormRead(); KM.f.dept = d.kfdept; return kbDraw(); }
+  if (d.kfcat) { kbFormRead(); KM.f.cat = d.kfcat; return kbDraw(); }
+  if (d.kfvadd) return kbVidAdd();
+  if (d.kfvx !== undefined) { kbFormRead(); KM.f.videos.splice(+d.kfvx, 1); return kbDraw(); }
+  if (d.kfpx) { kbFormRead(); const p = KM.pend.find(x => x.id === d.kfpx); if (p) URL.revokeObjectURL(p.url); KM.pend = KM.pend.filter(x => x.id !== d.kfpx); return kbDraw(); }
+  if (d.kfimx) return kbImgDelete(d.kfimx);
+  if (d.kfcam) { kbFormRead(); return camOpen(kbAddFiles, 'ถ่ายรูปประกอบความรู้'); }
+});
+document.addEventListener('change', e => { if (e.target && e.target.id === 'kfImgIn') { kbAddFiles(e.target.files); e.target.value = ''; } });
+document.addEventListener('input', e => { if (e.target && e.target.id === 'kbQ') { KV.q = e.target.value; const pos = e.target.selectionStart; kbRerender(); const el = $('#kbQ'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } } });
+document.addEventListener('keydown', e => {
+  if ($('#kbTheater') && e.key === 'Escape' && !e.cancelBubble) { e.stopPropagation(); kbTheaterClose(); return; }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.dataset && e.target.dataset.kbopen && !KM.mode) { e.preventDefault(); kbOpen(e.target.dataset.kbopen); return; }
+  if (!KM.mode || !$('#kbModal') || S.lb || $('#camModal') || $('#imgView.open') || e.cancelBubble) return;   // ตัวดูรูปปิดตัวเองไปแล้ว (หยุดต่อ) ไม่ต้องปิดหน้าต่างนี้
+  if (e.key === 'Escape') { e.stopPropagation(); kbClose(); }
+  else if (e.key === 'Enter' && e.target && e.target.id === 'kfVid') { e.preventDefault(); kbVidAdd(); }
+}, true);
+
 /* ================= คลังวัสดุ (ฝ่ายสต็อก) =================
    ดูได้: สิทธิ์ stock.view · รับเข้า/เบิกออก/ปรับยอด/เพิ่ม-แก้-ลบ/ใส่รูป: สิทธิ์ stock.edit
    รูปสินค้าใช้ระบบรูปเดียวกับงาน (ชีต Images, jobId = รหัสวัสดุ s_…) เก็บใน Drive โฟลเดอร์ รูปงาน/คลังวัสดุ */
@@ -5965,7 +6277,7 @@ function saleFlowHtml(d, sel) {
   SF.anim = false;
   return pipe + kpis + '<section class="panel sf-panel"><div class="panel-h"><h2>งานตามเลข Job</h2>' + legend + '</div>' + tools + chips + rows + '</section>';
 }
-const saleTabs = () => '<div class="sf-tabs" role="tablist"><button type="button" role="tab" data-sfview="flow" aria-selected="' + (SF.v === 'flow') + '">' + I.flow + 'ภาพรวมสถานะ</button><button type="button" role="tab" data-sfview="table" aria-selected="' + (SF.v !== 'flow') + '">' + I.list + 'ตารางงานฝ่ายแบบ</button></div>';
+const saleTabs = () => '<div class="sf-tabs" role="tablist"><button type="button" role="tab" data-sfview="flow" aria-selected="' + (SF.v === 'flow') + '">' + I.flow + 'ภาพรวมสถานะ</button><button type="button" role="tab" data-sfview="table" aria-selected="' + (SF.v !== 'flow' && SF.v !== 'kb') + '">' + I.list + 'ตารางงานฝ่ายแบบ</button><button type="button" role="tab" data-sfview="kb" aria-selected="' + (SF.v === 'kb') + '">' + I.kb + 'คลังความรู้</button></div>';
 
 /* ============ events ============ */
 document.addEventListener('click', async e => {

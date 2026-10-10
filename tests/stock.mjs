@@ -52,7 +52,7 @@ eq('prod: shows waiting-for-stock note', await pg.locator(`.pcard[data-popen="${
 // --- คลังบี (stock): ship + inventory
 await logout(); await loginAs('คลังบี');
 eq('stock lands on prod board', await pg.evaluate(() => S.view), 'prod');
-eq('stock nav', await pg.evaluate(() => Array.from(document.querySelectorAll('.rail [data-view]')).map(b => b.dataset.view).filter((v, i, a) => a.indexOf(v) === i)), ['flow', 'board', 'list', 'prod', 'stock', 'team', 'settings']);
+eq('stock nav', await pg.evaluate(() => Array.from(document.querySelectorAll('.rail [data-view]')).map(b => b.dataset.view).filter((v, i, a) => a.indexOf(v) === i)), ['flow', 'board', 'list', 'prod', 'stock', 'kb', 'team', 'settings']);
 await shot('stock-prod');
 await pg.click(`.pcard[data-popen="${shipId}"] [data-padv]`); await pg.waitForTimeout(500);
 eq('ส่งแล้ว asks for delivery proof first', await pg.locator('#shipModal').count(), 1);

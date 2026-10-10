@@ -100,7 +100,7 @@ eq('sale pin on', await pg.locator('#s-salelink .spp-all .pill.s-done').count(),
 // production staff
 await login('ช่างเอ');
 eq('prod role lands on board', await pg.evaluate(() => S.view), 'prod');
-eq('prod role nav', await pg.evaluate(() => [...document.querySelectorAll('#nav [data-view]')].map(b => b.dataset.view)), ['flow', 'home', 'board', 'list', 'prod', 'stock', 'team', 'settings']);
+eq('prod role nav', await pg.evaluate(() => [...document.querySelectorAll('#nav [data-view]')].map(b => b.dataset.view)), ['flow', 'home', 'board', 'list', 'prod', 'stock', 'kb', 'team', 'settings']);
 await pg.evaluate(() => T.go('board')); await pg.waitForTimeout(500);
 eq('prod role sees all design jobs', await pg.evaluate(() => document.querySelectorAll('.board .card').length > 10), true);
 eq('prod role cannot move/edit design cards', await pg.locator('.board .card .adv, .board .card .tbtn').count(), 0);
