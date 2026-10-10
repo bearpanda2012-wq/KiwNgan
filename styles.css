@@ -4363,3 +4363,9 @@ body.more-open .fab,body.more-open #chatHeads,body.more-open .msg-fab{opacity:0!
 
 /* v2.70.2: เปิดหน้าต่างงานแล้วพื้นหลังไม่ขยับ (กันแถบเลื่อนหายแล้วหน้ากว้างขึ้น) */
 body{scrollbar-gutter:stable}
+
+/* v2.70.3: บอร์ดผลิต — พื้นช่องเข้มขึ้นเป็นโทนสีขั้นปนเทา การ์ดสว่างกว่า มีขอบ+เงา แยกจากพื้นชัด */
+.pboard .col,.pboard .col.p-qc{background:linear-gradient(180deg,color-mix(in oklab,var(--s,var(--queue)) 17%,var(--surface-3)) 0%,color-mix(in oklab,var(--s,var(--queue)) 10%,var(--surface-3)) 100%);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--s,var(--queue)) 14%,transparent)}
+.pboard .pcard{background:linear-gradient(155deg,color-mix(in oklab,var(--s) 9%,var(--surface)) 0%,var(--surface) 45%);border:1px solid color-mix(in oklab,var(--s) 22%,var(--line));box-shadow:0 1px 2px rgba(15,23,42,.06),0 6px 16px -10px color-mix(in oklab,var(--s) 55%,rgba(15,23,42,.35))}
+.pboard .pcard.is-urgent{background:linear-gradient(155deg,color-mix(in oklab,var(--urgent) 12%,var(--surface)) 0%,var(--surface) 48%)}
+.pboard .pcard:hover{box-shadow:0 2px 4px rgba(15,23,42,.06),0 12px 24px -12px color-mix(in oklab,var(--s) 60%,rgba(15,23,42,.4))}
