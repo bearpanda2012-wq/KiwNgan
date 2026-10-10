@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.33.0';
+const VERSION = '1.34.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -43,8 +43,9 @@ const SHEETS = {
   Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due', 'qc', 'priority', 'ship'],   // ship = หลักฐานส่งมอบ {to ผู้รับ, note, sig รหัสรูปลายเซ็น, by, at} (รูปถ่ายเก็บที่ jobId d_<id>)
   // priority = 'urgent' ติดธงด่วนไปจนส่งมอบ (สืบจากงานฝ่ายแบบเลขเดียวกันด้วย)
   // คลังวัสดุ (ฝ่ายสต็อก): 1 แถว = 1 รายการวัสดุ · StockLog = ประวัติรับเข้า/เบิกออก/ปรับยอด
-  Stock: ['id', 'name', 'cat', 'unit', 'qty', 'min', 'loc', 'note', 'updatedAt', 'updatedBy', 'price'],   // price = ราคาต่อหน่วย (บาท) ใช้คิดต้นทุนวัสดุต่อเลข Job
-  StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note', 'price']   // price = ราคาต่อหน่วยตอนเบิก
+  Stock: ['id', 'name', 'cat', 'unit', 'qty', 'min', 'loc', 'note', 'updatedAt', 'updatedBy', 'price', 'own', 'cust', 'job', 'grade', 'base', 'size'],   // price = ราคาต่อหน่วย (บาท) ใช้คิดต้นทุนวัสดุต่อเลข Job
+  // own = 'cust' ของลูกค้า (cust = ชื่อลูกค้า, job = เลข Job) ไม่คิดมูลค่า · grade = 'ng' ตำหนิ / 'scrap' เศษ (base = วัสดุตั้งต้น, size = ขนาดเศษ) แยกจากยอดพร้อมใช้
+  StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note', 'price', 'cond', 'from']   // price = ราคาต่อหน่วยตอนเบิก · cond = สภาพของที่รับคืน ok/ng/scrap · from = ผู้ส่งคืน
 };
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
@@ -917,13 +918,15 @@ function prodDelete_(id, u) {
 }
 /* ======================= คลังวัสดุ (ฝ่ายสต็อก) =======================
    ดู: สิทธิ์ stock.view · รับเข้า/เบิกออก/ปรับยอด/เพิ่ม-แก้-ลบรายการ: สิทธิ์ stock.edit */
-const STOCK_KINDS_ = { in: 'รับเข้า', out: 'เบิกออก', adj: 'ปรับยอด' };
+const STOCK_KINDS_ = { in: 'รับเข้า', out: 'เบิกออก', adj: 'ปรับยอด', ret: 'รับคืนจากหน้างาน', back: 'คืนลูกค้า' };
+const STOCK_COND_ = { ok: 'สภาพดี', ng: 'มีตำหนิ', scrap: 'เศษ' };
+const stockSize_ = v => String(v || '').trim().replace(/\s+/g, ' ').replace(/\s*[xX*×]\s*/g, '×').slice(0, 40);
 const stockNum_ = v => { const n = Math.round(Number(String(v === undefined ? '' : v).replace(/,/g, '')) * 100) / 100; return isFinite(n) ? n : NaN; };
 function stockView_(u) {
   const items = readAll_('Stock').map(x => Object.assign(x, { qty: stockNum_(x.qty) || 0, min: stockNum_(x.min) || 0, price: stockNum_(x.price) || 0 }));
   // ล่าสุด 300 รายการ + การเบิกที่ระบุเลข Job ย้อนหลัง 1 ปี (ใช้คิดต้นทุนวัสดุต่อเลข Job ในหน้าสรุปรายงาน)
   const all = readAll_('StockLog'), since = Utilities.formatDate(new Date(Date.now() - 366 * 864e5), tz_(), 'yyyy-MM-dd'), cut = Math.max(0, all.length - 300);
-  const logs = all.filter((l, i) => i >= cut || (l.kind === 'out' && l.job && String(l.ts).slice(0, 10) >= since)).reverse()
+  const logs = all.filter((l, i) => i >= cut || ((l.kind === 'out' || l.kind === 'ret') && l.job && String(l.ts).slice(0, 10) >= since)).reverse()
     .map(l => Object.assign(l, { qty: stockNum_(l.qty) || 0, bal: stockNum_(l.bal) || 0, price: stockNum_(l.price) || 0, who: maskName_(l.who, u) }));
   return { items: items.map(x => Object.assign(x, { updatedBy: maskName_(x.updatedBy, u) })), logs: logs };
 }
@@ -932,9 +935,12 @@ function stockSave_(item, u) {
   stockEdit_(u);
   if (!item || !String(item.name || '').trim()) throw new Error('กรุณาใส่ชื่อวัสดุ');
   const name = String(item.name).trim().slice(0, 120), all = readAll_('Stock');
-  if (all.some(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== item.id)) throw new Error('มีวัสดุชื่อ ' + name + ' อยู่แล้ว');
-  const min = stockNum_(item.min || 0); if (isNaN(min) || min < 0) throw new Error('จุดสั่งซื้อต้องเป็นตัวเลข 0 ขึ้นไป');
-  const price = item.price === undefined ? undefined : stockNum_(item.price || 0); if (price !== undefined && (isNaN(price) || price < 0)) throw new Error('ราคาต่อหน่วยต้องเป็นตัวเลข 0 ขึ้นไป');
+  const prev = item.id ? all.find(x => x.id === item.id) : null;
+  const own = item.own === undefined ? String((prev && prev.own) || '') : (item.own === 'cust' ? 'cust' : '');
+  const cust = own ? String(item.cust === undefined ? (prev && prev.cust) || '' : item.cust).trim().slice(0, 80) : '';
+  if (all.some(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== item.id && String(x.own || '') === own && String(x.cust || '') === cust)) throw new Error('มีวัสดุชื่อ ' + name + ' อยู่แล้ว');
+  const min = own ? 0 : stockNum_(item.min || 0); if (isNaN(min) || min < 0) throw new Error('จุดสั่งซื้อต้องเป็นตัวเลข 0 ขึ้นไป');
+  const price = own ? 0 : item.price === undefined ? undefined : stockNum_(item.price || 0); if (price !== undefined && (isNaN(price) || price < 0)) throw new Error('ราคาต่อหน่วยต้องเป็นตัวเลข 0 ขึ้นไป');
   const now = nowIso_(), row = item.id ? rowOf_('Stock', item.id) : -1;
   let cur;
   if (row > 0) cur = readRow_('Stock', row);
@@ -946,6 +952,8 @@ function stockSave_(item, u) {
   Object.assign(cur, { name: name, cat: String(item.cat || '').trim().slice(0, 60), unit: String(item.unit || '').trim().slice(0, 20) || 'ชิ้น', min: min,
     loc: String(item.loc || '').trim().slice(0, 60), note: String(item.note || '').slice(0, 300), updatedAt: now, updatedBy: u.name });
   if (price !== undefined) cur.price = price;
+  cur.own = own; cur.cust = cust;
+  if (own) cur.job = String(item.job === undefined ? cur.job || '' : item.job).trim().slice(0, 60);
   writeRow_('Stock', cur, row);
   if (row < 0 && cur.qty) writeRow_('StockLog', { id: uid_('sl_'), ts: now, itemId: cur.id, kind: 'adj', qty: cur.qty, bal: cur.qty, job: '', who: u.name, note: 'ยอดเริ่มต้น' }, -1);
   log_(cur.id, u.name, 'stock', (row > 0 ? 'แก้ไขวัสดุ ' : 'เพิ่มวัสดุ ') + name);
@@ -958,17 +966,37 @@ function stockMove_(p, u) {
   const kind = STOCK_KINDS_[p.kind] ? p.kind : '', n = stockNum_(p.qty);
   if (!kind) throw new Error('เลือก รับเข้า / เบิกออก / ปรับยอด');
   if (isNaN(n) || (kind === 'adj' ? n < 0 : n <= 0)) throw new Error(kind === 'adj' ? 'ยอดคงเหลือจริงต้องเป็นตัวเลข 0 ขึ้นไป' : 'ใส่จำนวนมากกว่า 0');
-  const it = readRow_('Stock', row), have = stockNum_(it.qty) || 0;
-  const bal = kind === 'in' ? have + n : kind === 'out' ? have - n : n;
-  if (bal < 0) throw new Error('เบิกเกินยอดคงเหลือ (เหลือ ' + have + ' ' + (it.unit || '') + ')');
-  const now = nowIso_(), r2 = Math.round(bal * 100) / 100;
+  let it = readRow_('Stock', row), r0 = row;
+  const job = String(p.job || '').trim().slice(0, 60), base = it;
+  let cond = '', from = '';
+  if (kind === 'back' && it.own !== 'cust') throw new Error('คืนลูกค้าได้เฉพาะของลูกค้า');
+  if (kind === 'ret') {   // รับคืนจากหน้างาน: สภาพดี → เข้ายอดเดิม · ตำหนิ/เศษ → แยกเป็นรายการของตัวเอง (ไม่ปนยอดพร้อมใช้)
+    if (it.own || it.grade) throw new Error('รับคืนได้เฉพาะวัสดุของบริษัท');
+    if (!job) throw new Error('ใส่เลข Job ที่ของกลับมาจากหน้างาน');
+    cond = STOCK_COND_[p.cond] ? p.cond : 'ok'; from = String(p.from || '').trim().slice(0, 60);
+    const size = stockSize_(p.size);
+    if (cond === 'scrap' && !size) throw new Error('ใส่ขนาดเศษ เช่น 60×120 ซม.');
+    if (cond !== 'ok') {
+      const all = readAll_('Stock');
+      const hit = all.find(x => x.base === it.id && x.grade === cond && !x.own && (cond !== 'scrap' || stockSize_(x.size).toLowerCase() === size.toLowerCase()));
+      if (hit) { r0 = rowOf_('Stock', hit.id); it = readRow_('Stock', r0); }
+      else {
+        it = { id: uid_('s_'), name: (base.name + (cond === 'ng' ? ' · ตำหนิ' : ' · เศษ ' + size)).slice(0, 120), cat: base.cat, unit: base.unit, qty: 0, min: 0, loc: base.loc, note: '', price: 0, own: '', cust: '', job: '', grade: cond, base: base.id, size: cond === 'scrap' ? size : '' };
+        r0 = -1;
+      }
+    }
+  }
+  const have = stockNum_(it.qty) || 0, plus = kind === 'in' || kind === 'ret';
+  const bal = plus ? have + n : kind === 'adj' ? n : have - n;
+  if (bal < 0) throw new Error((kind === 'back' ? 'คืนเกินยอดคงเหลือ' : 'เบิกเกินยอดคงเหลือ') + ' (เหลือ ' + have + ' ' + (it.unit || '') + ')');
+  const now = nowIso_(), r2 = Math.round(bal * 100) / 100, logId = uid_('sl_');
   it.qty = r2; it.updatedAt = now; it.updatedBy = u.name;
-  writeRow_('Stock', it, row);
-  writeRow_('StockLog', { id: uid_('sl_'), ts: now, itemId: it.id, kind: kind, qty: kind === 'adj' ? Math.round((r2 - have) * 100) / 100 : n, bal: r2,
-    job: String(p.job || '').trim().slice(0, 60), who: u.name, note: String(p.note || '').slice(0, 200), price: stockNum_(it.price) || '' }, -1);
-  log_(it.id, u.name, 'stock', STOCK_KINDS_[kind] + ' ' + it.name + ' ' + n + ' ' + (it.unit || '') + ' (คงเหลือ ' + r2 + ')');
-  stockLowPush_(it, have, r2, u);
-  return stockView_(u);
+  writeRow_('Stock', it, r0);
+  writeRow_('StockLog', { id: logId, ts: now, itemId: it.id, kind: kind, qty: kind === 'adj' ? Math.round((r2 - have) * 100) / 100 : n, bal: r2,
+    job: job, who: u.name, note: String(p.note || '').slice(0, 200), price: kind === 'ret' ? stockNum_(base.price) || '' : stockNum_(it.price) || '', cond: cond, from: from }, -1);
+  log_(it.id, u.name, 'stock', STOCK_KINDS_[kind] + (cond ? ' (' + STOCK_COND_[cond] + ')' : '') + ' ' + it.name + ' ' + n + ' ' + (it.unit || '') + ' (คงเหลือ ' + r2 + ')');
+  if (!it.own && !it.grade) stockLowPush_(it, have, r2, u);
+  return Object.assign(stockView_(u), { logId: logId, itemId: it.id });
 }
 /** ของใกล้หมด: ยอดลดลงจนถึงจุดสั่งซื้อ (หรือหมด) → เด้งแจ้งเตือนเข้ามือถือคนที่จัดการคลังได้ (ยกเว้นคนที่เบิกเอง) */
 function stockLowPush_(it, before, after, u) {
@@ -1039,7 +1067,11 @@ function imageMeta_() {
 const IMG_FILE_COL_ = SHEETS.Images.indexOf('fileId') + 1;
 function addImage_(p, u) {
   let job;
-  if (/^s_/.test(String(p.jobId || ''))) {   // รูปสินค้า/วัสดุในคลัง (ฝ่ายสต็อก)
+  if (/^r_sl_/.test(String(p.jobId || ''))) {   // รูปของที่รับคืนจากหน้างาน (ผูกกับรายการเคลื่อนไหว)
+    if (!can_(u, 'stock.edit')) throw new Error('เพิ่มรูปได้เฉพาะคนที่จัดการคลังวัสดุได้');
+    if (rowOf_('StockLog', String(p.jobId).slice(2)) < 0) throw new Error('ไม่พบรายการรับคืนนี้');
+    job = { code: 'คลังวัสดุ รับคืน' };
+  } else if (/^s_/.test(String(p.jobId || ''))) {   // รูปสินค้า/วัสดุในคลัง (ฝ่ายสต็อก)
     const sr = rowOf_('Stock', p.jobId);
     if (sr < 0) throw new Error('ไม่พบวัสดุนี้');
     if (!can_(u, 'stock.edit')) throw new Error('เพิ่มรูปวัสดุได้เฉพาะคนที่จัดการคลังวัสดุได้');
@@ -1079,7 +1111,7 @@ function deleteImage_(id, u) {
   if (row < 0) throw new Error('ไม่พบรูปนี้');
   const meta = sheet_('Images').getRange(row, 1, 1, 4).getDisplayValues()[0];
   const jr = rowOf_('Jobs', meta[1]), job = jr > 0 ? readRow_('Jobs', jr) : null;
-  const isProdImg = (/^p_/.test(meta[1]) && canProd_(u)) || (/^s_/.test(meta[1]) && can_(u, 'stock.edit')) || (/^d_p_/.test(meta[1]) && can_(u, 'prod.ship'));
+  const isProdImg = (/^p_/.test(meta[1]) && canProd_(u)) || (/^(s_|r_sl_)/.test(meta[1]) && can_(u, 'stock.edit')) || (/^d_p_/.test(meta[1]) && can_(u, 'prod.ship'));
   if (!isAdmin_(u) && meta[2] !== u.name && !isProdImg && !(job && ownsJob_(u, job))) throw new Error('ลบได้เฉพาะรูปของงานตัวเอง');
   const fid = sheet_('Images').getRange(row, IMG_FILE_COL_).getDisplayValue();
   sheet_('Images').deleteRow(row);

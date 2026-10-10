@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.70.5';
+const APP_VERSION = '2.71.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -510,7 +510,7 @@ const Demo = {
     if (p.status === 'taken') { if (m.from === u.name) throw new Error('รับช่วยคำขอของตัวเองไม่ได้'); if (m.status !== 'open') throw new Error('มีคนรับช่วยแล้ว'); m.status = 'taken'; m.helper = u.name;
       const n = { id: uid('m_'), ts: nowLocal() + ':' + pad(new Date().getSeconds()), from: u.name, to: m.to === 'team' ? 'team' : m.from, kind: 'msg', text: '🙋 รับช่วยเรื่อง "' + m.text.slice(0, 60) + '" แล้ว', jobId: m.jobId, status: '', helper: '', readBy: [u.name] }; d.messages.push(n); this.save(d); return { message: this.mmsg(d, u, m), note: this.mmsg(d, u, n) }; }
     if (m.from !== u.name && m.helper !== u.name && !P.admin(u)) throw new Error('ปิดได้เฉพาะคนขอ คนที่รับช่วย หรือแอดมิน'); m.status = p.status; this.save(d); return { message: this.mmsg(d, u, m) }; },
-  async addImage(p) { const d = this.db(), u = this.me(d), dj = /^d_p_/.test(p.jobId || '') ? (d.prods || []).find(x => x.id === p.jobId.slice(2)) : null, sj = /^s_/.test(p.jobId || '') ? ((d.stock || {}).items || []).find(x => x.id === p.jobId) : null, pj = /^p_/.test(p.jobId || '') ? (d.prods || []).find(x => x.id === p.jobId) : null, j = dj || sj || pj || d.jobs.find(x => x.id === p.jobId); if (!j) throw new Error('ไม่พบงานนี้'); if (dj ? !P.can(u, 'prod.ship') && !P.can(u, 'prod.edit') : sj ? !P.can(u, 'stock.edit') : pj ? !P.can(u, 'prod.edit') : !P.owns(u, j)) throw new Error(dj ? 'เพิ่มหลักฐานส่งมอบได้เฉพาะฝ่ายสต็อกหรือแอดมิน' : pj ? 'เพิ่มรูปงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน' : 'เพิ่มรูปได้เฉพาะงานของตัวเอง'); d.images = d.images || []; if (d.images.filter(m => m.jobId === p.jobId).length >= IMG_MAX) throw new Error('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน');
+  async addImage(p) { const d = this.db(), u = this.me(d), dj = /^d_p_/.test(p.jobId || '') ? (d.prods || []).find(x => x.id === p.jobId.slice(2)) : null, sj = /^s_/.test(p.jobId || '') ? ((d.stock || {}).items || []).find(x => x.id === p.jobId) : /^r_sl_/.test(p.jobId || '') ? ((d.stock || {}).logs || []).find(l => 'r_' + l.id === p.jobId) : null, pj = /^p_/.test(p.jobId || '') ? (d.prods || []).find(x => x.id === p.jobId) : null, j = dj || sj || pj || d.jobs.find(x => x.id === p.jobId); if (!j) throw new Error('ไม่พบงานนี้'); if (dj ? !P.can(u, 'prod.ship') && !P.can(u, 'prod.edit') : sj ? !P.can(u, 'stock.edit') : pj ? !P.can(u, 'prod.edit') : !P.owns(u, j)) throw new Error(dj ? 'เพิ่มหลักฐานส่งมอบได้เฉพาะฝ่ายสต็อกหรือแอดมิน' : pj ? 'เพิ่มรูปงานผลิตได้เฉพาะฝ่ายผลิตหรือแอดมิน' : 'เพิ่มรูปได้เฉพาะงานของตัวเอง'); d.images = d.images || []; if (d.images.filter(m => m.jobId === p.jobId).length >= IMG_MAX) throw new Error('ใส่รูปได้สูงสุด ' + IMG_MAX + ' รูปต่องาน');
     const m = { id: uid('i_'), jobId: p.jobId, createdBy: u.name, createdAt: nowLocal(), thumb: p.thumb, full: p.full }; d.images.push(m);
     try { this.save(d); } catch (e) { d.images.pop(); throw new Error('พื้นที่ในโหมดทดลองเต็ม ลบรูปเก่าก่อน'); }
     return { image: { id: m.id, jobId: m.jobId, createdBy: this.mask(d, u, { n: m.createdBy }, ['n']).n, createdAt: m.createdAt, thumb: m.thumb } }; },
@@ -586,22 +586,36 @@ const Demo = {
   sedit(u) { if (!P.can(u, 'stock.edit')) throw new Error('ไม่มีสิทธิ์แก้คลังวัสดุ (แอดมินเปิดได้ที่ ตั้งค่า > ผู้ใช้งานและสิทธิ์)'); },
   async stockSave(p) { const d = this.db(), u = this.me(d), it = p.item || {}; this.sedit(u); d.stock = d.stock || seedStock();
     const name = String(it.name || '').trim(); if (!name) throw new Error('กรุณาใส่ชื่อวัสดุ');
-    if (d.stock.items.some(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== it.id)) throw new Error('มีวัสดุชื่อ ' + name + ' อยู่แล้ว');
-    const min = +it.min || 0; if (min < 0) throw new Error('จุดสั่งซื้อต้องเป็นตัวเลข 0 ขึ้นไป');
+    const prev = it.id ? d.stock.items.find(x => x.id === it.id) : null, own = it.own === undefined ? String((prev && prev.own) || '') : (it.own === 'cust' ? 'cust' : ''), cust = own ? String(it.cust === undefined ? (prev && prev.cust) || '' : it.cust).trim() : '';
+    if (d.stock.items.some(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== it.id && String(x.own || '') === own && String(x.cust || '') === cust)) throw new Error('มีวัสดุชื่อ ' + name + ' อยู่แล้ว');
+    const min = own ? 0 : +it.min || 0; if (min < 0) throw new Error('จุดสั่งซื้อต้องเป็นตัวเลข 0 ขึ้นไป');
     if (it.price !== undefined && !(+it.price >= 0)) throw new Error('ราคาต่อหน่วยต้องเป็นตัวเลข 0 ขึ้นไป');
     let cur = it.id ? d.stock.items.find(x => x.id === it.id) : null; const now = nowLocal() + ':00';
     if (it.id && !cur) throw new Error('ไม่พบวัสดุนี้ อาจถูกลบไปแล้ว');
     if (!cur) { const q0 = +it.qty || 0; if (q0 < 0) throw new Error('ยอดเริ่มต้นต้องเป็นตัวเลข 0 ขึ้นไป'); cur = { id: uid('s_'), qty: q0 }; d.stock.items.push(cur); if (q0) d.stock.logs.push({ id: uid('sl_'), ts: now, itemId: cur.id, kind: 'adj', qty: q0, bal: q0, job: '', who: u.name, note: 'ยอดเริ่มต้น' }); }
     Object.assign(cur, { name: name, cat: String(it.cat || '').trim(), unit: String(it.unit || '').trim() || 'ชิ้น', min: min, loc: String(it.loc || '').trim(), note: String(it.note || ''), updatedAt: now, updatedBy: u.name }); if (it.price !== undefined) cur.price = Math.round((+it.price || 0) * 100) / 100;
+    cur.own = own; cur.cust = cust; if (own) { cur.price = 0; cur.job = String(it.job === undefined ? cur.job || '' : it.job).trim(); }
     this.save(d); return this.sview(d, u); },
-  async stockMove(p) { const d = this.db(), u = this.me(d); this.sedit(u); d.stock = d.stock || seedStock(); const it = d.stock.items.find(x => x.id === p.itemId); if (!it) throw new Error('ไม่พบวัสดุนี้');
-    const k = { in: 1, out: 1, adj: 1 }[p.kind] ? p.kind : '', n = Math.round(+p.qty * 100) / 100; if (!k) throw new Error('เลือก รับเข้า / เบิกออก / ปรับยอด');
+  async stockMove(p) { const d = this.db(), u = this.me(d); this.sedit(u); d.stock = d.stock || seedStock(); let it = d.stock.items.find(x => x.id === p.itemId); if (!it) throw new Error('ไม่พบวัสดุนี้');
+    const k = { in: 1, out: 1, adj: 1, ret: 1, back: 1 }[p.kind] ? p.kind : '', n = Math.round(+p.qty * 100) / 100; if (!k) throw new Error('เลือก รับเข้า / เบิกออก / ปรับยอด');
     if (!isFinite(n) || (k === 'adj' ? n < 0 : n <= 0)) throw new Error(k === 'adj' ? 'ยอดคงเหลือจริงต้องเป็นตัวเลข 0 ขึ้นไป' : 'ใส่จำนวนมากกว่า 0');
-    const have = +it.qty || 0, bal = Math.round((k === 'in' ? have + n : k === 'out' ? have - n : n) * 100) / 100;
-    if (bal < 0) throw new Error('เบิกเกินยอดคงเหลือ (เหลือ ' + have + ' ' + (it.unit || '') + ')');
-    const now = nowLocal() + ':' + pad(new Date().getSeconds()); it.qty = bal; it.updatedAt = now; it.updatedBy = u.name;
-    d.stock.logs.push({ id: uid('sl_'), ts: now, itemId: it.id, kind: k, qty: k === 'adj' ? Math.round((bal - have) * 100) / 100 : n, bal: bal, job: String(p.job || '').trim(), who: u.name, note: String(p.note || ''), price: +it.price || 0 });
-    this.save(d); return this.sview(d, u); },
+    const base = it, job = String(p.job || '').trim(); let cond = '', from = '';
+    if (k === 'back' && it.own !== 'cust') throw new Error('คืนลูกค้าได้เฉพาะของลูกค้า');
+    if (k === 'ret') {
+      if (it.own || it.grade) throw new Error('รับคืนได้เฉพาะวัสดุของบริษัท');
+      if (!job) throw new Error('ใส่เลข Job ที่ของกลับมาจากหน้างาน');
+      cond = { ok: 1, ng: 1, scrap: 1 }[p.cond] ? p.cond : 'ok'; from = String(p.from || '').trim();
+      const size = stSize(p.size); if (cond === 'scrap' && !size) throw new Error('ใส่ขนาดเศษ เช่น 60×120 ซม.');
+      if (cond !== 'ok') {
+        it = d.stock.items.find(x => x.base === base.id && x.grade === cond && !x.own && (cond !== 'scrap' || stSize(x.size).toLowerCase() === size.toLowerCase()));
+        if (!it) { it = { id: uid('s_'), name: base.name + (cond === 'ng' ? ' · ตำหนิ' : ' · เศษ ' + size), cat: base.cat, unit: base.unit, qty: 0, min: 0, loc: base.loc, note: '', price: 0, grade: cond, base: base.id, size: cond === 'scrap' ? size : '' }; d.stock.items.push(it); }
+      }
+    }
+    const have = +it.qty || 0, bal = Math.round((k === 'in' || k === 'ret' ? have + n : k === 'adj' ? n : have - n) * 100) / 100;
+    if (bal < 0) throw new Error((k === 'back' ? 'คืนเกินยอดคงเหลือ' : 'เบิกเกินยอดคงเหลือ') + ' (เหลือ ' + have + ' ' + (it.unit || '') + ')');
+    const now = nowLocal() + ':' + pad(new Date().getSeconds()), logId = uid('sl_'); it.qty = bal; it.updatedAt = now; it.updatedBy = u.name;
+    d.stock.logs.push({ id: logId, ts: now, itemId: it.id, kind: k, qty: k === 'adj' ? Math.round((bal - have) * 100) / 100 : n, bal: bal, job: job, who: u.name, note: String(p.note || ''), price: k === 'ret' ? +base.price || 0 : +it.price || 0, cond: cond, from: from });
+    this.save(d); return Object.assign(this.sview(d, u), { logId: logId, itemId: it.id }); },
   async stockDelete(p) { const d = this.db(), u = this.me(d); this.sedit(u); d.stock = d.stock || seedStock(); d.stock.items = d.stock.items.filter(x => x.id !== p.id); this.save(d); return this.sview(d, u); },
   async salePin(p) { const d = this.db(); this.admin(this.me(d)); const sale = String(p.sale || '').trim(), pin = p.pin ? String(p.pin) : '', pins = d.salePins = d.salePins || {}, keys = d.saleKeys = d.saleKeys || {};
     if (pin && (Object.keys(pins).some(n => n !== sale && pins[n] === pin) || (sale && pin === String(d.salePin || '')))) throw new Error('PIN นี้มีคนใช้แล้ว เลือก PIN อื่น');
@@ -4198,8 +4212,30 @@ function matSec(r) {
   const list = Object.values(by).sort((a, b) => b.cost - a.cost || a.job.localeCompare(b.job)), tot = list.reduce((s, x) => s + x.cost, 0);
   const title = c => { const p = prodOfCode(c), j = designJobsOf(c)[0]; return (p && p.title) || (j && j.title) || ''; };
   return '<section class="rsec rsec-mat"><h3>ต้นทุนวัสดุต่อเลข Job <small>จากการเบิกที่ระบุเลข Job ในช่วงนี้ · ' + list.length + ' งาน</small></h3>' + (list.length ? '<div class="rtable-wrap"><table class="rtable rmat"><thead><tr><th>เลข Job</th><th>วัสดุที่ใช้</th><th class="n">ต้นทุน</th></tr></thead><tbody>' +
-    list.map(x => '<tr><td class="mono">' + esc(x.job) + '<small>' + esc(title(x.job)) + '</small></td><td>' + x.items.map(i => esc(i.name) + ' <b>' + esc(stNum(i.qty) + ' ' + i.unit) + '</b>' + (i.cost ? ' <small>(' + baht(i.cost) + ')</small>' : '')).join('<br>') + '</td><td class="n">' + (x.cost ? baht(x.cost) : '–') + (x.priced ? '' : '<small>บางรายการไม่มีราคา</small>') + '</td></tr>').join('') +
-    '</tbody><tfoot><tr class="tot"><td colspan="2">รวมต้นทุนวัสดุ</td><td class="n">' + baht(tot) + '</td></tr></tfoot></table></div>' : '<p class="rnone">ยังไม่มีการเบิกวัสดุที่ระบุเลข Job ในช่วงนี้ · ตอนเบิกออกในคลังวัสดุ ใส่เลข Job ด้วยเพื่อคิดต้นทุน</p>') + '</section>';
+    list.map(x => '<tr><td class="mono">' + esc(x.job) + '<small>' + esc(title(x.job)) + '</small></td><td>' + x.items.map(i => esc(i.name) + ' <b>' + esc(stNum(i.qty) + ' ' + i.unit) + '</b>' + (i.cost ? ' <small>(' + baht(i.cost) + ')</small>' : '') + (i.cust ? ' <small>ของลูกค้า</small>' : i.scrap ? ' <small>ใช้เศษ ไม่คิดต้นทุน</small>' : '') + (i.ret ? ' <small>คืน ' + esc(stNum(i.ret)) + '</small>' : '')).join('<br>') + '</td><td class="n">' + (x.cost ? baht(x.cost) : '–') + (x.priced ? '' : '<small>บางรายการไม่มีราคา</small>') + '</td></tr>').join('') +
+    '</tbody><tfoot><tr class="tot"><td colspan="2">รวมต้นทุนวัสดุ</td><td class="n">' + baht(tot) + '</td></tr></tfoot></table></div>' : '<p class="rnone">ยังไม่มีการเบิกวัสดุที่ระบุเลข Job ในช่วงนี้ · ตอนเบิกออกในคลังวัสดุ ใส่เลข Job ด้วยเพื่อคิดต้นทุน</p>') + '</section>' + retSec(r);
+}
+/* รายงานของคืนจากหน้างาน: Job ไหนคืนเยอะ · Sale คนไหนสั่งเกินบ่อย · สภาพของที่คืน */
+function retData(from, to) {
+  const L = ((S.stock && S.stock.logs) || []).filter(l => l.kind === 'ret' && l.job && (!from || String(l.ts).slice(0, 10) >= from) && (!to || String(l.ts).slice(0, 10) <= to));
+  const saleOf = c => { const p = prodOfCode(c), j = designJobsOf(c)[0]; return (p && p.sale) || (j && j.sale) || ''; };
+  const job = {}, sale = {}, cond = { ok: 0, ng: 0, scrap: 0 }; let val = 0;
+  L.forEach(l => { const c = l.cond || 'ok', q = +l.qty || 0, it = stItem(l.itemId) || {}, b = it.base ? stItem(it.base) || {} : it, v = c === 'ok' ? q * (+l.price || +b.price || 0) : 0, k = String(l.job).trim().toLowerCase();
+    cond[c] = (cond[c] || 0) + 1; val += v;
+    const J = job[k] || (job[k] = { job: String(l.job).trim(), n: 0, val: 0, items: {}, sale: saleOf(l.job) }); J.n++; J.val += v; const nm = (b.name || it.name || 'วัสดุที่ลบแล้ว') + '|' + (b.unit || it.unit || ''); J.items[nm] = (J.items[nm] || 0) + q;
+    const sn = J.sale || 'ไม่ระบุ Sale', Sx = sale[sn] || (sale[sn] = { name: sn, jobs: {}, n: 0, val: 0 }); Sx.jobs[k] = 1; Sx.n++; Sx.val += v; });
+  return { n: L.length, val: Math.round(val * 100) / 100, cond: cond, jobs: Object.values(job).sort((a, b) => b.val - a.val || b.n - a.n), sales: Object.values(sale).map(x => Object.assign(x, { nj: Object.keys(x.jobs).length })).sort((a, b) => b.nj - a.nj || b.val - a.val) };
+}
+function retSec(r) {
+  if (!S.stock) return '';
+  const D = retData(r.from, r.to);
+  const head = '<section class="rsec rsec-ret"><h3>ของคืนจากหน้างาน <small>รับคืนที่ระบุเลข Job ในช่วงนี้</small></h3>';
+  if (!D.n) return head + '<p class="rnone">ยังไม่มีของคืนจากหน้างานในช่วงนี้ · ตอนของเหลือกลับมา กด "รับคืน" ที่วัสดุในคลัง แล้วใส่เลข Job</p></section>';
+  const title = c => { const p = prodOfCode(c), j = designJobsOf(c)[0]; return (p && p.title) || (j && j.title) || ''; };
+  return head + '<div class="ret-kpis"><div><span>รับคืน</span><b>' + D.n + '</b><small>ครั้ง · ' + D.jobs.length + ' งาน</small></div><div><span>มูลค่าที่ได้คืน (สภาพดี)</span><b>' + baht(D.val) + '</b><small>หักออกจากต้นทุน Job แล้ว</small></div><div><span>สภาพ</span><b class="ret-c">ดี ' + D.cond.ok + ' · ตำหนิ ' + D.cond.ng + ' · เศษ ' + D.cond.scrap + '</b><small>ครั้ง</small></div></div>' +
+    '<div class="rtable-wrap"><table class="rtable rret"><thead><tr><th>เลข Job</th><th>ของที่คืน</th><th>Sale</th><th class="n">มูลค่าคืน</th></tr></thead><tbody>' +
+    D.jobs.slice(0, 12).map(x => '<tr><td class="mono">' + esc(x.job) + '<small>' + esc(title(x.job)) + '</small></td><td>' + Object.keys(x.items).map(k => { const a = k.split('|'); return esc(a[0]) + ' <b>' + esc(stNum(x.items[k]) + ' ' + a[1]) + '</b>'; }).join('<br>') + '</td><td>' + esc(x.sale || '–') + '</td><td class="n">' + (x.val ? baht(x.val) : '–') + '</td></tr>').join('') + '</tbody></table></div>' +
+    (D.sales.length ? '<div class="ret-sales"><span class="lbl">Sale ที่มีของคืนบ่อย</span>' + D.sales.slice(0, 6).map(x => '<span class="ret-s"><b>' + esc(x.name) + '</b>' + x.nj + ' งาน' + (x.val ? ' · ' + baht(x.val) : '') + '</span>').join('') + '</div>' : '') + '</section>';
 }
 function viewReport() {
   const D = reportData(), r = D.r, s = S.settings, T = D.total;
@@ -4964,9 +5000,17 @@ function viewFlow() {
    ดูได้: สิทธิ์ stock.view · รับเข้า/เบิกออก/ปรับยอด/เพิ่ม-แก้-ลบ/ใส่รูป: สิทธิ์ stock.edit
    รูปสินค้าใช้ระบบรูปเดียวกับงาน (ชีต Images, jobId = รหัสวัสดุ s_…) เก็บใน Drive โฟลเดอร์ รูปงาน/คลังวัสดุ */
 const SV = { q: '', cat: 'all', sort: 'status', anim: false };
-const SM = { id: '', mode: '', kind: 'out', pend: [], del: false, busy: false, f: null };
-const SK = { in: { label: 'รับเข้า', cls: 'sk-in', sign: '+' }, out: { label: 'เบิกออก', cls: 'sk-out', sign: '−' }, adj: { label: 'ปรับยอด', cls: 'sk-adj', sign: '±' } };
-const stLow = x => (+x.min || 0) > 0 && (+x.qty || 0) <= (+x.min || 0);
+const SM = { id: '', mode: '', kind: 'out', pend: [], del: false, busy: false, f: null, cond: 'ok', rpend: [] };
+const SKF = { all: 1, low: 1, scrap: 1, cust: 1 };
+const SK = { in: { label: 'รับเข้า', cls: 'sk-in', sign: '+' }, out: { label: 'เบิกออก', cls: 'sk-out', sign: '−' }, adj: { label: 'ปรับยอด', cls: 'sk-adj', sign: '±' }, ret: { label: 'รับคืน', cls: 'sk-ret', sign: '+' }, back: { label: 'คืนลูกค้า', cls: 'sk-back', sign: '−' } };
+/* ของบริษัทปกติ / ของลูกค้า (own=cust) / ตำหนิ-เศษที่รับคืนจากหน้างาน (grade=ng|scrap แยกรายการจากวัสดุตั้งต้น base) */
+const stReg = x => !x.own && !x.grade;
+const stCustOf = x => x && x.own === 'cust';
+const ST_COND = { ok: 'สภาพดี', ng: 'มีตำหนิ', scrap: 'เศษ' };
+const stSize = v => String(v || '').trim().replace(/\s+/g, ' ').replace(/\s*[xX*×]\s*/g, '×');
+const stKinds = x => stCustOf(x) ? ['in', 'out', 'back', 'adj'] : x.grade ? ['out', 'in', 'adj'] : ['in', 'out', 'ret', 'adj'];
+const skLabel = (x, k) => stCustOf(x) ? ({ in: 'รับของลูกค้า', out: 'เบิกใช้' }[k] || SK[k].label) : SK[k].label;
+const stLow = x => stReg(x) && (+x.min || 0) > 0 && (+x.qty || 0) <= (+x.min || 0);
 const stZero = x => (+x.qty || 0) <= 0;
 const stNum = n => { n = +n || 0; return n.toLocaleString('th-TH', { maximumFractionDigits: 2 }); };
 const canStock = () => P.can(S.user, 'stock.edit');
@@ -4978,20 +5022,25 @@ const logPrice = l => +l.price || +((stItem(l.itemId) || {}).price) || 0;   // �
 function jobMaterials(code, from, to) {
   const c = String(code || '').trim().toLowerCase(), by = {};
   ((S.stock && S.stock.logs) || []).forEach(l => { const d = String(l.ts).slice(0, 10);
-    if (l.kind !== 'out' || !l.job || (c && String(l.job).trim().toLowerCase() !== c) || (from && d < from) || (to && d > to)) return;
-    const k = (c ? '' : String(l.job).trim().toLowerCase() + '|') + l.itemId, it = stItem(l.itemId) || {};
-    const r = by[k] || (by[k] = { job: String(l.job).trim(), itemId: l.itemId, name: it.name || 'วัสดุที่ลบแล้ว', unit: it.unit || '', qty: 0, cost: 0, priced: true, last: '' });
-    r.qty += +l.qty || 0; r.cost += (+l.qty || 0) * logPrice(l); if (!logPrice(l)) r.priced = false; if (d > r.last) r.last = d; });
-  return Object.values(by).map(r => Object.assign(r, { qty: Math.round(r.qty * 100) / 100, cost: Math.round(r.cost * 100) / 100 }));
+    const back = l.kind === 'ret' && (l.cond || 'ok') === 'ok';
+    if ((l.kind !== 'out' && !back) || !l.job || (c && String(l.job).trim().toLowerCase() !== c) || (from && d < from) || (to && d > to)) return;
+    const k = (c ? '' : String(l.job).trim().toLowerCase() + '|') + l.itemId, it = stItem(l.itemId) || {}, free = !stReg(it);
+    const r = by[k] || (by[k] = { job: String(l.job).trim(), itemId: l.itemId, name: it.name || 'วัสดุที่ลบแล้ว', unit: it.unit || '', qty: 0, cost: 0, priced: true, last: '', ret: 0, cust: stCustOf(it), scrap: !!it.grade });
+    const q = +l.qty || 0, pr = free ? 0 : logPrice(l);
+    if (back) { r.qty -= q; r.ret += q; r.cost -= q * pr; } else { r.qty += q; r.cost += q * pr; if (!pr && !free) r.priced = false; }
+    if (d > r.last) r.last = d; });
+  return Object.values(by).map(r => Object.assign(r, { qty: Math.round(r.qty * 100) / 100, cost: Math.round(Math.max(0, r.cost) * 100) / 100, ret: Math.round(r.ret * 100) / 100 }));
 }
 function matHtml(code) {   // หน้าต่างงานผลิต: วัสดุที่ใช้กับเลข Job นี้
   if (!S.stock || !P.can(S.user, 'stock.view')) return '';
   const a = jobMaterials(code); if (!a.length) return '';
   const tot = a.reduce((s, r) => s + r.cost, 0), anyP = a.some(r => r.cost);
-  return '<div class="f pm-mat"><label>วัสดุที่ใช้กับงานนี้ <small class="muted">จากการเบิกในคลังวัสดุ</small></label><ul class="mat-list">' + a.map(r => '<li data-sopen="' + esc(r.itemId) + '"><b>' + esc(r.name) + '</b><span>' + esc(stNum(r.qty) + ' ' + r.unit) + '</span><em>' + (r.cost ? baht(r.cost) : '–') + '</em></li>').join('') + '</ul>' +
+  return '<div class="f pm-mat"><label>วัสดุที่ใช้กับงานนี้ <small class="muted">จากการเบิกในคลังวัสดุ</small></label><ul class="mat-list">' + a.map(r => '<li data-sopen="' + esc(r.itemId) + '"><b>' + esc(r.name) + (r.cust ? ' <small class="muted">ของลูกค้า</small>' : r.scrap ? ' <small class="muted">ใช้เศษ</small>' : '') + '</b><span>' + esc(stNum(r.qty) + ' ' + r.unit) + (r.ret ? '<small> (คืน ' + esc(stNum(r.ret)) + ')</small>' : '') + '</span><em>' + (r.cost ? baht(r.cost) : '–') + '</em></li>').join('') + '</ul>' +
     (anyP ? '<div class="mat-tot"><span>ต้นทุนวัสดุรวม</span><b>' + baht(tot) + '</b>' + (a.some(r => !r.priced) ? '<small>บางรายการยังไม่ได้ใส่ราคา</small>' : '') + '</div>' : '<small class="hint">ใส่ราคาต่อหน่วยที่วัสดุในคลัง เพื่อคิดต้นทุนอัตโนมัติ</small>') + '</div>';
 }
-const stState = x => stZero(x) ? { k: 'zero', label: 'หมดสต็อก' } : stLow(x) ? { k: 'low', label: 'ใกล้หมด' } : { k: 'ok', label: 'พร้อมใช้' };
+const stState = x => !stReg(x) ? { k: stZero(x) ? 'zero' : 'ok', label: stZero(x) ? 'หมดแล้ว' : stCustOf(x) ? 'ของลูกค้า' : x.grade === 'ng' ? 'มีตำหนิ' : 'เศษ' } : stZero(x) ? { k: 'zero', label: 'หมดสต็อก' } : stLow(x) ? { k: 'low', label: 'ใกล้หมด' } : { k: 'ok', label: 'พร้อมใช้' };
+const stTag = x => stCustOf(x) ? '<span class="sk-tag t-cust">ของลูกค้า' + (x.cust ? ' · ' + esc(x.cust) : '') + '</span>' : x.grade ? '<span class="sk-tag t-' + x.grade + '">' + (x.grade === 'ng' ? 'ตำหนิ' : 'เศษ' + (x.size ? ' ' + esc(x.size) : '')) + '</span>' : '';
+const stRetInfo = l => l.kind !== 'ret' ? '' : ' · ' + (ST_COND[l.cond] || 'สภาพดี') + (l.from ? ' · คืนโดย ' + l.from : '');
 /* หมวดวัสดุ: ไอคอน + สีประจำหมวด (หมวดที่ตั้งเองได้สีจากชื่อ) */
 const ST_IC = {
   sheet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8.5l8-4 8 4-8 4z"/><path d="M4 12.5l8 4 8-4M4 16.5l8 4 8-4" stroke-linecap="round"/></svg>',
@@ -5028,43 +5077,46 @@ function viewStock() {
   const all = stockItems(), logs = S.stock.logs || [], ed = canStock(), q = SV.q.trim().toLowerCase();
   const an = S.animIn || SV.anim; SV.anim = false;   // เล่นแอนิเมชันเฉพาะตอนเข้าหน้า/เปลี่ยนตัวกรอง (ซิงก์ข้อมูลแล้วไม่เด้ง)
   const cats = Array.from(new Set(all.map(x => x.cat).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'th'));
-  const low = all.filter(x => stLow(x) && !stZero(x)), zero = all.filter(stZero), td = today(), wk = addDays(td, -7);
-  const lw = logs.filter(l => String(l.ts).slice(0, 10) >= wk), nIn = lw.filter(l => l.kind === 'in').length, nOut = lw.filter(l => l.kind === 'out').length;
+  const reg = all.filter(stReg), scr = all.filter(x => x.grade && !stZero(x)), cus = all.filter(x => stCustOf(x) && !stZero(x));
+  const low = reg.filter(x => stLow(x) && !stZero(x)), zero = reg.filter(stZero), td = today(), wk = addDays(td, -7);
+  const lw = logs.filter(l => String(l.ts).slice(0, 10) >= wk), nIn = lw.filter(l => l.kind === 'in' || l.kind === 'ret').length, nOut = lw.filter(l => l.kind === 'out' || l.kind === 'back').length;
+  const show = x => SV.cat === 'scrap' ? !!x.grade : SV.cat === 'cust' ? stCustOf(x) : SV.cat === 'low' ? stLow(x) : (stReg(x) || !stZero(x)) && (SV.cat === 'all' || x.cat === SV.cat);
   const rank = x => stZero(x) ? 0 : stLow(x) ? 1 : 2;
-  const list = all.filter(x => (SV.cat === 'all' || (SV.cat === 'low' ? stLow(x) : x.cat === SV.cat)) && (!q || [x.name, x.cat, x.loc, x.note].join(' ').toLowerCase().indexOf(q) >= 0))
+  const list = all.filter(x => show(x) && (!q || [x.name, x.cat, x.loc, x.note, x.cust, x.job, x.size].join(' ').toLowerCase().indexOf(q) >= 0))
     .sort((a, b) => SV.sort === 'name' ? String(a.name).localeCompare(String(b.name), 'th') : SV.sort === 'qty' ? (+a.qty || 0) - (+b.qty || 0) : SV.sort === 'recent' ? String(b.updatedAt).localeCompare(String(a.updatedAt))
       : (rank(a) - rank(b)) || String(a.cat).localeCompare(String(b.cat), 'th') || String(a.name).localeCompare(String(b.name), 'th'));
   const kpi = (cls, ic, lab, n, sub, cf) => '<button type="button" class="sk-kpi ' + cls + '"' + (cf ? ' data-scat="' + cf + '"' : '') + '><span class="ski">' + ic + '</span><span class="skt"><small>' + lab + '</small><b class="tnum">' + n + '</b><em>' + sub + '</em></span></button>';
-  const kpis = '<div class="sk-kpis' + (an ? ' in' : '') + '">' + kpi('k-all', I.stock, 'วัสดุทั้งหมด', all.length, cats.length + ' หมวด' + (all.some(x => +x.price) ? ' · มูลค่า ' + baht(all.reduce((s, x) => s + (+x.price || 0) * Math.max(0, +x.qty || 0), 0)) : ''), 'all') + kpi('k-low', STI.fire, 'ใกล้หมด', low.length, 'ต่ำกว่าจุดสั่งซื้อ', 'low') +
+  const kpis = '<div class="sk-kpis' + (an ? ' in' : '') + '">' + kpi('k-all', I.stock, 'วัสดุทั้งหมด', reg.length, cats.length + ' หมวด' + (reg.some(x => +x.price) ? ' · มูลค่า ' + baht(reg.reduce((s, x) => s + (+x.price || 0) * Math.max(0, +x.qty || 0), 0)) : ''), 'all') + kpi('k-low', STI.fire, 'ใกล้หมด', low.length, 'ต่ำกว่าจุดสั่งซื้อ', 'low') +
     kpi('k-zero', PIC.xmark, 'หมดสต็อก', zero.length, zero.length ? 'ต้องสั่งด่วน' : 'ไม่มี', zero.length ? 'low' : '') + kpi('k-mv', STI.clock, 'เคลื่อนไหว 7 วัน', nIn + nOut, 'รับ ' + nIn + ' · เบิก ' + nOut, '') + '</div>';
   const alert = low.length + zero.length ? '<button type="button" class="sk-alert" data-scat="low"><span>' + STI.fire + '</span><b>ต้องสั่งเพิ่ม ' + (low.length + zero.length) + ' รายการ</b><small>' + esc(zero.concat(low).slice(0, 4).map(x => x.name).join(' · ')) + (low.length + zero.length > 4 ? ' …' : '') + '</small><em>ดูทั้งหมด ›</em></button>' : '';
-  const chips = '<div class="qchips sk-chips">' + [['all', 'ทั้งหมด', all.length], ['low', 'ต้องสั่งเพิ่ม', low.length + zero.length]].concat(cats.map(c => [c, c, all.filter(x => x.cat === c).length])).map(x => '<button class="qchip' + (x[0] === 'low' ? ' q-late' : '') + '" data-scat="' + esc(x[0]) + '" aria-pressed="' + (SV.cat === x[0]) + '"' + (x[0] !== 'all' && x[0] !== 'low' ? ' style="--ch:' + stHue(x[0]) + '"' : '') + '>' + (x[0] !== 'all' && x[0] !== 'low' ? '<i class="sk-dot"></i>' : '') + esc(x[1]) + '<b>' + x[2] + '</b></button>').join('') + '</div>';
+  const chips = '<div class="qchips sk-chips">' + [['all', 'ทั้งหมด', all.filter(x => stReg(x) || !stZero(x)).length], ['low', 'ต้องสั่งเพิ่ม', low.length + zero.length]].concat(scr.length || SV.cat === 'scrap' ? [['scrap', 'ตำหนิ / เศษ', scr.length]] : []).concat(cus.length || SV.cat === 'cust' ? [['cust', 'ของลูกค้า', cus.length]] : []).concat(cats.map(c => [c, c, all.filter(x => x.cat === c && (stReg(x) || !stZero(x))).length])).map(x => '<button class="qchip' + (x[0] === 'low' ? ' q-late' : '') + '" data-scat="' + esc(x[0]) + '" aria-pressed="' + (SV.cat === x[0]) + '"' + (SKF[x[0]] ? '' : ' style="--ch:' + stHue(x[0]) + '"') + '>' + (SKF[x[0]] ? '' : '<i class="sk-dot"></i>') + esc(x[1]) + '<b>' + x[2] + '</b></button>').join('') + '</div>';
   const tools = '<div class="sk-tools"><label class="search">' + I.search + '<input id="sq" type="search" autocomplete="off" placeholder="ค้นหาวัสดุ หมวด ที่เก็บ…" value="' + esc(SV.q) + '" aria-label="ค้นหาวัสดุ"></label>' +
     '<label class="sk-sort"><span>เรียง</span><select id="sSort" aria-label="เรียงตาม">' + [['status', 'ต้องสั่งก่อน'], ['qty', 'คงเหลือน้อย → มาก'], ['name', 'ชื่อ ก–ฮ'], ['recent', 'อัปเดตล่าสุด']].map(o => '<option value="' + o[0] + '"' + (SV.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label></div>';
-  const cards = list.map((x, k) => { const st = stState(x), n = imgsOf(x.id).length;
-    return '<article class="sk-card s-' + st.k + '" style="--i:' + Math.min(k, 24) + ';--h:' + stHue(x.cat) + '" data-sopen="' + esc(x.id) + '" tabindex="0" role="button" aria-label="' + esc(x.name) + '">' +
+  const cards = list.map((x, k) => { const st = stState(x), n = imgsOf(x.id).length, bs = x.base ? stItem(x.base) : null;
+    return '<article class="sk-card s-' + st.k + (stReg(x) ? '' : stCustOf(x) ? ' is-cust' : ' is-' + x.grade) + '" style="--i:' + Math.min(k, 24) + ';--h:' + stHue(x.cat) + '" data-sopen="' + esc(x.id) + '" tabindex="0" role="button" aria-label="' + esc(x.name) + '">' +
       '<div class="sk-top">' + stPhoto(x) + '<span class="sk-st">' + st.label + '</span>' + (n > 1 ? '<span class="sk-n">' + PICK_IC + n + '</span>' : '') +
       '<span class="sk-q"><b class="tnum">' + stNum(x.qty) + '</b><small>' + esc(x.unit || '') + '</small></span></div>' +
-      '<div class="sk-body"><b class="sk-name">' + esc(x.name) + '</b><small>' + [x.cat, x.loc ? '📍 ' + x.loc : ''].filter(Boolean).map(esc).join(' · ') + '</small>' + stLevel(x) +
-      '<small class="sk-min">' + ((+x.min || 0) ? 'จุดสั่งซื้อ ' + stNum(x.min) + ' ' + esc(x.unit || '') : 'ไม่ได้ตั้งจุดสั่งซื้อ') + '</small></div>' +
-      (ed ? '<div class="sk-acts"><button type="button" class="sk-b in" data-squick="in" data-sid="' + esc(x.id) + '">+ รับเข้า</button><button type="button" class="sk-b out" data-squick="out" data-sid="' + esc(x.id) + '"' + (stZero(x) ? ' disabled' : '') + '>− เบิก</button></div>' : '') + '</article>'; }).join('');
-  const addCard = ed && SV.cat === 'all' && !q ? '<button type="button" class="sk-card sk-add" data-sadd="1" style="--i:' + Math.min(list.length, 24) + '"><span class="ska-ic">' + I.plus + '</span><b>เพิ่มวัสดุใหม่</b><small>ใส่รูป ถ่ายรูป ตั้งจุดสั่งซื้อ</small></button>' : '';
+      '<div class="sk-body"><b class="sk-name">' + esc(x.name) + '</b>' + stTag(x) + '<small>' + [x.cat, x.loc ? '📍 ' + x.loc : ''].filter(Boolean).map(esc).join(' · ') + '</small>' + (stReg(x) ? stLevel(x) : '') +
+      '<small class="sk-min">' + (stCustOf(x) ? (x.job ? 'Job ' + esc(x.job) : 'ไม่คิดมูลค่า · ไม่รวมยอดคลัง') : x.grade ? 'รับคืนจากหน้างาน' + (bs ? ' · จาก ' + esc(bs.name) : '') : (+x.min || 0) ? 'จุดสั่งซื้อ ' + stNum(x.min) + ' ' + esc(x.unit || '') : 'ไม่ได้ตั้งจุดสั่งซื้อ') + '</small></div>' +
+      (ed ? '<div class="sk-acts">' + (x.grade ? '' : '<button type="button" class="sk-b in" data-squick="in" data-sid="' + esc(x.id) + '">+ ' + (stCustOf(x) ? 'รับ' : 'รับเข้า') + '</button>') + '<button type="button" class="sk-b out" data-squick="out" data-sid="' + esc(x.id) + '"' + (stZero(x) ? ' disabled' : '') + '>− ' + (stCustOf(x) ? 'เบิกใช้' : 'เบิก') + '</button>' + (stReg(x) ? '<button type="button" class="sk-b ret" data-squick="ret" data-sid="' + esc(x.id) + '" title="รับคืนจากหน้างาน">↩ คืน</button>' : '') + '</div>' : '') + '</article>'; }).join('');
+  const addCard = ed && (SV.cat === 'all' || SV.cat === 'cust') && !q ? '<button type="button" class="sk-card sk-add" data-sadd="1" style="--i:' + Math.min(list.length, 24) + '"><span class="ska-ic">' + I.plus + '</span><b>เพิ่มวัสดุใหม่</b><small>ใส่รูป ถ่ายรูป ตั้งจุดสั่งซื้อ</small></button>' : '';
   const grid = list.length || addCard ? '<div class="sk-grid' + (an ? ' in' : '') + '">' + cards + addCard + '</div>' : '<div class="sk-empty"><span>' + I.stock + '</span><b>' + (all.length ? 'ไม่พบวัสดุที่ค้นหา' : 'ยังไม่มีรายการวัสดุ') + '</b>' + (ed && !all.length ? '<button class="btn primary" data-sadd="1">' + I.plus + 'เพิ่มวัสดุชิ้นแรก</button>' : '') + '</div>';
   const nameOf = id => (stItem(id) || {}).name || 'วัสดุที่ลบแล้ว';
   const hist = logs.length ? '<ol class="sk-log' + (an ? ' in' : '') + '">' + logs.slice(0, 30).map(l => { const it = stItem(l.itemId), sk = SK[l.kind] || SK.adj;
-    return '<li class="' + sk.cls + '" style="--i:' + Math.min(30, logs.indexOf(l)) + '"' + (it ? ' data-sopen="' + esc(it.id) + '"' : '') + '>' + (it ? stPhoto(it, 'mini') : '<span class="sk-ph none mini"><i>' + I.stock + '</i></span>') + '<div><b>' + esc(nameOf(l.itemId)) + '</b><small>' + esc(fdt(String(l.ts).slice(0, 16))) + ' · ' + esc(l.who || '') + (l.job ? ' · Job ' + esc(l.job) : '') + '</small>' + (l.note ? '<small class="sl-note">' + esc(l.note) + '</small>' : '') + '</div>' +
-      '<span class="sl-q"><span class="sl-k">' + sk.label + '</span><b class="tnum">' + (l.kind === 'adj' ? (+l.qty >= 0 ? '+' : '−') : sk.sign) + stNum(Math.abs(+l.qty)) + '</b><em>เหลือ ' + stNum(l.bal) + '</em></span></li>'; }).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ยังไม่มีการเคลื่อนไหว</b></div>';
+    return '<li class="' + sk.cls + '" style="--i:' + Math.min(30, logs.indexOf(l)) + '"' + (it ? ' data-sopen="' + esc(it.id) + '"' : '') + '>' + (it ? stPhoto(it, 'mini') : '<span class="sk-ph none mini"><i>' + I.stock + '</i></span>') + '<div><b>' + esc(nameOf(l.itemId)) + '</b><small>' + esc(fdt(String(l.ts).slice(0, 16))) + ' · ' + esc(l.who || '') + (l.job ? ' · Job ' + esc(l.job) : '') + esc(stRetInfo(l)) + '</small>' + (l.note ? '<small class="sl-note">' + esc(l.note) + '</small>' : '') + '</div>' +
+      '<span class="sl-q"><span class="sl-k">' + (it ? skLabel(it, l.kind in SK ? l.kind : 'adj') : sk.label) + '</span><b class="tnum">' + (l.kind === 'adj' ? (+l.qty >= 0 ? '+' : '−') : sk.sign) + stNum(Math.abs(+l.qty)) + '</b><em>เหลือ ' + stNum(l.bal) + '</em></span></li>'; }).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ยังไม่มีการเคลื่อนไหว</b></div>';
   return topbar('คลังวัสดุ', ed ? 'กดการ์ดเพื่อดูรายละเอียด รับเข้า เบิกออก หรือเพิ่มรูป · เพิ่มวัสดุด้วยปุ่ม + มุมขวาล่าง' : 'ดูยอดคงเหลือได้อย่างเดียว · ฝ่ายสต็อกเป็นคนรับเข้า/เบิกออก') + kpis + alert +
     '<div class="sk-wrap"><section class="panel sk-main"><div class="panel-h"><h2>วัสดุในคลัง</h2><span class="sub">' + list.length + ' รายการ</span></div>' + tools + chips + grid + '</section>' +
     '<section class="panel sk-side"><div class="panel-h"><h2>ความเคลื่อนไหวล่าสุด</h2></div>' + hist + '</section></div>';
 }
 /* ---- หน้าต่างวัสดุ: ดู / รับเข้า-เบิกออก / แก้ไข / เพิ่มใหม่ ---- */
-function stockOpen(id, kind) { SM.id = id; SM.mode = 'view'; SM.kind = kind || (canStock() ? 'out' : ''); SM.del = false; SM.f = null; stDraw(); if (kind) setTimeout(() => { const x = $('#smQty'); if (x) x.focus(); }, 60); }
-function stockAddOpen() { if (!canStock()) return; stPendClear(); SM.id = ''; SM.mode = 'form'; SM.del = false; SM.f = { name: '', cat: SV.cat !== 'all' && SV.cat !== 'low' ? SV.cat : '', unit: '', min: '', price: '', qty: '', loc: '', note: '' }; stDraw(); setTimeout(() => { const x = $('#sfName'); if (x) x.focus(); }, 60); }
-function stClose() { stPendClear(); SM.id = ''; SM.mode = ''; SM.f = null; const m = $('#sModal'); if (m) m.remove(); if (!P2.id && !P2.add) document.body.classList.remove('pm-open'); }
+function stockOpen(id, kind) { stRetClear(); SM.cond = 'ok'; SM.id = id; SM.mode = 'view'; SM.kind = kind || (canStock() ? 'out' : ''); SM.del = false; SM.f = null; stDraw(); if (kind) setTimeout(() => { const x = $('#smQty'); if (x) x.focus(); }, 60); }
+function stockAddOpen() { if (!canStock()) return; stPendClear(); SM.id = ''; SM.mode = 'form'; SM.del = false; SM.f = { name: '', cat: SKF[SV.cat] ? '' : SV.cat, unit: '', min: '', price: '', qty: '', loc: '', note: '', own: SV.cat === 'cust' ? 'cust' : '', cust: '', job: '' }; stDraw(); setTimeout(() => { const x = $('#sfName'); if (x) x.focus(); }, 60); }
+function stClose() { stPendClear(); stRetClear(); SM.id = ''; SM.mode = ''; SM.f = null; const m = $('#sModal'); if (m) m.remove(); if (!P2.id && !P2.add) document.body.classList.remove('pm-open'); }
 function stPendClear() { (SM.pend || []).forEach(p => URL.revokeObjectURL(p.url)); SM.pend = []; }
-function stFormRead() { if (SM.mode !== 'form' || !SM.f) return; const v = id => { const e = $('#' + id); return e ? e.value : undefined; }; [['name', 'sfName'], ['cat', 'sfCat'], ['min', 'sfMin'], ['price', 'sfPrice'], ['qty', 'sfQty'], ['adj', 'sfAdj'], ['loc', 'sfLoc'], ['note', 'sfNote']].forEach(k => { const y = v(k[1]); if (y !== undefined) SM.f[k[0]] = y; }); const un = v('sfUnit'); if (un !== undefined && un.trim()) SM.f.unit = un.trim(); }
-function stMoveRead() { const v = id => (($('#' + id) || {}).value || ''); return { qty: v('smQty'), job: v('smJob').trim(), note: v('smNote').trim() }; }
+function stRetClear() { (SM.rpend || []).forEach(p => URL.revokeObjectURL(p.url)); SM.rpend = []; }
+function stFormRead() { if (SM.mode !== 'form' || !SM.f) return; const v = id => { const e = $('#' + id); return e ? e.value : undefined; }; [['name', 'sfName'], ['cat', 'sfCat'], ['min', 'sfMin'], ['price', 'sfPrice'], ['qty', 'sfQty'], ['adj', 'sfAdj'], ['loc', 'sfLoc'], ['note', 'sfNote'], ['cust', 'sfCust'], ['job', 'sfJob']].forEach(k => { const y = v(k[1]); if (y !== undefined) SM.f[k[0]] = y; }); const un = v('sfUnit'); if (un !== undefined && un.trim()) SM.f.unit = un.trim(); }
+function stMoveRead() { const v = id => (($('#' + id) || {}).value || ''); return { qty: v('smQty'), job: v('smJob').trim(), note: v('smNote').trim(), size: v('smSize').trim(), from: v('smFrom').trim() }; }
 function stDraw() {
   let m = $('#sModal');
   if (!SM.mode) { if (m) m.remove(); return; }
@@ -5078,7 +5130,7 @@ function stDraw() {
   card.innerHTML = SM.mode === 'form' ? stFormHtml(it, x) : stViewHtml(it, ed, x);
   card.classList.toggle('swap', !!card.dataset.k && !same); card.dataset.k = key;
   { const nb = card.querySelector('.pm-b'); if (nb && top) nb.scrollTop = top; }
-  if (keep && (keep.qty || keep.job || keep.note)) { const s = (id, v) => { const e = $('#' + id); if (e) e.value = v; }; s('smQty', keep.qty); s('smJob', keep.job); s('smNote', keep.note); }
+  if (keep && (keep.qty || keep.job || keep.note || keep.size || keep.from)) { const s = (id, v) => { const e = $('#' + id); if (e && v) e.value = v; }; s('smQty', keep.qty); s('smJob', keep.job); s('smNote', keep.note); s('smSize', keep.size); s('smFrom', keep.from); }
   smAfter();
   paintAllThumbs(m);
 }
@@ -5094,20 +5146,33 @@ function stGallery(it, ed) {
   return '<div class="skg">' + cover + (strip ? '<div class="skg-strip">' + strip + '</div>' : '') + btns + '</div>';
 }
 function stViewHtml(it, ed, x) {
-  const st = stState(it), logs = ((S.stock && S.stock.logs) || []).filter(l => l.itemId === it.id).slice(0, 12), k = SM.kind;
-  const SKH = { in: ['รับของเข้าคลัง', 'ของมาส่ง / ซื้อเพิ่ม'], out: ['เบิกของออกไปใช้', 'ใส่เลข Job เพื่อคิดต้นทุนงาน'], adj: ['นับสต็อกแล้วปรับยอด', 'ใส่ยอดจริงที่นับได้'] }, SKI = { in: '↓', out: '↑', adj: '⟳' };
-  const move = ed ? '<section class="sk-move ' + (SK[k] || SK.out).cls + '"><i class="smv-blob" aria-hidden="true"></i><div class="seg sk-seg">' + ['in', 'out', 'adj'].map(t => '<button type="button" class="' + SK[t].cls + '" data-skind="' + t + '" aria-pressed="' + (k === t) + '"><i>' + SKI[t] + '</i>' + SK[t].label + '</button>').join('') + '</div>' +
-    '<div class="smv-h"><b>' + SKH[k || 'out'][0] + '</b><small>' + SKH[k || 'out'][1] + '</small></div>' +
+  const st = stState(it), logs = ((S.stock && S.stock.logs) || []).filter(l => l.itemId === it.id).slice(0, 12), kinds = stKinds(it), k = kinds.indexOf(SM.kind) >= 0 ? SM.kind : 'out', cu = stCustOf(it);
+  const SKH = { in: cu ? ['รับของจากลูกค้า', 'ลูกค้าส่งแผ่นมาให้ตัด · ไม่คิดมูลค่า'] : ['รับของเข้าคลัง', 'ของมาส่ง / ซื้อเพิ่ม'], out: cu ? ['เบิกไปใช้กับงานลูกค้า', 'ไม่คิดต้นทุน (ของลูกค้า)'] : it.grade ? ['เบิกไปใช้ต่อ', 'ใช้กับงานอื่น ไม่คิดต้นทุน (ของเหลือ)'] : ['เบิกของออกไปใช้', 'ใส่เลข Job เพื่อคิดต้นทุนงาน'],
+    adj: ['นับสต็อกแล้วปรับยอด', 'ใส่ยอดจริงที่นับได้'], ret: ['รับคืนจากหน้างาน', 'ของเหลือกลับเข้าคลัง · สภาพดีหักต้นทุน Job ให้'], back: ['คืนของให้ลูกค้า', 'ของลูกค้าที่เหลือ ส่งคืน'] };
+  const SKI = { in: '↓', out: '↑', adj: '⟳', ret: '↩', back: '↗' }, sk = SK[k], cond = SM.cond || 'ok';
+  const jobs = '<datalist id="smJobs">' + Array.from(new Set(S.jobs.filter(j => j.status !== 'done' || prodOfCode(j.code)).map(j => j.code).concat(prodsAll().map(p => p.code)))).slice(0, 120).map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>';
+  const rp = SM.rpend || [];
+  const retBox = k !== 'ret' ? '' : '<div class="sm-cond" role="group" aria-label="สภาพของที่รับคืน">' + [['ok', 'สภาพดี', 'เข้ายอดเดิม'], ['ng', 'มีตำหนิ', 'แยกกองตำหนิ'], ['scrap', 'เป็นเศษ', 'แยกตามขนาด']].map(c => '<button type="button" class="c-' + c[0] + '" data-scond="' + c[0] + '" aria-pressed="' + (cond === c[0]) + '"><b>' + c[1] + '</b><small>' + c[2] + '</small></button>').join('') + '</div>' +
+    (cond === 'scrap' ? '<input id="smSize" placeholder="ขนาดเศษ (ต้องใส่) เช่น 60×120 ซม." autocomplete="off">' : '') +
+    '<input id="smFrom" placeholder="ผู้ส่งคืน เช่น ทีมติดตั้ง / ช่างเอ" autocomplete="off">' +
+    '<div class="sm-rph">' + rp.map(p => '<span class="skg-t pend"><img src="' + p.url + '" alt=""><button type="button" class="dz-x" data-srpx="' + esc(p.id) + '" aria-label="เอารูปนี้ออก">✕</button></span>').join('') +
+      (rp.length < 4 ? '<button type="button" class="btn sm ghost" data-srcam="1">' + CAM_IC + 'ถ่ายรูป</button><label class="btn sm ghost">' + PICK_IC + 'เลือกรูป<input type="file" accept="image/*" multiple hidden id="skRetIn"></label>' : '') + '<small>รูปของที่รับคืน (ไม่บังคับ)</small></div>';
+  const move = ed ? '<section class="sk-move ' + sk.cls + '"><i class="smv-blob" aria-hidden="true"></i><div class="seg sk-seg' + (kinds.length > 3 ? ' n4' : '') + '">' + kinds.map(t => '<button type="button" class="' + SK[t].cls + '" data-skind="' + t + '" aria-pressed="' + (k === t) + '"><i>' + SKI[t] + '</i>' + skLabel(it, t) + '</button>').join('') + '</div>' +
+    '<div class="smv-h"><b>' + SKH[k][0] + '</b><small>' + SKH[k][1] + '</small></div>' +
     '<div class="sm-qty"><button type="button" class="sm-step" data-sstep="-1" aria-label="ลด">−</button><input id="smQty" type="number" inputmode="decimal" min="0" step="any" placeholder="' + (k === 'adj' ? 'ยอดจริงที่นับได้' : 'จำนวน') + '"><span class="sm-u">' + esc(it.unit || '') + '</span><button type="button" class="sm-step" data-sstep="1" aria-label="เพิ่ม">+</button></div>' +
-    (k === 'adj' ? '' : '<div class="sm-quick">' + [1, 5, 10, 50].map(n => '<button type="button" data-sqk="' + n + '">+' + n + '</button>').join('') + '<span class="sm-after" id="smAfter" data-have="' + (+it.qty || 0) + '" data-k="' + k + '" data-u="' + esc(it.unit || '') + '"></span></div>') +
-    (k === 'out' ? '<input id="smJob" class="mono" list="smJobs" placeholder="ใช้กับเลข Job (ไม่บังคับ) เช่น R69-10012S" autocomplete="off"><datalist id="smJobs">' + Array.from(new Set(S.jobs.filter(j => j.status !== 'done' || prodOfCode(j.code)).map(j => j.code))).slice(0, 80).map(c => '<option value="' + esc(c) + '">').join('') + '</datalist>' : '') +
-    '<input id="smNote" placeholder="' + (k === 'in' ? 'หมายเหตุ เช่น รับจากซัพพลายเออร์ / เลขใบส่งของ' : k === 'out' ? 'หมายเหตุ เช่น ตัดผนังล็อบบี้' : 'หมายเหตุ เช่น นับสต็อกสิ้นเดือน') + '">' +
-    '<button type="button" class="btn sk-go ' + (SK[k] || SK.out).cls + '" data-sgo="' + esc(it.id) + '"' + (SM.busy ? ' disabled' : '') + '>' + (SM.busy ? '<span class="spin-dot"></span>' : '') + 'บันทึก' + (SK[k] || SK.out).label + '</button></section>' : '';
-  const hist = logs.length ? '<ol class="sk-log mini">' + logs.map(l => { const sk = SK[l.kind] || SK.adj; return '<li class="' + sk.cls + '"><span class="sl-k">' + sk.label + '</span><div><small>' + esc(fdt(String(l.ts).slice(0, 16))) + ' · ' + esc(l.who || '') + (l.job ? ' · Job ' + esc(l.job) : '') + (l.kind === 'out' && logPrice(l) ? ' · ' + baht(logPrice(l) * (+l.qty || 0)) : '') + (l.note ? ' · ' + esc(l.note) : '') + '</small></div><span class="sl-q"><b class="tnum">' + (l.kind === 'adj' ? (+l.qty >= 0 ? '+' : '−') : sk.sign) + stNum(Math.abs(+l.qty)) + '</b><em>เหลือ ' + stNum(l.bal) + '</em></span></li>'; }).join('') + '</ol>' : '<p class="sub">ยังไม่มีประวัติ</p>';
-  return '<div class="sk-mh sk-hero">' + stGallery(it, ed) + '<div class="skh-info"><div class="skh-tags"><span class="sk-pill s-' + st.k + '">' + st.label + '</span>' + (it.cat ? '<span class="sk-cat" style="--ch:' + stHue(it.cat) + '"><i class="sk-dot"></i>' + esc(it.cat) + '</span>' : '') + '</div><h3>' + esc(it.name) + '</h3>' +
-      '<small>' + [it.loc ? '📍 ที่เก็บ ' + it.loc : '', it.updatedAt ? 'อัปเดต ' + fdt(String(it.updatedAt).slice(0, 16)) + (it.updatedBy ? ' โดย ' + it.updatedBy : '') : ''].filter(Boolean).map(esc).join(' · ') + '</small>' +
+    (k === 'adj' ? '' : '<div class="sm-quick">' + [1, 5, 10, 50].map(n => '<button type="button" data-sqk="' + n + '">+' + n + '</button>').join('') + '<span class="sm-after" id="smAfter" data-have="' + (+it.qty || 0) + '" data-k="' + k + '" data-sep="' + (k === 'ret' && cond !== 'ok' ? 1 : '') + '" data-u="' + esc(it.unit || '') + '"></span></div>') +
+    (k === 'out' || k === 'ret' ? '<input id="smJob" class="mono" list="smJobs" placeholder="' + (k === 'ret' ? 'เลข Job ที่ของกลับมา (ต้องใส่)' : cu && it.job ? 'เลข Job (ว่าง = ' + esc(it.job) + ')' : 'ใช้กับเลข Job (ไม่บังคับ) เช่น R69-10012S') + '" autocomplete="off">' + jobs : '') + retBox +
+    '<input id="smNote" placeholder="' + (k === 'in' ? (cu ? 'หมายเหตุ เช่น ลูกค้าเอามาส่งเอง / เลขใบรับของ' : 'หมายเหตุ เช่น รับจากซัพพลายเออร์ / เลขใบส่งของ') : k === 'out' ? 'หมายเหตุ เช่น ตัดผนังล็อบบี้' : k === 'ret' ? 'หมายเหตุ เช่น เหลือจากติดตั้งชั้น 3' : k === 'back' ? 'หมายเหตุ เช่น ส่งคืนพร้อมงาน' : 'หมายเหตุ เช่น นับสต็อกสิ้นเดือน') + '">' +
+    '<button type="button" class="btn sk-go ' + sk.cls + '" data-sgo="' + esc(it.id) + '"' + (SM.busy ? ' disabled' : '') + '>' + (SM.busy ? '<span class="spin-dot"></span>' : '') + 'บันทึก' + (k === 'ret' ? 'รับคืน' : skLabel(it, k)) + '</button></section>' : '';
+  const ph = l => imgsOf('r_' + l.id).map(im => '<button type="button" class="sl-ph" data-lbopen="' + esc(im.id) + '" data-lbjob="r_' + esc(l.id) + '">' + thumbImg(im) + '</button>').join('');
+  const hist = logs.length ? '<ol class="sk-log mini">' + logs.map(l => { const s2 = SK[l.kind] || SK.adj; return '<li class="' + s2.cls + '"><span class="sl-k">' + skLabel(it, l.kind in SK ? l.kind : 'adj') + '</span><div><small>' + esc(fdt(String(l.ts).slice(0, 16))) + ' · ' + esc(l.who || '') + (l.job ? ' · Job ' + esc(l.job) : '') + esc(stRetInfo(l)) + (l.kind === 'out' && stReg(it) && logPrice(l) ? ' · ' + baht(logPrice(l) * (+l.qty || 0)) : '') + (l.note ? ' · ' + esc(l.note) : '') + '</small>' + (l.kind === 'ret' && imgsOf('r_' + l.id).length ? '<div class="sl-phs">' + ph(l) + '</div>' : '') + '</div><span class="sl-q"><b class="tnum">' + (l.kind === 'adj' ? (+l.qty >= 0 ? '+' : '−') : s2.sign) + stNum(Math.abs(+l.qty)) + '</b><em>เหลือ ' + stNum(l.bal) + '</em></span></li>'; }).join('') + '</ol>' : '<p class="sub">ยังไม่มีประวัติ</p>';
+  const kids = stReg(it) ? stockItems().filter(y => y.base === it.id && !stZero(y)) : [], bs = it.base ? stItem(it.base) : null;
+  return '<div class="sk-mh sk-hero">' + stGallery(it, ed) + '<div class="skh-info"><div class="skh-tags"><span class="sk-pill s-' + st.k + '">' + st.label + '</span>' + stTag(it) + (it.cat ? '<span class="sk-cat" style="--ch:' + stHue(it.cat) + '"><i class="sk-dot"></i>' + esc(it.cat) + '</span>' : '') + '</div><h3>' + esc(it.name) + '</h3>' +
+      '<small>' + [cu ? 'ของลูกค้า' + (it.cust ? ' ' + it.cust : '') + (it.job ? ' · Job ' + it.job : '') : '', it.loc ? '📍 ที่เก็บ ' + it.loc : '', it.updatedAt ? 'อัปเดต ' + fdt(String(it.updatedAt).slice(0, 16)) + (it.updatedBy ? ' โดย ' + it.updatedBy : '') : ''].filter(Boolean).map(esc).join(' · ') + '</small>' +
       '<div class="sk-big s-' + st.k + '"><span>คงเหลือ</span><b class="tnum">' + stNum(it.qty) + '</b><small>' + esc(it.unit || '') + '</small></div></div>' + x + '</div><div class="pm-b sk-mb">' +
-    stLevel(it) + '<div class="sk-mins"><span>จุดสั่งซื้อ <b>' + ((+it.min || 0) ? stNum(it.min) + ' ' + esc(it.unit || '') : '–') + '</b></span>' + ((+it.price || 0) ? '<span>ราคา <b>' + baht(it.price) + '</b> / ' + esc(it.unit || 'หน่วย') + '</span><span>มูลค่าคงเหลือ <b>' + baht((+it.price || 0) * (+it.qty || 0)) + '</b></span>' : '') + (it.note ? '<span>' + esc(it.note) + '</span>' : '') + '</div>' +
+    (stReg(it) ? stLevel(it) : '') + '<div class="sk-mins">' + (stReg(it) ? '<span>จุดสั่งซื้อ <b>' + ((+it.min || 0) ? stNum(it.min) + ' ' + esc(it.unit || '') : '–') + '</b></span>' : '') + (stReg(it) && (+it.price || 0) ? '<span>ราคา <b>' + baht(it.price) + '</b> / ' + esc(it.unit || 'หน่วย') + '</span><span>มูลค่าคงเหลือ <b>' + baht((+it.price || 0) * (+it.qty || 0)) + '</b></span>' : '') +
+      (bs ? '<span>แยกจาก <button type="button" class="linkbtn" data-sopen="' + esc(bs.id) + '">' + esc(bs.name) + '</button> · ไม่รวมในยอดพร้อมใช้ ไม่คิดต้นทุนเมื่อเบิก</span>' : '') + (cu ? '<span>ไม่คิดมูลค่า · ไม่รวมในยอดคลัง ไม่เตือนใกล้หมด</span>' : '') +
+      (kids.length ? '<span>ตำหนิ/เศษที่แยกไว้: ' + kids.map(y => '<button type="button" class="linkbtn" data-sopen="' + esc(y.id) + '">' + esc(y.grade === 'ng' ? 'ตำหนิ' : 'เศษ ' + (y.size || '')) + ' ' + esc(stNum(y.qty)) + '</button>').join(' · ') + '</span>' : '') + (it.note ? '<span>' + esc(it.note) + '</span>' : '') + '</div>' +
     move + '<div class="f"><span class="lbl">ประวัติของวัสดุนี้</span>' + hist + '</div></div>' +
     '<div class="pm-f">' + (ed ? '<button type="button" class="btn ghost sm" data-sedit="' + esc(it.id) + '">' + STI.pen + 'แก้ไขข้อมูล</button>' : '') + '<span style="flex:1"></span><button type="button" class="btn" data-sclose="1">ปิด</button></div>';
 }
@@ -5115,14 +5180,16 @@ function stFormHtml(it, x) {
   const f = SM.f || {}, isNew = !it, cats = Array.from(new Set(stockItems().map(i => i.cat).filter(Boolean)));
   const allCats = ST_PRESETS.map(p => p[0]).concat(cats).filter((v, i, a) => a.indexOf(v) === i);
   const step = (id, val, ph) => '<div class="sf-step"><button type="button" data-sfstep="' + id + '" data-d="-1" aria-label="ลด">−</button><input id="' + id + '" type="number" min="0" step="any" inputmode="decimal" value="' + esc(val === undefined ? '' : val) + '" placeholder="' + esc(ph) + '"><button type="button" data-sfstep="' + id + '" data-d="1" aria-label="เพิ่ม">+</button></div>';
-  return '<div class="sk-mh">' + stGallery(it, true) + x + '</div><div class="pm-b sk-mb"><h3 class="sk-ft">' + (isNew ? 'เพิ่มวัสดุใหม่' : 'แก้ไข ' + esc(it.name)) + '</h3>' +
-    '<div class="form-grid sk-form"><div class="f full"><label for="sfName">ชื่อวัสดุ / สินค้า</label><input id="sfName" value="' + esc(f.name || '') + '" placeholder="เช่น แผ่นอะลูมิเนียมคอมโพสิต 4 มม."></div>' +
+  const cu = f.own === 'cust', own = isNew ? '<div class="f full"><span class="lbl">เป็นของ</span><div class="sf-own" role="group">' + [['', 'ของบริษัท', 'คิดมูลค่า · เตือนใกล้หมด'], ['cust', 'ของลูกค้า', 'ลูกค้าส่งมาให้ตัด · ไม่คิดมูลค่า']].map(o => '<button type="button" data-sfown="' + o[0] + '" aria-pressed="' + ((f.own || '') === o[0]) + '"><b>' + o[1] + '</b><small>' + o[2] + '</small></button>').join('') + '</div></div>' : '';
+  const custF = cu ? '<div class="f"><label for="sfCust">ลูกค้า</label><input id="sfCust" value="' + esc(f.cust || '') + '" placeholder="เช่น คุณบี / บจก.…"></div><div class="f"><label for="sfJob">เลข Job</label><input id="sfJob" class="mono" list="smJobs" value="' + esc(f.job || '') + '" placeholder="เช่น R69-10012S" autocomplete="off"><datalist id="smJobs">' + Array.from(new Set(S.jobs.map(j => j.code).concat(prodsAll().map(p => p.code)))).slice(0, 120).map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></div>' : '';
+  return '<div class="sk-mh">' + stGallery(it, true) + x + '</div><div class="pm-b sk-mb"><h3 class="sk-ft">' + (isNew ? (cu ? 'รับของลูกค้าเข้าคลัง' : 'เพิ่มวัสดุใหม่') : 'แก้ไข ' + esc(it.name)) + '</h3>' +
+    '<div class="form-grid sk-form">' + own + custF + '<div class="f full"><label for="sfName">ชื่อวัสดุ / สินค้า</label><input id="sfName" value="' + esc(f.name || '') + '" placeholder="เช่น แผ่นอะลูมิเนียมคอมโพสิต 4 มม."></div>' +
     '<div class="f full"><span class="lbl">หมวด</span><div class="sf-chips">' + allCats.map(n => { const k = stCat(n); return '<button type="button" class="sf-chip' + (f.cat === n ? ' on' : '') + '" style="--sc:' + k.col + '" data-sfcat="' + esc(n) + '" aria-pressed="' + (f.cat === n) + '">' + k.ic + esc(n) + '</button>'; }).join('') + '</div><input id="sfCat" value="' + esc(f.cat || '') + '" placeholder="หรือพิมพ์หมวดใหม่"></div>' +
     '<div class="f full"><span class="lbl">หน่วยนับ</span><div class="sf-chips sm">' + ST_UNITS.map(n => '<button type="button" class="sf-chip' + (f.unit === n ? ' on' : '') + '" data-sfunit="' + esc(n) + '" aria-pressed="' + (f.unit === n) + '">' + esc(n) + '</button>').join('') + '<input id="sfUnit" class="sf-unit" value="' + esc(ST_UNITS.indexOf(f.unit) >= 0 ? '' : f.unit || '') + '" placeholder="อื่นๆ"></div></div>' +
     (isNew ? '<div class="f"><label for="sfQty">ยอดเริ่มต้น</label>' + step('sfQty', f.qty, '0') + '<span class="hint">ของที่มีอยู่ตอนนี้</span></div>'
       : '<div class="f"><label for="sfAdj">นับสต็อก: ยอดจริง</label>' + step('sfAdj', f.adj, stNum(it.qty)) + '<span class="hint">ตอนนี้ ' + esc(stNum(it.qty)) + ' ' + esc(it.unit || '') + ' · ว่าง = ไม่ปรับ</span></div>') +
-    '<div class="f"><label for="sfMin">จุดสั่งซื้อ</label>' + step('sfMin', f.min, '0') + '<span class="hint">เตือน "ใกล้หมด" เมื่อเหลือไม่เกินนี้</span></div>' +
-    (!NEW_API() ? '' : '<div class="f"><label for="sfPrice">ราคาต่อหน่วย (บาท)</label><input id="sfPrice" type="number" min="0" step="any" inputmode="decimal" value="' + esc(f.price === undefined || f.price === 0 ? '' : f.price) + '" placeholder="เช่น 850"><span class="hint">ใช้คิดต้นทุนวัสดุต่อเลข Job · ไม่บังคับ</span></div>') +
+    (cu || (it && it.grade) ? '' : '<div class="f"><label for="sfMin">จุดสั่งซื้อ</label>' + step('sfMin', f.min, '0') + '<span class="hint">เตือน "ใกล้หมด" เมื่อเหลือไม่เกินนี้</span></div>') +
+    (!NEW_API() || cu ? '' : '<div class="f"><label for="sfPrice">ราคาต่อหน่วย (บาท)</label><input id="sfPrice" type="number" min="0" step="any" inputmode="decimal" value="' + esc(f.price === undefined || f.price === 0 ? '' : f.price) + '" placeholder="เช่น 850"><span class="hint">ใช้คิดต้นทุนวัสดุต่อเลข Job · ไม่บังคับ</span></div>') +
     '<div class="f"><label for="sfLoc">ที่เก็บ</label><input id="sfLoc" value="' + esc(f.loc || '') + '" placeholder="เช่น ชั้น A1"></div>' +
     '<div class="f full"><label for="sfNote">หมายเหตุ</label><input id="sfNote" value="' + esc(f.note || '') + '" placeholder="เช่น สั่งจากร้าน… / ขนาด 1220×2440 มม."></div></div></div>' +
     '<div class="pm-f">' + (!isNew ? (SM.del ? '<span class="pm-del">ลบ ' + esc(it.name) + '? (ประวัติยังอยู่)</span><button type="button" class="btn sm" data-sdel="no">ไม่</button><button type="button" class="btn sm danger" data-sdel="yes">ลบ</button>' : '<button type="button" class="btn ghost sm" data-sdel="ask">' + I.trash + 'ลบ</button>') : '') +
@@ -5153,6 +5220,10 @@ async function uploadStockImages(id, files) {
   }
   if (ok) toast('เพิ่มรูปแล้ว ' + ok + ' รูป');
   return ok;
+}
+function stRetFiles(files) {   // รูปของที่รับคืน: พักไว้ อัปโหลดหลังบันทึกรับคืน (ผูกกับรายการเคลื่อนไหวนั้น)
+  Array.from(files || []).filter(f => /^image\//.test(f.type)).slice(0, 4 - SM.rpend.length).forEach(f => SM.rpend.push({ id: uid('rp'), f: f, url: URL.createObjectURL(f) }));
+  stDraw();
 }
 function stAddFiles(files) {   // รูปที่ได้จากถ่าย/เลือก: วัสดุที่มีอยู่ → อัปโหลดเลย · วัสดุใหม่ → พักไว้ อัปโหลดหลังกดเพิ่ม
   files = Array.from(files || []).filter(f => /^image\//.test(f.type));
@@ -5202,8 +5273,9 @@ function camShot() {
 }
 function smAfter() {   // ตัวอย่างยอดหลังบันทึก (รับเข้า/เบิกออก)
   const a = $('#smAfter'), x = $('#smQty'); if (!a || !x) return;
-  const n = +x.value || 0, have = +a.dataset.have || 0, out = a.dataset.k === 'out', bal = out ? have - n : have + n;
+  const n = +x.value || 0, have = +a.dataset.have || 0, out = a.dataset.k === 'out' || a.dataset.k === 'back', bal = out ? have - n : have + n;
   if (!n) { a.innerHTML = ''; a.className = 'sm-after'; return; }
+  if (a.dataset.sep) { a.className = 'sm-after on'; a.innerHTML = 'แยกเป็นรายการตำหนิ/เศษ ไม่รวมยอดนี้'; return; }
   a.className = 'sm-after on' + (bal < 0 ? ' bad' : ''); a.innerHTML = bal < 0 ? 'เกินยอดคงเหลือ' : 'เหลือหลังบันทึก <b>' + esc(stNum(bal)) + '</b> ' + esc(a.dataset.u);
 }
 document.addEventListener('input', e => { if (e.target && e.target.id === 'smQty') smAfter(); });
@@ -5230,17 +5302,32 @@ function stockClick(t, d) {
     return true;
   }
   if (d.sfstep) { const e = $('#' + d.sfstep); if (e) { e.value = Math.max(0, Math.round(((+e.value || 0) + (+d.d)) * 100) / 100); e.focus(); } return true; }
+  if (d.scond) { SM.cond = d.scond; stDraw(); if (d.scond === 'scrap') setTimeout(() => { const x = $('#smSize'); if (x && !x.value) x.focus(); }, 30); return true; }
+  if (d.srcam) { camOpen(stRetFiles, 'ถ่ายรูปของที่รับคืน'); return true; }
+  if (d.srpx) { const p = SM.rpend.find(x => x.id === d.srpx); if (p) URL.revokeObjectURL(p.url); SM.rpend = SM.rpend.filter(x => x.id !== d.srpx); stDraw(); return true; }
+  if (d.sfown !== undefined) { stFormRead(); SM.f.own = d.sfown; stDraw(); return true; }
   if (d.skind) { SM.kind = d.skind; stDraw(); setTimeout(() => { const x = $('#smQty'); if (x) x.focus(); }, 30); return true; }
   if (d.sstep) { const x = $('#smQty'); if (x) { x.value = Math.max(0, (+x.value || 0) + (+d.sstep)); x.focus(); smAfter(); } return true; }
   if (d.sqk) { const x = $('#smQty'); if (x) { x.value = Math.round(((+x.value || 0) + (+d.sqk)) * 100) / 100; smAfter(); t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop'); } return true; }
-  if (d.sedit) { const it = stItem(d.sedit); if (!it) return true; SM.mode = 'form'; SM.del = false; SM.f = { name: it.name, cat: it.cat, unit: it.unit, min: it.min || '', price: +it.price || '', loc: it.loc, note: it.note, adj: '' }; stDraw(); return true; }
+  if (d.sedit) { const it = stItem(d.sedit); if (!it) return true; SM.mode = 'form'; SM.del = false; SM.f = { name: it.name, cat: it.cat, unit: it.unit, min: it.min || '', price: +it.price || '', loc: it.loc, note: it.note, adj: '', own: it.own || '', cust: it.cust || '', job: it.job || '' }; stDraw(); return true; }
   if (d.sback) { SM.mode = 'view'; SM.f = null; SM.del = false; stDraw(); return true; }
   if (d.sgo) {
-    const it = stItem(d.sgo), k = SM.kind, mv = stMoveRead(), n = +mv.qty; if (!it || !SK[k]) return true;
-    if (!(n > 0) && !(k === 'adj' && mv.qty !== '' && n === 0)) { toast(k === 'adj' ? 'ใส่ยอดจริงที่นับได้' : 'ใส่จำนวนมากกว่า 0', true); const x = $('#smQty'); if (x) x.focus(); return true; }
-    if (k === 'out' && n > (+it.qty || 0)) { toast('เบิกเกินยอดคงเหลือ (เหลือ ' + stNum(it.qty) + ' ' + (it.unit || '') + ')', true); return true; }
-    const q0 = +it.qty || 0;
-    stockCall(() => api().stockMove({ itemId: it.id, kind: k, qty: n, job: mv.job, note: mv.note }), SK[k].label + ' ' + it.name + ' ' + stNum(n) + ' ' + (it.unit || '')).then(r => { if (r) { ['smQty', 'smJob', 'smNote'].forEach(i => { const e = $('#' + i); if (e) e.value = ''; }); stBump(it.id, q0); } });
+    const it = stItem(d.sgo), k = SM.kind, mv = stMoveRead(), n = +mv.qty; if (!it || !SK[k] || stKinds(it).indexOf(k) < 0) return true;
+    const foc = id => { const x = $('#' + id); if (x) x.focus(); };
+    if (!(n > 0) && !(k === 'adj' && mv.qty !== '' && n === 0)) { toast(k === 'adj' ? 'ใส่ยอดจริงที่นับได้' : 'ใส่จำนวนมากกว่า 0', true); foc('smQty'); return true; }
+    if ((k === 'out' || k === 'back') && n > (+it.qty || 0)) { toast((k === 'back' ? 'คืนเกินยอดคงเหลือ' : 'เบิกเกินยอดคงเหลือ') + ' (เหลือ ' + stNum(it.qty) + ' ' + (it.unit || '') + ')', true); return true; }
+    if (k === 'ret' && !mv.job) { toast('ใส่เลข Job ที่ของกลับมาจากหน้างาน', true); foc('smJob'); return true; }
+    if (k === 'ret' && SM.cond === 'scrap' && !mv.size) { toast('ใส่ขนาดเศษ เช่น 60×120 ซม.', true); foc('smSize'); return true; }
+    if (k === 'ret' && !apiAtLeast('1.34.0')) { toast('ต้องอัปเดตหลังบ้าน (Apps Script) เป็นเวอร์ชันล่าสุดก่อน', true); return true; }
+    const q0 = +it.qty || 0, cond = SM.cond || 'ok', files = k === 'ret' ? (SM.rpend || []).map(p => p.f) : [];
+    const job = mv.job || (k === 'out' && stCustOf(it) ? it.job || '' : '');
+    const msg = (k === 'ret' ? 'รับคืน' + (cond !== 'ok' ? ' (' + ST_COND[cond] + ')' : '') : skLabel(it, k)) + ' ' + it.name + ' ' + stNum(n) + ' ' + (it.unit || '');
+    stockCall(() => api().stockMove(Object.assign({ itemId: it.id, kind: k, qty: n, job: job, note: mv.note }, k === 'ret' ? { cond: cond, size: mv.size, from: mv.from } : {})), msg).then(r => {
+      if (!r) return;
+      ['smQty', 'smJob', 'smNote', 'smSize', 'smFrom'].forEach(i => { const e = $('#' + i); if (e) e.value = ''; }); smAfter();
+      if (k === 'ret') { stRetClear(); stDraw(); if (files.length && r.logId) uploadStockImages('r_' + r.logId, files); if (cond !== 'ok' && r.itemId && r.itemId !== it.id) { const t2 = stItem(r.itemId); if (t2) toast('แยกไว้ที่ "' + t2.name + '" (คงเหลือ ' + stNum(t2.qty) + ' ' + (t2.unit || '') + ')'); } }
+      if (!r.itemId || r.itemId === it.id) stBump(it.id, q0);
+    });
     return true;
   }
   if (d.ssave) {
@@ -5249,6 +5336,8 @@ function stockClick(t, d) {
     if (!String(f.unit || '').trim()) { toast('เลือกหน่วยนับ', true); return true; }
     if (String(f.price || '').trim() !== '' && !(+f.price >= 0)) { toast('ราคาต่อหน่วยต้องเป็นตัวเลข 0 ขึ้นไป', true); return true; }
     const item = { id: it ? it.id : undefined, name: String(f.name).trim(), cat: String(f.cat || '').trim(), unit: String(f.unit || '').trim(), min: f.min, price: String(f.price === undefined ? '' : f.price).trim() === '' ? 0 : +f.price, loc: String(f.loc || '').trim(), note: String(f.note || '').trim() };
+    if (f.own === 'cust') { if (!apiAtLeast('1.34.0')) { toast('ต้องอัปเดตหลังบ้าน (Apps Script) เป็นเวอร์ชันล่าสุดก่อน', true); return true; } Object.assign(item, { own: 'cust', cust: String(f.cust || '').trim(), job: String(f.job || '').trim(), price: 0, min: 0 }); }
+    else if (it && it.grade) { delete item.min; }
     if (!it) item.qty = f.qty;
     const adj = it ? String(f.adj || '').trim() : '', files = (SM.pend || []).map(p => p.f), before = stockItems().map(x => x.id);
     stockCall(() => api().stockSave({ item: item }), (it ? 'บันทึก ' : 'เพิ่ม ') + item.name + ' แล้ว').then(async r => {
@@ -5656,6 +5745,7 @@ function openPendingLink() {
 document.addEventListener('change', e => {
   const t = e.target;
   if (t && (t.id === 'skImgIn' || t.id === 'skPendIn')) { stAddFiles(t.files); t.value = ''; return; }
+  if (t && t.id === 'skRetIn') { stRetFiles(t.files); t.value = ''; return; }
   if (t && t.id === 'sSort') { SV.sort = t.value; SV.anim = true; render(); return; }
   if (t && t.id === 'pAddImg') { pAddRead(); Array.from(t.files || []).filter(f => /^image\//.test(f.type)).slice(0, IMG_MAX - P2.files.length).forEach(f => P2.files.push({ f: f, url: URL.createObjectURL(f) })); pModalDraw(); }
   if (t && t.id === 'pImgIn' && P2.id) { const id = P2.id; uploadProdImages(id, t.files).then(n => { if (n) toast('เพิ่มรูปแล้ว ' + n + ' รูป'); }); }
