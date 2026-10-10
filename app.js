@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.59.0';
+const APP_VERSION = '2.60.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -541,7 +541,7 @@ const Demo = {
   /* ฝ่ายผลิต (โหมดทดลอง) — กติกาเดียวกับหลังบ้าน */
   pfind(d, code) { const c = String(code || '').trim().toLowerCase(); return (d.prods || []).find(x => x.code.toLowerCase() === c && x.stage !== 'shipped') || null; },
   pensure(d, j, u) { d.prods = d.prods || []; if (this.pfind(d, j.code)) return; const t = nowLocal();
-    d.prods.push({ id: uid('p_'), code: j.code, title: j.title || '', sale: j.sale || '', group: j.group || '', stage: 'wait', machines: '[]', paint: '', note: '', enteredAt: t, startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, updatedAt: t + ':00', updatedBy: u.name, history: JSON.stringify([{ t: t, by: u.name, s: 'wait', x: 'ออกแบบเสร็จ ส่งเข้าผลิต' }]) }); },
+    d.prods.push({ id: uid('p_'), code: j.code, priority: d.jobs.some(x => x.code.toLowerCase() === j.code.toLowerCase() && x.priority === 'urgent') ? 'urgent' : '', title: j.title || '', sale: j.sale || '', group: j.group || '', stage: 'wait', machines: '[]', paint: '', note: '', enteredAt: t, startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, updatedAt: t + ':00', updatedBy: u.name, history: JSON.stringify([{ t: t, by: u.name, s: 'wait', x: 'ออกแบบเสร็จ ส่งเข้าผลิต' }]) }); },
   async prodSave(p) {
     const d = this.db(), u = this.me(d), data = p.prod || {}, now = nowLocal() + ':' + pad(new Date().getSeconds()); d.prods = d.prods || [];
     const ship = P.can(u, 'prod.ship'), edit = P.can(u, 'prod.edit');
@@ -553,9 +553,10 @@ const Demo = {
     if (cur && data.baseUpdatedAt && cur.updatedAt && data.baseUpdatedAt !== cur.updatedAt) throw new Error('งานนี้ถูกอัปเดตโดย ' + cur.updatedBy + ' เมื่อสักครู่ กดรีเฟรชแล้วลองอีกครั้ง');
     if (!cur) { const code = String(data.code || '').trim(); if (!code) throw new Error('กรุณาใส่เลข Job'); if (this.pfind(d, code)) throw new Error('เลข Job ' + code + ' อยู่ในฝ่ายผลิตแล้ว');
       const src = d.jobs.filter(j => j.code.toLowerCase() === code.toLowerCase()), pick = k => (src.find(j => j[k]) || {})[k] || '';
-      cur = { id: uid('p_'), code: code, title: pick('title'), sale: pick('sale'), group: pick('group'), stage: 'wait', machines: '[]', paint: '', note: '', enteredAt: nowLocal(), startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, history: '[]' }; d.prods.push(cur); }
+      cur = { id: uid('p_'), code: code, priority: src.some(j => j.priority === 'urgent') ? 'urgent' : '', title: pick('title'), sale: pick('sale'), group: pick('group'), stage: 'wait', machines: '[]', paint: '', note: '', enteredAt: nowLocal(), startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, history: '[]' }; d.prods.push(cur); }
     ['title', 'sale', 'group', 'note'].forEach(k => { if (data[k] !== undefined) cur[k] = String(data[k]); });
     if (data.due !== undefined) { const dd = String(data.due || '').slice(0, 10); if (dd && !/^\d{4}-\d{2}-\d{2}$/.test(dd)) throw new Error('กำหนดส่งไม่ถูกต้อง'); cur.due = dd; }
+    if (data.priority !== undefined) cur.priority = data.priority === 'urgent' ? 'urgent' : '';
     if (data.paint !== undefined) cur.paint = data.paint === 'no' ? 'no' : '';
     if (data.assy !== undefined) cur.assy = data.assy === 'no' ? 'no' : '';
     if (data.machines !== undefined) cur.machines = JSON.stringify((Array.isArray(data.machines) ? data.machines : []).filter(x => x && x.m).map(x => ({ m: String(x.m), d: String(x.d || '') })));
@@ -1450,7 +1451,7 @@ function prodHoverHtml(p) {
   const dn = p.due ? daysBetween(today(), p.due) : null, late = p.due && dn < 0 && p.stage !== 'ready' && p.stage !== 'shipped';
   const hero = im.length ? '<div class="hv-hero"><button type="button" class="hv-main" data-lbopen="' + esc(im[0].id) + '" data-lbjob="' + esc(imj(0)) + '" title="กดดูรูปเต็มจอ">' + thumbImg(im[0], 'big') + '<span class="hv-zoom">' + I.search + 'กดดูรูป</span>' + (im.length > 1 ? '<span class="hv-cnt">' + STI.camera + im.length + '</span>' : '') + '</button>' +
     (im.length > 1 ? '<div class="hv-strip">' + im.slice(1, 6).map((m, k) => '<button type="button" data-lbopen="' + esc(m.id) + '" data-lbjob="' + esc(imj(k + 1)) + '">' + thumbImg(m) + '</button>').join('') + '</div>' : '') + '</div>' : '';
-  const main = hero + '<div class="hv-head"><span class="flow-ic ic-' + p.stage + '">' + PIC[p.stage] + '</span><div><b class="mono">' + esc(p.code) + '</b><small>' + esc(p.title || '–') + '</small></div></div>' +
+  const main = hero + '<div class="hv-head"><span class="flow-ic ic-' + p.stage + '">' + PIC[p.stage] + '</span><div><b class="mono">' + esc(p.code) + '</b>' + (pUrgent(p) ? ' ' + URG_TAG : '') + '<small>' + esc(p.title || '–') + '</small></div></div>' +
     '<div class="hv-grid"><span>สถานะ</span><b>' + stgHtml(stageOf(null, p)) + '</b>' +
     '<span>ที่มา</span><b>' + (dj.length ? '<span class="co-sk">จากฝ่ายแบบ</span>' : '<span class="co-sk">ฝ่ายผลิตบันทึกเอง</span>') + '</b>' +
     '<span>Sale</span><b>' + esc(p.sale || '–') + '</b>' +
@@ -4247,7 +4248,7 @@ function viewSettings() {
         '<div class="hol-list">' + ((d.holidays || []).filter(h => h.d >= addDays(today(), -31)).map(h => '<span class="hol-it' + (h.d < today() ? ' past' : '') + '"><b>' + fdY(h.d) + '</b>' + esc(h.n || '') + '<button class="icon-btn sm" data-holdel="' + esc(h.d) + '" aria-label="ลบ">✕</button></span>').join('') || '<span class="sub">ยังไม่มีวันหยุด — วันพระและวันหยุดชดเชยเพิ่มเองตามประกาศแต่ละปี</span>') + '</div></div></section>' +
     '<section class="panel sec" id="s-salelink"><div class="panel-h"><h2>ปุ่ม Sale ที่หน้าเข้าสู่ระบบ</h2>' + (S.salePinOn ? '<span class="pill s-done">เปิดอยู่</span>' : '<span class="pill s-hold">ปิดอยู่</span>') + '</div>' +
       '<p class="help">ตั้ง PIN ให้ Sale 1 ชุด แล้วที่หน้าเข้าสู่ระบบจะมีปุ่ม "สำหรับ Sale" กดแล้วใส่ PIN ก็เห็นสถานะงานทุกฝ่าย (ฝ่ายแบบ + ฝ่ายผลิต) ไม่ต้องมีบัญชี · เปลี่ยน PIN ได้ตลอด</p>' +
-      '<div class="pin-set"><input id="salePinSet" inputmode="numeric" maxlength="6" placeholder="PIN ใหม่ 4–6 หลัก" aria-label="PIN สำหรับ Sale"><button class="btn primary sm" data-act="salepin">' + (S.salePinOn ? 'เปลี่ยน PIN' : 'ตั้ง PIN และเปิดปุ่ม') + '</button>' + (S.salePinOn ? '<button class="btn sm ghost" data-act="salepin" data-clear="1">ปิดปุ่ม Sale</button>' : '') + '</div></section>' +
+      '<div class="pin-set"><input id="salePinSet" inputmode="numeric" maxlength="4" placeholder="PIN ใหม่ 4 หลัก" aria-label="PIN สำหรับ Sale"><button class="btn primary sm" data-act="salepin">' + (S.salePinOn ? 'เปลี่ยน PIN' : 'ตั้ง PIN และเปิดปุ่ม') + '</button>' + (S.salePinOn ? '<button class="btn sm ghost" data-act="salepin" data-clear="1">ปิดปุ่ม Sale</button>' : '') + '</div></section>' +
     '<section class="panel sec" id="s-salelink2"><div class="panel-h"><h2>ลิงก์ดูสถานะงานสำหรับ Sale</h2></div><p class="help">Sale เปิดลิงก์แล้วเห็นสถานะงานของตัวเอง (อ่านอย่างเดียว ไม่ต้องเข้าสู่ระบบ) — ไม่แสดงชื่อคนทำ เวลาทำงาน และข้อความภายในทีม</p>' +
       (S.saleKey ? '<div class="sale-links">' + [''].concat(d.sales || []).map(n => { const u = saleLinkUrl(S.saleKey, n); return '<div class="sl-row"><b>' + (n ? 'Sale ' + esc(n) : 'ทุก Sale (สำหรับหัวหน้าฝ่ายขาย)') + '</b><code>' + esc(u) + '</code><button class="btn sm" data-act="copysale" data-url="' + esc(u) + '">คัดลอก</button></div>'; }).join('') + '</div>' +
         '<div class="top-actions"><button class="btn sm ghost" data-act="salelink" data-reset="1">สร้างลิงก์ใหม่ (ลิงก์เก่าจะใช้ไม่ได้)</button></div>'
@@ -4477,6 +4478,9 @@ function pNextOf(p) { let i = PORDER.indexOf(p.stage) + 1; while (PORDER[i] && p
 function pPrevOf(p) { let i = PORDER.indexOf(p.stage) - 1; while (i > 0 && pSkipped(p, PORDER[i])) i--; return i >= 0 ? PORDER[i] : ''; }
 const PDONE = { paint: 'ทำสีเสร็จ', assemble: 'ประกอบเสร็จ', pack: 'แพ็คเสร็จ', ready: 'ส่งแล้ว' };
 /* ย้ายไปขั้น st ได้ไหม: ฝ่ายผลิตทำได้ถึง "พร้อมส่ง" · "ส่งแล้ว" (และย้อนกลับจากส่งแล้ว) เป็นของฝ่ายสต็อก */
+/* ธงด่วน: งานฝ่ายแบบเลขเดียวกันติดด่วน หรือฝ่ายผลิตติดเอง → ติดไปทุกขั้นจนส่งมอบ */
+const pUrgent = p => !!p && (p.priority === 'urgent' || designJobsOf(p.code).some(j => j.priority === 'urgent'));
+const URG_TAG = '<span class="tag urgent">' + STI.fire + 'ด่วน</span>';
 const SHIPZ = ['ready', 'shipped'];
 function pCanSet(p, st) {
   const touchShip = st === 'shipped' || p.stage === 'shipped';
@@ -4620,12 +4624,13 @@ function pcard(p) {
     if (may) body += '<button type="button" class="btn sm pc-go ' + (p.stage === 'ready' ? 'primary' : 'adv-' + p.stage) + '" data-padv="' + esc(p.id) + '" title="' + (nx && nx !== 'shipped' ? 'ไปขั้น ' + PSTG[nx].label : 'ฝ่ายสต็อกกดเมื่อส่งของถึงลูกค้าแล้ว') + '">' + PIC[nx || 'shipped'] + PDONE[p.stage] + '</button>';
     else if (p.stage === 'ready' && !p.pending) body += '<div class="pc-note pc-wship">' + ROLE_IC.stock + 'รอฝ่ายสต็อกกด "ส่งแล้ว"</div>';
   }
-  return '<div class="card pcard ' + PSTG[p.stage].cls + (p.pending ? ' is-pending' : '') + (stuck ? ' is-late' : '') + '" data-popen="' + esc(p.id) + '" tabindex="0" role="button">' +
+  const urg = pUrgent(p);
+  return '<div class="card pcard ' + PSTG[p.stage].cls + (p.pending ? ' is-pending' : '') + (stuck ? ' is-late' : '') + (urg ? ' is-urgent' : '') + '" data-popen="' + esc(p.id) + '" tabindex="0" role="button">' +
     '<div class="card-top"><div class="code">' + esc(p.code) + '</div>' +
       (th ? '<button type="button" class="card-th" data-lbopen="' + esc(th.img.id) + '" data-lbjob="' + esc(th.job.id) + '" aria-label="ดูรูปงาน">' + thumbImg(th.img) + '</button>' : '') +
       (!ro && p.stage !== 'wait' ? '<button type="button" class="adv pback" data-pback="' + esc(p.id) + '" title="ย้อนกลับ 1 ขั้น" aria-label="ย้อนกลับ 1 ขั้น">' + PIC.back + '</button>' : '') + '</div>' +
     (p.title ? '<div class="title">' + esc(p.title) + '</div>' : '') +
-    '<div class="tags">' + (p.stage === 'machine' ? '<span class="tag pt-mc">' + PIC.machine + 'เสร็จ ' + ms.filter(m => m.d).length + '/' + ms.length + ' เครื่อง</span>' : '') + (p.paint === 'no' ? '<span class="tag pt-nopaint">ไม่ทำสี</span>' : '') + (p.assy === 'no' ? '<span class="tag pt-noassy">ไม่ประกอบ</span>' : '') + (p.group ? groupChip(p.group) : '') + pDueTag(p) + '</div>' + (p.note ? '<div class="pc-notetx" title="' + esc(p.note) + '">' + STI.note + '<span>' + esc(p.note) + '</span></div>' : '') +
+    '<div class="tags">' + (urg ? URG_TAG : '') + (p.stage === 'machine' ? '<span class="tag pt-mc">' + PIC.machine + 'เสร็จ ' + ms.filter(m => m.d).length + '/' + ms.length + ' เครื่อง</span>' : '') + (p.paint === 'no' ? '<span class="tag pt-nopaint">ไม่ทำสี</span>' : '') + (p.assy === 'no' ? '<span class="tag pt-noassy">ไม่ประกอบ</span>' : '') + (p.group ? groupChip(p.group) : '') + pDueTag(p) + '</div>' + (p.note ? '<div class="pc-notetx" title="' + esc(p.note) + '">' + STI.note + '<span>' + esc(p.note) + '</span></div>' : '') +
     body + pTrack(p) +
     '<div class="card-foot"><span>' + esc(p.sale ? 'Sale ' + p.sale : '') + '</span><span class="due' + (stuck ? ' late' : '') + '" title="อยู่ขั้นนี้มาแล้ว">' + (stuck ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(age) + '</span></div></div>';
 }
@@ -4641,7 +4646,7 @@ function viewProd() {
   const cols = PCOLS.map(st => {
     let js = open.filter(p => p.stage === st);
     if (st === 'machine' && F !== 'all') js = js.filter(p => inMachine(p, F));
-    js.sort((a, b) => String(pStageSince(a)).localeCompare(String(pStageSince(b))));
+    js.sort((a, b) => (pUrgent(b) - pUrgent(a)) || String(pStageSince(a)).localeCompare(String(pStageSince(b))));   // งานด่วนขึ้นก่อน
     let extra = '';
     if (st === 'machine') extra = '<div class="pm-sum">' + machinesList().map(m => { const n = open.filter(p => inMachine(p, m)).length; return '<span class="' + (n ? 'on' : '') + '">' + esc(m) + ' <b>' + n + '</b></span>'; }).join('') + '</div>';
     let more = '';
@@ -4699,7 +4704,7 @@ function coRows() {
     else if (p) { dl = p.stage === 'ready' ? 'พร้อมส่งตั้งแต่' : 'เข้าผลิต'; dd = String(p.stage === 'ready' ? p.finishedAt : p.enteredAt).slice(0, 10); }
     return { code: r.code, title: ref.title || (r.jobs.find(j => j.title) || {}).title || '', sale: ref.sale || (r.jobs.find(j => j.sale) || {}).sale || '', group: ref.group || '', step: step, sub: sub, since: since, late: late, prod: p, jobs: r.jobs,
       due: due, dl: dl, dd: dd,
-      urgent: r.jobs.some(j => j.priority === 'urgent' && j.status !== 'done') };
+      urgent: r.jobs.some(j => j.priority === 'urgent') || (!!p && p.priority === 'urgent') };   // ด่วนติดไปจนส่งมอบ
   }).filter(Boolean);
 }
 /* ป้ายตำแหน่งงานแบบเด่น (ใช้ทั้งระบบ): ไอคอน + แผนก + ขั้น + จุดเส้นทาง 7 ขั้น */
@@ -5209,7 +5214,8 @@ function pModalDraw() {
       return '<button type="button" style="--i:' + i + '" class="pm-step ' + PSTG[st].cls + (i < ci ? ' past' : i === ci ? ' now' : '') + (sk ? ' skip' : '') + '"' + (i === ci || !pCanSet(p, st) ? ' disabled' : '') + ' data-pset="' + st + '" title="' + (!pCanSet(p, st) ? PSTG[st].label + (st === 'shipped' ? ' · ฝ่ายสต็อกเป็นคนกด' : '') : 'ย้ายไปขั้น ' + PSTG[st].label) + '"><span>' + (sk ? '<i>ข้าม</i>' : i < ci ? PIC.check : PIC[st]) + (i === ci ? '<b class="pm-spk"></b>' : '') + '</span><small>' + PSTG[st].label + '</small></button>'; }).join('') + '</div></div>';
   const mPick = '<div class="pc-pick">' + machinesList().concat(ms.map(x => x.m).filter(n => machinesList().indexOf(n) < 0)).map(n => { const cur = ms.find(x => x.m === n);
     return '<button type="button" class="mchip' + (cur ? ' on' : '') + (cur && cur.d ? ' done' : '') + '"' + (ro ? ' disabled' : '') + ' data-pmset="' + esc(n) + '" aria-pressed="' + !!cur + '">' + (cur ? PIC.check : '') + esc(n) + (cur && cur.d ? ' · เสร็จ ' + esc(fdt(cur.d).replace(/^.* /, '')) : '') + '</button>'; }).join('') + '</div>';
-  m.innerHTML = '<div class="pm-card ' + PSTG[p.stage].cls + '"><div class="pm-h"><div><span class="eyebrow">' + pPill(p.stage) + ' · อยู่ขั้นนี้ ' + pAgeTxt(pAge(p)) + '</span><h3>' + esc(p.code) + '</h3>' + (p.title ? '<p class="sub">' + esc(p.title) + '</p>' : '') + '</div>' + x + '</div><div class="pm-b">' +
+  m.innerHTML = '<div class="pm-card ' + PSTG[p.stage].cls + '"><div class="pm-h"><div><span class="eyebrow">' + pPill(p.stage) + ' · อยู่ขั้นนี้ ' + pAgeTxt(pAge(p)) + '</span><h3>' + esc(p.code) + (pUrgent(p) ? ' ' + URG_TAG : '') + '</h3>' + (p.title ? '<p class="sub">' + esc(p.title) + '</p>' : '') + '</div>' + x + '</div><div class="pm-b">' +
+    (canProd() ? (fromD => '<button type="button" class="pm-urg' + (pUrgent(p) ? ' on' : '') + '" data-purg="' + esc(p.id) + '" aria-pressed="' + pUrgent(p) + '"' + (fromD ? ' disabled' : '') + '>' + STI.fire + '<span><b>งานด่วน</b><small>' + (fromD ? 'ติดด่วนจากงานฝ่ายแบบ · ติดไปจนส่งมอบ' : 'ติดธงด่วนไปทุกขั้นจนส่งมอบ · งานด่วนขึ้นก่อนในทุกช่อง') + '</small></span><i class="sw"></i></button>')(p.priority !== 'urgent' && pUrgent(p)) : '') +
     stepper + pQcHtml(p, ro) +
     pInfoHtml(p, ro) + pImgsHtml(p, ro) +
     '<div class="f"><label>เครื่องที่ใช้</label>' + mPick + (p.stage === 'machine' && !ro ? '<div class="hint">ติ๊กเครื่องที่ทำเสร็จได้ที่การ์ดบนบอร์ด ครบทุกเครื่องแล้วงานไปขั้นต่อเอง</div>' : '') + '</div>' +
@@ -5316,6 +5322,7 @@ function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ
     if (p.stage === 'wait') { S.psel = S.psel || {}; S.psel[p.id] = ms.map(x => x.m); }
     prodWrite(p.id, { machines: ms }, (has ? 'เอา ' : 'เพิ่ม ') + d.pmset + (has ? ' ออก' : '')); return true; }
   if (d.pnote) { const p = prodById(P2.id); if (p) prodWrite(p.id, { note: ($('#pNote') || {}).value || '' }, 'บันทึกโน้ตแล้ว'); return true; }
+  if (d.purg) { const p = prodById(d.purg); if (p && canProd()) { const on = p.priority !== 'urgent'; prodWrite(p.id, { priority: on ? 'urgent' : '' }, on ? '🔥 ' + p.code + ' ติดธงด่วนแล้ว · ติดไปจนส่งมอบ' : p.code + ' เอาธงด่วนออกแล้ว'); } return true; }
   if (d.pdel) {
     if (d.pdel === 'ask') { P2.del = true; pModalDraw(); return true; }
     if (d.pdel === 'no') { P2.del = false; pModalDraw(); return true; }
@@ -5335,27 +5342,27 @@ function saleTile() {
   const n = String(L.salePinV || '').length;
   return '<form class="sx-pin' + (L.saleErr ? ' bad' : '') + '" id="saleForm"><div class="sx-band"><div class="sx-h"><span class="sx-ic">' + PIC.sale + '</span><div><b>เข้าหน้า Sale</b><small>ใส่ PIN ที่ได้จากแอดมิน' + (mode() === 'demo' ? ' (โหมดทดลองใช้ 1234)' : '') + '</small></div><button type="button" class="icon-btn sm sx-x" data-act="saleoff" aria-label="ยกเลิก">✕</button></div>' +
     flow + '</div>' +
-    '<label class="sx-in"><input id="salePin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="PIN สำหรับ Sale" value="' + esc(L.salePinV || '') + '"><span class="sx-dots" aria-hidden="true">' + [0, 1, 2, 3, 4, 5].map(i => '<i class="' + (i < n ? 'on' : '') + (i >= 4 ? ' opt' : '') + '"></i>').join('') + '</span></label>' +
-    (L.saleErr ? '<div class="sx-err" role="alert">' + esc(L.saleErr) + '</div>' : '<small class="sx-hint">PIN 4–6 หลัก · กด Enter หรือปุ่มด้านล่าง</small>') +
+    '<label class="sx-in"><input id="salePin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-label="PIN สำหรับ Sale 4 หลัก" value="' + esc(L.salePinV || '') + '"><span class="sx-dots" aria-hidden="true">' + [0, 1, 2, 3].map(i => '<i class="' + (i < n ? 'on' : '') + '"></i>').join('') + '</span></label>' +
+    (L.saleErr ? '<div class="sx-err" role="alert">' + esc(L.saleErr) + '</div>' : '<small class="sx-hint">ใส่ PIN 4 หลัก ครบแล้วเปิดให้เอง</small>') +
     '<button class="btn sx-btn" type="submit"' + (L.saleBusy || n < 4 ? ' disabled' : '') + '>' + (L.saleBusy ? '<span class="spin-dot"></span>กำลังเปิด…' : 'เปิดหน้าสถานะงาน ' + I.next) + '</button></form>';
 }
 async function saleSubmit() {
   const L = S.login, pin = String(($('#salePin') || {}).value || L.salePinV || '').trim();
-  if (!/^\d{4,6}$/.test(pin)) { L.saleErr = 'PIN ต้องเป็นตัวเลข 4–6 หลัก'; renderLogin(); return; }
+  if (!/^\d{4}$/.test(pin)) { L.saleErr = 'PIN ต้องเป็นตัวเลข 4 หลัก'; renderLogin(); return; }
   L.saleBusy = true; L.saleErr = ''; renderLogin();
   try {
     const r = mode() === 'sheet' ? await Remote.call('saleOpen', { pin: pin }) : await Demo.saleOpen({ pin: pin });
     LS.set('saleKey', r.key); location.href = saleLinkUrl(r.key, '');
   } catch (e) { L.saleBusy = false; L.saleErr = e.message; L.salePinV = ''; renderLogin(); const x = $('#salePin'); if (x) x.focus(); }
 }
-/* PIN ของ Sale: จุดแสดงจำนวนหลักที่พิมพ์ · ใส่ครบ 6 หลักแล้วเปิดเลย */
+/* PIN ของ Sale: 4 หลัก · จุดแสดงจำนวนหลักที่พิมพ์ · ครบ 4 หลักเปิดเลย */
 document.addEventListener('input', e => {
   const t = e.target; if (!t || t.id !== 'salePin') return;
-  const L = S.login, v = t.value.replace(/\D/g, '').slice(0, 6); if (t.value !== v) t.value = v; L.salePinV = v; L.saleErr = '';
+  const L = S.login, v = t.value.replace(/\D/g, '').slice(0, 4); if (t.value !== v) t.value = v; L.salePinV = v; L.saleErr = '';
   const f = $('#saleForm'); if (!f) return; f.classList.remove('bad'); f.querySelectorAll('.sx-dots i').forEach((d, i) => d.classList.toggle('on', i < v.length));
   const btn = f.querySelector('.sx-btn'); if (btn) btn.disabled = v.length < 4 || L.saleBusy;
-  const er = f.querySelector('.sx-err'); if (er) er.outerHTML = '<small class="sx-hint">PIN 4–6 หลัก · กด Enter หรือปุ่มด้านล่าง</small>';
-  if (v.length === 6) saleSubmit();
+  const er = f.querySelector('.sx-err'); if (er) er.outerHTML = '<small class="sx-hint">ใส่ PIN 4 หลัก ครบแล้วเปิดให้เอง</small>';
+  if (v.length === 4 && !L.saleBusy) saleSubmit();
 });
 
 /* ===== หน้า Sale: มุมมอง "ภาพรวมสถานะ" แบบเดียวกับหน้าภาพรวมบริษัท (1 เลข Job = 1 แถว เดินตั้งแต่ฝ่ายแบบจนส่งลูกค้า) ===== */
@@ -5379,7 +5386,7 @@ function saleRows(d) {
     } else if (p) { step = 'shipped'; sub = 'ส่งถึงลูกค้าแล้ว'; info = 'ส่งแล้ว ' + fd(p.shippedAt); dl = 'ส่งแล้ว'; dd = String(p.shippedAt).slice(0, 10); }
     else { const fin = r.jobs.map(j => String(j.finishedAt || '').slice(0, 10)).sort().pop() || ''; step = 'ddone'; sub = 'ออกแบบเสร็จ · รอเข้าผลิต'; info = 'เสร็จ ' + fd(fin); var old = fin < addDays(t, -14); dl = 'ออกแบบเสร็จ'; dd = fin; }
     return { code: r.code, title: ref.title || (r.jobs.find(j => j.title) || {}).title || '', sale: ref.sale || (r.jobs.find(j => j.sale) || {}).sale || '', group: ref.group || (r.jobs[0] || {}).group || '',
-      step: step, sub: sub, info: info, late: late, due: due, prod: p, old: step === 'ddone' && !!old, dl: due ? (step === 'design' ? 'กำหนดส่งแบบ' : 'กำหนดส่ง') : dl || '', dd: due || dd || '', jobs: r.jobs, urgent: r.jobs.some(j => j.priority === 'urgent' && j.status !== 'done') };
+      step: step, sub: sub, info: info, late: late, due: due, prod: p, old: step === 'ddone' && !!old, dl: due ? (step === 'design' ? 'กำหนดส่งแบบ' : 'กำหนดส่ง') : dl || '', dd: due || dd || '', jobs: r.jobs, urgent: r.jobs.some(j => j.priority === 'urgent') || (!!p && p.priority === 'urgent')};
   });
 }
 function saleFlowHtml(d, sel) {
@@ -5511,7 +5518,7 @@ document.addEventListener('click', async e => {
     case 'new': if (S.view === 'prod') return canProd() ? pAddOpen() : undefined; if (S.view === 'stock') return canStock() ? stockAddOpen() : undefined; if (!canAddDesign()) return; return openEditor(null);
     case 'saleon': { const k = LS.get('saleKey', ''); if (k && mode() === 'sheet') { location.href = saleLinkUrl(k, ''); return; } S.login.sale = true; S.login.saleErr = ''; S.login.salePinV = ''; renderLogin(); setTimeout(() => { const x = $('#salePin'); if (x) x.focus(); }, 30); return; }
     case 'saleoff': S.login.sale = false; S.login.saleErr = ''; S.login.salePinV = ''; return renderLogin();
-    case 'salepin': { const v = String(($('#salePinSet') || {}).value || '').trim(); if (v && !/^\d{4,6}$/.test(v)) { toast('PIN ต้องเป็นตัวเลข 4–6 หลัก', true); return; }
+    case 'salepin': { const v = String(($('#salePinSet') || {}).value || '').trim(); if (v && !/^\d{4}$/.test(v)) { toast('PIN ต้องเป็นตัวเลข 4 หลัก', true); return; }
       try { const r = await mutate(() => api().salePin({ pin: d.clear ? '' : v }), d.clear ? 'ปิดปุ่ม Sale ที่หน้าเข้าสู่ระบบแล้ว' : 'ตั้ง PIN ของ Sale แล้ว'); S.salePinOn = !!r.on; render(); } catch (x) {} return; }
     case 'close': return closeEditor();
     case 'save': return saveEditor();

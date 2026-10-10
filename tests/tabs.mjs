@@ -14,11 +14,11 @@ eq('sale tile shown', await pg.locator('.sx-tile').count(), 1);
 await pg.locator('.sx-tile').scrollIntoViewIfNeeded(); await pg.waitForTimeout(700); await shot('sale-tile');
 eq('sale tile layout: icon left, text middle', await pg.evaluate(() => { const t = document.querySelector('.sx-tile').getBoundingClientRect(), i = document.querySelector('.sx-tile .sx-ic').getBoundingClientRect(), x = document.querySelector('.sx-tile .sx-t').getBoundingClientRect(); return i.left < x.left && i.top < t.top + t.height / 2 && i.bottom > t.top + t.height / 2; }), true);
 await pg.click('.sx-tile'); await pg.waitForTimeout(400);
-eq('PIN panel with 6 dots', await pg.locator('#saleForm .sx-dots i').count(), 6);
+eq('PIN panel with 4 dots', await pg.locator('#saleForm .sx-dots i').count(), 4);
 await pg.fill('#salePin', '12'); await pg.waitForTimeout(100);
 eq('dots fill as you type, button disabled <4', [await pg.locator('#saleForm .sx-dots i.on').count(), await pg.locator('#saleForm .sx-btn').isDisabled()], [2, true]);
-await pg.fill('#salePin', '0000'); await pg.waitForTimeout(100); await pg.press('#salePin', 'Enter'); await pg.waitForTimeout(600);
-eq('wrong PIN shakes + message', [await pg.locator('#saleForm.bad').count(), await pg.locator('#saleForm .sx-err').textContent()], [1, 'PIN ไม่ถูกต้อง']);
+await pg.fill('#salePin', '0000'); await pg.waitForTimeout(700);
+eq('4 digits auto-submit; wrong PIN shakes + message', [await pg.locator('#saleForm.bad').count(), await pg.locator('#saleForm .sx-err').textContent()], [1, 'PIN ไม่ถูกต้อง']);
 await shot('sale-pin');
 await pg.click('[data-act="saleoff"]'); await pg.waitForTimeout(300);
 // staff login → bottom tab bar

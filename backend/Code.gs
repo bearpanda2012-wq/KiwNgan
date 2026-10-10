@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.31.0';
+const VERSION = '1.32.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -40,7 +40,7 @@ const SHEETS = {
   Files: ['id', 'jobId', 'name', 'mime', 'size', 'fileId', 'createdBy', 'createdAt'],
   Comments: ['id', 'jobId', 'ts', 'from', 'text'],
   // ฝ่ายผลิต: 1 แถว = 1 เลข Job ที่ออกแบบเสร็จแล้ว เดินต่อ รอผลิต → ลงเครื่อง → ทำสี → ประกอบติดตั้ง → แพ็ค → พร้อมส่ง → ส่งแล้ว (paint/assy = 'no' คือข้ามขั้นนั้น)
-  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due', 'qc'],
+  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due', 'qc', 'priority'],   // priority = 'urgent' ติดธงด่วนไปจนส่งมอบ (สืบจากงานฝ่ายแบบเลขเดียวกันด้วย)
   // คลังวัสดุ (ฝ่ายสต็อก): 1 แถว = 1 รายการวัสดุ · StockLog = ประวัติรับเข้า/เบิกออก/ปรับยอด
   Stock: ['id', 'name', 'cat', 'unit', 'qty', 'min', 'loc', 'note', 'updatedAt', 'updatedBy'],
   StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note']
@@ -532,7 +532,7 @@ function saleView_(k, sale) {
       return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', assignee: maskName_(j.assignee, { role: 'user' }) || '', helpers: helpersOf_(j).map(n => maskName_(n, { role: 'user' })).join(','),
                steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '', imgs: (im[j.id] || []).slice(-6) }; });
   const people = usersLite_().filter(x => x.active && x.role !== 'admin').map(x => ({ name: x.name, color: x.color }));
-  const pv = prods.map(x => ({ code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6), qc: (q => ({ res: q.res, at: q.at, fails: q.fails, ok: q.ok, ng: q.ng }))(prodQc_(x.qc)) }));
+  const pv = prods.map(x => ({ code: x.code, priority: x.priority === 'urgent' ? 'urgent' : '', title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6), qc: (q => ({ res: q.res, at: q.at, fails: q.fails, ok: q.ok, ng: q.ng }))(prodQc_(x.qc)) }));
   const out = { brand: publicBrand_(), sales: s.sales || [], sale: sale || '', jobs: jobs, prods: pv, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(ck, t, 600); } catch (e) {}
   return out;
@@ -805,7 +805,8 @@ function prodFind_(code) {
 function ensureProd_(job, u) {
   if (prodFind_(job.code)) return null;
   const now = nowIso_();
-  const p = { id: uid_('p_'), code: job.code, title: job.title || '', sale: job.sale || '', group: job.group || '', stage: 'wait', machines: '[]', paint: '', assy: '', note: '',
+  const urg = job.priority === 'urgent' || readAll_('Jobs').some(j => j.code.toLowerCase() === String(job.code).toLowerCase() && j.priority === 'urgent');
+  const p = { id: uid_('p_'), code: job.code, priority: urg ? 'urgent' : '', title: job.title || '', sale: job.sale || '', group: job.group || '', stage: 'wait', machines: '[]', paint: '', assy: '', note: '',
               enteredAt: now.slice(0, 16), startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, updatedAt: now, updatedBy: u.name,
               history: JSON.stringify([{ t: now.slice(0, 16), by: u.name, s: 'wait', x: 'ออกแบบเสร็จ ส่งเข้าผลิต' }]) };
   writeRow_('Prod', p, -1);
@@ -834,11 +835,12 @@ function prodSave_(data, u) {
     if (prodFind_(code)) throw new Error('เลข Job ' + code + ' อยู่ในฝ่ายผลิตแล้ว');
     const src = readAll_('Jobs').filter(j => j.code.toLowerCase() === code.toLowerCase());
     const pick = k => (src.find(j => j[k]) || {})[k] || '';
-    cur = { id: uid_('p_'), code: code, title: pick('title'), sale: pick('sale'), group: pick('group'), stage: 'wait', machines: '[]', paint: '', assy: '', note: '',
+    cur = { id: uid_('p_'), code: code, priority: src.some(j => j.priority === 'urgent') ? 'urgent' : '', title: pick('title'), sale: pick('sale'), group: pick('group'), stage: 'wait', machines: '[]', paint: '', assy: '', note: '',
             enteredAt: now.slice(0, 16), startedAt: '', finishedAt: '', shippedAt: '', createdBy: u.name, history: '[]' };
   }
   ['title', 'sale', 'group', 'note'].forEach(k => { if (data[k] !== undefined) cur[k] = String(data[k]).slice(0, k === 'note' ? 1000 : 200); });
   if (data.due !== undefined) { const dd = String(data.due || '').slice(0, 10); if (dd && !/^\d{4}-\d{2}-\d{2}$/.test(dd)) throw new Error('กำหนดส่งไม่ถูกต้อง'); cur.due = dd; }
+  if (data.priority !== undefined) cur.priority = data.priority === 'urgent' ? 'urgent' : '';
   if (data.paint !== undefined) cur.paint = data.paint === 'no' ? 'no' : '';
   if (data.assy !== undefined) cur.assy = data.assy === 'no' ? 'no' : '';
   if (data.machines !== undefined) cur.machines = JSON.stringify(prodMachines_(data.machines));

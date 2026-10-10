@@ -118,9 +118,9 @@ await pg.screenshot({ path: out + 'prod-board-m.png', fullPage: true });
 // sale tile → PIN → sale page
 await pg.setViewportSize({ width: 1400, height: 900 });
 await pg.evaluate(() => Object.keys(localStorage).filter(k => /token/.test(k)).forEach(k => localStorage.removeItem(k))); await pg.goto('http://127.0.0.1:8790/index.html'); await pg.waitForTimeout(700);
-await pg.click('.sx-tile'); await pg.fill('#salePin', '0000'); await pg.press('#salePin', 'Enter'); await pg.waitForTimeout(400);
+await pg.click('.sx-tile'); await pg.fill('#salePin', '0000'); await pg.waitForTimeout(600);
 eq('wrong sale pin', await pg.locator('#saleForm .sx-err').textContent(), 'PIN ไม่ถูกต้อง');
-await pg.fill('#salePin', '5678'); await pg.press('#salePin', 'Enter'); await pg.waitForTimeout(1500);
+await pg.fill('#salePin', '5678'); await pg.waitForTimeout(1500);
 eq('sale page opened', /salek=/.test(pg.url()), true);
 eq('sale overview pipeline', await pg.locator('.sf-wrap .co-step').count(), 8);
 eq('sale overview rows', (await pg.locator('.sf-list .co-row').count()) > 5, true);

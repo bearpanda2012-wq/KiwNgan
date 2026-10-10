@@ -3777,3 +3777,22 @@ html,body{overflow-x:hidden}
 .sx-btn svg{width:18px;height:18px}
 .sx-btn:disabled{opacity:.45;box-shadow:none}
 @media (prefers-reduced-motion:reduce){.sx-tile,.sx-tile::after,.sx-flow i,.sx-flow u::after,.sx-pin,.sx-dots i.on,.sx-pin.bad .sx-dots{animation:none}}
+
+/* v2.60: ธงด่วนติดไปจนส่งมอบ (บอร์ดผลิต) */
+.pcard.is-urgent{border-left:4px solid var(--urgent);box-shadow:0 0 0 1px color-mix(in oklab,var(--urgent) 35%,transparent),0 10px 22px -16px var(--urgent)}
+.pcard.is-urgent .tag.urgent{animation:urgPulse 2s ease-in-out infinite}
+@keyframes urgPulse{0%,100%{box-shadow:0 0 0 0 color-mix(in oklab,var(--urgent) 45%,transparent)}50%{box-shadow:0 0 0 4px transparent}}
+.pm-h h3 .tag.urgent{vertical-align:4px;margin-left:6px;font-size:12px}
+.pm-urg{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);font:inherit;color:inherit;text-align:left;cursor:pointer;transition:background .2s,border-color .2s}
+.pm-urg>svg{width:20px;height:20px;color:var(--muted);flex:none;transition:color .2s,transform .25s}
+.pm-urg span{flex:1;display:flex;flex-direction:column;min-width:0}
+.pm-urg small{color:var(--muted);font-size:12px}
+.pm-urg .sw{position:relative;width:40px;height:22px;border-radius:99px;background:var(--surface-3);flex:none;transition:background .2s}
+.pm-urg .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.pm-urg.on{background:color-mix(in oklab,var(--urgent) 10%,var(--surface));border-color:color-mix(in oklab,var(--urgent) 45%,var(--line))}
+.pm-urg.on>svg{color:var(--urgent);transform:scale(1.15)}
+.pm-urg.on b{color:var(--urgent)}
+.pm-urg.on .sw{background:var(--urgent)}
+.pm-urg.on .sw::after{transform:translateX(18px)}
+.pm-urg:disabled{cursor:default;opacity:.85}
+@media (prefers-reduced-motion:reduce){.pcard.is-urgent .tag.urgent{animation:none}}

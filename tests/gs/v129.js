@@ -58,5 +58,16 @@ eq('delete item', m.call('stockDelete', { id: it.id }, ST).data.items.length, 0)
   eq('CAM after CAD+CAM blocked', m.call('saveJob', { job: { code: 'CC-1', taskType: 'ทำ CAM' } }, U).error, 'เลข Job CC-1 มีงาน CAM (CAD+CAM) อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1');
   m.call('saveJob', { job: Object.assign({}, cc, { status: 'done' }) }, U);
   eq('CAD+CAM done → รอผลิต', (m.call('bootstrap', {}, U).data.prods.find(p => p.code === 'CC-1') || {}).stage, 'wait'); }
+// ธงด่วน: งานฝ่ายแบบด่วน → งานผลิตติดด่วน · ฝ่ายผลิตติด/เอาออกเองได้ · สต็อกแก้ธงไม่ได้ · หน้า Sale เห็น
+{ const uj = m.call('saveJob', { job: { code: 'UR-1', taskType: 'ทำ CAM', priority: 'urgent', status: 'queue' } }, U).data.job;
+  m.call('saveJob', { job: Object.assign({}, uj, { status: 'done' }) }, U);
+  const up = m.call('bootstrap', {}, U).data.prods.find(p => p.code === 'UR-1');
+  eq('urgent design job → urgent production job', up && up.priority, 'urgent');
+  const [PR2] = mk('ช่างบี', 'prod');
+  const np = m.call('prodSave', { prod: { code: 'UR-2' } }, PR2).data.prod;
+  eq('prod staff flags urgent', m.call('prodSave', { prod: { id: np.id, priority: 'urgent' } }, PR2).data.prod.priority, 'urgent');
+  eq('prod staff removes flag', m.call('prodSave', { prod: { id: np.id, priority: '' } }, PR2).data.prod.priority, '');
+  const key = m.call('saleLink', {}, A).data.key;
+  eq('sale view carries urgent', (m.call('saleView', { k: key }).data.prods.find(p => p.code === 'UR-1') || {}).priority, 'urgent'); }
 console.log(ok + ' ok, ' + bad + ' failed');
 if (bad) process.exit(1);
