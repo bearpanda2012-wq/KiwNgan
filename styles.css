@@ -4232,3 +4232,34 @@ body.more-open .fab,body.more-open #chatHeads,body.more-open .msg-fab{opacity:0!
 .sk-mb{padding-top:6px}
 @media (max-width:520px){.sk-hero{grid-template-columns:104px minmax(0,1fr);gap:12px;padding:14px 48px 12px 14px}.skh-info h3{font-size:18px}.sk-hero .sk-big{padding:8px 12px}.sk-hero .sk-big b{font-size:26px}.sk-hero .skg-btns .btn svg{display:none}}
 .sk-hero .skg-btns{display:grid;grid-template-columns:1fr 1fr;gap:4px}.sk-hero .skg-btns .btn{width:100%;border-radius:10px;font-weight:600}.sk-hero .skg-btns .btn svg{display:none}.sk-hero .skg-pick{border:1px solid var(--line)}
+/* ===== v2.67.2: กล่องรับเข้า/เบิกออก/ปรับยอด โทนสุภาพ (สีอ่อน ไม่ฉูดฉาด) ===== */
+.sk-move{--mc:#C07A2C;--mc2:var(--mc);background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);border-radius:16px;padding:12px}
+.sk-move.sk-in{--mc:#3C8D62}.sk-move.sk-adj{--mc:#7064B0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sk-move{--mc:#E0A15A}:root:not([data-theme="light"]) .sk-move.sk-in{--mc:#6CC496}:root:not([data-theme="light"]) .sk-move.sk-adj{--mc:#A79BE8}}
+:root[data-theme="dark"] .sk-move{--mc:#E0A15A}:root[data-theme="dark"] .sk-move.sk-in{--mc:#6CC496}:root[data-theme="dark"] .sk-move.sk-adj{--mc:#A79BE8}
+.smv-blob{display:none}
+/* แท็บเลือก: รางสีเทา แท็บที่เลือกเป็นการ์ดขาว ตัวอักษรสีของประเภท */
+.sk-seg{background:var(--surface-3);box-shadow:none;padding:4px;border-radius:12px;gap:4px}
+.sk-seg button{--bc:#C07A2C;background:transparent!important;color:var(--muted)!important;min-height:40px;font-weight:600}
+.sk-seg button.sk-in{--bc:#3C8D62}.sk-seg button.sk-adj{--bc:#7064B0}
+.sk-seg button i{background:transparent;color:inherit;width:auto;height:auto;font-size:14px}
+.sk-seg button[aria-pressed=true]{background:var(--surface)!important;color:var(--bc)!important;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 10px -6px rgba(0,0,0,.15)}
+.sk-seg button[aria-pressed=true] i{background:transparent;animation:none}
+.sk-seg button:not([aria-pressed=true]):hover{background:color-mix(in oklab,var(--surface) 55%,transparent)!important;color:var(--ink)!important}
+.smv-h b{color:var(--ink);font-weight:700}
+.smv-h b::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mc);margin-right:7px;vertical-align:1px}
+/* ช่องจำนวน + ปุ่ม +/− : ขอบเรียบ ไอคอนสีอ่อน */
+.sm-qty input{border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.sm-qty input:focus{border-color:color-mix(in oklab,var(--mc) 60%,var(--line));box-shadow:0 0 0 3px color-mix(in oklab,var(--mc) 14%,transparent)}
+.sm-step{background:var(--surface)!important;color:var(--mc);border:1px solid var(--line);box-shadow:none;filter:none!important}
+.sm-step:hover{border-color:color-mix(in oklab,var(--mc) 45%,var(--line));background:color-mix(in oklab,var(--mc) 6%,var(--surface))!important}
+.sm-quick button{color:var(--muted);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font-weight:600}
+.sm-quick button:hover{color:var(--mc);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--mc) 40%,var(--line));background:var(--surface);transform:none}
+.sm-after b{color:var(--ink)}
+.sk-move>input{background:var(--surface);border:1px solid var(--line)}
+.sk-move>input:focus{border-color:color-mix(in oklab,var(--mc) 60%,var(--line));box-shadow:0 0 0 3px color-mix(in oklab,var(--mc) 12%,transparent)}
+/* ปุ่มบันทึก: สีพื้นเรียบ ไม่ไล่สี ไม่มีแสงวิ่ง */
+.btn.sk-go,.btn.sk-go:hover,.btn.sk-go:focus-visible{background:var(--mc)!important;box-shadow:0 6px 14px -10px var(--mc);border-radius:12px;min-height:48px;font-weight:700}
+.btn.sk-go:hover{filter:brightness(1.06);transform:none}
+.btn.sk-go::after{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.sk-go{background:color-mix(in oklab,var(--mc) 55%,#000)!important}}:root[data-theme="dark"] .btn.sk-go{background:color-mix(in oklab,var(--mc) 55%,#000)!important}
