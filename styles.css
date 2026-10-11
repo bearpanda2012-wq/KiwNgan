@@ -4678,7 +4678,6 @@ body{scrollbar-gutter:stable}
 .mq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
 .mq-c{--mc:var(--p-mach);position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:auto auto auto;column-gap:10px;row-gap:6px;align-items:center;padding:10px 12px;border-radius:14px;border:1px solid color-mix(in oklab,var(--mc) 20%,var(--line));background:linear-gradient(150deg,color-mix(in oklab,var(--mc) 10%,var(--surface)),var(--surface) 75%);color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:transform .2s cubic-bezier(.3,1.4,.5,1),box-shadow .2s,border-color .2s}
 .mq-c.all{--mc:var(--accent);grid-template-rows:auto}
-.mq-c.idle{--mc:#2B8A5A}
 .mq-c:hover{transform:translateY(-2px);box-shadow:0 10px 22px -16px var(--mc)}
 .mq-c[aria-pressed=true]{border-color:var(--mc);box-shadow:0 0 0 1px var(--mc),0 10px 22px -16px var(--mc)}
 .mq-ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:var(--mc);color:#fff}.mq-ic svg{width:18px;height:18px}
@@ -4698,3 +4697,8 @@ body{scrollbar-gutter:stable}
 .kf-catplus{display:inline-flex;align-items:center;gap:5px;padding:8px 12px;border-radius:12px;border:1.5px dashed var(--line);background:transparent;color:var(--muted);font:600 13px var(--f-body);cursor:pointer}
 .kf-catplus svg{width:15px;height:15px}.kf-catplus:hover{border-color:var(--accent);color:var(--accent)}
 .kf-catnew{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}.kf-catnew input{width:220px;max-width:100%;padding:8px 10px}
+/* v2.74.3: คิวเครื่อง — สีประจำเครื่อง · ว่าง = ป้ายเขียว (การ์ดไม่เปลี่ยนสี) */
+.mq-c.idle .mq-n{color:color-mix(in oklab,var(--mc) 55%,var(--muted))}
+.mq-c.idle{background:linear-gradient(150deg,color-mix(in oklab,var(--mc) 6%,var(--surface)),var(--surface) 75%)}
+.mq-tags:empty{display:none}
+.mq-tags em.free{background:color-mix(in oklab,#2B8A5A 12%,var(--surface));color:#2B8A5A}

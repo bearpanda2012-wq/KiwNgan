@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.74.2';
+const APP_VERSION = '2.74.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4881,12 +4881,14 @@ function viewProd() {
     const old = run.reduce((mx, p) => Math.max(mx, daysBetween(String(pStageSince(p) || today()).slice(0, 10), today()) || 0), 0);
     return { m: m, run: run.length, wait: wt.length, urg: all.filter(pUrgent).length, old: old, tot: all.length }; });
   const mx = Math.max(1, ...mq.map(x => x.tot)), allRun = open.filter(p => p.stage === 'machine').length;
+  const MQ_COL = { router: '#EA580C', laser: '#DB2777', punching: '#7C3AED', waterjet: '#0284C7' }, MQ_HUE = ['#0D9488', '#B45309', '#4F46E5', '#BE123C', '#15803D', '#0E7490'];
+  const mqCol = (m, i) => MQ_COL[String(m).toLowerCase().replace(/[^a-z]/g, '')] || MQ_HUE[i % MQ_HUE.length];   // แต่ละเครื่องมีสีของตัวเอง
   const chips = '<div class="mq' + (S.animIn ? ' in' : '') + '"><div class="mq-h"><b>' + PIC.machine + 'คิวงานแต่ละเครื่อง</b><small>กดที่เครื่องเพื่อดูเฉพาะงานของเครื่องนั้น</small></div><div class="mq-grid">' +
     '<button type="button" class="mq-c all" data-pm="all" aria-pressed="' + (F === 'all') + '" style="--i:0"><span class="mq-ic">' + STI.all + '</span><span class="mq-t"><b>ทุกเครื่อง</b><small>ลงเครื่องอยู่ ' + allRun + ' งาน</small></span></button>' +
-    mq.map((x, i) => '<button type="button" class="mq-c' + (x.tot ? '' : ' idle') + (x.urg ? ' urg' : '') + '" data-pm="' + esc(x.m) + '" aria-pressed="' + (F === x.m) + '" style="--i:' + (i + 1) + '"><span class="mq-ic">' + PIC.machine + '</span><span class="mq-t"><b>' + esc(x.m) + '</b><small>' +
-      (x.tot ? 'กำลังทำ ' + x.run + ' · รอ ' + x.wait : 'ว่าง · รับงานได้') + '</small></span><span class="mq-n">' + x.tot + '</span>' +
+    mq.map((x, i) => '<button type="button" class="mq-c' + (x.tot ? '' : ' idle') + (x.urg ? ' urg' : '') + '" data-pm="' + esc(x.m) + '" aria-pressed="' + (F === x.m) + '" style="--i:' + (i + 1) + ';--mc:' + mqCol(x.m, i) + '"><span class="mq-ic">' + PIC.machine + '</span><span class="mq-t"><b>' + esc(x.m) + '</b><small>' +
+      (x.tot ? 'กำลังทำ ' + x.run + ' · รอ ' + x.wait : 'ไม่มีงานค้าง') + '</small></span><span class="mq-n">' + x.tot + '</span>' +
       '<span class="mq-bar"><i style="width:' + Math.round(x.tot / mx * 100) + '%"></i></span>' +
-      (x.urg || x.old >= 2 ? '<span class="mq-tags">' + (x.urg ? '<em class="u">' + STI.fire + 'ด่วน ' + x.urg + '</em>' : '') + (x.old >= 2 ? '<em>ค้าง ' + x.old + ' วัน</em>' : '') + '</span>' : '') + '</button>').join('') + '</div></div>';
+      '<span class="mq-tags">' + (x.tot ? '' : '<em class="free">● ว่าง · รับงานได้</em>') + (x.urg ? '<em class="u">' + STI.fire + 'ด่วน ' + x.urg + '</em>' : '') + (x.old >= 2 ? '<em>ค้าง ' + x.old + ' วัน</em>' : '') + '</span></button>').join('') + '</div></div>';
   const search = '<div class="filters"><label class="search">' + I.search + '<input id="pq" type="search" autocomplete="off" placeholder="ค้นหาเลข Job, ชื่องาน, sale…" value="' + esc(S.pq || '') + '" aria-label="ค้นหางานผลิต"></label></div>';
   const sub = !canProd() && canShip() ? 'ฝ่ายสต็อก: กด "ส่งแล้ว" ที่การ์ดในช่อง "พร้อมส่ง" เมื่อส่งของถึงลูกค้า · ขั้นอื่นดูได้อย่างเดียว' : canProd() ? 'เลือกเครื่องแล้วกด "เริ่มลงเครื่อง" · ติ๊กแต่ละเครื่องเมื่อเสร็จ ครบแล้วไปทำสี → ประกอบติดตั้ง → แพ็ค เอง' : 'ดูสถานะงานผลิตได้อย่างเดียว · อัปเดตได้เฉพาะฝ่ายผลิตและแอดมิน';
   return topbar('ฝ่ายผลิต', sub) + flow + search + chips + '<div class="board-scroll"><div class="board pboard">' + cols + '</div></div>';
