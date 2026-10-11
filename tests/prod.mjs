@@ -28,6 +28,7 @@ await pg.click('.cpx-step[data-cf="machine"]'); await pg.waitForTimeout(300);
 eq('filter by step', await pg.evaluate(() => [...document.querySelectorAll('.co-row .pill')].every(p => p.textContent === 'ลงเครื่อง')), true);
 await pg.click('#nav [data-view="prod"]'); await pg.waitForTimeout(700);
 eq('prod board 7 columns', await pg.locator('.pboard .col').count(), 7);
+eq('banner icons all animate (distinct)', await pg.evaluate(() => [...document.querySelectorAll('.pflow .flow-ic svg')].map(e => getComputedStyle(e).animationName)), ['icHome', 'icPress', 'icRoll', 'icTwist', 'icShield', 'icHop', 'icDrive']);
 await pg.screenshot({ path: out + 'prod-board.png', fullPage: true });
 eq('admin can act on prod board', (await pg.locator('.pboard [data-pstart],.pboard [data-padv]').count()) > 0, true);
 eq('admin has add-to-production button', await pg.evaluate(() => getComputedStyle(document.querySelector('.fab')).display) !== 'none', true);

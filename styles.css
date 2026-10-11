@@ -4703,3 +4703,28 @@ body{scrollbar-gutter:stable}
 .mq-tags:empty{display:none}
 .mq-tags em.free{background:color-mix(in oklab,#2B8A5A 12%,var(--surface));color:#2B8A5A}
 .mq-c.all{--mc:#3A4250}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mq-c.all{--mc:#8C96A8}}:root[data-theme="dark"] .mq-c.all{--mc:#8C96A8}
+
+/* v2.74.5 ไอคอนขั้นตอนผลิตขยับทุกตัว (แบนเนอร์บน + หัวคอลัมน์) · แต่ละตัวมีท่าของตัวเอง */
+.flow-ic.ic-wait svg,.col-ic.ic-wait svg{animation:icHome 2.8s ease-in-out infinite;transform-origin:50% 100%}
+.flow-ic.ic-machine svg,.col-ic.ic-machine svg{animation:icPress 1.4s cubic-bezier(.5,0,.3,1) infinite;transform-origin:50% 100%}
+.flow-ic.ic-paint svg,.col-ic.ic-paint svg{animation:icRoll 2.2s ease-in-out infinite;transform-origin:50% 90%}
+.flow-ic.ic-assemble svg,.col-ic.ic-assemble svg{animation:icTwist 2s ease-in-out infinite;transform-origin:30% 70%}
+.flow-ic.ic-qc svg,.col-ic.ic-qc svg{animation:icShield 2.4s ease-in-out infinite}
+.flow-ic.ic-pack svg,.col-ic.ic-pack svg{animation:icHop 2.2s cubic-bezier(.3,0,.3,1) infinite;transform-origin:50% 100%}
+.flow-ic.ic-ready svg,.col-ic.ic-ready svg{animation:icDrive 2.4s ease-in-out infinite}
+.flow-ic.ic-shipped svg,.col-ic.ic-shipped svg{animation:icShield 2.6s ease-in-out infinite}
+.pflow .flow-step:nth-child(3) .flow-ic svg{animation-delay:-.2s}
+.pflow .flow-step:nth-child(5) .flow-ic svg{animation-delay:-.4s}
+.pflow .flow-step:nth-child(7) .flow-ic svg{animation-delay:-.6s}
+.pflow .flow-step:nth-child(9) .flow-ic svg{animation-delay:-.8s}
+.pflow .flow-step:nth-child(11) .flow-ic svg{animation-delay:-1s}
+.pflow .flow-step:nth-child(13) .flow-ic svg{animation-delay:-1.2s}
+.pflow .flow-step:hover .flow-ic svg{animation-duration:.9s}
+@keyframes icHome{0%,60%,100%{transform:translateY(0) scale(1)}70%{transform:translateY(0) scale(1.08,.9)}80%{transform:translateY(-4px) scale(.96,1.06)}90%{transform:translateY(0) scale(1.04,.96)}}
+@keyframes icPress{0%,100%{transform:translateY(0) scaleY(1)}35%{transform:translateY(-2px) scaleY(1.04)}55%{transform:translateY(1.5px) scaleY(.9)}70%{transform:translateY(0) scaleY(1)}}
+@keyframes icRoll{0%,100%{transform:translate(0,0) rotate(0)}25%{transform:translate(-2px,-3px) rotate(-10deg)}50%{transform:translate(0,0) rotate(0)}75%{transform:translate(2px,-3px) rotate(10deg)}}
+@keyframes icTwist{0%,100%{transform:rotate(0)}20%{transform:rotate(-22deg)}40%{transform:rotate(8deg)}55%{transform:rotate(-14deg)}70%{transform:rotate(0)}}
+@keyframes icShield{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(255,255,255,0))}50%{transform:scale(1.14);filter:drop-shadow(0 0 4px rgba(255,255,255,.75))}}
+@keyframes icHop{0%,55%,100%{transform:translateY(0) rotate(0) scale(1)}65%{transform:translateY(0) scale(1.1,.88)}78%{transform:translateY(-5px) rotate(-8deg) scale(.95,1.05)}90%{transform:translateY(0) rotate(3deg) scale(1.05,.95)}}
+@keyframes icDrive{0%{transform:translateX(-3px) translateY(0)}20%{transform:translateX(-1px) translateY(-1px)}40%{transform:translateX(1px) translateY(0)}60%{transform:translateX(3px) translateY(-1px)}80%{transform:translateX(1px) translateY(0)}100%{transform:translateX(-3px) translateY(0)}}
+@media (prefers-reduced-motion:reduce){.flow-ic svg,.col-ic svg{animation:none!important}}
