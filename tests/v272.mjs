@@ -47,7 +47,9 @@ await pg.mouse.click(30, 450); await pg.waitForTimeout(200);
 eq('outside click keeps the reader open too', await pg.locator('#kbModal').count(), 1);
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
 // add as admin into general dept
-await pg.click('[data-kbadd]'); await pg.waitForTimeout(300);
+eq('no add button beside search', await pg.locator('.kb-tools [data-kbadd]').count(), 0);
+eq('fab says เพิ่มความรู้', await pg.locator('.fab').getAttribute('aria-label'), 'เพิ่มความรู้');
+await pg.click('.fab'); await pg.waitForTimeout(300);
 eq('admin picks among 4 depts', await pg.locator('[data-kfdept]').count(), 4);
 await pg.click('[data-kfdept="g"]'); await pg.click('[data-kfcat="warn"]');
 await pg.fill('#kfTitle', 'ใส่แว่นตานิรภัยทุกครั้ง'); await pg.fill('#kfBody', '- เครื่อง Laser\n- เครื่อง Router');
@@ -83,7 +85,7 @@ eq('prod saved own edit', await pg.evaluate(() => S.kb.find(x => x.id === 'k_dem
 await pg.keyboard.press('Escape');
 const r1 = await pg.evaluate(async () => { try { await T.api().kbSave({ item: { id: 'k_demo3', dept: 's', title: 'แอบแก้' } }); return 'saved'; } catch (e) { return e.message; } });
 eq('api blocks editing other dept', r1, 'แก้ได้เฉพาะความรู้ของฝ่ายตัวเอง');
-await pg.click('[data-kbadd]'); await pg.waitForTimeout(200);
+await pg.click('.fab'); await pg.waitForTimeout(200);
 await pg.fill('#kfTitle', 'เปลี่ยนดอกทุก 40 ชม.'); await pg.click('[data-kbsave]'); await pg.waitForTimeout(800);
 eq('prod adds to prod dept automatically', await pg.evaluate(() => (S.kb.find(x => x.title === 'เปลี่ยนดอกทุก 40 ชม.') || {}).dept), 'p');
 await pg.click('#kbModal [data-kbdel="ask"]'); await pg.click('#kbModal [data-kbdel="yes"]'); await pg.waitForTimeout(800);

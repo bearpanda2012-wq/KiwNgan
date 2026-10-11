@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.72.1';
+const APP_VERSION = '2.72.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3613,7 +3613,7 @@ function renderShell() {
   const s = S.settings || defaultSettings();
   $('#brand').innerHTML = brandMark(s) + '<div><b>' + esc(s.appName) + '</b><small>' + esc(s.company) + '</small></div>';
   $('#nav').innerHTML = navHtml(true);
-  { const fab = $('.fab'), pv = S.view === 'prod', sv = S.view === 'stock', lbl = pv ? 'เพิ่มงานเข้าผลิต' : sv ? 'เพิ่มวัสดุ' : 'เพิ่มงาน'; if (fab) { fab.style.display = (pv ? !canProd() : sv ? !canStock() : !canAddDesign()) ? 'none' : ''; fab.dataset.tip = lbl; fab.setAttribute('aria-label', lbl); } }   // ปุ่ม + ลอย: ทุกแผนกมีเหมือนกัน (คลังวัสดุ = เพิ่มวัสดุ)
+  { const fab = $('.fab'), pv = S.view === 'prod', sv = S.view === 'stock', kv = S.view === 'kb', lbl = pv ? 'เพิ่มงานเข้าผลิต' : sv ? 'เพิ่มวัสดุ' : kv ? 'เพิ่มความรู้' : 'เพิ่มงาน'; if (fab) { fab.style.display = (kv ? !kbMyDepts().length : pv ? !canProd() : sv ? !canStock() : !canAddDesign()) ? 'none' : ''; fab.dataset.tip = lbl; fab.setAttribute('aria-label', lbl); } }   // ปุ่ม + ลอย: ทุกแผนกมีเหมือนกัน (คลังวัสดุ = เพิ่มวัสดุ)
   { const T = tabSplit(); $('#tabbar').innerHTML = tabsHtml(); $('#tabbar').style.setProperty('--tabs', T.main.length + (T.more.length ? 1 : 0)); $('#tabbar').classList.toggle('has-more', !!T.more.length); }
   const connCls = mode() === 'demo' ? '' : (S.sync === 'err' ? 'err' : 'ok');
   const connTxt = mode() === 'demo' ? 'โหมดทดลอง (เก็บในเครื่องนี้)' : (S.sync === 'err' ? 'เชื่อมต่อไม่ได้' : S.sync === 'busy' ? 'กำลังซิงก์…' : (isAdmin() ? 'เชื่อมต่อ Google Sheet' : 'ซิงก์ข้อมูลแล้ว'));
@@ -3669,7 +3669,7 @@ function banner() {
 
 function newBtn() {
   if (S.view === 'prod') return canProd() ? '<button class="btn primary new" data-act="new">' + I.plus + 'เพิ่มงานเข้าผลิต</button>' : '';
-  if (!canAddDesign() || S.view === 'stock') return '';   // ไม่มีสิทธิ์ลงงาน (เช่นฝ่ายผลิต) ดูงานฝ่ายแบบได้อย่างเดียว
+  if (!canAddDesign() || S.view === 'stock' || S.view === 'kb') return '';   // ไม่มีสิทธิ์ลงงาน (เช่นฝ่ายผลิต) ดูงานฝ่ายแบบได้อย่างเดียว
   return '<button class="btn primary new" data-act="new">' + I.plus + 'เพิ่มงาน</button>';
 }
 function topbar(title, sub, extra) {
@@ -5116,7 +5116,7 @@ function kbListHtml(an) {
   const cats = '<div class="qchips kb-cats">' + [['all', 'ทุกประเภท']].concat(Object.keys(KB_CAT).map(k => [k, KB_CAT[k].label])).map(x => '<button type="button" class="qchip" data-kbcat="' + x[0] + '" aria-pressed="' + (KV.cat === x[0]) + '"' + (x[0] !== 'all' ? ' style="--ch:' + KB_CAT[x[0]].col + '"' : '') + '>' + (x[0] !== 'all' ? KB_IC[x[0]] : '') + x[1] + '<b>' + all.filter(a => (x[0] === 'all' || a.cat === x[0]) && (KV.dept === 'all' || a.dept === KV.dept)).length + '</b></button>').join('') +
     '<button type="button" class="qchip kb-vf" data-kbvid="1" aria-pressed="' + KV.vid + '">' + KB_IC.video + 'มีวิดีโอ</button></div>';
   const tools = '<div class="kb-tools"><label class="search">' + I.search + '<input id="kbQ" type="search" autocomplete="off" placeholder="ค้นหาความรู้ เทคนิค ข้อจำกัด…" value="' + esc(KV.q) + '" aria-label="ค้นหาความรู้"></label>' +
-    (mine.length && KM.ctx === 'app' ? '<button type="button" class="btn primary kb-add" data-kbadd="1">' + I.plus + 'เพิ่มความรู้</button>' : '') + '</div>';
+'</div>';   // ปุ่มเพิ่ม: ใช้ปุ่ม + มุมขวาล่าง (และปุ่มในหน้าว่าง)
   const grid = list.length ? '<div class="kb-grid' + (an ? ' in' : '') + '">' + list.map(kbCard).join('') + '</div>'
     : '<div class="kb-empty"><span>' + KB_IC.book + '</span><b>' + (all.length ? 'ไม่พบเรื่องที่ค้นหา' : 'ยังไม่มีความรู้ในคลัง') + '</b><small>' + (all.length ? 'ลองเปลี่ยนคำค้นหรือตัวกรอง' : mine.length && KM.ctx === 'app' ? 'เริ่มแชร์เทคนิคหรือข้อจำกัดของฝ่ายคุณเป็นเรื่องแรก' : 'แต่ละฝ่ายจะมาแชร์เทคนิคและข้อจำกัดของงานที่นี่') + '</small>' +
       (!all.length && mine.length && KM.ctx === 'app' ? '<button class="btn primary" data-kbadd="1">' + I.plus + 'เพิ่มความรู้เรื่องแรก</button>' : '') + '</div>';
@@ -6369,7 +6369,7 @@ document.addEventListener('click', async e => {
   if (d.open && !e.target.closest('.adv')) return openEditor(d.open);
 
   switch (d.act) {
-    case 'new': if (S.view === 'prod') return canProd() ? pAddOpen() : undefined; if (S.view === 'stock') return canStock() ? stockAddOpen() : undefined; if (!canAddDesign()) return; return openEditor(null);
+    case 'new': if (S.view === 'kb') return kbMyDepts().length ? kbAddOpen() : undefined; if (S.view === 'prod') return canProd() ? pAddOpen() : undefined; if (S.view === 'stock') return canStock() ? stockAddOpen() : undefined; if (!canAddDesign()) return; return openEditor(null);
     case 'saleon': { const k = LS.get('saleKey', ''); if (k && mode() === 'sheet') { location.href = saleLinkUrl(k, ''); return; } S.login.sale = true; S.login.saleErr = ''; S.login.salePinV = ''; renderLogin(); setTimeout(() => { const x = $('#salePin'); if (x) x.focus(); }, 30); return; }
     case 'saleoff': S.login.sale = false; S.login.saleErr = ''; S.login.salePinV = ''; return renderLogin();
     case 'salepin': { const v = d.clear ? '' : String(($('#' + (d.pinin || 'salePinSet')) || {}).value || '').trim(); if (!d.clear && !/^\d{4}$/.test(v)) { toast('PIN ต้องเป็นตัวเลข 4 หลัก', true); return; }
