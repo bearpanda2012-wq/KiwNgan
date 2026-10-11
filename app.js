@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.72.4';
+const APP_VERSION = '2.72.5';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5488,7 +5488,7 @@ function stViewHtml(it, ed, x) {
     move + '<div class="f"><span class="lbl">ประวัติของวัสดุนี้</span>' + hist + '</div></div>' +
     '<div class="pm-f">' + (ed ? '<button type="button" class="btn ghost sm" data-sedit="' + esc(it.id) + '">' + STI.pen + 'แก้ไขข้อมูล</button>' : '') + '<span style="flex:1"></span><button type="button" class="btn" data-sclose="1">ปิด</button></div>';
 }
-const SF_SEC_IC = { info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 8L12 4l8.5 4v8.5L12 20.5l-8.5-4z"/><path d="M3.5 8L12 12l8.5-4M12 12v8.5" stroke-linecap="round"/></svg>', qty: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>', more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="8" cy="8" r="1.6"/></svg>' };
+const SF_SEC_IC = { info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 8.5h8M8 12h8M8 15.5h5"/></svg>', qty: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>', more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="8" cy="8" r="1.6"/></svg>' };
 const sfSec = (k, t, sub) => '<div class="f full sf-sec s-' + k + '"><i>' + SF_SEC_IC[k] + '</i><b>' + t + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>';
 function stFormHtml(it, x) {
   const f = SM.f || {}, isNew = !it, cats = Array.from(new Set(stockItems().map(i => i.cat).filter(Boolean)));
