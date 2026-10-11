@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.38.0';
+const VERSION = '1.39.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -139,6 +139,9 @@ const ACTIONS = {
   deleteMessages: (p, u) => withLock_(() => { admin_(u); return deleteMessages_(p.ids, u); }),
   rtcSend: (p, u) => { const c = CacheService.getScriptCache(), k = 'sigp:' + String(p.id || ''); if (p.id && !c.get(k)) { c.put(k, '1', 300); pushForSignal_(p, u); } const r = withLock_(() => rtcSend_(p, u)); if (!p.id && !r.dup) pushForSignal_(p, u); return r; },   // โทร/ขอดูจอ: ส่ง push ก่อนเขียนลงชีต (เด้งเร็วขึ้น) · รหัสซ้ำไม่ส่งซ้ำ
   pushKey: () => ({ key: vapid_().pub }),
+  // ธีมผูกกับบัญชี: ทุกเครื่องที่เข้าบัญชีเดียวกันได้หน้าตาเดียวกัน (เก็บใน Settings key "theme:<id>")
+  themeGet: (p, u) => ({ data: themeGet_(u) }),
+  themeSave: (p, u) => withLock_(() => themeSave_(p.data, u)),
   pushSub: (p, u) => withLock_(() => pushSub_(p.sub, u, p.urgent)),
   digestTest: (p, u) => { admin_(u); const r = digestNow_(Array.isArray(p.topics) && p.topics.length ? p.topics : digestCfg_().topics); const sent = p.send ? pushTo_([u.name].concat(Array.isArray(p.to) ? p.to.map(String).slice(0, 50) : []), digestInfo_(r)) : null; return Object.assign(r, { sent: sent, devices: pushList_(u).length, trigger: digestTriggerOn_(), last: PropertiesService.getScriptProperties().getProperty('DIGEST_SENT') || '' }); },   // ดูตัวอย่าง/ส่งสรุปเช้าให้ตัวเองทันที
   pushTest: (p, u) => { Utilities.sleep(Math.max(0, Math.min(8000, +p.delay || 0))); pushTo_([u.name], { kind: 'call', from: 'ทดสอบระบบ', sid: '' }); return { ok: true, devices: pushList_(u).length }; },   // ทดสอบเสียงเรียกเข้า: รอสักครู่ให้ปิดแอป/ล็อกจอก่อน
@@ -410,6 +413,17 @@ function log_(jobId, who, action, detail) {
 
 /* ======================= Settings ======================= */
 
+function themeGet_(u) { try { return JSON.parse(getSetting_('theme:' + u.id) || 'null'); } catch (e) { return null; } }
+function themeSave_(data, u) {
+  if (!data || typeof data !== 'object' || typeof data.theme !== 'object' || Array.isArray(data.theme)) throw new Error('ข้อมูลธีมไม่ถูกต้อง');
+  const out = { ts: Math.min(Number(data.ts) || Date.now(), Date.now() + 60000), theme: data.theme, saves: Array.isArray(data.saves) ? data.saves.slice(0, 24) : [] };
+  let txt = JSON.stringify(out);
+  while (txt.length > 45000 && out.saves.length) { out.saves.pop(); txt = JSON.stringify(out); }   // เซลล์ชีตเก็บได้ ~50,000 ตัวอักษร
+  if (txt.length > 45000) throw new Error('ธีมใหญ่เกินไป');
+  const cur = themeGet_(u); if (cur && Number(cur.ts) > out.ts) return { ts: cur.ts, stale: true, data: cur };   // เครื่องอื่นบันทึกใหม่กว่า → ส่งของใหม่กลับไปแทน
+  setSetting_('theme:' + u.id, txt);
+  return { ts: out.ts, saves: out.saves.length };
+}
 function getSetting_(key) {
   const sh = sheet_('Settings');
   const last = sh.getLastRow();
