@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.74.5';
+const APP_VERSION = '2.75.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -723,6 +723,7 @@ const Demo = {
     if (!P.admin(u) && l.member !== u.name) throw new Error('ลบได้เฉพาะเวลาของตัวเอง');
     d.logs = d.logs.filter(x => x.id !== p.logId); const m = this.recalc(d, l.jobId); this.save(d); return { logId: p.logId, jobId: l.jobId, minutes: m };
   },
+  async digestTest(p) { const d = this.db(); this.admin(this.me(d)); return Object.assign(digestCalc(p && p.topics), { devices: 0, demo: true }); },
   async saveSettings(p) { const d = this.db(); this.admin(this.me(d)); delete p.settings.members; d.settings = p.settings; this.save(d); return { settings: p.settings }; },
   async activity(p) { const d = this.db(), u = this.me(d); return d.activity.filter(a => a.jobId === p.jobId).slice(-50).reverse().map(a => this.mask(d, u, a, ['who'])); },
   async changePin(p) {
@@ -808,7 +809,7 @@ const Remote = {
     return data.data;
   }
 };
-['kbSave', 'kbDelete', 'kbAck', 'stockCount', 'pushTest', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
+['digestTest', 'kbSave', 'kbDelete', 'kbAck', 'stockCount', 'pushTest', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -4354,7 +4355,7 @@ function viewSettings() {
   const admin = isAdmin();
   if (admin && !S.draft) { S.draft = clone(S.settings); S.draftDirty = false; }
   const d = S.draft || S.settings, c = S.conn || { url: '' };
-  const nav = [['me', 'บัญชีของฉัน'], ['theme', 'ธีมและสี']].concat(admin ? [['conn', 'ฐานข้อมูล'], ['users', 'ผู้ใช้งานและสิทธิ์'], ['brand', 'แบรนด์'], ['lists', 'รายการตัวเลือก'], ['sla', 'ระยะเวลามาตรฐาน'], ['salelink', 'Sale']] : []).concat([['about', 'เกี่ยวกับ']]);
+  const nav = [['me', 'บัญชีของฉัน'], ['theme', 'ธีมและสี']].concat(admin ? [['conn', 'ฐานข้อมูล'], ['users', 'ผู้ใช้งานและสิทธิ์'], ['brand', 'แบรนด์'], ['lists', 'รายการตัวเลือก'], ['sla', 'ระยะเวลามาตรฐาน'], ['salelink', 'Sale'], ['digest', 'สรุปประจำเช้า']] : []).concat([['about', 'เกี่ยวกับ']]);
   let h = topbar('ตั้งค่า', admin ? 'คุณเป็นแอดมิน จัดการผู้ใช้ การตั้งค่า และแบรนด์ได้' : 'บัญชีของคุณและการเชื่อมต่อ') +
     '<div class="settings"><nav class="snav">' + nav.map(n => '<a href="#s-' + n[0] + '">' + n[1] + '</a>').join('') + '</nav><div class="sbody">';
 
@@ -4448,10 +4449,131 @@ function viewSettings() {
       : '<div class="top-actions"><button class="btn primary sm" data-act="salelink">แสดงลิงก์</button></div>') + '</section>';
   }
 
+  if (admin) h += digestSection(d);
   h += '<section class="panel sec" id="s-about"><div class="panel-h"><h2>เกี่ยวกับ</h2></div><p class="help">KiwNgan คิวงาน เวอร์ชัน ' + APP_VERSION + (admin ? ' · ข้อมูลทั้งหมดอยู่ใน Google Sheet ของทีมเอง' : '') + (S.lastSync ? ' · ซิงก์ล่าสุด ' + new Date(S.lastSync).toLocaleTimeString('th-TH') : '') + '</p></section>';
   if (admin) h += '<div class="savebar"' + (S.draftDirty ? '' : ' hidden') + ' id="savebar"><span>มีการแก้ไขที่ยังไม่บันทึก</span><button class="btn" data-act="discard">ยกเลิก</button><button class="btn primary" data-act="savesettings">บันทึกการตั้งค่า</button></div>';
   return h + '</div></div>';
 }
+/* ============ สรุปงานประจำเช้า (แอดมินตั้งเวลา วัน และผู้รับ) — ส่งเป็นแจ้งเตือนเข้ามือถือ/คอม ============ */
+const DG_IC = {
+  sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  ppl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.3-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/></svg>',
+  send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></svg>',
+  list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>'
+};
+const DG_DAYS = [['wd', 'จันทร์–ศุกร์', [1, 2, 3, 4, 5]], ['sat', 'จันทร์–เสาร์', [1, 2, 3, 4, 5, 6]], ['all', 'ทุกวัน', [0, 1, 2, 3, 4, 5, 6]]];
+const DG_WEEK = [1, 2, 3, 4, 5, 6, 0], DG_DOWL = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+const DG_TOPICS = [['design', '🎨', 'ฝ่ายแบบ', 'งานค้าง · เลยกำหนด · ครบกำหนดวันนี้'], ['prod', '🏭', 'ฝ่ายผลิต', 'งานในไลน์ · ลงเครื่อง · พร้อมส่ง · ด่วน'],
+  ['due', '📅', 'งานครบกำหนดวันนี้', 'บอกรหัสงานที่ต้องเสร็จ/ส่งวันนี้'], ['late', '⚠️', 'งานเลยกำหนด', 'บอกรหัสงานที่เลยกำหนดแล้ว'],
+  ['shipped', '🚚', 'ส่งมอบเมื่อวาน', 'จำนวนงานที่ส่งลูกค้าไปเมื่อวาน'], ['stock', '📦', 'วัสดุใกล้หมด', 'รายการที่ถึงจุดสั่งซื้อ']];
+const DG_TK = DG_TOPICS.map(t => t[0]);
+function dgDays(v) {
+  if (Array.isArray(v)) return v.map(Number).filter((n, i, a) => n >= 0 && n <= 6 && n === Math.floor(n) && a.indexOf(n) === i).sort();
+  return (DG_DAYS.find(x => x[0] === v) || DG_DAYS[0])[2].slice();
+}
+function dgDayTxt(days) {
+  const pre = DG_DAYS.find(x => x[2].join() === days.join()); if (pre) return pre[1];
+  return days.length ? DG_WEEK.filter(n => days.indexOf(n) >= 0).map(n => DG_DOW[n]).join(' ') : 'ยังไม่ได้เลือกวัน';
+}
+const DG_DOW = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'], DG_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const DG = { prev: null, busy: false };
+function digestCfgC(d) {
+  const g = (d || S.settings || {}).digest || {}, h = Math.round(+g.hour), tp = Array.isArray(g.topics) ? DG_TK.filter(k => g.topics.indexOf(k) >= 0) : [];
+  return { on: g.on === true || g.on === 'true', hour: h >= 0 && h <= 23 && g.hour !== '' && g.hour != null ? h : 8, days: dgDays(g.days), to: Array.isArray(g.to) ? g.to.map(String).filter(Boolean) : [], topics: tp.length ? tp : DG_TK.slice() };
+}
+/* ฟังก์ชันเดียวกับ digestBuild_ หลังบ้าน (ดูตัวอย่างได้ทันทีจากข้อมูลในเครื่อง) */
+function digestBuild(jobs, prods, items, td, yd, dow, topics) {
+  const on = k => !topics || topics.indexOf(k) >= 0;
+  const num = v => { const n = Number(v); return isFinite(n) ? n : 0; }, d10 = v => String(v || '').slice(0, 10);
+  const late = x => x.due && d10(x.due) < td, due = x => d10(x.due) === td;
+  const codes = a => a.slice(0, 4).map(x => x.code || x.title || '-').join(', ') + (a.length > 4 ? ' +' + (a.length - 4) : '');
+  const jo = jobs.filter(j => j.status !== 'done'), jl = jo.filter(late).length, jt = jo.filter(due).length;
+  const po = prods.filter(p => p.stage !== 'shipped'), pr = po.filter(p => p.stage === 'ready').length, pl = po.filter(late).length;
+  const pt = po.filter(due).length, pu = po.filter(p => p.priority === 'urgent').length, mc = po.filter(p => p.stage === 'machine').length;
+  const sh = prods.filter(p => p.stage === 'shipped' && d10(p.shippedAt) === yd).length;
+  const low = items.filter(x => x.own !== 'cust' && !x.grade && num(x.min) > 0 && num(x.qty) <= num(x.min));
+  const dueA = po.filter(due).concat(jo.filter(due)), lateA = po.filter(late).concat(jo.filter(late));
+  const m = +td.slice(5, 7), lines = [];
+  if (on('design')) lines.push('🎨 ฝ่ายแบบ ค้าง ' + jo.length + ' งาน' + (jl ? ' · เลยกำหนด ' + jl : '') + (jt ? ' · ครบกำหนดวันนี้ ' + jt : ''));
+  if (on('prod')) lines.push('🏭 ฝ่ายผลิต ' + po.length + ' งาน · ลงเครื่อง ' + mc + ' · พร้อมส่ง ' + pr + (pl ? ' · เลยกำหนด ' + pl : '') + (pt ? ' · ส่งวันนี้ ' + pt : '') + (pu ? ' · ด่วน ' + pu : ''));
+  if (on('due')) lines.push(dueA.length ? '📅 ครบกำหนดวันนี้ ' + dueA.length + ' งาน: ' + codes(dueA) : '📅 วันนี้ไม่มีงานครบกำหนด');
+  if (on('late')) lines.push(lateA.length ? '⚠️ เลยกำหนด ' + lateA.length + ' งาน: ' + codes(lateA) : '✅ ไม่มีงานเลยกำหนด');
+  if (on('shipped')) lines.push(sh ? '🚚 เมื่อวานส่งมอบแล้ว ' + sh + ' งาน' : '🚚 เมื่อวานไม่มีงานส่งมอบ');
+  if (on('stock')) lines.push(low.length ? '📦 ใกล้หมด ' + low.length + ' รายการ: ' + low.slice(0, 3).map(x => x.name).join(', ') + (low.length > 3 ? ' …' : '') : '📦 วัสดุพอทุกรายการ');
+  const alert = (on('design') || on('late') ? jl : 0) + (on('prod') || on('late') ? pl : 0) + (on('stock') ? low.length : 0);
+  return { title: '☀️ สรุปงานเช้านี้ · ' + DG_DOW[dow] + ' ' + (+td.slice(8, 10)) + ' ' + DG_MON[m - 1], body: lines.join('\n'), alert: alert };
+}
+function digestCalc(topics) { const td = today(); return digestBuild(S.jobs || [], prodsAll(), stockItems(), td, addDays(td, -1), new Date(td + 'T12:00:00').getDay(), topics || digestCfgC(S.draft || S.settings).topics); }
+function digestSet(k, v) { if (!S.draft) return; S.draft.digest = Object.assign(digestCfgC(S.draft), { [k]: v }); markDirty(); }
+function digestDraw() { const el = $('#s-digest'); if (el && S.draft) el.outerHTML = digestSection(S.draft); }
+function digestSection(d) {
+  const g = digestCfgC(d), users = (S.users || []).filter(u => u.active), admins = users.filter(u => u.role === 'admin').map(u => u.name);
+  const sel = g.to.length ? g.to : admins, hh = h => (h < 10 ? '0' : '') + h + ':00';
+  const pv = DG.prev || digestCalc(g.topics), old = mode() === 'sheet' && !apiAtLeast('1.37.0');
+  const lines = pv.body.split('\n').map(l => '<li>' + esc(l) + '</li>').join('');
+  const dayTxt = dgDayTxt(g.days), pre = (DG_DAYS.find(x => x[2].join() === g.days.join()) || [''])[0];
+  return '<section class="panel sec dg' + (g.on ? ' on' : '') + '" id="s-digest"><div class="panel-h"><h2>สรุปงานประจำเช้า</h2><span class="pill ' + (g.on ? 's-done">เปิดอยู่' : 's-hold">ปิดอยู่') + '</span></div>' +
+    '<p class="help">ส่งแจ้งเตือนสรุปภาพรวมเข้ามือถือ/คอมทุกเช้า ไม่ต้องเปิดแอปก็รู้ว่างานค้างกี่งาน วันนี้ต้องส่งอะไร และวัสดุอะไรใกล้หมด</p>' +
+    (old ? '<p class="dg-warn">ต้องอัปเดตหลังบ้าน (Apps Script) เป็นเวอร์ชัน 1.37.0 ก่อน ระบบจึงจะส่งสรุปได้</p>' : '') +
+    '<div class="dg-wrap"><div class="dg-set">' +
+      '<label class="dg-main"><span class="dg-sun">' + DG_IC.sun + '</span><span class="dg-mt"><b>ส่งสรุปอัตโนมัติ</b><small>' + (g.on ? (g.days.length ? 'ส่ง' + (pre ? 'ทุก' + dayTxt : 'ทุกวัน ' + dayTxt) + ' เวลา ' + hh(g.hour) + ' น.' : 'ยังไม่ได้เลือกวันส่ง') : 'ปิดอยู่ ไม่ส่งให้ใคร') + '</small></span><span class="dg-sw"><input type="checkbox" data-dg="on"' + (g.on ? ' checked' : '') + ' aria-label="เปิดส่งสรุปอัตโนมัติ"><i></i></span></label>' +
+      '<div class="dg-rows' + (g.on ? '' : ' dim') + '">' +
+        '<div class="dg-row"><span class="dg-ic c1">' + DG_IC.clock + '</span><div class="dg-rb"><b>เวลาส่ง</b><div class="dg-hours">' + [6, 7, 8, 9, 10].map(h => '<button type="button" class="dg-chip' + (g.hour === h ? ' on' : '') + '" data-dghour="' + h + '">' + hh(h) + '</button>').join('') +
+          '<select data-dg="hour" aria-label="เลือกเวลาอื่น" class="dg-sel' + ([6, 7, 8, 9, 10].indexOf(g.hour) < 0 ? ' on' : '') + '">' + Array.from({ length: 19 }, (x, i) => i + 4).map(h => '<option value="' + h + '"' + (g.hour === h ? ' selected' : '') + '>' + ([6, 7, 8, 9, 10].indexOf(h) >= 0 ? 'เวลาอื่น…' : hh(h)) + '</option>').join('') + '</select></div><small>ระบบส่งภายในชั่วโมงที่เลือก (' + hh(g.hour) + '–' + hh(g.hour).slice(0, 3) + '59 น.)</small></div></div>' +
+        '<div class="dg-row"><span class="dg-ic c2">' + DG_IC.cal + '</span><div class="dg-rb"><b>วันที่ส่ง <span class="sub">' + g.days.length + ' วัน/สัปดาห์</span></b>' +
+          '<div class="dg-week">' + DG_WEEK.map(n => '<label class="dg-day' + (g.days.indexOf(n) >= 0 ? ' on' : '') + (n === 0 || n === 6 ? ' we' : '') + '" title="' + DG_DOWL[n] + '"><input type="checkbox" data-dgday="' + n + '"' + (g.days.indexOf(n) >= 0 ? ' checked' : '') + ' aria-label="' + DG_DOWL[n] + '"><span>' + DG_DOW[n].replace('.', '') + '</span><i>' + PIC.check + '</i></label>').join('') + '</div>' +
+          '<div class="dg-seg">' + DG_DAYS.map(x => '<button type="button" class="' + (pre === x[0] ? 'on' : '') + '" data-dgdays="' + x[0] + '">' + x[1] + '</button>').join('') + '</div><small>ติ๊กเลือกวันเองได้ หรือกดชุดลัดด้านล่าง</small></div></div>' +
+        '<div class="dg-row"><span class="dg-ic c4">' + DG_IC.list + '</span><div class="dg-rb"><b>เรื่องที่จะส่ง <span class="sub">' + g.topics.length + '/' + DG_TOPICS.length + ' เรื่อง</span></b><div class="dg-tp">' +
+          DG_TOPICS.map(t => '<label class="dg-t' + (g.topics.indexOf(t[0]) >= 0 ? ' on' : '') + '"><input type="checkbox" data-dgtopic="' + t[0] + '"' + (g.topics.indexOf(t[0]) >= 0 ? ' checked' : '') + '><span class="dg-te">' + t[1] + '</span><span class="dg-tt"><b>' + t[2] + '</b><small>' + t[3] + '</small></span><i>' + PIC.check + '</i></label>').join('') + '</div></div></div>' +
+        '<div class="dg-row"><span class="dg-ic c3">' + DG_IC.ppl + '</span><div class="dg-rb"><b>ส่งให้ใคร <span class="sub">' + sel.length + ' คน</span></b><div class="dg-ppl">' + users.map(u => '<button type="button" class="dg-p' + (sel.indexOf(u.name) >= 0 ? ' on' : '') + '" data-dgto="' + esc(u.name) + '" aria-pressed="' + (sel.indexOf(u.name) >= 0) + '">' + avUser(u, 'sm') + '<span class="dg-n">' + esc(u.name) + '</span><i>' + PIC.check + '</i></button>').join('') + '</div>' +
+          '<small>' + (g.to.length ? 'แตะชื่อเพื่อเลือก/เอาออก' : 'ยังไม่ได้เลือก จึงส่งให้แอดมินทุกคน · แตะชื่อเพื่อเลือกเอง') + ' · ผู้รับต้องเปิดแจ้งเตือนในเครื่องตัวเองก่อน (ตั้งค่า › แจ้งเตือน)</small></div></div>' +
+      '</div></div>' +
+      '<div class="dg-pv"><span class="dg-pvh">ตัวอย่างที่จะได้รับ</span><div class="dg-ntf"><div class="dg-nh"><span class="dg-app">' + brandMark(S.settings) + '</span><span>KiwNgan · ' + (g.on ? hh(g.hour) : 'ตัวอย่าง') + '</span></div><b>' + esc(pv.title) + '</b><ul>' + lines + '</ul></div>' +
+        '<div class="dg-act"><button type="button" class="btn sm" data-act="dgprev">' + DG_IC.eye + 'อัปเดตตัวอย่าง</button><button type="button" class="btn sm primary" data-act="dgsend"' + (DG.busy ? ' disabled' : '') + '>' + DG_IC.send + 'ส่งให้ฉันตอนนี้</button></div>' +
+        '<small class="dg-note">ตั้งค่าแล้วกด <b>บันทึก</b> ที่แถบด้านล่าง</small></div>' +
+    '</div></section>';
+}
+async function digestSend(send) {
+  if (mode() === 'sheet' && !apiAtLeast('1.37.0')) return toast('ต้องอัปเดตหลังบ้าน (Apps Script) เป็นเวอร์ชันล่าสุดก่อน', true);
+  DG.busy = true; digestDraw();
+  try {
+    const r = await api().digestTest({ send: !!send, topics: digestCfgC(S.draft || S.settings).topics });
+    DG.prev = { title: r.title, body: r.body, alert: r.alert };
+    if (send) toast(r.demo ? 'โหมดทดลอง: ไม่ได้ส่งจริง ดูตัวอย่างด้านขวา' : r.devices ? 'ส่งสรุปเข้าเครื่องของคุณแล้ว (' + r.devices + ' เครื่อง)' : 'ส่งแล้ว แต่เครื่องของคุณยังไม่ได้เปิดแจ้งเตือน', !r.demo && !r.devices);
+  } catch (e) { toast(e.message, true); }
+  DG.busy = false; digestDraw();
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-dghour],[data-dgdays],[data-dgto]'); if (!t || !S.draft) return;
+  if (t.dataset.dghour) digestSet('hour', +t.dataset.dghour);
+  else if (t.dataset.dgdays) digestSet('days', dgDays(t.dataset.dgdays));
+  else {
+    const g = digestCfgC(S.draft), n = t.dataset.dgto, admins = (S.users || []).filter(u => u.active && u.role === 'admin').map(u => u.name);
+    let to = g.to.length ? g.to.slice() : admins.slice(); to = to.indexOf(n) >= 0 ? to.filter(x => x !== n) : to.concat(n);
+    if (!to.length) return toast('ต้องมีผู้รับอย่างน้อย 1 คน (หรือปิดการส่งด้านบน)', true);
+    digestSet('to', to);
+  }
+  digestDraw();
+});
+document.addEventListener('change', e => {
+  const t = e.target; if (!t.dataset || !S.draft) return;
+  if (t.dataset.dgday != null) {
+    const g = digestCfgC(S.draft), n = +t.dataset.dgday, days = t.checked ? g.days.concat(n) : g.days.filter(x => x !== n);
+    if (!days.length) { t.checked = true; return toast('ต้องเลือกอย่างน้อย 1 วัน (ถ้าไม่อยากส่ง ปิดสวิตช์ด้านบน)', true); }
+    digestSet('days', dgDays(days)); return digestDraw();
+  }
+  if (t.dataset.dgtopic) {
+    const g = digestCfgC(S.draft), k = t.dataset.dgtopic, tp = t.checked ? g.topics.concat(k) : g.topics.filter(x => x !== k);
+    if (!tp.length) { t.checked = true; return toast('ต้องเลือกอย่างน้อย 1 เรื่อง', true); }
+    DG.prev = null; digestSet('topics', DG_TK.filter(x => tp.indexOf(x) >= 0)); return digestDraw();
+  }
+  if (!t.dataset.dg) return;
+  digestSet(t.dataset.dg, t.dataset.dg === 'on' ? t.checked : +t.value); digestDraw();
+});
+
 function setPath(obj, path, val) {
   const p = path.split('.'); let o = obj;
   for (let i = 0; i < p.length - 1; i++) o = o[p[i]];
@@ -6670,6 +6792,8 @@ document.addEventListener('click', async e => {
     case 'adduser': return addUser();
     case 'copylink': return copyLink();
     case 'savesettings': return saveSettings();
+    case 'dgprev': DG.prev = null; if (mode() === 'sheet' && apiAtLeast('1.37.0')) return digestSend(false); digestDraw(); return;
+    case 'dgsend': return digestSend(true);
     case 'discard': S.draft = null; S.draftDirty = false; applyBrand(); return render();
     case 'nologo': S.draft.logo = ''; markDirty(); return render();
   }
@@ -6903,6 +7027,7 @@ async function saveSettings() {
   try {
     const r = await mutate(() => api().saveSettings({ settings: d }), 'บันทึกการตั้งค่าแล้ว');
     S.settings = normalizeSettings(r.settings); S.draft = null; S.draftDirty = false; applyBrand(); render();
+    if (r.digestTrigger === false) toast('บันทึกแล้ว แต่ระบบตั้งเวลาส่งสรุปอัตโนมัติไม่สำเร็จ — เปิด Apps Script แล้วรัน installTriggers 1 ครั้ง', true);
   } catch (e) {}
 }
 /* square-crop and shrink an image file to a small data URL */
@@ -7024,7 +7149,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|u
     if (api) { u.searchParams.delete('api'); history.replaceState(null, '', u.pathname + u.search + u.hash); }
     const job = u.searchParams.get('job');   // สแกน QR ฉลากงาน
     if (job) { LS.set('pendJob', job.slice(0, 60)); u.searchParams.delete('job'); history.replaceState(null, '', u.pathname + u.search + u.hash); }
-    { const hv = (u.hash.match(/^#(stock|kb)$/) || [])[1]; if (hv) { LS.set('pendView', hv); history.replaceState(null, '', u.pathname + u.search); } }
+    { const hv = (u.hash.match(/^#(stock|kb|flow)$/) || [])[1]; if (hv) { LS.set('pendView', hv); history.replaceState(null, '', u.pathname + u.search); } }
   } catch (e) {}
 })();
 try { applyTheme(); } catch (e) {}

@@ -1,0 +1,46 @@
+// 1.37.0: สรุปงานประจำเช้า (ตั้งเวลา/วัน/ผู้รับ · ปิดได้ · ส่งครั้งเดียวต่อวัน)
+const path = require('path'); process.argv[2] = path.join(__dirname, '../../backend/Code.gs');
+const m = require('./mock.js'); const logs = []; const ol = console.log; console.log = (...a) => logs.push(a.join(' ')); m.ctx.setup(); console.log = ol;
+const pin = (logs.join('\n').match(/PIN[^0-9]*(\d{4})/) || [])[1]; const A = m.call('login', { name: 'แอดมิน', pin }).data.token;
+let ok = 0, bad = 0; const eq = (l, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + l + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
+const mk = (name, role, p) => { const r = m.call('saveUser', { user: { name, role, pin: p } }, A).data; return m.call('login', { userId: r.user.id, pin: p }).data.token; };
+const D = mk('ต้น', 'user', '1111'), K = mk('คลัง', 'stock', '4444');
+const trig = []; global.ScriptApp = { getProjectTriggers: () => trig.map(h => ({ getHandlerFunction: () => h })), deleteTrigger() {}, newTrigger: h => ({ timeBased: () => ({ everyHours: () => ({ create() { trig.push(h); } }) }) }) };
+m.cacheStore['vj:https://fcm.googleapis.com'] = 'vapid t=x'; const sent = []; global.UrlFetchApp.fetchAll = reqs => { sent.push(reqs.map(r => r.url)); return reqs.map(() => ({ getResponseCode: () => 201 })); };
+m.call('pushSub', { sub: { endpoint: 'https://fcm.googleapis.com/fcm/send/a1' } }, A);
+m.call('pushSub', { sub: { endpoint: 'https://fcm.googleapis.com/fcm/send/d1' } }, D);
+const td = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10), hr = +new Date(Date.now() + 7 * 3600e3).toISOString().slice(11, 13);
+m.call('saveJob', { job: { code: 'J1', title: 'ผนัง', status: 'queue', received: td, due: '2020-01-01', group: 'งาน 2D', taskType: 'ทำ CAD' } }, A);
+m.call('stockSave', { item: { name: 'MDF 9mm', unit: 'แผ่น', qty: 2, min: 5 } }, K);
+eq('non-admin cannot preview', !!m.call('digestTest', {}, D).error, true);
+let r = m.call('digestTest', {}, A).data;
+eq('preview has title + lines', [/สรุปงานเช้านี้/.test(r.title), /ฝ่ายแบบ ค้าง 1 งาน · เลยกำหนด 1/.test(r.body), /ใกล้หมด 1 รายการ: MDF 9mm/.test(r.body)], [true, true, true]);
+eq('preview does not send', sent.length, 0);
+r = m.call('digestTest', { send: true }, A).data;
+eq('send-to-me goes to admin only', [sent.length, sent[0][0].endsWith('a1')], [1, true]);
+eq('push info kind digest', JSON.parse(m.cacheStore['pinfo:แอดมิน']).kind, 'digest');
+// ปิดอยู่ → ไม่ส่ง
+sent.length = 0; m.ctx.digestTick(); eq('off: tick sends nothing', sent.length, 0);
+const s = m.call('bootstrap', {}, A).data.settings;
+s.digest = { on: true, hour: hr, days: 'all', to: ['ต้น'] };
+r = m.call('saveSettings', { settings: s }, A).data;
+eq('save creates hourly trigger', [r.digestTrigger, trig.filter(h => h === 'digestTick').length], [true, 1]);
+m.call('saveSettings', { settings: s }, A); eq('trigger not duplicated', trig.filter(h => h === 'digestTick').length, 1);
+m.ctx.digestTick(); eq('on time: sends to chosen recipient', [sent.length, sent[0] && sent[0][0].endsWith('d1')], [1, true]);
+m.ctx.digestTick(); eq('only once per day', sent.length, 1);
+delete m.props.DIGEST_SENT; s.digest.hour = (hr + 5) % 24; m.call('saveSettings', { settings: s }, A);
+m.ctx.digestTick(); eq('wrong hour: nothing', sent.length, 1);
+s.digest = { on: true, hour: hr, days: 'all', to: [] }; m.call('saveSettings', { settings: s }, A);
+m.ctx.digestTick(); eq('no recipients chosen → admins', sent[1] && sent[1][0].endsWith('a1'), true);
+delete m.props.DIGEST_SENT; s.digest.on = false; m.call('saveSettings', { settings: s }, A); m.ctx.digestTick(); eq('turned off: nothing', sent.length, 2);
+// ติ๊กวันเอง: วันนี้ไม่ได้ติ๊ก → ไม่ส่ง · ติ๊ก → ส่ง
+const dow = new Date(Date.now() + 7 * 3600e3).getUTCDay();
+delete m.props.DIGEST_SENT; s.digest = { on: true, hour: hr, days: [0, 1, 2, 3, 4, 5, 6].filter(n => n !== dow), to: ['แอดมิน'], topics: ['stock'] }; m.call('saveSettings', { settings: s }, A);
+m.ctx.digestTick(); eq('day not ticked: nothing', sent.length, 2);
+s.digest.days = [dow]; m.call('saveSettings', { settings: s }, A); m.ctx.digestTick();
+const pi = JSON.parse(m.cacheStore['pinfo:แอดมิน']);
+eq('day ticked: sent with chosen topics only', [sent.length, /ใกล้หมด/.test(pi.code), /ฝ่ายแบบ/.test(pi.code), pi.code.split('\n').length], [3, true, false, 1]);
+r = m.call('digestTest', { topics: ['late', 'due'] }, A).data;
+eq('preview with topics', [/เลยกำหนด 1 งาน: J1/.test(r.body), /ครบกำหนดวันนี้|ไม่มีงานครบกำหนด/.test(r.body), r.body.split('\n').length], [true, true, 2]);
+eq('legacy days value still works', m.call('bootstrap', {}, A).data.settings.digest.days.length, 1);
+console.log('v137: ' + ok + ' ok, ' + bad + ' fail'); if (bad) process.exit(1);
