@@ -11,7 +11,8 @@ await pg.goto('http://127.0.0.1:8805/index.html'); await pg.waitForTimeout(700);
 await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
 await pg.evaluate(() => document.querySelectorAll('.ntf').forEach(e => e.remove()));
 // สถานะเชื่อมต่อเป็นไอคอน ไม่มีข้อความ
-eq('connection status is icon-only with tooltip', await pg.evaluate(() => { const c = document.querySelector('#railFoot .conn'); return [!!c.querySelector('svg'), c.textContent.trim(), !!c.getAttribute('title')]; }), [true, '', true]);
+eq('connection badge sits on the avatar inside the user card', await pg.evaluate(() => { const c = document.querySelector('#railFoot .me-chip .me-av .conn'), a = document.querySelector('#railFoot .me-av .av'); if (!c || !a) return null; const cr = c.getBoundingClientRect(), ar = a.getBoundingClientRect(); return [!!c.querySelector('svg'), c.textContent.trim(), !!c.getAttribute('aria-label'), cr.right > ar.left + ar.width / 2 && cr.bottom > ar.top + ar.height / 2]; }), [true, '', true, true]);
+await pg.locator('#railFoot').screenshot({ path: new URL('out/v2801-foot.png', import.meta.url).pathname });
 // การ์ดลอยไม่ค้างหลังเปลี่ยนหน้า
 await pg.evaluate(() => T.go('list')); await pg.waitForTimeout(700);
 await pg.hover('.row[data-open], [data-open]'); await pg.waitForTimeout(900);

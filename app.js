@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.80.0';
+const APP_VERSION = '2.80.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3995,12 +3995,12 @@ function renderShell() {
   const connCls = mode() === 'demo' ? '' : (S.sync === 'err' ? 'err' : 'ok');
   const connTxt = mode() === 'demo' ? 'โหมดทดลอง (เก็บในเครื่องนี้)' : (S.sync === 'err' ? 'เชื่อมต่อไม่ได้' : S.sync === 'busy' ? 'กำลังซิงก์…' : (isAdmin() ? 'เชื่อมต่อ Google Sheet' : 'ซิงก์ข้อมูลแล้ว'));
   // สถานะการเชื่อมต่อ: ไอคอนอย่างเดียว (คำอธิบายอยู่ในป้ายเมื่อชี้/แตะค้าง) · เขียว = ซิงก์แล้ว · หมุน = กำลังซิงก์ · แดง = เชื่อมต่อไม่ได้ · ส้ม = โหมดทดลอง
-  const cIc = mode() === 'demo' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>'
-    : S.sync === 'err' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.5-8.97A6 6 0 0 1 17.7 8.1 4 4 0 0 1 17 18"/><path d="M3 3l18 18"/></svg>'
-    : S.sync === 'busy' ? '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4h-4"/></svg>'
-    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.5-8.97A6 6 0 0 1 17.7 8.1 4 4 0 0 1 17 18z"/><path d="M9.5 13.2l1.8 1.8 3.6-3.6"/></svg>';
-  $('#railFoot').innerHTML = '<div class="foot-row"><button class="me-chip" data-go="settings" data-sec="me">' + av(S.me) + '<span><small>' + ROLES[roleOf(S.user)].label + '</small><b>' + esc(S.me) + '</b></span>' + roleChip(S.user, true) + '</button>' +
-    '<span class="conn ' + (connCls || 'demo') + (S.sync === 'busy' ? ' busy' : '') + '" role="status" title="' + esc(connTxt) + '" aria-label="' + esc(connTxt) + '">' + cIc + '</span></div>';
+  const sv = d => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';   // ป้ายเล็ก: ใช้รูปทรงง่าย ๆ อ่านออกแม้ขนาด 14px
+  const cIc = mode() === 'demo' ? sv('<path d="M12 7v6M12 17v.01"/>') : S.sync === 'err' ? sv('<path d="M7 7l10 10M17 7L7 17"/>') : S.sync === 'busy' ? sv('<path class="spin" d="M20 12a8 8 0 1 1-8-8"/>') : sv('<path d="M5.5 12.5l4 4L18.5 7.5"/>');
+  // ป้ายสถานะเชื่อมต่ออยู่มุมรูปโปรไฟล์ในการ์ดผู้ใช้ (แบบไฟสถานะออนไลน์)
+  $('#railFoot').innerHTML = '<button class="me-chip" data-go="settings" data-sec="me" title="' + esc(connTxt) + '"><span class="me-av">' + av(S.me) +
+      '<span class="conn ' + (connCls || 'demo') + (S.sync === 'busy' ? ' busy' : '') + '" role="status" aria-label="' + esc(connTxt) + '">' + cIc + '</span></span>' +
+    '<span class="me-tx"><small>' + ROLES[roleOf(S.user)].label + '</small><b>' + esc(S.me) + '</b></span>' + roleChip(S.user, true) + '</button>';
   renderTimerbar();
 }
 function renderTimerbar() {

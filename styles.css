@@ -5192,17 +5192,17 @@ body.auth #bgSndBtn{display:none}
 .ts-x{flex:none;opacity:.55}.ts-it:hover .ts-x{opacity:1}
 .ts-cf{display:flex;gap:4px;flex:none}
 
-/* v2.80 สถานะการเชื่อมต่อเป็นไอคอน (ไม่มีข้อความ) */
-.foot-row{display:flex;align-items:center;gap:8px}
-.foot-row .me-chip{flex:1;min-width:0}
-.rail .conn,.conn{flex:none;width:30px;height:30px;padding:0;border-radius:50%;display:grid;place-items:center;font-size:0;cursor:default;position:relative;background:color-mix(in srgb,currentColor 12%,transparent)}
-.conn svg{width:17px;height:17px}
-.conn.ok{color:#22C55E}.conn.err{color:#EF4444}.conn.demo{color:#F59E0B}.conn.busy{color:#38BDF8}
-.rail .conn.ok{color:#4ADE80}
-[data-sidebar="plain"] .rail .conn.ok,[data-rltext="dark"] .rail .conn.ok{color:#16A34A}
-.conn.ok::after{content:"";position:absolute;right:1px;top:1px;width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 0 2px color-mix(in srgb,currentColor 25%,transparent);animation:connPulse 2.4s ease-in-out infinite}
-@keyframes connPulse{50%{box-shadow:0 0 0 5px transparent}}
-.conn .spin{animation:spin 1s linear infinite}
+/* v2.80.1 สถานะการเชื่อมต่อ: ป้ายวงกลมเล็กมุมรูปโปรไฟล์ในการ์ดผู้ใช้ */
+.me-av{position:relative;flex:none;display:inline-flex}
+.me-tx{flex:1;min-width:0}.me-tx small,.me-tx b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rail .conn,.conn{position:absolute;right:-5px;bottom:-3px;width:14px;height:14px;padding:0;border-radius:50%;display:grid;place-items:center;font-size:0;color:#fff;background:#94A3B8;box-shadow:0 0 0 2px var(--rail-ring,#1f4f7a),0 1px 4px rgba(0,0,0,.25)}
+.conn svg{width:9px;height:9px}
+.conn.ok{background:#22C55E}.conn.err{background:#EF4444}.conn.demo{background:#F59E0B}.conn.busy{background:#0EA5E9}
+.conn.ok::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:2px solid #22C55E;opacity:0;animation:connRing 2.6s ease-out infinite}
+@keyframes connRing{0%{transform:scale(.9);opacity:.55}70%,100%{transform:scale(1.55);opacity:0}}
+.conn.busy svg{animation:spin 1s linear infinite}
+.me-chip{--rail-ring:color-mix(in srgb,var(--brand) 70%,#0b1b2a)}
+[data-sidebar="plain"] .me-chip,[data-rltext="dark"] .me-chip{--rail-ring:var(--surface)}
 
 /* v2.80 แก้: ปุ่ม "ตั้ง PIN" ล้นกรอบบนจอขนาดกลาง (ใช้ความกว้างของการ์ด ไม่ใช่ความกว้างจอ) */
 #s-salelink{container-type:inline-size}
@@ -5221,3 +5221,4 @@ body.auth #bgSndBtn{display:none}
 .board .card .card-foot>span:not([class]){flex:1 1 0;min-width:0}
 .board .card .card-foot>.live,.board .card .card-foot>.tg{flex:0 1 auto}
 .board .card .code{white-space:normal;overflow-wrap:anywhere;word-break:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}
+.me-chip .conn{color:#fff!important}
