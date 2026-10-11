@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.36.0';
+const VERSION = '1.36.1';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -1049,6 +1049,7 @@ function stockDelete_(id, u) {
    รูปใช้ระบบรูปเดิม (jobId = รหัสเรื่อง k_…) · วิดีโอเก็บแค่ลิงก์ (YouTube, Google Drive, Vimeo, Facebook, TikTok) ไม่เก็บไฟล์ */
 const KB_DEPTS_ = { d: 'ฝ่ายแบบ', p: 'ฝ่ายผลิต', s: 'ฝ่ายสต็อก', g: 'ทั่วไป' };
 const KB_CATS_ = { tip: 'เทคนิค', limit: 'ข้อจำกัด', warn: 'ข้อควรระวัง', step: 'ขั้นตอนงาน' };
+const kbCat_ = v => KB_CATS_[v] ? v : (String(v || '').replace(/[<>"]/g, '').trim().slice(0, 30) || 'tip');   // ประเภทพื้นฐาน หรือชื่อประเภทที่ทีมเพิ่มเอง
 const deptOf_ = u => ({ user: 'd', lead: 'd', prod: 'p', stock: 's' })[u.role] || '';
 const kbCan_ = (u, dept) => isAdmin_(u) || (dept !== 'g' && !!KB_DEPTS_[dept] && deptOf_(u) === dept);
 function kbVideos_(v) {
@@ -1091,7 +1092,7 @@ function kbSave_(item, u) {
   if (!kbCan_(u, dept)) throw new Error(dept === 'g' ? 'หมวดทั่วไปเพิ่มได้เฉพาะแอดมิน' : 'เพิ่มได้เฉพาะความรู้ของฝ่ายตัวเอง');
   const isNew = row < 0;
   if (!isNew && (cur.title !== title || String(cur.body || '') !== body)) cur.acks = '';   // เนื้อหาเปลี่ยน → ทุกคนต้องรับทราบใหม่
-  Object.assign(cur, { dept: dept, cat: KB_CATS_[item.cat] ? item.cat : 'tip', title: title, body: body, videos: JSON.stringify(kbVideos_(item.videos)), pin: item.pin ? '1' : '', updatedBy: u.name, updatedAt: nowIso_() });
+  Object.assign(cur, { dept: dept, cat: kbCat_(item.cat), title: title, body: body, videos: JSON.stringify(kbVideos_(item.videos)), pin: item.pin ? '1' : '', updatedBy: u.name, updatedAt: nowIso_() });
   writeRow_('Kb', cur, row);
   log_(cur.id, u.name, 'kb', (row > 0 ? 'แก้ไขความรู้ ' : 'เพิ่มความรู้ ') + title);
   if (isNew) kbPush_(cur, u);

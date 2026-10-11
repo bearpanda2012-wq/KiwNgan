@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.74.1';
+const APP_VERSION = '2.74.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -633,7 +633,7 @@ const Demo = {
     if (cur && !kbCanU(u, cur.dept)) throw new Error('แก้ได้เฉพาะความรู้ของฝ่ายตัวเอง');
     const dept = KB_DEPT[it.dept] ? it.dept : (cur ? cur.dept : kbUserDept(u)); if (!kbCanU(u, dept)) throw new Error(dept === 'g' ? 'หมวดทั่วไปเพิ่มได้เฉพาะแอดมิน' : 'เพิ่มได้เฉพาะความรู้ของฝ่ายตัวเอง');
     const now = nowLocal() + ':00'; if (!cur) { cur = { id: uid('k_'), createdBy: u.name, createdAt: now }; d.kb.push(cur); } else if (cur.title !== title || String(cur.body || '') !== String(it.body || '')) cur.acks = {};
-    Object.assign(cur, { dept: dept, cat: KB_CAT[it.cat] ? it.cat : 'tip', title: title, body: String(it.body || ''), videos: (it.videos || []).filter(x => /^https:\/\//.test(x)).slice(0, 8), pin: it.pin ? 1 : 0, updatedBy: u.name, updatedAt: now });
+    Object.assign(cur, { dept: dept, cat: kbCatClean(it.cat), title: title, body: String(it.body || ''), videos: (it.videos || []).filter(x => /^https:\/\//.test(x)).slice(0, 8), pin: it.pin ? 1 : 0, updatedBy: u.name, updatedAt: now });
     this.save(d); return { kb: this.kbList(d, u), id: cur.id }; },
   async kbAck(p) { const d = this.db(), u = this.me(d), k = (d.kb || []).find(x => x.id === p.id); if (!k) throw new Error('ไม่พบเรื่องนี้'); k.acks = k.acks || {}; if (!k.acks[u.name]) k.acks[u.name] = nowLocal() + ':00'; this.save(d); return { kb: this.kbList(d, u) }; },
   async kbDelete(p) { const d = this.db(), u = this.me(d), k = (d.kb || []).find(x => x.id === p.id); if (!k) throw new Error('ไม่พบเรื่องนี้'); if (!kbCanU(u, k.dept)) throw new Error('ลบได้เฉพาะความรู้ของฝ่ายตัวเอง'); d.kb = d.kb.filter(x => x.id !== p.id); d.images = (d.images || []).filter(m => m.jobId !== p.id); this.save(d); return { kb: this.kbList(d, u) }; },
@@ -5117,13 +5117,23 @@ function kbBody(t) {
   close(); return out;
 }
 const kbExcerpt = t => String(t || '').replace(/\*\*/g, '').replace(/^\s*([-•*]|\d+[.)])\s+/gm, '').replace(/\s+/g, ' ').trim().slice(0, 140);
-const kbChip = (k, txt) => { const c = KB_CAT[k]; return c ? '<span class="kb-cat" style="--kc:' + c.col + '">' + KB_IC[k] + (txt === false ? '' : c.label) + '</span>' : ''; };
+/* ประเภท: 4 แบบพื้นฐาน + ประเภทที่ทีมเพิ่มเอง (เก็บเป็นชื่อประเภทในเรื่องนั้น ใช้ร่วมกันทั้งระบบ) */
+const KB_TAG_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="8" cy="8" r="1.6"/></svg>';
+const KB_HUES = ['#0E7490', '#7C3AED', '#B45309', '#BE185D', '#4D7C0F', '#1D4ED8', '#9F1239', '#0F766E'];
+const kbCatClean = v => { const t = String(v || '').replace(/[<>"]/g, '').trim().slice(0, 30); return t || 'tip'; };
+function kbCatOf(k) {
+  if (KB_CAT[k]) return { label: KB_CAT[k].label, col: KB_CAT[k].col, ic: KB_IC[k] };
+  let h = 0; for (const ch of String(k || '')) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  return { label: String(k || 'อื่น ๆ'), col: KB_HUES[h % KB_HUES.length], ic: KB_TAG_IC };
+}
+const kbCats = extra => { const c = Object.keys(KB_CAT); kbAll().concat(extra ? [{ cat: extra }] : []).forEach(a => { if (a.cat && c.indexOf(a.cat) < 0) c.push(a.cat); }); return c; };
+const kbChip = (k, txt) => { const c = kbCatOf(k); return '<span class="kb-cat" style="--kc:' + c.col + '">' + c.ic + (txt === false ? '' : esc(c.label)) + '</span>'; };
 const kbDeptChip = k => { const d = KB_DEPT[k] || KB_DEPT.g; return '<span class="kb-dept" style="--kd:' + d.col + '">' + kbDeptIc(d.ic) + d.label + '</span>'; };
 function kbCover(a) {
   const im = kbImgs(a)[0], v = (a.videos || []).map(vidParse).find(x => x && x.thumb), d = KB_DEPT[a.dept] || KB_DEPT.g;
   if (im) return '<span class="kb-cv has">' + kbImgTag(im, 600) + ((a.videos || []).length ? '<i class="kb-cvplay">' + KB_IC.play + '</i>' : '') + '</span>';
   if (v) return '<span class="kb-cv has vid"><img alt="" loading="lazy" referrerpolicy="no-referrer" src="' + esc(v.thumb) + '" onerror="this.remove()"><i class="kb-cvplay">' + KB_IC.play + '</i></span>';
-  return '<span class="kb-cv none" style="--kd:' + d.col + '"><i>' + (KB_IC[a.cat] || KB_IC.book) + '</i></span>';
+  return '<span class="kb-cv none" style="--kd:' + d.col + '"><i>' + kbCatOf(a.cat).ic + '</i></span>';
 }
 function kbCard(a, k) {
   const ni = kbImgs(a).length, nv = (a.videos || []).length, d = KB_DEPT[a.dept] || KB_DEPT.g;
@@ -5137,12 +5147,12 @@ function kbCard(a, k) {
 function kbListHtml(an) {
   const all = kbAll(), q = KV.q.trim().toLowerCase(), mine = kbMyDepts();
   const hit = a => (KV.dept === 'all' || a.dept === KV.dept) && (KV.cat === 'all' || a.cat === KV.cat) && (!KV.vid || (a.videos || []).length) &&
-    (!q || [a.title, a.body, (KB_DEPT[a.dept] || {}).label, (KB_CAT[a.cat] || {}).label, a.updatedBy].join(' ').toLowerCase().indexOf(q) >= 0);
+    (!q || [a.title, a.body, (KB_DEPT[a.dept] || {}).label, kbCatOf(a.cat).label, a.updatedBy].join(' ').toLowerCase().indexOf(q) >= 0);
   const list = all.filter(hit);
   const deptN = k => all.filter(a => (k === 'all' || a.dept === k) && (KV.cat === 'all' || a.cat === KV.cat)).length;
   const depts = '<div class="kb-depts' + (an ? ' in' : '') + '">' + [['all', 'ทั้งหมด', 'var(--accent)', KB_IC.book]].concat(['d', 'p', 's', 'g'].map(k => [k, KB_DEPT[k].label, KB_DEPT[k].col, kbDeptIc(KB_DEPT[k].ic)])).map((x, i) =>
     '<button type="button" class="kb-dt' + (KV.dept === x[0] ? ' on' : '') + (mine.length === 1 && mine[0] === x[0] ? ' mine' : '') + '" style="--kd:' + x[2] + ';--i:' + i + '" data-kbdept="' + x[0] + '" aria-pressed="' + (KV.dept === x[0]) + '"><span class="kdt-ic">' + x[3] + '</span><span class="kdt-t"><b>' + x[1] + '</b><small>' + deptN(x[0]) + ' เรื่อง' + (mine.length === 1 && mine[0] === x[0] && KM.ctx === 'app' ? ' · ฝ่ายของคุณ' : '') + '</small></span></button>').join('') + '</div>';
-  const cats = '<div class="qchips kb-cats">' + [['all', 'ทุกประเภท']].concat(Object.keys(KB_CAT).map(k => [k, KB_CAT[k].label])).map(x => '<button type="button" class="qchip" data-kbcat="' + x[0] + '" aria-pressed="' + (KV.cat === x[0]) + '"' + (x[0] !== 'all' ? ' style="--ch:' + KB_CAT[x[0]].col + '"' : '') + '>' + (x[0] !== 'all' ? KB_IC[x[0]] : '') + x[1] + '<b>' + all.filter(a => (x[0] === 'all' || a.cat === x[0]) && (KV.dept === 'all' || a.dept === KV.dept)).length + '</b></button>').join('') +
+  const cats = '<div class="qchips kb-cats">' + [['all', 'ทุกประเภท']].concat(kbCats().map(k => [k, kbCatOf(k).label])).map(x => '<button type="button" class="qchip" data-kbcat="' + esc(x[0]) + '" aria-pressed="' + (KV.cat === x[0]) + '"' + (x[0] !== 'all' ? ' style="--ch:' + kbCatOf(x[0]).col + '"' : '') + '>' + (x[0] !== 'all' ? kbCatOf(x[0]).ic : '') + esc(x[1]) + '<b>' + all.filter(a => (x[0] === 'all' || a.cat === x[0]) && (KV.dept === 'all' || a.dept === KV.dept)).length + '</b></button>').join('') +
     '<button type="button" class="qchip kb-vf" data-kbvid="1" aria-pressed="' + KV.vid + '">' + KB_IC.video + 'มีวิดีโอ</button></div>';
   const tools = '<div class="kb-tools"><label class="search">' + I.search + '<input id="kbQ" type="search" autocomplete="off" placeholder="ค้นหาความรู้ เทคนิค ข้อจำกัด…" value="' + esc(KV.q) + '" aria-label="ค้นหาความรู้"></label>' +
 '</div>';   // ปุ่มเพิ่ม: ใช้ปุ่ม + มุมขวาล่าง (และปุ่มในหน้าว่าง)
@@ -5163,11 +5173,11 @@ function viewKb() {
 function kbOpen(id) { KM.id = id; KM.mode = 'view'; KM.del = false; KM.f = null; kbDraw(); }
 function kbAddOpen(pre) {
   const mine = kbMyDepts(); if (!mine.length) return;
-  kbPendClear(); KM.id = ''; KM.mode = 'form'; KM.del = false;
+  kbPendClear(); KM.id = ''; KM.mode = 'form'; KM.del = false; KM.catNew = false;
   KM.f = Object.assign({ dept: mine.indexOf(KV.dept) >= 0 ? KV.dept : mine[0], cat: KV.cat !== 'all' ? KV.cat : 'tip', title: '', body: '', videos: [], pin: false }, pre || {});
   kbDraw(); setTimeout(() => { const x = $('#kfTitle'); if (x) x.focus(); }, 60);
 }
-function kbEditOpen(id) { const a = kbById(id); if (!a || !kbCan(a.dept)) return; kbPendClear(); KM.id = id; KM.mode = 'form'; KM.del = false; KM.f = { dept: a.dept, cat: a.cat, title: a.title, body: a.body || '', videos: (a.videos || []).slice(), pin: !!a.pin }; kbDraw(); }
+function kbEditOpen(id) { const a = kbById(id); if (!a || !kbCan(a.dept)) return; kbPendClear(); KM.catNew = false; KM.id = id; KM.mode = 'form'; KM.del = false; KM.f = { dept: a.dept, cat: a.cat, title: a.title, body: a.body || '', videos: (a.videos || []).slice(), pin: !!a.pin }; kbDraw(); }
 function kbClose() { kbPendClear(); KM.id = ''; KM.mode = ''; KM.f = null; const m = $('#kbModal'); if (m) m.remove(); if (!P2.id && !P2.add && !SM.mode) document.body.classList.remove('pm-open'); }
 function kbPendClear() { (KM.pend || []).forEach(p => URL.revokeObjectURL(p.url)); KM.pend = []; }
 function kbFormRead() { if (KM.mode !== 'form' || !KM.f) return; const v = id => { const e = $('#' + id); return e ? e.value : undefined; }; const t = v('kfTitle'), b = v('kfBody'), p = $('#kfPin'); if (t !== undefined) KM.f.title = t; if (b !== undefined) KM.f.body = b; if (p) KM.f.pin = p.checked; }
@@ -5196,7 +5206,7 @@ function kbGallery(a) {
 }
 function kbReadHtml(a) {
   const d = KB_DEPT[a.dept] || KB_DEPT.g, can = kbCan(a.dept), vids = (a.videos || []);
-  return '<header class="kb-rh"><i class="kb-rh-ic">' + (KB_IC[a.cat] || KB_IC.book) + '</i><div class="kb-tags">' + kbDeptChip(a.dept) + kbChip(a.cat) + (a.pin ? '<span class="kb-pinchip">' + KB_IC.pin + 'ปักหมุด</span>' : '') + '</div>' +
+  return '<header class="kb-rh"><i class="kb-rh-ic">' + kbCatOf(a.cat).ic + '</i><div class="kb-tags">' + kbDeptChip(a.dept) + kbChip(a.cat) + (a.pin ? '<span class="kb-pinchip">' + KB_IC.pin + 'ปักหมุด</span>' : '') + '</div>' +
       '<h2>' + esc(a.title) + '</h2><small>' + esc([a.createdBy ? 'เขียนโดย ' + a.createdBy : '', a.updatedAt ? 'อัปเดต ' + fdt(String(a.updatedAt).slice(0, 16)) + (a.updatedBy && a.updatedBy !== a.createdBy ? ' โดย ' + a.updatedBy : '') : ''].filter(Boolean).join(' · ')) + '</small>' + KB_X + '</header>' +
     '<div class="pm-b kb-rb">' + kbAckHtml(a) + (a.body ? '<div class="kb-body">' + kbBody(a.body) + '</div>' : '') + kbGallery(a) +
       (vids.length ? '<div class="kb-vids"><span class="lbl">' + KB_IC.video + 'วิดีโอ ' + vids.length + ' รายการ</span>' + vids.map(vidHtml).join('') + '</div>' : '') +
@@ -5211,10 +5221,11 @@ function kbFormHtml(a) {
   const imgs = ims.map(im => '<span class="skg-t"><button type="button" class="kf-im" data-lbopen="' + esc(im.id) + '" data-lbjob="' + esc(a.id) + '">' + thumbImg(im) + '</button><button type="button" class="dz-x" data-kfimx="' + esc(im.id) + '" aria-label="ลบรูปนี้">✕</button></span>').join('') +
     Array.from({ length: KM.up || 0 }).map(() => '<span class="skg-t up"><span class="spin-dot dark"></span></span>').join('') +
     pend.map(p => '<span class="skg-t pend"><img src="' + p.url + '" alt=""><button type="button" class="dz-x" data-kfpx="' + esc(p.id) + '" aria-label="เอารูปนี้ออก">✕</button></span>').join('');
-  return '<header class="kb-rh form"><i class="kb-rh-ic">' + (KB_IC[f.cat] || KB_IC.book) + '</i><h2>' + (a ? 'แก้ไขความรู้' : 'เพิ่มความรู้ใหม่') + '</h2><small>' + (mine.length > 1 ? 'เลือกฝ่ายที่เป็นเจ้าของเรื่องนี้' : 'บันทึกในหมวด ' + (KB_DEPT[mine[0]] || {}).label + ' · ฝ่ายอื่นอ่านได้แต่แก้ไม่ได้') + '</small>' + KB_X + '</header>' +
+  return '<header class="kb-rh form"><i class="kb-rh-ic">' + kbCatOf(f.cat).ic + '</i><h2>' + (a ? 'แก้ไขความรู้' : 'เพิ่มความรู้ใหม่') + '</h2><small>' + (mine.length > 1 ? 'เลือกฝ่ายที่เป็นเจ้าของเรื่องนี้' : 'บันทึกในหมวด ' + (KB_DEPT[mine[0]] || {}).label + ' · ฝ่ายอื่นอ่านได้แต่แก้ไม่ได้') + '</small>' + KB_X + '</header>' +
     '<div class="pm-b kb-fb"><div class="form-grid kb-form">' +
       (mine.length > 1 ? '<div class="f full"><span class="lbl">ฝ่าย</span><div class="kf-depts">' + mine.map(k => '<button type="button" style="--kd:' + KB_DEPT[k].col + '" data-kfdept="' + k + '" aria-pressed="' + (f.dept === k) + '">' + kbDeptIc(KB_DEPT[k].ic) + KB_DEPT[k].label + '</button>').join('') + '</div></div>' : '') +
-      '<div class="f full"><span class="lbl">ประเภท</span><div class="kf-cats">' + Object.keys(KB_CAT).map(k => '<button type="button" style="--kc:' + KB_CAT[k].col + '" data-kfcat="' + k + '" aria-pressed="' + (f.cat === k) + '">' + KB_IC[k] + '<b>' + KB_CAT[k].label + '</b></button>').join('') + '</div></div>' +
+      '<div class="f full"><span class="lbl">ประเภท</span><div class="kf-cats">' + kbCats(f.cat).map(k => { const c = kbCatOf(k); return '<button type="button" style="--kc:' + c.col + '" data-kfcat="' + esc(k) + '" aria-pressed="' + (f.cat === k) + '">' + c.ic + '<b>' + esc(c.label) + '</b></button>'; }).join('') +
+        (KM.catNew ? '<span class="kf-catnew"><input id="kfCatNew" maxlength="30" placeholder="ชื่อประเภทใหม่ เช่น ความปลอดภัย" autocomplete="off"><button type="button" class="btn sm primary" data-kfcatadd="1">เพิ่ม</button><button type="button" class="btn sm ghost" data-kfcatnew="0" aria-label="ยกเลิก">✕</button></span>' : '<button type="button" class="kf-catplus" data-kfcatnew="1">' + I.plus + 'เพิ่มประเภท</button>') + '</div></div>' +
       '<div class="f full"><label for="kfTitle">หัวข้อ</label><input id="kfTitle" maxlength="160" value="' + esc(f.title || '') + '" placeholder="เช่น Router ตัด ACP หนาได้ไม่เกิน 20 มม."></div>' +
       '<div class="f full"><label for="kfBody">รายละเอียด</label><textarea id="kfBody" rows="8" placeholder="อธิบายเทคนิค ข้อจำกัด หรือขั้นตอน&#10;- ขึ้นต้นด้วย - เพื่อทำรายการ&#10;1. ขึ้นต้นด้วยตัวเลข เพื่อเรียงขั้นตอน&#10;**คำสำคัญ** เพื่อทำตัวหนา">' + esc(f.body || '') + '</textarea></div>' +
       '<div class="f full"><span class="lbl">รูปภาพ <small class="muted">' + (ims.length + pend.length) + '/' + IMG_MAX + '</small></span><div class="kf-imgs">' + imgs +
@@ -5261,6 +5272,10 @@ function kbAddFiles(files) {
   if (KM.id) return kbUpload(KM.id, files);
   files.slice(0, IMG_MAX - KM.pend.length).forEach(f => KM.pend.push({ id: uid('kp'), f: f, url: URL.createObjectURL(f) }));
   kbDraw();
+}
+function kbCatAdd() {
+  const e = $('#kfCatNew'); if (!e) return; const v = kbCatClean(e.value); if (!e.value.trim()) { e.focus(); return; }
+  kbFormRead(); const hit = Object.keys(KB_CAT).find(k => KB_CAT[k].label === v); KM.f.cat = hit || v; KM.catNew = false; kbDraw();
 }
 function kbVidAdd() {
   const e = $('#kfVid'); if (!e) return; const u = e.value.trim(); if (!u) { e.focus(); return; }
@@ -5325,7 +5340,7 @@ function kbRelated(p) {
 function kbRelatedHtml(p) {
   if (!S.kb) return '';
   const list = kbRelated(p); if (!list.length) return '';
-  return '<div class="f pm-kb"><label>' + I.kb + 'ความรู้ที่เกี่ยวข้อง <small class="muted">อ่านก่อนลงมือ</small></label><div class="pmk-list">' + list.map(a => '<button type="button" class="pmk" style="--kc:' + (KB_CAT[a.cat] || KB_CAT.tip).col + '" data-kbopen="' + esc(a.id) + '"><i>' + (KB_IC[a.cat] || KB_IC.book) + '</i><span><b>' + esc(a.title) + '</b><small>' + esc((KB_CAT[a.cat] || {}).label || '') + ' · ' + esc((KB_DEPT[a.dept] || {}).label || '') + (kbNeedAck(a) ? ' · ยังไม่รับทราบ' : '') + '</small></span>' + (a.pin ? '<em>' + KB_IC.pin + '</em>' : '') + '</button>').join('') + '</div></div>';
+  return '<div class="f pm-kb"><label>' + I.kb + 'ความรู้ที่เกี่ยวข้อง <small class="muted">อ่านก่อนลงมือ</small></label><div class="pmk-list">' + list.map(a => '<button type="button" class="pmk" style="--kc:' + kbCatOf(a.cat).col + '" data-kbopen="' + esc(a.id) + '"><i>' + kbCatOf(a.cat).ic + '</i><span><b>' + esc(a.title) + '</b><small>' + esc(kbCatOf(a.cat).label) + ' · ' + esc((KB_DEPT[a.dept] || {}).label || '') + (kbNeedAck(a) ? ' · ยังไม่รับทราบ' : '') + '</small></span>' + (a.pin ? '<em>' + KB_IC.pin + '</em>' : '') + '</button>').join('') + '</div></div>';
 }
 /* QC ไม่ผ่าน → บันทึกเป็นบทเรียนในคลังความรู้ */
 function kbLesson(pid) {
@@ -5348,9 +5363,11 @@ function saleKbHtml(d, redraw) {   // หน้า Sale: อ่านคลั�
 }
 const kbRerender = () => { if (KM.ctx === 'sale') { if (saleKbRerender) saleKbRerender(); } else render(); };
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-kback],[data-kblesson],[data-kbopen],[data-kbclose],[data-kbadd],[data-kbedit],[data-kbback],[data-kbdel],[data-kbsave],[data-kbdept],[data-kbcat],[data-kbvid],[data-kbplay],[data-kbbig],[data-kbtx],[data-kfdept],[data-kfcat],[data-kfvadd],[data-kfvx],[data-kfpx],[data-kfimx],[data-kfcam]');
+  const t = e.target.closest && e.target.closest('[data-kfcatnew],[data-kfcatadd],[data-kback],[data-kblesson],[data-kbopen],[data-kbclose],[data-kbadd],[data-kbedit],[data-kbback],[data-kbdel],[data-kbsave],[data-kbdept],[data-kbcat],[data-kbvid],[data-kbplay],[data-kbbig],[data-kbtx],[data-kfdept],[data-kfcat],[data-kfvadd],[data-kfvx],[data-kfpx],[data-kfimx],[data-kfcam]');
   if (!t) { if (e.target && e.target.id === 'kbTheater') kbTheaterClose(); return; }   // หน้าต่างคลังความรู้: คลิกด้านนอกไม่ปิด (กันข้อความที่พิมพ์หาย) ต้องกดปิดเอง
   const d = t.dataset;
+  if (d.kfcatnew !== undefined) { kbFormRead(); KM.catNew = d.kfcatnew === '1'; kbDraw(); if (KM.catNew) setTimeout(() => { const x = $('#kfCatNew'); if (x) x.focus(); }, 30); return; }
+  if (d.kfcatadd) return kbCatAdd();
   if (d.kback) return kbAck(d.kback);
   if (d.kblesson) return kbLesson(d.kblesson);
   if (d.kbplay) { e.preventDefault(); return kbPlay(t); }
@@ -5382,6 +5399,7 @@ document.addEventListener('keydown', e => {
   if (!KM.mode || !$('#kbModal') || S.lb || $('#camModal') || $('#imgView.open') || e.cancelBubble) return;   // ตัวดูรูปปิดตัวเองไปแล้ว (หยุดต่อ) ไม่ต้องปิดหน้าต่างนี้
   if (e.key === 'Escape') { e.stopPropagation(); if (KM.mode !== 'form') kbClose(); }   // ระหว่างเพิ่ม/แก้ Esc ไม่ปิด ต้องกดยกเลิกหรือ ✕
   else if (e.key === 'Enter' && e.target && e.target.id === 'kfVid') { e.preventDefault(); kbVidAdd(); }
+  else if (e.key === 'Enter' && e.target && e.target.id === 'kfCatNew') { e.preventDefault(); kbCatAdd(); }
 }, true);
 
 /* ================= คลังวัสดุ (ฝ่ายสต็อก) =================

@@ -39,5 +39,8 @@ eq('call goes to urgent channel', sent.some(l => l.some(u => u.endsWith('/u2')))
 sent.length = 0; m.call('kbSave', { item: { dept: 'p', title: 'เรื่องใหม่อีกเรื่อง' } }, P);
 eq('normal notice goes to normal channel', sent.some(l => l.some(u => u.endsWith('/n2'))) && !sent.some(l => l.some(u => u.endsWith('/u2'))), true);
 eq('bad urgent endpoint ignored', m.call('pushSub', { sub: { endpoint: 'https://fcm.googleapis.com/fcm/send/n3' }, urgent: { endpoint: 'https://evil.example/x' } }, D2).error, undefined);
+const cc = m.call('kbSave', { item: { dept: 'p', cat: 'ความปลอดภัย<x>', title: 'ประเภทใหม่' } }, P).data;
+eq('custom category kept (cleaned)', cc.kb.find(x => x.id === cc.id).cat, 'ความปลอดภัยx');
+eq('empty category → tip', m.call('kbSave', { item: { id: cc.id, dept: 'p', cat: '  ', title: 'ประเภทใหม่' } }, P).data.kb.find(x => x.id === cc.id).cat, 'tip');
 console.log(ok + ' ok, ' + bad + ' failed');
 if (bad) process.exit(1);
