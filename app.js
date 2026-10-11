@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.72.2';
+const APP_VERSION = '2.72.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5438,7 +5438,7 @@ function stDraw() {
   const keep = SM.mode === 'view' ? stMoveRead() : null;
   const ed = canStock(), x = '<button type="button" class="icon-btn sk-x" data-sclose="1" aria-label="ปิด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
   const card = m.querySelector('.sk-mcard'), key = SM.mode + ':' + SM.id, same = card.dataset.k === key, ob = card.querySelector('.pm-b'), top = same && ob ? ob.scrollTop : 0;   // วาดซ้ำ: ไม่เด้ง ไม่เลื่อนกลับขึ้นบน
-  card.style.setProperty('--h', stHue((SM.f && SM.f.cat) || (it && it.cat)));
+  { const c0 = (SM.f && SM.f.cat) || (it && it.cat); card.style.setProperty('--h', c0 ? stHue(c0) : SM.mode === 'form' ? 'var(--brand)' : stHue(c0)); }
   card.innerHTML = SM.mode === 'form' ? stFormHtml(it, x) : stViewHtml(it, ed, x);
   card.classList.toggle('swap', !!card.dataset.k && !same); card.dataset.k = key;
   { const nb = card.querySelector('.pm-b'); if (nb && top) nb.scrollTop = top; }
@@ -5450,7 +5450,7 @@ function stGallery(it, ed) {
   const ims = it ? imgsOf(it.id) : [], pend = SM.pend || [], up = it ? (S.suploading || 0) : 0, room = IMG_MAX - ims.length - pend.length - up;
   const cover = ims[0] ? '<button type="button" class="skg-cover" data-lbopen="' + esc(ims[0].id) + '" data-lbjob="' + esc(it.id) + '" title="ดูรูปเต็มจอ">' + thumbImg(ims[0], 'big') + '</button>'
     : pend[0] ? '<span class="skg-cover"><img src="' + pend[0].url + '" alt=""></span>'
-    : '<span class="skg-cover none" style="--h:' + stHue((SM.f && SM.f.cat) || (it && it.cat)) + '"><i>' + stIcon((SM.f && SM.f.cat) || (it && it.cat)) + '</i><small>' + (ed ? 'ยังไม่มีรูป · ถ่ายรูปหรือเลือกรูปด้านล่าง' : 'ยังไม่มีรูป') + '</small></span>';
+    : '<span class="skg-cover none"><i>' + stIcon((SM.f && SM.f.cat) || (it && it.cat)) + '</i><small>' + (ed ? 'ยังไม่มีรูป · ถ่ายรูปหรือเลือกรูปด้านล่าง' : 'ยังไม่มีรูป') + '</small></span>';
   const strip = ims.map(im => '<button type="button" class="skg-t" data-lbopen="' + esc(im.id) + '" data-lbjob="' + esc(it.id) + '">' + thumbImg(im) + '</button>').join('') +
     Array.from({ length: up }).map(() => '<span class="skg-t up"><span class="spin-dot dark"></span></span>').join('') +
     pend.map(p => '<span class="skg-t pend"><img src="' + p.url + '" alt=""><button type="button" class="dz-x" data-spendx="' + esc(p.id) + '" aria-label="เอารูปนี้ออก">✕</button></span>').join('');
@@ -5488,21 +5488,23 @@ function stViewHtml(it, ed, x) {
     move + '<div class="f"><span class="lbl">ประวัติของวัสดุนี้</span>' + hist + '</div></div>' +
     '<div class="pm-f">' + (ed ? '<button type="button" class="btn ghost sm" data-sedit="' + esc(it.id) + '">' + STI.pen + 'แก้ไขข้อมูล</button>' : '') + '<span style="flex:1"></span><button type="button" class="btn" data-sclose="1">ปิด</button></div>';
 }
+const SF_SEC_IC = { info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 8L12 4l8.5 4v8.5L12 20.5l-8.5-4z"/><path d="M3.5 8L12 12l8.5-4M12 12v8.5" stroke-linecap="round"/></svg>', qty: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>', more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="8" cy="8" r="1.6"/></svg>' };
+const sfSec = (k, t, sub) => '<div class="f full sf-sec s-' + k + '"><i>' + SF_SEC_IC[k] + '</i><b>' + t + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>';
 function stFormHtml(it, x) {
   const f = SM.f || {}, isNew = !it, cats = Array.from(new Set(stockItems().map(i => i.cat).filter(Boolean)));
   const allCats = ST_PRESETS.map(p => p[0]).concat(cats).filter((v, i, a) => a.indexOf(v) === i);
   const step = (id, val, ph) => '<div class="sf-step"><button type="button" data-sfstep="' + id + '" data-d="-1" aria-label="ลด">−</button><input id="' + id + '" type="number" min="0" step="any" inputmode="decimal" value="' + esc(val === undefined ? '' : val) + '" placeholder="' + esc(ph) + '"><button type="button" data-sfstep="' + id + '" data-d="1" aria-label="เพิ่ม">+</button></div>';
-  const cu = f.own === 'cust', own = isNew ? '<div class="f full"><span class="lbl">เป็นของ</span><div class="sf-own" role="group">' + [['', 'ของบริษัท', 'คิดมูลค่า · เตือนใกล้หมด'], ['cust', 'ของลูกค้า', 'ลูกค้าส่งมาให้ตัด · ไม่คิดมูลค่า']].map(o => '<button type="button" data-sfown="' + o[0] + '" aria-pressed="' + ((f.own || '') === o[0]) + '"><b>' + o[1] + '</b><small>' + o[2] + '</small></button>').join('') + '</div></div>' : '';
+  const cu = f.own === 'cust', own = isNew ? '<div class="f full"><span class="lbl">เป็นของ</span><div class="sf-own" role="group">' + [['', 'ของบริษัท', 'คิดมูลค่า · เตือนใกล้หมด', I.stock, 'o-co'], ['cust', 'ของลูกค้า', 'ลูกค้าส่งมาให้ตัด · ไม่คิดมูลค่า', STI.user || I.team, 'o-cu']].map(o => '<button type="button" class="' + o[4] + '" data-sfown="' + o[0] + '" aria-pressed="' + ((f.own || '') === o[0]) + '"><i>' + o[3] + '</i><span><b>' + o[1] + '</b><small>' + o[2] + '</small></span></button>').join('') + '</div></div>' : '';
   const custF = cu ? '<div class="f"><label for="sfCust">ลูกค้า</label><input id="sfCust" value="' + esc(f.cust || '') + '" placeholder="เช่น คุณบี / บจก.…"></div><div class="f"><label for="sfJob">เลข Job</label><input id="sfJob" class="mono" list="smJobs" value="' + esc(f.job || '') + '" placeholder="เช่น R69-10012S" autocomplete="off"><datalist id="smJobs">' + Array.from(new Set(S.jobs.map(j => j.code).concat(prodsAll().map(p => p.code)))).slice(0, 120).map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></div>' : '';
   return '<div class="sk-mh">' + stGallery(it, true) + x + '</div><div class="pm-b sk-mb"><h3 class="sk-ft">' + (isNew ? (cu ? 'รับของลูกค้าเข้าคลัง' : 'เพิ่มวัสดุใหม่') : 'แก้ไข ' + esc(it.name)) + '</h3>' +
-    '<div class="form-grid sk-form">' + own + custF + '<div class="f full"><label for="sfName">ชื่อวัสดุ / สินค้า</label><input id="sfName" value="' + esc(f.name || '') + '" placeholder="เช่น แผ่นอะลูมิเนียมคอมโพสิต 4 มม."></div>' +
+    '<div class="form-grid sk-form">' + own + custF + sfSec('info', 'ข้อมูลวัสดุ', 'ชื่อ หมวด และหน่วยนับ') + '<div class="f full"><label for="sfName">ชื่อวัสดุ / สินค้า</label><input id="sfName" value="' + esc(f.name || '') + '" placeholder="เช่น แผ่นอะลูมิเนียมคอมโพสิต 4 มม."></div>' +
     '<div class="f full"><span class="lbl">หมวด</span><div class="sf-chips">' + allCats.map(n => { const k = stCat(n); return '<button type="button" class="sf-chip' + (f.cat === n ? ' on' : '') + '" style="--sc:' + k.col + '" data-sfcat="' + esc(n) + '" aria-pressed="' + (f.cat === n) + '">' + k.ic + esc(n) + '</button>'; }).join('') + '</div><input id="sfCat" value="' + esc(f.cat || '') + '" placeholder="หรือพิมพ์หมวดใหม่"></div>' +
     '<div class="f full"><span class="lbl">หน่วยนับ</span><div class="sf-chips sm">' + ST_UNITS.map(n => '<button type="button" class="sf-chip' + (f.unit === n ? ' on' : '') + '" data-sfunit="' + esc(n) + '" aria-pressed="' + (f.unit === n) + '">' + esc(n) + '</button>').join('') + '<input id="sfUnit" class="sf-unit" value="' + esc(ST_UNITS.indexOf(f.unit) >= 0 ? '' : f.unit || '') + '" placeholder="อื่นๆ"></div></div>' +
-    (isNew ? '<div class="f"><label for="sfQty">ยอดเริ่มต้น</label>' + step('sfQty', f.qty, '0') + '<span class="hint">ของที่มีอยู่ตอนนี้</span></div>'
+    sfSec('qty', 'จำนวนในคลัง', isNew ? 'ยอดที่มีตอนนี้และจุดเตือนสั่งซื้อ' : 'นับสต็อกและจุดเตือนสั่งซื้อ') + (isNew ? '<div class="f"><label for="sfQty">ยอดเริ่มต้น</label>' + step('sfQty', f.qty, '0') + '<span class="hint">ของที่มีอยู่ตอนนี้</span></div>'
       : '<div class="f"><label for="sfAdj">นับสต็อก: ยอดจริง</label>' + step('sfAdj', f.adj, stNum(it.qty)) + '<span class="hint">ตอนนี้ ' + esc(stNum(it.qty)) + ' ' + esc(it.unit || '') + ' · ว่าง = ไม่ปรับ</span></div>') +
     (cu || (it && it.grade) ? '' : '<div class="f"><label for="sfMin">จุดสั่งซื้อ</label>' + step('sfMin', f.min, '0') + '<span class="hint">เตือน "ใกล้หมด" เมื่อเหลือไม่เกินนี้</span></div>') +
-    (!NEW_API() || cu ? '' : '<div class="f"><label for="sfPrice">ราคาต่อหน่วย (บาท)</label><input id="sfPrice" type="number" min="0" step="any" inputmode="decimal" value="' + esc(f.price === undefined || f.price === 0 ? '' : f.price) + '" placeholder="เช่น 850"><span class="hint">ใช้คิดต้นทุนวัสดุต่อเลข Job · ไม่บังคับ</span></div>') +
-    '<div class="f"><label for="sfLoc">ที่เก็บ</label><input id="sfLoc" value="' + esc(f.loc || '') + '" placeholder="เช่น ชั้น A1"></div>' +
+    (!NEW_API() || cu ? '' : sfSec('more', 'ราคาและที่เก็บ', 'ใช้คิดต้นทุนต่อเลข Job') + '<div class="f"><label for="sfPrice">ราคาต่อหน่วย (บาท)</label><input id="sfPrice" type="number" min="0" step="any" inputmode="decimal" value="' + esc(f.price === undefined || f.price === 0 ? '' : f.price) + '" placeholder="เช่น 850"><span class="hint">ใช้คิดต้นทุนวัสดุต่อเลข Job · ไม่บังคับ</span></div>') +
+    (cu || !NEW_API() ? sfSec('more', 'ที่เก็บและหมายเหตุ', '') : '') + '<div class="f"><label for="sfLoc">ที่เก็บ</label><input id="sfLoc" value="' + esc(f.loc || '') + '" placeholder="เช่น ชั้น A1"></div>' +
     '<div class="f full"><label for="sfNote">หมายเหตุ</label><input id="sfNote" value="' + esc(f.note || '') + '" placeholder="เช่น สั่งจากร้าน… / ขนาด 1220×2440 มม."></div></div></div>' +
     '<div class="pm-f">' + (!isNew ? (SM.del ? '<span class="pm-del">ลบ ' + esc(it.name) + '? (ประวัติยังอยู่)</span><button type="button" class="btn sm" data-sdel="no">ไม่</button><button type="button" class="btn sm danger" data-sdel="yes">ลบ</button>' : '<button type="button" class="btn ghost sm" data-sdel="ask">' + I.trash + 'ลบ</button>') : '') +
     '<span style="flex:1"></span><button type="button" class="btn" data-' + (isNew ? 'sclose' : 'sback') + '="1">ยกเลิก</button><button type="button" class="btn primary" data-ssave="1"' + (SM.busy ? ' disabled' : '') + '>' + (SM.busy ? '<span class="spin-dot"></span>' : '') + (isNew ? 'เพิ่มวัสดุ' : 'บันทึก') + '</button></div>';

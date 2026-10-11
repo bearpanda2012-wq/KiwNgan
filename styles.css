@@ -4559,3 +4559,39 @@ body{scrollbar-gutter:stable}
 .kb-form .kf-pin input[type=checkbox]{flex:none;width:18px;height:18px;min-height:0;padding:0;margin:0;border:0;box-shadow:none;background:none}
 .kb-form .kf-pin span{flex:1;font-size:13.5px;color:var(--ink)}
 .kb-form .kf-pin:has(input:checked){border-color:#C08A1A;box-shadow:0 0 0 1px #C08A1A}
+
+/* ===== v2.72.3: ฟอร์มเพิ่ม/แก้วัสดุ มีสีสัน (โทนสุภาพ ตามสีหมวด --h) ===== */
+.sk-mcard .sk-mh .skg-cover.none{background:radial-gradient(110% 120% at 15% 0%,color-mix(in oklab,var(--h) 42%,var(--surface)),color-mix(in oklab,var(--h) 15%,var(--surface)) 55%,color-mix(in oklab,var(--h) 4%,var(--surface-2)));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--h) 16%,transparent)}
+.sk-mcard .sk-mh .skg-cover.none i{background:var(--surface);color:var(--h);box-shadow:0 12px 26px -14px var(--h)}
+.sk-mcard .sk-mh .skg-cover.none small{color:color-mix(in oklab,var(--h) 55%,var(--muted))}
+.sk-mcard .sk-mh .skg-btns .skg-cam{background:var(--h);border-color:var(--h);color:#fff}
+.sk-mcard .sk-mh .skg-btns .skg-pick{color:var(--h);border-color:color-mix(in oklab,var(--h) 35%,var(--line))}
+.sk-ft{display:flex;align-items:center;gap:10px}
+.sk-ft::before{content:'';width:10px;height:28px;border-radius:6px;background:linear-gradient(180deg,var(--h),color-mix(in oklab,var(--h) 45%,var(--surface)))}
+.sf-sec{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;margin:10px 0 -2px;padding:10px 12px;border-radius:12px;background:linear-gradient(90deg,color-mix(in oklab,var(--sc2) 12%,var(--surface)),transparent 85%)}
+.sf-sec i{grid-row:1/3;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--sc2);color:#fff;box-shadow:0 6px 14px -8px var(--sc2)}
+.sf-sec i svg{width:18px;height:18px}
+.sf-sec b{font-size:14.5px;color:var(--ink)}.sf-sec small{font-size:12px;color:var(--muted)}
+.sf-sec.s-info{--sc2:var(--h)}.sf-sec.s-qty{--sc2:#3C8D62}.sf-sec.s-more{--sc2:#B8742A}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sf-sec.s-qty{--sc2:#5DB487}:root:not([data-theme="light"]) .sf-sec.s-more{--sc2:#D9984F}}
+:root[data-theme="dark"] .sf-sec.s-qty{--sc2:#5DB487}:root[data-theme="dark"] .sf-sec.s-more{--sc2:#D9984F}
+/* เป็นของ: การ์ดสีพร้อมไอคอน */
+.sf-own button{flex-direction:row;align-items:center;gap:10px;--oc:#0B6B70;transition:border-color .15s,box-shadow .15s,background .15s,transform .15s}
+.sf-own button.o-cu{--oc:#2D5FC4}
+.sf-own button i{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:color-mix(in oklab,var(--oc) 12%,var(--surface));color:var(--oc)}
+.sf-own button i svg{width:19px;height:19px}
+.sf-own button span{display:flex;flex-direction:column;gap:1px;min-width:0}
+.sf-own button:hover{transform:translateY(-1px);border-color:color-mix(in oklab,var(--oc) 40%,var(--line))}
+.sf-own button[aria-pressed=true]{border-color:var(--oc);box-shadow:0 0 0 1px var(--oc),0 8px 18px -12px var(--oc);background:linear-gradient(140deg,color-mix(in oklab,var(--oc) 10%,var(--surface)),var(--surface) 80%)}
+.sf-own button[aria-pressed=true] i{background:var(--oc);color:#fff}
+.sf-own button[aria-pressed=true] b{color:var(--oc)}
+/* หมวด: ชิปพื้นสีอ่อนของหมวด · หน่วย: เลือกแล้วเป็นสีหมวดที่เลือก */
+.sk-form .sf-chips:not(.sm) .sf-chip{background:color-mix(in oklab,var(--sc) 8%,var(--surface));border-color:color-mix(in oklab,var(--sc) 24%,var(--line))}
+.sk-form .sf-chips:not(.sm) .sf-chip.on{background:var(--sc);border-color:var(--sc);color:#fff}
+.sk-form .sf-chips.sm .sf-chip.on{background:color-mix(in oklab,var(--h) 14%,var(--surface));border-color:var(--h);color:color-mix(in oklab,var(--h) 70%,var(--ink));box-shadow:none}
+/* ช่องตัวเลข: ปุ่ม − ส้ม + เขียว */
+.sk-form .sf-step{border-color:color-mix(in oklab,var(--h) 22%,var(--line))}
+.sk-form .sf-step button[data-d="-1"]{background:color-mix(in oklab,#C2410C 9%,var(--surface));color:#C2410C}
+.sk-form .sf-step button[data-d="1"]{background:color-mix(in oklab,#2B8A5A 10%,var(--surface));color:#2B8A5A}
+.sk-form .sf-step button:hover{filter:brightness(.96)}
+.sk-form input:focus,.sk-form textarea:focus{border-color:color-mix(in oklab,var(--h) 60%,var(--line));box-shadow:0 0 0 3px color-mix(in oklab,var(--h) 14%,transparent)}
