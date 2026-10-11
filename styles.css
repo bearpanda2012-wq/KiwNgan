@@ -4694,3 +4694,4 @@ body{scrollbar-gutter:stable}
 .push-test{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0}.push-test small{color:var(--muted);font-size:12.5px;flex:1;min-width:200px}
 .push-tips{margin:8px 0 12px;padding:10px 14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line)}
 .push-tips summary{cursor:pointer;font-weight:700;font-size:13.5px}.push-tips ul{margin:8px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.55}
+.cnt-search{padding:10px 18px 0}.cnt-search .search{width:100%}

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.74.0';
+const APP_VERSION = '2.74.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5559,21 +5559,22 @@ function stBuyPrint() {
 }
 function stBuyClose() { const m = $('#buyModal'); if (m) m.remove(); if (!P2.id && !P2.add && !SM.mode && !KM.mode) document.body.classList.remove('pm-open'); }
 /* ---- นับสต็อกประจำเดือน ---- */
-const CNT = { v: {}, cat: 'all', busy: false, onlyDiff: false };
+const CNT = { v: {}, cat: 'all', busy: false, onlyDiff: false, q: '' };
 const stCountItems = () => stockItems().filter(x => !stCustOf(x) && (stReg(x) || !stZero(x)));
-function stCountOpen() { CNT.v = {}; CNT.cat = 'all'; CNT.onlyDiff = false; stCountDraw(); }
+function stCountOpen() { CNT.v = {}; CNT.cat = 'all'; CNT.onlyDiff = false; CNT.q = ''; stCountDraw(); setTimeout(() => { const x = $('#cntQ'); if (x && matchMedia('(pointer:fine)').matches) x.focus(); }, 60); }
 function stCountDiffs() { return stCountItems().filter(x => CNT.v[x.id] !== undefined && CNT.v[x.id] !== '' && +CNT.v[x.id] !== (+x.qty || 0) && +CNT.v[x.id] >= 0); }
 function stCountDraw() {
   let m = $('#cntModal');
   if (!m) { m = document.createElement('div'); m.id = 'cntModal'; m.className = 'pmodal sk-tool-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); document.body.classList.add('pm-open'); }
   const all = stCountItems(), cats = Array.from(new Set(all.map(x => x.cat).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'th'));
   const done = all.filter(x => CNT.v[x.id] !== undefined && CNT.v[x.id] !== '').length, diffs = stCountDiffs();
-  const list = all.filter(x => (CNT.cat === 'all' || x.cat === CNT.cat) && (!CNT.onlyDiff || diffs.indexOf(x) >= 0)).sort((a, b) => String(a.cat).localeCompare(String(b.cat), 'th') || String(a.name).localeCompare(String(b.name), 'th'));
+  const qq = CNT.q.trim().toLowerCase(), list = all.filter(x => (CNT.cat === 'all' || x.cat === CNT.cat) && (!CNT.onlyDiff || diffs.indexOf(x) >= 0) && (!qq || [x.name, x.cat, x.loc, x.note, x.size].join(' ').toLowerCase().indexOf(qq) >= 0)).sort((a, b) => String(a.cat).localeCompare(String(b.cat), 'th') || String(a.name).localeCompare(String(b.name), 'th'));
   const body = m.querySelector('.skt-b'), top = body ? body.scrollTop : 0;
   m.innerHTML = '<div class="pm-card skt-card" style="--tc:#7064B0"><header class="skt-h"><i>' + SKT_IC.count + '</i><div><h2>นับสต็อก</h2><small>ใส่ยอดที่นับได้จริง · ไม่ใส่ = ไม่ปรับ · บันทึกเฉพาะรายการที่ต่างจากในระบบ</small></div><button type="button" class="icon-btn" data-cntx="1" aria-label="ปิด">✕</button></header>' +
     '<div class="cnt-prog" id="cntProg">' + stCountProg() + '</div>' +
+    '<div class="cnt-search"><label class="search">' + I.search + '<input id="cntQ" type="search" autocomplete="off" placeholder="ค้นหาวัสดุ หมวด ที่เก็บ…" value="' + esc(CNT.q) + '" aria-label="ค้นหาวัสดุที่จะนับ"></label></div>' +
     '<div class="qchips cnt-cats">' + [['all', 'ทั้งหมด']].concat(cats.map(c => [c, c])).map(c => '<button type="button" class="qchip" data-cntcat="' + esc(c[0]) + '" aria-pressed="' + (CNT.cat === c[0]) + '">' + esc(c[1]) + '</button>').join('') + '<button type="button" class="qchip q-late" data-cntdiff="1" aria-pressed="' + CNT.onlyDiff + '">เฉพาะที่ต่าง</button></div>' +
-    '<div class="pm-b skt-b"><div class="cnt-list">' + list.map(x => { const v = CNT.v[x.id], has = v !== undefined && v !== '', dq = has ? Math.round((+v - (+x.qty || 0)) * 100) / 100 : 0;
+    '<div class="pm-b skt-b"><div class="cnt-list">' + (list.length ? '' : '<div class="kb-empty"><span>' + I.search + '</span><b>ไม่พบวัสดุที่ค้นหา</b><small>ลองพิมพ์คำอื่น หรือเปลี่ยนหมวด</small></div>') + list.map(x => { const v = CNT.v[x.id], has = v !== undefined && v !== '', dq = has ? Math.round((+v - (+x.qty || 0)) * 100) / 100 : 0;
       return '<div class="cnt-r' + (has ? (dq ? ' diff' : ' same') : '') + '" data-cntrow="' + esc(x.id) + '">' + stPhoto(x, 'mini') + '<span class="buy-t"><b>' + esc(x.name) + '</b><small>' + esc([x.cat, x.loc ? '📍 ' + x.loc : ''].filter(Boolean).join(' · ')) + '</small></span>' +
         '<span class="cnt-sys"><small>ในระบบ</small><b>' + esc(stNum(x.qty)) + '</b></span><span class="cnt-in"><input type="number" min="0" step="any" inputmode="decimal" data-cntq="' + esc(x.id) + '" value="' + esc(has ? v : '') + '" placeholder="นับได้"><small>' + esc(x.unit || '') + '</small></span>' +
         '<span class="cnt-d">' + stCountD(has, dq) + '</span></div>'; }).join('') + '</div></div>' +
@@ -5627,9 +5628,11 @@ document.addEventListener('change', e => {
   if (t.id === 'buyNote') BUY.note = t.value;
 });
 document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset) return; if (t.dataset.cntq !== undefined) stCountUpd(t.dataset.cntq, t.value);
+  if (t.id === 'cntQ') { CNT.q = t.value; const pos = t.selectionStart; stCountDraw(); const x = $('#cntQ'); if (x) { x.focus(); try { x.setSelectionRange(pos, pos); } catch (er) {} } return; }
   if (t.dataset.buyq !== undefined) { BUY.qty[t.dataset.buyq] = t.value; const x = stItem(t.dataset.buyq), c = t.closest('.buy-r').querySelector('.buy-c'); if (x && +x.price && c) c.textContent = baht((+t.value || 0) * (+x.price)); const rows = stBuyRows(), tot = rows.reduce((s, r) => s + r.cost, 0), el = $('#buyModal .buy-tot'); if (el) el.innerHTML = rows.length + ' รายการ' + (rows.some(r => r.cost) ? ' · ประมาณ <b>' + baht(tot) + '</b>' : ''); }
   if (t.id === 'buyNote') BUY.note = t.value; });
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target && e.target.id === 'cntQ') { e.preventDefault(); const f = $('#cntModal [data-cntq]'); if (f) { f.focus(); f.select(); } return; }
   if (e.key === 'Enter' && e.target && e.target.dataset && e.target.dataset.cntq !== undefined) { e.preventDefault(); const all = Array.from(document.querySelectorAll('#cntModal [data-cntq]')), nx = all[all.indexOf(e.target) + 1]; if (nx) { nx.focus(); nx.select(); } return; }
   if (e.key === 'Escape' && !e.cancelBubble && ($('#buyModal') || $('#cntModal'))) { e.stopPropagation(); if ($('#buyModal')) stBuyClose(); else if (!stCountDiffs().length) stCountClose(); }
 }, true);
