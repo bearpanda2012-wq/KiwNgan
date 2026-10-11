@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.37.1';
+const VERSION = '1.38.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -114,7 +114,9 @@ const PUBLIC = {
   // ลิงก์ให้ Sale ดูสถานะงาน (อ่านอย่างเดียว ไม่ต้องเข้าสู่ระบบ) — ต้องมีกุญแจที่แอดมินสร้าง
   saleView: p => saleView_(p.k, p.sale),
   // ปุ่ม Sale ที่หน้าเข้าสู่ระบบ: ใส่ PIN ของ Sale (แอดมินตั้งไว้) แล้วได้กุญแจเปิดหน้าสถานะงาน
-  saleOpen: p => saleOpen_(p.pin)
+  saleOpen: p => saleOpen_(p.pin),
+  // service worker ถามว่า push ล่าสุดของ "เครื่องนี้" คือเรื่องอะไร (ใช้ endpoint ของเครื่องเป็นกุญแจ ไม่ต้องใช้ token ที่อาจหมดอายุ/เป็นของบัญชีอื่น)
+  pushInfoEp: p => ({ info: pushInfoEp_(p.ep) })
 };
 
 const ACTIONS = {
@@ -138,10 +140,10 @@ const ACTIONS = {
   rtcSend: (p, u) => { const c = CacheService.getScriptCache(), k = 'sigp:' + String(p.id || ''); if (p.id && !c.get(k)) { c.put(k, '1', 300); pushForSignal_(p, u); } const r = withLock_(() => rtcSend_(p, u)); if (!p.id && !r.dup) pushForSignal_(p, u); return r; },   // โทร/ขอดูจอ: ส่ง push ก่อนเขียนลงชีต (เด้งเร็วขึ้น) · รหัสซ้ำไม่ส่งซ้ำ
   pushKey: () => ({ key: vapid_().pub }),
   pushSub: (p, u) => withLock_(() => pushSub_(p.sub, u, p.urgent)),
-  digestTest: (p, u) => { admin_(u); const r = digestNow_(Array.isArray(p.topics) && p.topics.length ? p.topics : digestCfg_().topics); const sent = p.send ? pushTo_([u.name], digestInfo_(r)) : null; return Object.assign(r, { sent: sent, devices: pushList_(u).length, trigger: digestTriggerOn_(), last: PropertiesService.getScriptProperties().getProperty('DIGEST_SENT') || '' }); },   // ดูตัวอย่าง/ส่งสรุปเช้าให้ตัวเองทันที
+  digestTest: (p, u) => { admin_(u); const r = digestNow_(Array.isArray(p.topics) && p.topics.length ? p.topics : digestCfg_().topics); const sent = p.send ? pushTo_([u.name].concat(Array.isArray(p.to) ? p.to.map(String).slice(0, 50) : []), digestInfo_(r)) : null; return Object.assign(r, { sent: sent, devices: pushList_(u).length, trigger: digestTriggerOn_(), last: PropertiesService.getScriptProperties().getProperty('DIGEST_SENT') || '' }); },   // ดูตัวอย่าง/ส่งสรุปเช้าให้ตัวเองทันที
   pushTest: (p, u) => { Utilities.sleep(Math.max(0, Math.min(8000, +p.delay || 0))); pushTo_([u.name], { kind: 'call', from: 'ทดสอบระบบ', sid: '' }); return { ok: true, devices: pushList_(u).length }; },   // ทดสอบเสียงเรียกเข้า: รอสักครู่ให้ปิดแอป/ล็อกจอก่อน
   pushUnsub: (p, u) => withLock_(() => pushUnsub_(p.endpoint, u)),
-  pushInfo: (p, u) => ({ info: pushInfo_(u) }),
+  pushInfo: (p, u) => ({ info: (p.ep && pushInfoEp_(p.ep)) || pushInfo_(u) }),
   rtcPoll: (p, u) => Object.assign(rtcPoll_(u, p.wait, p.ack), { room: roomView_(roomGet_(), u), ds: stamp_('data'), ms: stamp_('msg') }),
   room: (p, u) => room_(p, u),
   deleteImage: (p, u) => withLock_(() => deleteImage_(p.id, u)),
@@ -1692,21 +1694,45 @@ function pushSub_(sub, u, urgent) {
   if (!PUSH_HOST_.test(ep) || ep.length > 900) throw new Error('ลงทะเบียนการแจ้งเตือนไม่ได้');
   const list = pushList_(u).filter(x => x.e !== ep);
   const ent = { e: ep, t: Date.now() };
+  try {   // เครื่องนี้ย้ายมาเป็นของบัญชีนี้: เอาออกจากบัญชีอื่น
+    const pr = PropertiesService.getScriptProperties(), all = pr.getProperties();
+    Object.keys(all).forEach(k => { if (k.indexOf('PUSH_') !== 0 || k === pushKeyOf_(u)) return; let l = []; try { l = JSON.parse(all[k] || '[]'); } catch (e) { return; }
+      const n = l.filter(x => x && x.e !== ep); if (n.length !== l.length) { if (n.length) pr.setProperty(k, JSON.stringify(n)); else pr.deleteProperty(k); } });
+  } catch (e) {}
   if (ux && PUSH_HOST_.test(ux) && ux.length <= 900 && ux !== ep) ent.x = ux;   // ช่องด่วน (โทร/ขอดูจอ): เครื่องรู้ทันทีว่าเป็นสายเรียกเข้า เด้งได้เลยไม่ต้องรอถามเซิร์ฟเวอร์
   list.push(ent);
   pushSave_(u, list.slice(-6)); // สูงสุด 6 เครื่องต่อคน
   return { ok: true, devices: Math.min(list.length, 6) };
 }
 function pushUnsub_(ep, u) { pushSave_(u, pushList_(u).filter(x => x.e !== String(ep || ''))); return { ok: true }; }
+function epKey_(ep) { return 'pinfo:e:' + u8_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(ep || ''))).slice(0, 16).map(b => ('0' + b.toString(16)).slice(-2)).join(''); }
+function pushInfoEp_(ep) {
+  ep = String(ep || ''); if (!PUSH_HOST_.test(ep) || ep.length > 900) return null;
+  try { return JSON.parse(CacheService.getScriptCache().get(epKey_(ep)) || 'null'); } catch (e) { return null; }
+}
+/* เครื่องหนึ่งเป็นของบัญชีที่เข้าระบบล่าสุดเท่านั้น (เดิมเครื่องที่เคยสลับบัญชีได้ push ของทั้ง 2 บัญชี → เด้งซ้ำ และถามข้อมูลผิดคน) */
+function pushOwners_() {
+  const own = {}, all = PropertiesService.getScriptProperties().getProperties();
+  Object.keys(all).forEach(k => {
+    if (k.indexOf('PUSH_') !== 0) return; let l = []; try { l = JSON.parse(all[k] || '[]'); } catch (e) {}
+    const uid = k.slice(5); (Array.isArray(l) ? l : []).forEach(x => { if (x && x.e && (!own[x.e] || (+x.t || 0) > own[x.e].t)) own[x.e] = { uid: uid, t: +x.t || 0 }; });
+  });
+  return own;
+}
 function pushInfo_(u) { try { return JSON.parse(CacheService.getScriptCache().get('pinfo:' + u.name) || 'null'); } catch (e) { return null; } }
 const PUSH_URGENT_ = { call: 1, view: 1, remote: 1, share: 1, sos: 1 };
 function pushTo_(names, info) {
   const users = usersLite_().filter(x => x.active), cache = CacheService.getScriptCache(), st = { users: 0, devices: 0, ok: 0, codes: [], err: '' };   // ผลการส่ง (ไว้บอกในหน้าทดสอบ)
-  names.forEach(n => {
+  const own = pushOwners_(), done = {}, ttl = info.kind === 'digest' ? 7200 : 120;   // สรุปเช้า: เครื่องที่ปิดเน็ตอยู่ เปิดมาทีหลังยังอ่านได้
+  names.filter((n, i) => names.indexOf(n) === i).forEach(n => {
     const ru = users.find(x => x.name === n); if (!ru) return;
-    const list = pushList_(ru); if (!list.length) return;
+    const list = pushList_(ru).filter(x => !done[x.e] && (!own[x.e] || own[x.e].uid === ru.id)); if (!list.length) return;   // 1 เครื่อง = 1 แจ้งเตือน
+    list.forEach(x => { done[x.e] = 1; });
     st.users++; st.devices += list.length;
-    cache.put('pinfo:' + n, JSON.stringify(Object.assign({}, info, { ts: Date.now() })), info.kind === 'digest' ? 7200 : 120);   // สรุปเช้า: เครื่องที่ปิดเน็ตอยู่ เปิดมาทีหลังยังอ่านได้
+    const pj = JSON.stringify(Object.assign({}, info, { ts: Date.now() })), byEp = {};
+    cache.put('pinfo:' + n, pj, ttl);
+    list.forEach(x => { byEp[epKey_(x.e)] = pj; if (x.x) byEp[epKey_(x.x)] = pj; });
+    try { cache.putAll(byEp, ttl); } catch (e) {}
     let res = [];
     const urg = !!PUSH_URGENT_[info.kind], eps = list.map(x => urg && x.x ? x.x : x.e);   // สายเรียกเข้า/ขอดูจอ/ขอความช่วยเหลือ → ส่งเข้าช่องด่วนของเครื่องที่มี
     try {

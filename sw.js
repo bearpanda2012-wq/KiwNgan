@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.77.0';
+const CACHE = 'kiwngan-v2.77.1';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 /* ตัวนี้ลงทะเบียน 2 ที่: ที่หลัก (แอป) และ ./ring/ (ช่องด่วน: push ที่มาทางนี้คือสายเรียกเข้า/ขอดูจอแน่นอน เด้งได้ทันที) */
@@ -47,15 +47,24 @@ const PUSH_TEXT = {
   kb: (f, i) => ['📘 ความรู้ใหม่' + (i.code ? ' · ' + i.code : '') + (i.count ? ' (สำคัญ)' : ''), (i.title || '') + ' — โดย ' + f]
 };
 /* ถามเซิร์ฟเวอร์ว่าใครเรียก/เรื่องอะไร (push ไม่มีเนื้อหา) · จำกัดเวลารอ ไม่ให้แจ้งเตือนช้า */
+/* ถามด้วย endpoint ของเครื่องนี้ก่อน (ได้เรื่องที่ส่งถึงเครื่องนี้จริง แม้ token หมดอายุหรือเคยสลับบัญชี) แล้วค่อยถามแบบเดิมตามชื่อผู้ใช้ */
 async function pushInfo(ms) {
+  const until = Date.now() + (ms || 9000);
   try {
     const m = await (await caches.open('kiwngan-meta')).match('/__meta'); if (!m) return null;
-    const meta = await m.json(), ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const tm = setTimeout(() => ctl && ctl.abort(), ms || 9000);
-    const r = await fetch(meta.api, { method: 'POST', body: JSON.stringify({ token: meta.token, action: 'pushInfo', payload: {} }), redirect: 'follow', signal: ctl ? ctl.signal : undefined });
-    clearTimeout(tm); const j = await r.json(); return j && j.ok && j.data ? j.data.info : null;
+    const meta = await m.json();
+    let ep = ''; try { const sub = self.registration.pushManager && await self.registration.pushManager.getSubscription(); ep = sub ? sub.endpoint : ''; } catch (x) {}
+    const ask = async (action, token, payload) => {
+      const left = until - Date.now(); if (left < 300) return null;
+      const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, tm = setTimeout(() => ctl && ctl.abort(), left);
+      try { const r = await fetch(meta.api, { method: 'POST', body: JSON.stringify({ token: token, action: action, payload: payload }), redirect: 'follow', signal: ctl ? ctl.signal : undefined }); const j = await r.json(); return j && j.ok && j.data ? j.data.info : null; }
+      catch (x) { return null; } finally { clearTimeout(tm); }
+    };
+    return (ep && await ask('pushInfoEp', '', { ep: ep })) || (meta.token ? await ask('pushInfo', meta.token, ep ? { ep: ep } : {}) : null);
   } catch (x) { return null; }
 }
+/* Safari (iPhone/iPad/Mac): แสดงซ้ำด้วยแท็กเดิมแล้วไม่ทับของเก่า แต่ซ้อนเป็นหลายรายการ → แสดงครั้งเดียว ไม่มีตัวกั้นระหว่างรอ */
+const SAFARI = (() => { try { const ua = self.navigator && self.navigator.userAgent || ''; return /AppleWebKit/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Android/.test(ua); } catch (x) { return false; } })();
 const URGENT = { call: 1, view: 1, remote: 1, share: 1, sos: 1 };
 const VIB = { call: [900, 350, 900, 350, 900, 350, 900, 350, 900], view: [600, 250, 600, 250, 600, 250, 600], remote: [600, 250, 600, 250, 600, 250, 600], share: [600, 250, 600, 250, 600], sos: [400, 150, 400, 150, 400, 150, 400, 150, 400] };
 const STOP = {};   // แท็กที่ผู้ใช้กดหรือปัดทิ้งแล้ว → หยุดเรียกซ้ำ
@@ -75,7 +84,7 @@ function notifOpts(k, info, extra) {
 /* สายเรียกเข้า/ขอดูจอ: เด้งซ้ำทุก ~4 วินาที (มีเสียง+สั่นทุกครั้ง) จนกดรับ/ปัดทิ้ง หรือครบ ~25 วินาที — คล้ายเสียงเรียกเข้า */
 async function ring(k, title, opts) {
   const tag = opts.tag; delete STOP[tag];
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < (SAFARI ? 1 : 7); i++) {
     if (STOP[tag]) return;
     await self.registration.showNotification(title, Object.assign({}, opts, { renotify: true }));
     await wait(i === 0 ? 3500 : 4000);
@@ -94,10 +103,12 @@ self.addEventListener('push', e => {
       return ring(k, t[0], notifOpts(k, info, { tag: 'kiwngan-ring', body: t[1] }));
     }
     let info = null, late = false;
-    const pend = setTimeout(() => { late = true; self.registration.showNotification('🔔 KiwNgan · มีการแจ้งเตือนใหม่', notifOpts('pend', null, { tag: 'kiwngan-pending', body: 'กำลังโหลดรายละเอียด… แตะเพื่อเปิดแอป', requireInteraction: false })); }, 2500);   // เซิร์ฟเวอร์ตอบช้า: เด้งก่อน แล้วค่อยแทนที่
+    const pend = SAFARI ? 0 : setTimeout(() => { late = true; self.registration.showNotification('🔔 KiwNgan · มีการแจ้งเตือนใหม่', notifOpts('pend', null, { tag: 'kiwngan-pending', body: 'กำลังโหลดรายละเอียด… แตะเพื่อเปิดแอป', requireInteraction: false })); }, 2500);   // เซิร์ฟเวอร์ตอบช้า: เด้งก่อน แล้วค่อยแทนที่
     info = await pushInfo(15000); clearTimeout(pend);
-    const k = info && PUSH_TEXT[info.kind] ? info.kind : (late ? '' : 'call');
-    if (late) { (await self.registration.getNotifications({ tag: 'kiwngan-pending' })).forEach(n => n.close()); if (!k) return self.registration.showNotification('🔔 KiwNgan · มีการแจ้งเตือนใหม่', notifOpts('pend', null, { body: 'แตะเพื่อเปิดแอปดูรายละเอียด' })); }
+    // ไม่รู้ว่าเรื่องอะไร → แจ้งเตือนกลาง ๆ 1 รายการ (ห้ามเดาว่าเป็น "สายเรียกเข้า" — ทำให้เด้งซ้ำหลายครั้งและเปิดแอปแล้วไม่เจออะไร)
+    const k = info && PUSH_TEXT[info.kind] ? info.kind : '';
+    if (late) (await self.registration.getNotifications({ tag: 'kiwngan-pending' })).forEach(n => n.close());
+    if (!k) return self.registration.showNotification('🔔 KiwNgan · มีการแจ้งเตือนใหม่', notifOpts('pend', null, { tag: 'kiwngan-pending', body: 'แตะเพื่อเปิดแอปดูรายละเอียด', requireInteraction: false }));
     const t = PUSH_TEXT[k](info && info.from ? info.from : 'มีคน', info || {});
     if (k === 'msg' || k === 'sos') {   // แอปเปิดอยู่บนจอ: แอปเด้งแจ้งเตือน + เสียงเองแล้ว ไม่ต้องซ้ำ
       const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.77.0';
+const APP_VERSION = '2.77.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2693,7 +2693,8 @@ function pushNav(hash, tries) {
   if (p[0] === 'digest') { if (viewsFor(S.user).some(v => v.id === 'flow')) go('flow'); return digestShow(); }
   if (p[0] === 'push') {   // แจ้งเตือนที่โหลดรายละเอียดไม่ทัน: ถามเซิร์ฟเวอร์ว่าเรื่องอะไร แล้วพาไปที่นั่น
     if (mode() !== 'sheet') return;
-    return api().pushInfo({}).then(r => { const i = r && r.info; if (!i) return;
+    const ep = navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(g => g.pushManager.getSubscription()).then(x => x ? x.endpoint : '').catch(() => '') : Promise.resolve('');
+    return ep.then(e => api().pushInfo(e ? { ep: e } : {})).then(r => { const i = r && r.info; if (!i) return;
       const k = i.kind, h = k === 'msg' || k === 'sos' ? 'msg/' + encodeURIComponent(i.mid || '') : ['assign', 'cmt', 'help', 'fix'].indexOf(k) >= 0 && i.code ? 'job/' + encodeURIComponent(i.code) : k === 'digest' ? 'digest' : k === 'low' || k === 'nostock' ? 'stock' : k === 'kb' ? 'kb' : '';
       if (h) pushNav('#' + h); }).catch(() => {});
   }
@@ -4791,7 +4792,7 @@ function digestSection(d) {
           '<small>' + (g.to.length ? 'แตะชื่อเพื่อเลือก/เอาออก' : 'ยังไม่ได้เลือก จึงส่งให้แอดมินทุกคน · แตะชื่อเพื่อเลือกเอง') + ' · ผู้รับต้องเปิดแจ้งเตือนในเครื่องตัวเองก่อน (ตั้งค่า › แจ้งเตือน)</small></div></div>' +
       '</div></div>' +
       '<div class="dg-pv"><span class="dg-pvh">ตัวอย่างที่จะได้รับ</span><div class="dg-ntf"><div class="dg-nh"><span class="dg-app">' + brandMark(S.settings) + '</span><span>KiwNgan · ' + (g.on ? hh(g.hour) : 'ตัวอย่าง') + '</span></div><b>' + esc(pv.title) + '</b><ul>' + lines + '</ul></div>' +
-        '<div class="dg-act"><button type="button" class="btn sm" data-act="dgprev">' + DG_IC.eye + 'อัปเดตตัวอย่าง</button><button type="button" class="btn sm primary" data-act="dgsend"' + (DG.busy ? ' disabled' : '') + '>' + DG_IC.send + 'ส่งให้ฉันตอนนี้</button></div>' +
+        '<div class="dg-act"><button type="button" class="btn sm" data-act="dgprev">' + DG_IC.eye + 'อัปเดตตัวอย่าง</button><button type="button" class="btn sm primary" data-act="dgsend"' + (DG.busy ? ' disabled' : '') + '>' + DG_IC.send + 'ส่งทดสอบตอนนี้</button></div>' +
         '<small class="dg-note">ตั้งค่าแล้วกด <b>บันทึก</b> ที่แถบด้านล่าง</small></div>' +
     '</div></section>';
 }
@@ -4799,7 +4800,7 @@ async function digestSend(send) {
   if (mode() === 'sheet' && !apiAtLeast('1.37.0')) return toast('ต้องอัปเดตหลังบ้าน (Apps Script) เป็นเวอร์ชันล่าสุดก่อน', true);
   DG.busy = true; digestDraw();
   try {
-    const r = await api().digestTest({ send: !!send, topics: digestCfgC(S.draft || S.settings).topics });
+    const g = digestCfgC(S.draft || S.settings), r = await api().digestTest({ send: !!send, topics: g.topics, to: g.to });   // ส่งทดสอบ: ถึงตัวเอง + คนที่เลือกไว้ (เครื่องเดียวกันได้ครั้งเดียว)
     DG.prev = { title: r.title, body: r.body, alert: r.alert };
     if (send) {
       const st = r.sent;
