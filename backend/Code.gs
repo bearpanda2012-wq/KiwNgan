@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.36.1';
+const VERSION = '1.37.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -138,6 +138,7 @@ const ACTIONS = {
   rtcSend: (p, u) => { const c = CacheService.getScriptCache(), k = 'sigp:' + String(p.id || ''); if (p.id && !c.get(k)) { c.put(k, '1', 300); pushForSignal_(p, u); } const r = withLock_(() => rtcSend_(p, u)); if (!p.id && !r.dup) pushForSignal_(p, u); return r; },   // โทร/ขอดูจอ: ส่ง push ก่อนเขียนลงชีต (เด้งเร็วขึ้น) · รหัสซ้ำไม่ส่งซ้ำ
   pushKey: () => ({ key: vapid_().pub }),
   pushSub: (p, u) => withLock_(() => pushSub_(p.sub, u, p.urgent)),
+  digestTest: (p, u) => { admin_(u); const r = digestNow_(Array.isArray(p.topics) && p.topics.length ? p.topics : digestCfg_().topics); if (p.send) pushTo_([u.name], digestInfo_(r)); return Object.assign(r, { devices: pushList_(u).length, trigger: digestTriggerOn_(), last: PropertiesService.getScriptProperties().getProperty('DIGEST_SENT') || '' }); },   // ดูตัวอย่าง/ส่งสรุปเช้าให้ตัวเองทันที
   pushTest: (p, u) => { Utilities.sleep(Math.max(0, Math.min(8000, +p.delay || 0))); pushTo_([u.name], { kind: 'call', from: 'ทดสอบระบบ', sid: '' }); return { ok: true, devices: pushList_(u).length }; },   // ทดสอบเสียงเรียกเข้า: รอสักครู่ให้ปิดแอป/ล็อกจอก่อน
   pushUnsub: (p, u) => withLock_(() => pushUnsub_(p.endpoint, u)),
   pushInfo: (p, u) => ({ info: pushInfo_(u) }),
@@ -449,7 +450,9 @@ function saveSettings_(settings, u) {
   setSetting_('config', JSON.stringify(settings));
   try { CacheService.getScriptCache().remove('cfg'); } catch (e) {}
   log_('', u.name, 'settings', 'แก้ไขการตั้งค่า');
-  return { settings: settings };
+  let dt;
+  if (digestCfg_(settings).on) { try { dt = digestEnsure_(); } catch (e) { dt = false; } }
+  return { settings: settings, digestTrigger: dt };
 }
 
 function defaultSettings_() {
@@ -1702,12 +1705,12 @@ function pushTo_(names, info) {
   names.forEach(n => {
     const ru = users.find(x => x.name === n); if (!ru) return;
     const list = pushList_(ru); if (!list.length) return;
-    cache.put('pinfo:' + n, JSON.stringify(Object.assign({}, info, { ts: Date.now() })), 120);
+    cache.put('pinfo:' + n, JSON.stringify(Object.assign({}, info, { ts: Date.now() })), info.kind === 'digest' ? 7200 : 120);   // สรุปเช้า: เครื่องที่ปิดเน็ตอยู่ เปิดมาทีหลังยังอ่านได้
     let res = [];
     const urg = !!PUSH_URGENT_[info.kind], eps = list.map(x => urg && x.x ? x.x : x.e);   // สายเรียกเข้า/ขอดูจอ/ขอความช่วยเหลือ → ส่งเข้าช่องด่วนของเครื่องที่มี
     try {
       res = UrlFetchApp.fetchAll(eps.map(ep => ({ url: ep, method: 'post', muteHttpExceptions: true, payload: '', contentType: 'application/octet-stream',
-        headers: { TTL: urg ? '45' : '600', Urgency: 'high', Authorization: vapidAuth_(ep) } })));
+        headers: { TTL: urg ? '45' : info.kind === 'digest' ? '7200' : '600', Urgency: 'high', Authorization: vapidAuth_(ep) } })));
     } catch (e) { return; }
     const dead = list.filter((x, i) => res[i] && [404, 410].indexOf(res[i].getResponseCode()) >= 0 && eps[i] === x.e).map(x => x.e);
     const deadX = list.filter((x, i) => res[i] && [404, 410].indexOf(res[i].getResponseCode()) >= 0 && eps[i] === x.x).map(x => x.e);
@@ -1925,11 +1928,72 @@ function morningReminders() {
     try { pushTo_([n], { kind: 'due', from: '', code: js.map(j => j.code).slice(0, 3).join(', '), count: js.length, late: late }); } catch (e) {}
   });
 }
+/* ---------- สรุปงานประจำเช้า → ส่งแจ้งเตือนให้เจ้าของ/หัวหน้า (ตั้งเวลา วัน และผู้รับในหน้า ตั้งค่า > สรุปประจำวัน) ---------- */
+const DIGEST_TOPICS_ = ['design', 'prod', 'due', 'late', 'shipped', 'stock'];
+/* วันที่ส่ง: [0=อา. … 6=ส.] (ค่าเก่า 'wd' / 'sat' / 'all' แปลงให้) · หัวข้อ: ไม่ระบุ = ทุกหัวข้อ */
+function digestDays_(v) {
+  if (Array.isArray(v)) return v.map(Number).filter((n, i, a) => n >= 0 && n <= 6 && n === Math.floor(n) && a.indexOf(n) === i).sort();
+  return v === 'all' ? [0, 1, 2, 3, 4, 5, 6] : v === 'sat' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5];
+}
+function digestCfg_(s) {
+  const d = (s || settings_()).digest || {}, h = Math.round(+d.hour);
+  const tp = Array.isArray(d.topics) ? DIGEST_TOPICS_.filter(k => d.topics.indexOf(k) >= 0) : [];
+  return { on: d.on === true || d.on === 'true', hour: h >= 0 && h <= 23 && d.hour !== '' && d.hour != null ? h : 8,
+           days: digestDays_(d.days), to: Array.isArray(d.to) ? d.to.map(String).filter(Boolean) : [], topics: tp.length ? tp : DIGEST_TOPICS_.slice() };
+}
+const DIGEST_DAYS_ = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'], DIGEST_MON_ = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+/* สรุปจากข้อมูลจริง (ฟังก์ชันเดียวกับ digestBuild ในแอป ใช้ดูตัวอย่างโหมดทดลอง) */
+function digestBuild_(jobs, prods, items, today, yday, dow, topics) {
+  const on = k => !topics || topics.indexOf(k) >= 0;
+  const num = v => { const n = Number(v); return isFinite(n) ? n : 0; }, d10 = v => String(v || '').slice(0, 10);
+  const late = x => x.due && d10(x.due) < today, due = x => d10(x.due) === today;
+  const codes = a => a.slice(0, 4).map(x => x.code || x.title || '-').join(', ') + (a.length > 4 ? ' +' + (a.length - 4) : '');
+  const jo = jobs.filter(j => j.status !== 'done'), jl = jo.filter(late).length, jt = jo.filter(due).length;
+  const po = prods.filter(p => p.stage !== 'shipped'), pr = po.filter(p => p.stage === 'ready').length, pl = po.filter(late).length;
+  const pt = po.filter(due).length, pu = po.filter(p => p.priority === 'urgent').length, mc = po.filter(p => p.stage === 'machine').length;
+  const sh = prods.filter(p => p.stage === 'shipped' && d10(p.shippedAt) === yday).length;
+  const low = items.filter(x => x.own !== 'cust' && !x.grade && num(x.min) > 0 && num(x.qty) <= num(x.min));
+  const dueA = po.filter(due).concat(jo.filter(due)), lateA = po.filter(late).concat(jo.filter(late));
+  const m = +today.slice(5, 7), lines = [];
+  if (on('design')) lines.push('🎨 ฝ่ายแบบ ค้าง ' + jo.length + ' งาน' + (jl ? ' · เลยกำหนด ' + jl : '') + (jt ? ' · ครบกำหนดวันนี้ ' + jt : ''));
+  if (on('prod')) lines.push('🏭 ฝ่ายผลิต ' + po.length + ' งาน · ลงเครื่อง ' + mc + ' · พร้อมส่ง ' + pr + (pl ? ' · เลยกำหนด ' + pl : '') + (pt ? ' · ส่งวันนี้ ' + pt : '') + (pu ? ' · ด่วน ' + pu : ''));
+  if (on('due')) lines.push(dueA.length ? '📅 ครบกำหนดวันนี้ ' + dueA.length + ' งาน: ' + codes(dueA) : '📅 วันนี้ไม่มีงานครบกำหนด');
+  if (on('late')) lines.push(lateA.length ? '⚠️ เลยกำหนด ' + lateA.length + ' งาน: ' + codes(lateA) : '✅ ไม่มีงานเลยกำหนด');
+  if (on('shipped')) lines.push(sh ? '🚚 เมื่อวานส่งมอบแล้ว ' + sh + ' งาน' : '🚚 เมื่อวานไม่มีงานส่งมอบ');
+  if (on('stock')) lines.push(low.length ? '📦 ใกล้หมด ' + low.length + ' รายการ: ' + low.slice(0, 3).map(x => x.name).join(', ') + (low.length > 3 ? ' …' : '') : '📦 วัสดุพอทุกรายการ');
+  const alert = (on('design') || on('late') ? jl : 0) + (on('prod') || on('late') ? pl : 0) + (on('stock') ? low.length : 0);
+  return { title: '☀️ สรุปงานเช้านี้ · ' + DIGEST_DAYS_[dow] + ' ' + (+today.slice(8, 10)) + ' ' + DIGEST_MON_[m - 1], body: lines.join('\n'), alert: alert };
+}
+function digestNow_(topics) {
+  const now = new Date(), today = Utilities.formatDate(now, tz_(), 'yyyy-MM-dd'), yday = Utilities.formatDate(new Date(now.getTime() - 864e5), tz_(), 'yyyy-MM-dd');
+  const dow = +Utilities.formatDate(now, tz_(), 'u') % 7;
+  let items = []; try { items = readAll_('Stock'); } catch (e) {}
+  let prods = []; try { prods = readAll_('Prod'); } catch (e) {}
+  return digestBuild_(readAll_('Jobs'), prods, items, today, yday, dow, topics);
+}
+const digestInfo_ = r => ({ kind: 'digest', from: '', title: r.title, code: r.body, count: r.alert });
+function digestTo_(cfg) {
+  const act = usersLite_().filter(x => x.active).map(x => x.name), to = cfg.to.filter(n => act.indexOf(n) >= 0);
+  return to.length ? to : adminNames_();
+}
+function digestTriggerOn_() { try { return ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'digestTick'); } catch (e) { return null; } }
+function digestEnsure_() { if (!digestTriggerOn_()) ScriptApp.newTrigger('digestTick').timeBased().everyHours(1).create(); return true; }
+/** ทำงานทุกชั่วโมง: ถึงเวลาที่ตั้งไว้ → ส่งสรุปครั้งเดียวต่อวัน */
+function digestTick() {
+  const cfg = digestCfg_(); if (!cfg.on) return;
+  const now = new Date(), hr = +Utilities.formatDate(now, tz_(), 'H'), u = +Utilities.formatDate(now, tz_(), 'u'), today = Utilities.formatDate(now, tz_(), 'yyyy-MM-dd');
+  if (hr < cfg.hour || hr > cfg.hour + 2) return;   // ช่วงเผื่อ 2 ชม. เผื่อรอบก่อนพลาด
+  if (cfg.days.indexOf(u % 7) < 0) return;   // วันที่ไม่ได้ติ๊กไว้
+  const pr = PropertiesService.getScriptProperties(); if (pr.getProperty('DIGEST_SENT') === today) return;
+  pr.setProperty('DIGEST_SENT', today);
+  pushTo_(digestTo_(cfg), digestInfo_(digestNow_(cfg.topics)));
+}
 /** เรียกครั้งเดียวในหน้าแก้ไข Apps Script: ตั้งเวลาสำรองข้อมูลทุกคืน (02:00) และแจ้งเตือนงานใกล้กำหนดตอนเช้า (08:00) */
 function installTriggers() {
-  ScriptApp.getProjectTriggers().forEach(t => { if (['nightly', 'morningReminders'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(t => { if (['nightly', 'morningReminders', 'digestTick'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('nightly').timeBased().everyDays(1).atHour(2).inTimezone(tz_()).create();
   ScriptApp.newTrigger('morningReminders').timeBased().everyDays(1).atHour(8).inTimezone(tz_()).create();
+  ScriptApp.newTrigger('digestTick').timeBased().everyHours(1).create();
   driveRoot_(); ['images', 'backup', 'archive', 'docs'].forEach(driveFolder_); archiveSs_();
   Logger.log('ตั้งเวลาแล้ว: สำรองข้อมูล 02:00 ทุกคืน · แจ้งเตือนงานใกล้กำหนด 08:00 (จ-ศ) · โฟลเดอร์: ' + driveRoot_().getUrl());
 }

@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.74.6';
+const CACHE = 'kiwngan-v2.75.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 /* ตัวนี้ลงทะเบียน 2 ที่: ที่หลัก (แอป) และ ./ring/ (ช่องด่วน: push ที่มาทางนี้คือสายเรียกเข้า/ขอดูจอแน่นอน เด้งได้ทันที) */
@@ -43,6 +43,7 @@ const PUSH_TEXT = {
   due: (f, i) => ['⏳ งานใกล้ถึงกำหนด ' + (i.count || '') + ' งาน', (i.late ? 'เลยกำหนดแล้ว ' + i.late + ' งาน · ' : '') + (i.code || '')],
   low: (f, i) => ['📦 ' + (i.title || 'วัสดุ') + ' ใกล้หมด', 'เหลือ ' + (i.code || '') + ' · ถึงจุดสั่งซื้อแล้ว (' + f + ' เบิกล่าสุด)'],
   nostock: (f, i) => ['🚫 ' + (i.title || 'วัสดุ') + ' หมดสต็อก', 'เหลือ 0 · ' + f + ' เบิกล่าสุด — ต้องสั่งเพิ่ม'],
+  digest: (f, i) => [i.title || '☀️ สรุปงานเช้านี้', i.code || 'แตะเพื่อเปิดดูภาพรวมบริษัท'],
   kb: (f, i) => ['📘 ความรู้ใหม่' + (i.code ? ' · ' + i.code : '') + (i.count ? ' (สำคัญ)' : ''), (i.title || '') + ' — โดย ' + f]
 };
 /* ถามเซิร์ฟเวอร์ว่าใครเรียก/เรื่องอะไร (push ไม่มีเนื้อหา) · จำกัดเวลารอ ไม่ให้แจ้งเตือนช้า */
@@ -59,9 +60,9 @@ const URGENT = { call: 1, view: 1, remote: 1, share: 1, sos: 1 };
 const VIB = { call: [900, 350, 900, 350, 900, 350, 900, 350, 900], view: [600, 250, 600, 250, 600, 250, 600], remote: [600, 250, 600, 250, 600, 250, 600], share: [600, 250, 600, 250, 600], sos: [400, 150, 400, 150, 400, 150, 400, 150, 400] };
 const STOP = {};   // แท็กที่ผู้ใช้กดหรือปัดทิ้งแล้ว → หยุดเรียกซ้ำ
 const wait = ms => new Promise(r => setTimeout(r, ms));
-const urlOf = k => APP + '?from=push#' + (k === 'msg' || k === 'sos' ? 'msg' : k === 'low' || k === 'nostock' ? 'stock' : k);
+const urlOf = k => APP + '?from=push#' + (k === 'msg' || k === 'sos' ? 'msg' : k === 'low' || k === 'nostock' ? 'stock' : k === 'digest' ? 'flow' : k);
 function notifOpts(k, info, extra) {
-  return Object.assign({ body: '', tag: 'kiwngan-' + k + (info && info.code ? '-' + info.code : ''), renotify: true, requireInteraction: !!URGENT[k], silent: false,
+  return Object.assign({ body: '', tag: 'kiwngan-' + k + (info && info.code && k !== 'digest' ? '-' + info.code : ''), renotify: true, requireInteraction: !!URGENT[k], silent: false,
     vibrate: VIB[k] || [300, 120, 300], icon: APP + 'icons/icon-192.png', badge: APP + 'icons/icon-192.png', data: { url: urlOf(k), k: k } }, extra || {});
 }
 /* สายเรียกเข้า/ขอดูจอ: เด้งซ้ำทุก ~4 วินาที (มีเสียง+สั่นทุกครั้ง) จนกดรับ/ปัดทิ้ง หรือครบ ~25 วินาที — คล้ายเสียงเรียกเข้า */

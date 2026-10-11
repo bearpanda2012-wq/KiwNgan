@@ -36,7 +36,7 @@ DRIVE.files['SSID'] = { id: 'SSID', parent: PROJ.id, getId: () => 'SSID', getPar
 global.DriveApp = { getFileById: id => { const f = DRIVE.files[id]; if (!f) throw new Error('no file'); return f; }, getFolderById: id => { const f = DRIVE.folders[id]; if (!f) throw new Error('no folder'); return f; },
   createFolder: n => mkFolder(n, ROOTF.id), getRootFolder: () => ROOTF, Access: { ANYONE_WITH_LINK: 1 }, Permission: { VIEW: 1 } };
 global.MimeType = { GOOGLE_SHEETS: 'sheet' };
-global.ScriptApp = { getProjectTriggers: () => [], deleteTrigger() {}, newTrigger: () => ({ timeBased: () => ({ everyDays: () => ({ atHour: () => ({ inTimezone: () => ({ create() {} }) }) }) }) }) };
+global.ScriptApp = { getProjectTriggers: () => [], deleteTrigger() {}, newTrigger: () => ({ timeBased: () => ({ everyDays: () => ({ atHour: () => ({ inTimezone: () => ({ create() {} }) }) }), everyHours: () => ({ create() {} }) }) }) };
 global.UrlFetchApp = { fetch() { return {}; }, fetchAll: () => [] };
 const ARCH = {}; 
 const ss = { getId: () => 'SSID', getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = mkSheet(n)), getSpreadsheetTimeZone: () => 'Asia/Bangkok' };
@@ -57,10 +57,10 @@ global.Utilities = {
   computeDigest: (a, s) => Array.from(crypto.createHash('sha256').update(s).digest()).map(b => b > 127 ? b - 256 : b),
   base64Encode: b => Buffer.from(b.map(x => x & 255)).toString('base64'),
   base64EncodeWebSafe: b => Buffer.from(b.map(x => x & 255)).toString('base64url'),
-  getUuid: () => crypto.randomUUID(), formatDate: (d, tz, f) => { const z = new Date(d.getTime() + 7 * 3600e3).toISOString(); return f.indexOf('HH') >= 0 ? z.slice(0, 19) : z.slice(0, 10); },
+  getUuid: () => crypto.randomUUID(), formatDate: (d, tz, f) => { const z = new Date(d.getTime() + 7 * 3600e3).toISOString(); if (f === 'H') return String(+z.slice(11, 13)); if (f === 'u') return String(new Date(d.getTime() + 7 * 3600e3).getUTCDay() || 7); return f.indexOf('HH') >= 0 ? z.slice(0, 19) : z.slice(0, 10); },
   sleep: () => {}, DigestAlgorithm: { SHA_256: 1 }, Charset: { UTF_8: 1 }, newBlob: (s, type, name) => ({ name, type, getBytes: () => Array.from(Buffer.from(s)) }), base64Decode: b => Array.from(Buffer.from(b, 'base64'))
 };
 const src = fs.readFileSync(process.argv[2], 'utf8');
-const ctx = new Function(src + '\nreturn { doPost, setup, archiveOld, backupNow, installTriggers, migrateImagesToDrive, morningReminders };')();
+const ctx = new Function(src + '\nreturn { doPost, setup, archiveOld, backupNow, installTriggers, migrateImagesToDrive, morningReminders, digestTick: typeof digestTick === "function" ? digestTick : null };')();
 const call = (action, payload, token) => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify({ action, payload, token }) } }).t);
 module.exports = { DRIVE, ARCH, ctx, call, sheets, cacheStore, props, reads: () => reads, resetReads: () => { reads = 0; } };

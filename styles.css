@@ -4742,3 +4742,70 @@ body{scrollbar-gutter:stable}
 .pcard .pc-rt .rt-lbl.lb-e{transform:translateX(calc(-100% + 13px))}
 .pcard:hover .pc-rt .rt-dot:not(.now){transform:scale(1.15)}
 @keyframes pcRing{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.7);opacity:0}}
+
+/* v2.75.0 สรุปงานประจำเช้า (ตั้งค่า) */
+.dg-warn{background:color-mix(in oklab,#D97706 12%,var(--surface));border:1px solid color-mix(in oklab,#D97706 35%,transparent);color:#92400E;border-radius:10px;padding:8px 12px;font-size:13px;margin:0 0 10px}
+.dg-wrap{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;align-items:start}
+.dg-set{display:flex;flex-direction:column;gap:10px;min-width:0}
+.dg-main{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;cursor:pointer;background:linear-gradient(135deg,color-mix(in oklab,#F59E0B 16%,var(--surface)),color-mix(in oklab,#F97316 8%,var(--surface)));border:1px solid color-mix(in oklab,#F59E0B 30%,transparent);transition:filter .2s}
+.dg:not(.on) .dg-main{background:var(--surface-2);border-color:var(--line)}
+.dg-sun{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex:none;color:#fff;background:linear-gradient(135deg,#F59E0B,#F97316);box-shadow:0 6px 14px -6px #F97316}
+.dg-sun svg{width:22px;height:22px}
+.dg.on .dg-sun svg{animation:spinSlow 12s linear infinite}
+.dg:not(.on) .dg-sun{background:#9AA3AF;box-shadow:none}
+.dg-mt{flex:1;min-width:0;display:flex;flex-direction:column}.dg-mt b{font-size:15px}.dg-mt small{color:var(--muted);font-size:12.5px}
+.dg-sw{position:relative;width:46px;height:26px;flex:none}
+.dg-sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.dg-sw i{position:absolute;inset:0;border-radius:99px;background:#C9CED6;transition:background .2s}
+.dg-sw i::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.dg-sw input:checked+i{background:#16A34A}.dg-sw input:checked+i::after{transform:translateX(20px)}
+.dg-sw input:focus-visible+i{outline:2px solid var(--brand);outline-offset:2px}
+.dg-rows{display:flex;flex-direction:column;gap:8px;transition:opacity .2s}.dg-rows.dim{opacity:.55}
+.dg-row{display:flex;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.dg-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;color:#fff}.dg-ic svg{width:18px;height:18px}
+.dg-ic.c1{background:#2563EB}.dg-ic.c2{background:#0D9488}.dg-ic.c3{background:#9333EA}
+.dg-rb{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}.dg-rb>b{font-size:14px}.dg-rb>small{color:var(--muted);font-size:12px;line-height:1.45}
+.dg-hours{display:flex;flex-wrap:wrap;gap:6px}
+.dg-chip,.dg-sel{border:1px solid var(--line);background:var(--surface-2);border-radius:99px;padding:5px 12px;font:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;font-variant-numeric:tabular-nums}
+.dg-chip.on,.dg-sel.on{background:#2563EB;border-color:#2563EB;color:#fff}
+.dg-sel{padding-right:8px}.dg-sel option{color:var(--text);background:var(--surface)}
+.dg-seg{display:inline-flex;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px;align-self:flex-start}
+.dg-seg button{border:0;background:none;border-radius:8px;padding:6px 12px;font:inherit;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+.dg-seg button.on{background:#0D9488;color:#fff;box-shadow:0 2px 6px -2px #0D9488}
+.dg-ppl{display:flex;flex-wrap:wrap;gap:6px}
+.dg-p{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface-2);border-radius:99px;padding:3px 10px 3px 3px;font:inherit;font-size:13px;cursor:pointer;color:var(--text);transition:all .15s}
+.dg-p i{display:none;width:14px;height:14px}.dg-p i svg{width:14px;height:14px}
+.dg-p.on{background:color-mix(in oklab,#9333EA 12%,var(--surface));border-color:#9333EA;color:#6B21A8;font-weight:600}.dg-p.on i{display:inline-grid;color:#9333EA}
+.dg-pv{position:sticky;top:80px;display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:16px;background:linear-gradient(160deg,#1E293B,#0F172A);color:#E2E8F0}
+.dg-pvh{font-size:12px;font-weight:600;letter-spacing:.02em;color:#94A3B8}
+.dg-ntf{background:rgba(255,255,255,.96);color:#111827;border-radius:14px;padding:10px 12px 12px;box-shadow:0 10px 24px -12px rgba(0,0,0,.6);animation:dgIn .5s cubic-bezier(.2,.8,.3,1.2)}
+.dg-nh{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#6B7280;margin-bottom:4px}
+.dg-app{width:18px;height:18px;border-radius:5px;overflow:hidden;display:grid;place-items:center;flex:none}.dg-app>*{width:18px!important;height:18px!important;font-size:10px!important;border-radius:5px!important}
+.dg-ntf>b{display:block;font-size:14px;margin-bottom:4px}
+.dg-ntf ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px;font-size:13px;line-height:1.45;color:#374151}
+.dg-act{display:flex;flex-wrap:wrap;gap:8px}.dg-act .btn svg{width:15px;height:15px;margin-right:4px}
+.dg-pv .btn:not(.primary){background:rgba(255,255,255,.1);color:#E2E8F0;border-color:rgba(255,255,255,.18)}
+.dg-note{font-size:12px;color:#94A3B8}.dg-note b{color:#E2E8F0}
+@keyframes dgIn{from{opacity:0;transform:translateY(-8px) scale(.97)}to{opacity:1;transform:none}}
+@media (max-width:900px){.dg-wrap{grid-template-columns:1fr}.dg-pv{position:static}}
+/* v2.75 สรุปเช้า: ติ๊กเลือกวัน + เลือกเรื่องที่จะส่ง */
+.dg-ic.c4{background:#E11D48}
+.dg-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;max-width:420px}
+.dg-day{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface-2);cursor:pointer;font-weight:700;font-size:14px;color:var(--muted);transition:all .15s;user-select:none}
+.dg-day input{position:absolute;opacity:0;pointer-events:none}
+.dg-day i{width:12px;height:12px;display:grid;opacity:0;transform:scale(.4);transition:all .15s}.dg-day i svg{width:12px;height:12px}
+.dg-day.we span{color:#DC2626}
+.dg-day.on{background:#0D9488;border-color:#0D9488;color:#fff;box-shadow:0 4px 10px -5px #0D9488}.dg-day.on span{color:#fff}.dg-day.on i{opacity:1;transform:none}
+.dg-day:has(input:focus-visible){outline:2px solid var(--brand);outline-offset:2px}
+.dg-day:hover:not(.on){border-color:#0D9488;color:#0D9488}
+.dg-tp{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px}
+.dg-t{position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface-2);cursor:pointer;transition:all .15s;min-width:0}
+.dg-t input{position:absolute;opacity:0;pointer-events:none}
+.dg-te{font-size:18px;line-height:1;flex:none;filter:grayscale(1);opacity:.55;transition:all .15s}
+.dg-tt{flex:1;min-width:0;display:flex;flex-direction:column}.dg-tt b{font-size:13px;color:var(--muted)}.dg-tt small{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dg-t i{width:18px;height:18px;border-radius:6px;border:1.5px solid var(--line);display:grid;place-items:center;flex:none;color:transparent;background:var(--surface)}.dg-t i svg{width:12px;height:12px}
+.dg-t.on{background:color-mix(in oklab,#E11D48 8%,var(--surface));border-color:color-mix(in oklab,#E11D48 55%,transparent)}
+.dg-t.on .dg-te{filter:none;opacity:1}.dg-t.on .dg-tt b{color:var(--text)}
+.dg-t.on i{background:#E11D48;border-color:#E11D48;color:#fff}
+.dg-t:has(input:focus-visible){outline:2px solid var(--brand);outline-offset:2px}
+@media (max-width:560px){.dg-tp{grid-template-columns:1fr}.dg-week{gap:4px}.dg-day{height:42px;font-size:13px}}
