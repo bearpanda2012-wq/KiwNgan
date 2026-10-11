@@ -4728,3 +4728,17 @@ body{scrollbar-gutter:stable}
 @keyframes icHop{0%,55%,100%{transform:translateY(0) rotate(0) scale(1)}65%{transform:translateY(0) scale(1.1,.88)}78%{transform:translateY(-5px) rotate(-8deg) scale(.95,1.05)}90%{transform:translateY(0) rotate(3deg) scale(1.05,.95)}}
 @keyframes icDrive{0%{transform:translateX(-3px) translateY(0)}20%{transform:translateX(-1px) translateY(-1px)}40%{transform:translateX(1px) translateY(0)}60%{transform:translateX(3px) translateY(-1px)}80%{transform:translateX(1px) translateY(0)}100%{transform:translateX(-3px) translateY(0)}}
 @media (prefers-reduced-motion:reduce){.flow-ic svg,.col-ic svg{animation:none!important}}
+
+/* v2.74.6 การ์ดบอร์ดผลิต: แถบขั้นตอนแบบหน้าภาพรวมบริษัท (ไอคอนเด้ง + วงกระเพื่อม + ป้ายชื่อขั้น) */
+.pcard .pc-rt{height:26px;margin:12px 12px 24px}
+.pcard .pc-rt .rt-dot{width:10px;height:10px;margin:-5px 0 0 -5px;border-width:2px}
+.pcard .pc-rt .rt-dot svg{width:6px;height:6px}
+.pcard .pc-rt .rt-dot.now{width:26px;height:26px;margin:-13px 0 0 -13px;border-width:2.5px}
+.pcard .pc-rt .rt-dot.now svg{width:13px;height:13px}
+.pcard .pc-rt .rt-dot.now::before,.pcard .pc-rt .rt-dot.now::after{inset:-2px;animation-name:pcRing}
+.pcard .pc-rt .rt-line{height:5px;margin-top:-2.5px}
+.pcard .pc-rt .rt-lbl{font-size:10.5px;margin-top:4px}
+.pcard .pc-rt .rt-lbl.lb-s{transform:translateX(-13px)}
+.pcard .pc-rt .rt-lbl.lb-e{transform:translateX(calc(-100% + 13px))}
+.pcard:hover .pc-rt .rt-dot:not(.now){transform:scale(1.15)}
+@keyframes pcRing{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.7);opacity:0}}

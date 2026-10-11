@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.74.5';
+const APP_VERSION = '2.74.6';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4759,6 +4759,17 @@ function pTrack(p) {   // แถบความคืบหน้าแบบเ
     PCOLS.map((f, k) => '<span class="trk-dot' + (k <= i ? ' on' : '') + (pSkipped(p, f) ? ' skip' : '') + '" style="left:' + (k / (PCOLS.length - 1) * 100) + '%"></span>').join('') +
     '<span class="trk-rider' + (p.stage === 'machine' ? ' go' : '') + '">' + PIC[p.stage] + '</span></div>';
 }
+/* แถบขั้นตอนแบบหน้าภาพรวมบริษัท (จุดติ๊กถูก · เส้นริ้ววิ่ง · ไอคอนเด้งพร้อมวงกระเพื่อม) ใช้ในการ์ดบอร์ดผลิต */
+function pRoute(p) {
+  const steps = CO_STEPS.filter(s => PCOLS.indexOf(s.k) >= 0), n = steps.length - 1, fin = p.stage === 'shipped';
+  const i = fin ? n : Math.max(0, steps.findIndex(s => s.k === p.stage)), pct = i / n * 100;
+  const chk = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  return '<div class="rt pc-rt' + (fin ? ' fin' : '') + (pStuck(p) ? ' late' : '') + '" style="--p:' + pct + '%"><span class="rt-line"><i></i></span>' + steps.map((st, k) => {
+    const cls = k < i || fin ? 'past' : k === i ? 'now' : '', sk = pSkipped(p, st.k), x = k / n * 100;
+    return '<span class="rt-dot d-p ' + cls + (sk ? ' skip' : '') + ' ' + PSTG[st.k].cls + '" style="left:' + x + '%" title="' + esc(st.label) + (sk ? ' (ข้าม)' : '') + '">' + (cls === 'now' ? PIC[st.ic] : cls === 'past' ? chk : '') + '</span>' +
+      (cls === 'now' ? '<span class="rt-lbl' + (k === 0 ? ' lb-s' : k === n ? ' lb-e' : '') + '" style="left:' + x + '%">' + esc(st.label) + '</span>' : '');
+  }).join('') + '</div>';
+}
 function pPill(st, txt) { return '<span class="pill ' + PSTG[st].cls + '">' + esc(txt || PSTG[st].label) + '</span>'; }
 
 /* ---- เขียนข้อมูล (อัปเดตหน้าจอทันที แล้วค่อยรอหลังบ้าน) ---- */
@@ -4846,7 +4857,7 @@ function pcard(p) {
       (pFwdOk(p) ? (nx => '<button type="button" class="adv pfwd" data-pfwd="' + esc(p.id) + '" title="ส่งต่อไปขั้น ' + esc(nx) + '" aria-label="ส่งต่อไปขั้น ' + esc(nx) + '">' + PIC.fwd + '</button>')(PSTG[pNextOf(p) || 'shipped'].label) : '') + '</div>' +
     (p.title ? '<div class="title">' + esc(p.title) + '</div>' : '') +
     '<div class="tags">' + (urg ? URG_TAG : '') + (p.stage === 'machine' ? '<span class="tag pt-mc">' + PIC.machine + 'เสร็จ ' + ms.filter(m => m.d).length + '/' + ms.length + ' เครื่อง</span>' : '') + (p.paint === 'no' ? '<span class="tag pt-nopaint">ไม่ทำสี</span>' : '') + (p.assy === 'no' ? '<span class="tag pt-noassy">ไม่ประกอบ</span>' : '') + (p.group ? groupChip(p.group) : '') + pDueTag(p) + '</div>' + (p.note ? '<div class="pc-notetx" title="' + esc(p.note) + '">' + STI.note + '<span>' + esc(p.note) + '</span></div>' : '') +
-    body + pTrack(p) +
+    body + pRoute(p) +
     '<div class="card-foot"><span>' + esc(p.sale ? 'Sale ' + p.sale : '') + '</span><span class="due' + (stuck ? ' late' : '') + '" title="อยู่ขั้นนี้มาแล้ว">' + (stuck ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(age) + '</span></div></div>';
 }
 
