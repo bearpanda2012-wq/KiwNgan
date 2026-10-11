@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.76.1';
+const APP_VERSION = '2.77.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -373,6 +373,24 @@ function defaultSettings() {
     skipWeekends: true,
     machines: ['Router', 'Laser', 'Punching', 'WaterJet']
   };
+}
+/* ลำดับผู้ใช้ที่แอดมินจัดไว้ (settings.userOrder = รายการ id) · คนที่ไม่อยู่ในรายการต่อท้ายตามเดิม */
+function orderUsers(list) {
+  let o = S.settings && Array.isArray(S.settings.userOrder) ? S.settings.userOrder : null;
+  if (!o) { try { o = LS.get('userOrder', []) || []; } catch (e) { o = []; } }
+  if (!o.length || !Array.isArray(list)) return list || [];
+  const ix = {}; o.forEach((id, i) => { ix[id] = i; });
+  return list.map((u, i) => [u, i]).sort((a, b) => ((a[0].id in ix ? ix[a[0].id] : 1e6 + a[1]) - (b[0].id in ix ? ix[b[0].id] : 1e6 + b[1]))).map(x => x[0]);
+}
+let uOrderTm = 0;
+function moveUser(id, dir) {
+  const i = S.users.findIndex(u => u.id === id), j = i + dir; if (i < 0 || j < 0 || j >= S.users.length) return;
+  const a = S.users.slice(); const x = a[i]; a[i] = a[j]; a[j] = x; S.users = a;
+  const ids = a.map(u => u.id); S.settings = Object.assign({}, S.settings, { userOrder: ids }); if (S.draft) S.draft.userOrder = ids; LS.set('userOrder', ids);
+  S.uMoved = id; render();
+  const row = document.querySelector('[data-urow="' + id + '"]'); if (row) { row.classList.add('moved'); const r = row.getBoundingClientRect(); if (r.top < 80 || r.bottom > innerHeight) row.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  clearTimeout(uOrderTm);   // กดหลายครั้งติดกัน → บันทึกครั้งเดียว
+  uOrderTm = setTimeout(async () => { try { const r = await mutate(() => api().saveSettings({ settings: Object.assign({}, S.settings, { userOrder: S.users.map(u => u.id) }) }), 'บันทึกลำดับผู้ใช้แล้ว'); if (r && r.settings) { S.settings = normalizeSettings(Object.assign({}, r.settings)); } } catch (e) {} }, 900);
 }
 function normalizeSettings(s) {
   const d = defaultSettings(); s = Object.assign({}, d, s || {});
@@ -923,7 +941,7 @@ async function load(silent, boot) {
     }
     if (!d) throw new Error('ฐานข้อมูลตอบกลับไม่ครบ กรุณากด "ลองอีกครั้ง"');
     S.settings = normalizeSettings(d.settings);
-    S.users = d.users || []; S.user = d.me; S.me = d.me.name;
+    S.users = orderUsers(d.users || []); S.user = d.me; S.me = d.me.name; LS.set('userOrder', Array.isArray(S.settings.userOrder) ? S.settings.userOrder : []);
     const prevJobs = S.loaded && S.me && S.jobs && S.jobs.length ? S.jobs : null, prevStock = S.loaded && S.me ? S.stock : null, prevKb = S.loaded && S.me ? S.kb : null;
     S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || []; S.files = d.files || []; S.prods = d.prods || []; S.stock = d.stock || null; S.kb = Array.isArray(d.kb) ? d.kb : null; S.salePinOn = !!d.salePin; S.salePins = d.salePins || []; S.apiV = d.version || '';
     if (!viewsFor(S.user).some(v => v.id === S.view) || (S.screen !== 'app' && isProdRole() && S.view !== 'flow')) S.view = isProdRole() ? 'prod' : 'home';   // ฝ่ายผลิตเข้าระบบแล้วเปิดบอร์ดผลิตเลย
@@ -1012,7 +1030,7 @@ async function showLogin(keepErr) {
   renderLogin();
   if (mode() === 'sheet') ibStart(LS.get('rtpub', null));
   try {
-    const r = await api().roster(); L.roster = r.users || []; L.brand = r.brand || null; L.saleOn = !!r.sale;
+    const r = await api().roster(); L.roster = orderUsers(r.users || []); L.brand = r.brand || null; L.saleOn = !!r.sale;
     if (mode() === 'sheet') { LS.set('roster', { users: L.roster, brand: L.brand, sale: L.saleOn }); if (r.rt) ibStart(r.rt); }
     if (L.brand) { S.settings = normalizeSettings(Object.assign(S.settings || {}, L.brand)); applyBrand(); }
   }
@@ -1228,18 +1246,30 @@ const THEMES = [
   { id: 'classic', name: 'เรียบคลาสสิก', c1: '', c2: '', sidebar: 'plain', header: 'plain' }
 ];
 const THEME_DEFAULT = { bgdim: 'mid', bgblur: '0', preset: 'brand', mode: 'auto', c1: '#0B6B70', c2: '#5B3FD6', sidebar: 'gradient', header: 'gradient', radius: 'round',
-  bgfit: 'cover', bgpos: 'c', bgdimv: null, bgblurv: null, bgbri: 100, bgsat: 100, bgtint: 'auto', glass: 0, gblur: 12, zoom: 100, motion: 'full', shadow: 'soft', pattern: 'none', font: 'anuphan' };
+  bgfit: 'cover', bgpos: 'c', bgdimv: null, bgblurv: null, bgbri: 100, bgsat: 100, bgtint: 'auto', glass: 0, gblur: 12, zoom: 100, motion: 'full', shadow: 'soft', pattern: 'none', font: 'anuphan',
+  hdc: 'theme', hd1: '', hd2: '', hdg: 0, hdb: 12, hdt: 'auto', rlc: 'theme', rl1: '', rl2: '', rlg: 0, rlb: 12, rlt: 'auto',   // แบนเนอร์บน (hd) + เมนูซ้าย (rl)
+  bgsrc: 'auto', bgurl: '', bgfx: 'aurora' };   // พื้นหลัง: auto = ไฟล์ในเครื่องถ้ามี · file · url · fx (เคลื่อนไหวสำเร็จรูป) · none
 /* รูปพื้นหลัง: เก็บไฟล์ความละเอียดสูงใน IndexedDB (เดิมเก็บใน localStorage ได้แค่ ~900KB รูปเลยถูกบีบจนแตก) */
 const BG = { url: '', w: 0, h: 0, size: 0, ready: false };
 const bgDb = () => new Promise((res, rej) => { try { const r = indexedDB.open('kiwngan-bg', 1); r.onupgradeneeded = () => r.result.createObjectStore('img'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } });
 async function bgGet() { const db = await bgDb(); return new Promise((res, rej) => { const q = db.transaction('img').objectStore('img').get('bg'); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); }
 async function bgPut(v) { const db = await bgDb(); return new Promise((res, rej) => { const tx = db.transaction('img', 'readwrite'); if (v) tx.objectStore('img').put(v, 'bg'); else tx.objectStore('img').delete('bg'); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
-function bgUse(rec) { if (BG.url && BG.url.indexOf('blob:') === 0) URL.revokeObjectURL(BG.url); BG.url = rec && rec.blob ? URL.createObjectURL(rec.blob) : ''; BG.w = rec ? rec.w : 0; BG.h = rec ? rec.h : 0; BG.size = rec && rec.blob ? rec.blob.size : 0; }
+function bgUse(rec) { if (BG.url && BG.url.indexOf('blob:') === 0) URL.revokeObjectURL(BG.url); BG.url = rec && rec.blob ? URL.createObjectURL(rec.blob) : ''; BG.w = rec ? rec.w : 0; BG.h = rec ? rec.h : 0; BG.size = rec && rec.blob ? rec.blob.size : 0; BG.kind = rec && rec.blob ? (rec.kind || (/^video\//.test(rec.blob.type) ? 'vid' : /gif/.test(rec.blob.type) ? 'gif' : 'img')) : ''; }
 async function bgLoad() { try { bgUse(await bgGet()); } catch (e) {} BG.ready = true; applyTheme(); if (S.view === 'settings') render(); }
 const BGIMG = () => { if (BG.url) return BG.url; try { return localStorage.getItem('kiwngan:bgimg') || ''; } catch (e) { return ''; } };
 /* ย่อเฉพาะรูปที่ใหญ่เกินจอ 4K · คุณภาพสูง (ไม่บีบจนแตก) */
 async function bgPrepare(file) {
-  if (!file || !/^image\//.test(file.type)) throw new Error('เลือกไฟล์รูปภาพ (JPG, PNG, WebP)');
+  if (file && /^video\//.test(file.type)) {   // วิดีโอ: เก็บไฟล์เดิม (ไม่แปลง) · อ่านขนาดภาพจาก metadata
+    if (file.size > 80e6) throw new Error('วิดีโอใหญ่เกิน 80 MB ลองตัดให้สั้นลงหรือลดความละเอียด');
+    const u = URL.createObjectURL(file), v = document.createElement('video'); v.muted = true; v.preload = 'metadata'; v.src = u;
+    const wh = await new Promise((res, rej) => { const tm = setTimeout(() => rej(new Error('เปิดวิดีโอนี้ไม่ได้ ลองไฟล์ MP4 หรือ WebM')), 15000); v.onloadedmetadata = () => { clearTimeout(tm); res([v.videoWidth, v.videoHeight]); }; v.onerror = () => { clearTimeout(tm); rej(new Error('เปิดวิดีโอนี้ไม่ได้ ลองไฟล์ MP4 หรือ WebM')); }; });
+    URL.revokeObjectURL(u); return { blob: file, w: wh[0], h: wh[1], kind: 'vid' };
+  }
+  if (!file || !/^image\//.test(file.type)) throw new Error('เลือกไฟล์รูปภาพ (JPG, PNG, WebP, GIF) หรือวิดีโอ (MP4, WebM)');
+  if (/gif/.test(file.type)) {   // GIF เคลื่อนไหว: ห้ามแปลงเป็น JPG (ภาพจะหยุดนิ่ง)
+    if (file.size > 30e6) throw new Error('GIF ใหญ่เกิน 30 MB');
+    const bm = await createImageBitmap(file); const r = { blob: file, w: bm.width, h: bm.height, kind: 'gif' }; bm.close && bm.close(); return r;
+  }
   const bmp = await createImageBitmap(file), max = 3840, big = Math.max(bmp.width, bmp.height);
   if (big <= max && file.size <= 6e6 && /jpe?g|png|webp/.test(file.type)) { const r = { blob: file, w: bmp.width, h: bmp.height }; bmp.close && bmp.close(); return r; }
   const k = Math.min(1, max / big), c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
@@ -1248,6 +1278,73 @@ async function bgPrepare(file) {
   return { blob: blob, w: c.width, h: c.height };
 }
 const BG_POS = { tl: 'left top', t: 'center top', tr: 'right top', l: 'left center', c: 'center', r: 'right center', bl: 'left bottom', b: 'center bottom', br: 'right bottom' };
+/* พื้นหลังเคลื่อนไหวสำเร็จรูป (ทำด้วย CSS ใช้สีธีม · ไม่ต้องต่อเน็ต) · n = จำนวนชิ้นที่ลอย */
+const BGFX = { aurora: ['แสงออโรร่า', 4], flow: ['ไล่สีลื่นไหล', 0], bubbles: ['ฟองลอย', 14], stars: ['ดาวระยิบ', 3], waves: ['คลื่นทะเล', 3], grid: ['ตารางแสง', 1], rain: ['ฝนแสง', 16] };
+const bgFxHtml = (k, mini) => '<div class="bgfx fx-' + k + (mini ? ' mini' : '') + '" aria-hidden="true">' + Array.from({ length: (BGFX[k] || [0, 0])[1] }, (x, i) => '<i style="--k:' + i + '"></i>').join('') + '</div>';
+/* ลิงก์ออนไลน์ → ชนิด: YouTube · หน้า Giphy (แปลงเป็นไฟล์ GIF ให้) · วิดีโอ .mp4/.webm · ที่เหลือถือเป็นรูป (รวม GIF/WebP เคลื่อนไหว) */
+function bgUrlKind(raw) {
+  let u; try { u = new URL(String(raw || '').trim()); } catch (e) { return null; }
+  if (u.protocol !== 'https:') return null;
+  const h = u.hostname.replace(/^(www|m)\./, ''), p = u.pathname;
+  let yt = '';
+  if (h === 'youtu.be') yt = p.slice(1).split('/')[0];
+  else if (/(^|\.)youtube(-nocookie)?\.com$/.test(h)) yt = u.searchParams.get('v') || (p.match(/^\/(?:shorts|embed|live|v)\/([\w-]{6,})/) || [])[1] || '';
+  if (yt && /^[\w-]{6,20}$/.test(yt)) return { kind: 'yt', id: yt, anim: true, url: u.href };
+  if (h === 'giphy.com' && /^\/(gifs|stickers)\//.test(p)) { const id = (p.split('/').filter(Boolean)[1] || '').split('-').pop(); if (id) return { kind: 'img', url: 'https://media.giphy.com/media/' + id + '/giphy.gif', anim: true }; }
+  if (/\.(mp4|webm|m4v|mov|ogv)$/i.test(p)) return { kind: 'vid', url: u.href, anim: true };
+  return { kind: 'img', url: u.href, anim: /\.gif$/i.test(p) || /giphy|tenor/.test(h) };
+}
+/* พื้นหลังที่ใช้อยู่ตอนนี้: { kind: img|vid|yt|fx, url, src: file|url|fx, anim } หรือ null */
+function bgActive(t) {
+  t = t || getTheme(); const src = t.bgsrc || 'auto';
+  if (src === 'none') return null;
+  if (src === 'fx' && BGFX[t.bgfx]) return { kind: 'fx', fx: t.bgfx, src: 'fx', anim: true };
+  if (src === 'url' && t.bgurl) { const k = bgUrlKind(t.bgurl); return k ? Object.assign({ src: 'url' }, k) : null; }
+  if ((src === 'file' || src === 'auto') && BGIMG()) return { kind: BG.kind === 'vid' ? 'vid' : 'img', url: BGIMG(), src: 'file', anim: BG.kind === 'vid' || BG.kind === 'gif' };
+  return null;
+}
+/* ใช้ลิงก์ออนไลน์เป็นพื้นหลัง: ลองโหลดก่อน ถ้าเปิดไม่ได้จะไม่เปลี่ยนของเดิม */
+function bgUseUrl(raw, rand) {
+  const v = String(raw || '').trim(); if (!v) { toast('วางลิงก์ก่อน', true); const i = $('#bgUrl'); if (i) i.focus(); return; }
+  const k = bgUrlKind(v); if (!k) return toast('ลิงก์ต้องขึ้นต้นด้วย https://', true);
+  const done = () => { BGT.tab = k.anim ? 'anim' : 'img'; setTheme({ bgsrc: 'url', bgurl: k.kind === 'img' && !rand ? k.url : v, pattern: 'none' }); toast(k.kind === 'yt' ? 'ตั้งวิดีโอ YouTube เป็นพื้นหลังแล้ว' : k.kind === 'vid' ? 'ตั้งวิดีโอออนไลน์เป็นพื้นหลังแล้ว' : rand ? 'สุ่มรูปใหม่แล้ว · กดอีกครั้งเพื่อเปลี่ยน' : 'ตั้งพื้นหลังจากลิงก์แล้ว'); render(); };
+  if (k.kind === 'yt') return done();
+  toast('กำลังเปิดลิงก์…');
+  const fail = () => toast(k.kind === 'vid' ? 'เปิดวิดีโอจากลิงก์นี้ไม่ได้ · ต้องเป็นลิงก์ไฟล์ .mp4/.webm โดยตรง' : 'เปิดรูปจากลิงก์นี้ไม่ได้ · ต้องเป็นลิงก์ไฟล์รูปโดยตรง (คลิกขวาที่รูป → คัดลอกที่อยู่รูปภาพ)', true);
+  let ok = false; const tm = setTimeout(() => { if (!ok) fail(); ok = true; }, 20000);
+  if (k.kind === 'vid') { const el = document.createElement('video'); el.muted = true; el.preload = 'metadata'; el.onloadedmetadata = () => { if (ok) return; ok = true; clearTimeout(tm); done(); }; el.onerror = () => { if (ok) return; ok = true; clearTimeout(tm); fail(); }; el.src = k.url; return; }
+  const im = new Image(); im.referrerPolicy = 'no-referrer'; im.onload = () => { if (ok) return; ok = true; clearTimeout(tm); done(); }; im.onerror = () => { if (ok) return; ok = true; clearTimeout(tm); fail(); }; im.src = k.url;
+}
+/* ชั้นพื้นหลังเคลื่อนไหว (วิดีโอ / YouTube / แอนิเมชัน): สร้างใหม่เฉพาะตอนเปลี่ยนแหล่ง ไม่งั้นวิดีโอจะเริ่มใหม่ทุกครั้งที่เลื่อนแถบปรับค่า */
+function bgLayer(A, t) {
+  let el = document.getElementById('bgLayer');
+  const sig = A && A.kind !== 'img' ? A.kind + '|' + (A.url || A.id || A.fx) : '';
+  if (!sig) { if (el) el.remove(); return; }
+  if (!el || el.dataset.sig !== sig) {
+    if (el) el.remove();
+    el = document.createElement('div'); el.id = 'bgLayer'; el.dataset.sig = sig; el.setAttribute('aria-hidden', 'true');
+    if (A.kind === 'vid') el.innerHTML = '<video autoplay muted loop playsinline preload="auto" disablepictureinpicture src="' + esc(A.url) + '"></video>';
+    else if (A.kind === 'yt') el.innerHTML = '<iframe tabindex="-1" title="พื้นหลัง" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube-nocookie.com/embed/' + esc(A.id) + '?autoplay=1&mute=1&loop=1&playlist=' + esc(A.id) + '&controls=0&disablekb=1&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&fs=0"></iframe>';
+    else el.innerHTML = bgFxHtml(A.fx);
+    el.className = 'bgl-' + A.kind; document.body.insertBefore(el, document.body.firstChild);
+  }
+  const fit = t.bgfit || 'cover';
+  el.style.setProperty('--vfit', fit === 'contain' ? 'contain' : fit === 'center' ? 'none' : 'cover');
+  const v = el.querySelector('video'); if (v) { v.muted = true; if (t.motion === 'off') v.pause(); else { const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); } }
+}
+/* แบนเนอร์บน (hd) / เมนูซ้าย (rl): สีเอง · โปร่งแสง · เบลอ · สีตัวอักษร (อัตโนมัติ = ดูจากความสว่างของสีที่เลือก) */
+const hexLum = h => { const n = parseInt(h.slice(1), 16), c = [n >> 16 & 255, n >> 8 & 255, n & 255].map(x => { x /= 255; return x <= .03928 ? x / 12.92 : Math.pow((x + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+function barApply(p, t, app) {
+  const root = document.documentElement, rs = root.style, custom = app && t[p + 'c'] === 'custom' && isHex(t[p + '1']);
+  const c1 = custom ? t[p + '1'] : '', c2 = custom ? (isHex(t[p + '2']) ? t[p + '2'] : c1) : '';
+  const g = app ? thNum(t[p + 'g'], 0, 0, 90) : 0, b = thNum(t[p + 'b'], 12, 0, 30);
+  if (custom) { rs.setProperty('--' + p + '1', c1); rs.setProperty('--' + p + '2', c2); } else { rs.removeProperty('--' + p + '1'); rs.removeProperty('--' + p + '2'); }
+  if (custom || g > 0) { root.setAttribute('data-' + p + 'x', ''); rs.setProperty('--' + p + 'o', (100 - g) + '%'); rs.setProperty('--' + p + 'bl', (g > 0 ? b : 0) + 'px'); }
+  else { root.removeAttribute('data-' + p + 'x'); rs.removeProperty('--' + p + 'o'); rs.removeProperty('--' + p + 'bl'); }
+  let tx = app ? t[p + 't'] || 'auto' : 'auto';
+  if (tx === 'auto') tx = custom && (hexLum(c1) + hexLum(c2)) / 2 > .42 ? 'dark' : '';
+  if (tx === 'dark' || tx === 'light') root.setAttribute('data-' + p + 'text', tx); else root.removeAttribute('data-' + p + 'text');
+}
 const FONTS = { anuphan: ['Anuphan', 'อนุพันธ์ (ค่าเริ่มต้น)'], bai: ['Bai Jamjuree', 'ใบจามจุรี'], sarabun: ['Sarabun', 'สารบรรณ'], prompt: ['Prompt', 'พรอมต์'], noto: ['Noto Sans Thai', 'โนโต้'], system: ['', 'ตามเครื่อง'] };
 function fontLoad(k) {
   const f = FONTS[k]; if (!f || !f[0] || k === 'anuphan' || k === 'bai' || document.getElementById('font-' + k)) return;
@@ -1270,11 +1367,12 @@ function applyTheme() {
   root.setAttribute('data-sidebar', t.sidebar === 'plain' ? 'plain' : 'gradient');
   root.setAttribute('data-header', ['soft', 'plain'].indexOf(t.header) >= 0 ? t.header : 'gradient');
   root.setAttribute('data-radius', t.radius === 'sharp' ? 'sharp' : 'round');
-  const bg = S.screen === 'app' ? BGIMG() : '', app = S.screen === 'app', rs = root.style;
-  root.removeAttribute('data-bgblur');
+  const app = S.screen === 'app', rs = root.style, A = app ? bgActive(t) : null, bg = A ? (A.kind === 'img' ? A.url : 'none') : '';
+  root.removeAttribute('data-bgblur'); bgLayer(A, t); barApply('hd', t, app); barApply('rl', t, app);
+  if (A) root.setAttribute('data-bgk', A.kind); else root.removeAttribute('data-bgk');
   if (bg) {
     const fit = t.bgfit || 'cover', dim = thNum(t.bgdimv, { soft: 78, mid: 55, strong: 28 }[t.bgdim] || 55, 0, 92), blur = thNum(t.bgblurv, { 0: 0, 1: 6, 2: 16 }[t.bgblur] || 0, 0, 30);
-    rs.setProperty('--bgimg', 'url("' + bg + '")'); root.setAttribute('data-bg', 'on');
+    rs.setProperty('--bgimg', bg === 'none' ? 'none' : 'url("' + bg.replace(/"/g, '%22') + '")'); root.setAttribute('data-bg', 'on');
     rs.setProperty('--bgsize', fit === 'contain' ? 'contain' : fit === 'tile' || fit === 'center' ? 'auto' : 'cover');
     rs.setProperty('--bgrep', fit === 'tile' ? 'repeat' : 'no-repeat');
     rs.setProperty('--bgpos', BG_POS[t.bgpos] || 'center');
@@ -1310,11 +1408,9 @@ function themeSection() {
     '<div class="theme-opts">' +
       '<div class="f"><span class="lbl">สีหลัก / สีรอง (กำหนดเอง)</span><div class="theme-colors"><input type="color" id="thC1" value="' + esc(c1) + '" aria-label="สีหลัก"><span>→</span><input type="color" id="thC2" value="' + esc(c2) + '" aria-label="สีรอง"></div></div>' +
       '<div class="f"><span class="lbl">โหมด</span>' + seg('mode', [['auto', 'ตามเครื่อง'], ['light', 'สว่าง'], ['dark', 'มืด']]) + '</div>' +
-      '<div class="f"><span class="lbl">เมนูด้านข้าง</span>' + seg('sidebar', [['gradient', 'สีไล่'], ['plain', 'พื้นเรียบ']]) + '</div>' +
-      '<div class="f"><span class="lbl">หัวหน้าเพจ</span>' + seg('header', [['gradient', 'สีไล่'], ['soft', 'สีอ่อน'], ['plain', 'เรียบ']]) + '</div>' +
       '<div class="f"><span class="lbl">มุมการ์ด</span>' + seg('radius', [['round', 'โค้งมน'], ['sharp', 'เหลี่ยม']]) + '</div>' +
     '</div>' +
-    themeMore(t) + bgSection(t) + '</section>';
+    barSection(t) + themeMore(t) + bgSection(t) + '</section>';
 }
 /* แถบเลื่อนปรับค่า (เลื่อนแล้วเห็นผลทันที ไม่วาดหน้าใหม่) */
 function thRange(key, label, v, lo, hi, step, unit, hint) {
@@ -1331,24 +1427,60 @@ function themeMore(t) {
         '<div class="f"><span class="lbl">ฟอนต์</span><div class="th-fonts">' + Object.keys(FONTS).map(k => '<button data-themeset="font" data-val="' + k + '" aria-pressed="' + ((t.font || 'anuphan') === k) + '" style="font-family:' + (FONTS[k][0] ? '\'' + FONTS[k][0] + '\',' : '') + 'system-ui">' + FONTS[k][1] + '<small>กขค 123</small></button>').join('') + '</div></div>' +
         '<div class="f"><span class="lbl">เงาการ์ด</span>' + thSeg(t, 'shadow', [['none', 'ไม่มี'], ['soft', 'บาง'], ['strong', 'ชัด']]) + '</div>' +
         '<div class="f"><span class="lbl">ภาพเคลื่อนไหว</span>' + thSeg(t, 'motion', [['full', 'เต็ม'], ['less', 'น้อย'], ['off', 'ปิด']]) + '</div>' +
-        (BGIMG() ? '' : '<div class="f"><span class="lbl">ลายพื้นหลัง (เมื่อไม่ใส่รูป)</span><div class="th-pats">' + pats.map(p => '<button data-themeset="pattern" data-val="' + p[0] + '" aria-pressed="' + ((t.pattern || 'none') === p[0]) + '"><i class="pat-' + p[0] + '"></i>' + p[1] + '</button>').join('') + '</div></div>') +
+        (bgActive(t) ? '' : '<div class="f"><span class="lbl">ลายพื้นหลัง (เมื่อไม่ใส่รูป)</span><div class="th-pats">' + pats.map(p => '<button data-themeset="pattern" data-val="' + p[0] + '" aria-pressed="' + ((t.pattern || 'none') === p[0]) + '"><i class="pat-' + p[0] + '"></i>' + p[1] + '</button>').join('') + '</div></div>') +
       '</div></div>';
 }
+/* แบนเนอร์ด้านบน + เมนูด้านซ้าย: ปรับแยกกันได้แบบกล่อง/การ์ด (รูปแบบ สี โปร่งแสง เบลอ สีตัวอักษร) */
+function barSection(t) {
+  const card = (p, title, sub, styleKey, styles) => {
+    const st = t[styleKey], custom = t[p + 'c'] === 'custom' && isHex(t[p + '1']), def1 = getComputedStyle(document.documentElement).getPropertyValue('--brand').trim();
+    const v1 = custom ? t[p + '1'] : (isHex(def1) ? def1 : '#0B6B70'), v2 = custom && isHex(t[p + '2']) ? t[p + '2'] : '#5B3FD6';
+    const noBg = styleKey === 'header' && st === 'plain';
+    return '<div class="bar-card" data-bar="' + p + '"><div class="bar-h"><span class="bar-prev bp-' + p + ' st-' + st + '"><i></i></span><div><b>' + title + '</b><small>' + sub + '</small></div></div>' +
+      '<div class="f"><span class="lbl">รูปแบบ</span>' + thSeg(t, styleKey, styles) + '</div>' +
+      '<div class="f"><span class="lbl">สี</span><div class="bar-cols"><button type="button" class="btn sm' + (custom ? '' : ' on') + '" data-barcol="' + p + '" aria-pressed="' + !custom + '">ตามธีม</button>' +
+        '<input type="color" id="' + p + 'C1" data-barc="' + p + '" value="' + esc(v1) + '" aria-label="' + title + ' สีหลัก"><span>→</span><input type="color" id="' + p + 'C2" data-barc="' + p + '" value="' + esc(v2) + '" aria-label="' + title + ' สีรอง"></div></div>' +
+      (noBg ? '<small class="bar-note">แบบเรียบไม่มีพื้นหลัง จึงปรับความโปร่งแสงไม่ได้</small>' :
+        '<div class="th-rows bar-rows">' + thRange(p + 'g', 'ความโปร่งแสง', thNum(t[p + 'g'], 0, 0, 90), 0, 90, 5, '%', '0% = ทึบ') + thRange(p + 'b', 'เบลอแบบกระจกฝ้า', thNum(t[p + 'b'], 12, 0, 30), 0, 30, 1, 'px', 'ใช้เมื่อโปร่งแสง') + '</div>') +
+      (st === 'gradient' ? '<div class="f"><span class="lbl">สีตัวอักษร</span>' + thSeg(t, p + 't', [['auto', 'อัตโนมัติ'], ['light', 'ขาว'], ['dark', 'เข้ม']]) + '</div>' : '') + '</div>';
+  };
+  return '<div class="th-grp"><div class="th-gh"><span class="th-gi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 9v12"/></svg></span><div><b>แบนเนอร์ด้านบน และเมนูด้านซ้าย</b><small>ตั้งสี ความโปร่งแสง และเบลอแยกจากกล่อง/การ์ดได้ (โปร่งแสงสวยที่สุดเมื่อใส่พื้นหลัง)</small></div></div>' +
+    '<div class="bar-grid">' + card('hd', 'แบนเนอร์ด้านบน', 'หัวเพจทุกหน้า', 'header', [['gradient', 'สีไล่'], ['soft', 'สีอ่อน'], ['plain', 'เรียบ']]) +
+      card('rl', 'เมนูด้านซ้าย', 'แถบเมนูบนคอมพิวเตอร์', 'sidebar', [['gradient', 'สีไล่'], ['plain', 'พื้นเรียบ']]) + '</div></div>';
+}
+/* พื้นหลัง: ไม่มี · ภาพนิ่ง (ไฟล์/ลิงก์ออนไลน์/สุ่มรูป) · ภาพเคลื่อนไหว (สำเร็จรูป/ไฟล์วิดีโอ-GIF/ลิงก์ YouTube Giphy วิดีโอ) */
+const BGT = { tab: '' };
 function bgSection(t) {
-  const has = !!BGIMG(), fit = t.bgfit || 'cover';
+  const A = bgActive(t), fit = t.bgfit || 'cover', has = !!A;
+  const tab = BGT.tab || (!A ? 'img' : A.anim ? 'anim' : 'img');   // ยังไม่มีพื้นหลัง → เปิดแท็บภาพนิ่งไว้ให้เลือกได้เลย
   const dim = thNum(t.bgdimv, { soft: 78, mid: 55, strong: 28 }[t.bgdim] || 55, 0, 92), blur = thNum(t.bgblurv, { 0: 0, 1: 6, 2: 16 }[t.bgblur] || 0, 0, 30);
-  const info = has ? (BG.w ? BG.w + '×' + BG.h + ' px · ' + (BG.size / 1048576).toFixed(1) + ' MB' : 'รูปเดิม (ความละเอียดต่ำ) — เลือกใหม่อีกครั้งเพื่อให้คมชัด') : '';
-  const prevStyle = has ? 'background-image:url(&quot;' + esc(BGIMG()) + '&quot;);background-size:' + (fit === 'contain' ? 'contain' : fit === 'cover' ? 'cover' : fit === 'tile' ? '30%' : '60%') + ';background-repeat:' + (fit === 'tile' ? 'repeat' : 'no-repeat') + ';background-position:' + (BG_POS[t.bgpos] || 'center') : '';
-  return '<div class="th-grp bg-pick2"><div class="th-gh"><span class="th-gi">' + STI.camera + '</span><div><b>รูปพื้นหลัง</b><small>ใช้รูปของคุณเป็นพื้นหลังแอป (เฉพาะเครื่องนี้) · เก็บความละเอียดสูงสุด 4K ไม่บีบจนแตก</small></div></div>' +
-    '<div class="bg-pick"><div class="bg-prev' + (has ? ' has' : '') + '"' + (has ? ' style="' + prevStyle + '"' : '') + '>' + (has ? '<i class="bg-dim" style="opacity:' + (dim / 100) + '"></i>' : '<span>' + STI.camera + 'ยังไม่มีรูป</span>') + '</div>' +
-      '<div class="bg-ctl"><div class="top-actions"><label class="btn sm primary">' + STI.camera + (has ? 'เปลี่ยนรูป' : 'เลือกรูป') + '<input type="file" accept="image/*" id="bgIn" hidden></label>' + (has ? '<button class="btn sm" data-act="bgremove">' + I.trash + 'เอาออก</button>' : '') + '</div>' +
-        (info ? '<small class="bg-info' + (BG.w ? '' : ' warn') + '">' + info + '</small>' : '') +
-        (has ? '<div class="f"><span class="lbl">การจัดวาง</span>' + thSeg(t, 'bgfit', [['cover', 'เต็มจอ'], ['contain', 'พอดีทั้งรูป'], ['center', 'ขนาดจริง'], ['tile', 'ปูกระเบื้อง']]) + '</div>' +
-          '<div class="f bg-posf"><span class="lbl">จุดยึดรูป</span><div class="bg-pos" role="group" aria-label="ตำแหน่งรูป">' + ['tl', 't', 'tr', 'l', 'c', 'r', 'bl', 'b', 'br'].map(k => '<button data-themeset="bgpos" data-val="' + k + '" aria-pressed="' + ((t.bgpos || 'c') === k) + '" aria-label="' + k + '"><i></i></button>').join('') + '</div></div>' : '') +
+  const what = !A ? '' : A.kind === 'fx' ? 'ภาพเคลื่อนไหว: ' + BGFX[A.fx][0] : A.kind === 'yt' ? 'วิดีโอ YouTube (ปิดเสียง)' : A.src === 'url' ? (A.kind === 'vid' ? 'วิดีโอออนไลน์' : A.anim ? 'GIF ออนไลน์' : 'รูปออนไลน์') + ' · ' + esc(String(t.bgurl).replace(/^https:\/\//, '').slice(0, 48)) :
+    (A.kind === 'vid' ? 'วิดีโอในเครื่อง' : BG.kind === 'gif' ? 'GIF ในเครื่อง' : 'รูปในเครื่อง') + (BG.w ? ' · ' + BG.w + '×' + BG.h + ' px · ' + (BG.size / 1048576).toFixed(1) + ' MB' : ' · รูปเดิม (ความละเอียดต่ำ) — เลือกใหม่อีกครั้งเพื่อให้คมชัด');
+  const pst = A && A.kind === 'img' ? 'background-image:url(&quot;' + esc(A.url) + '&quot;);background-size:' + (fit === 'contain' ? 'contain' : fit === 'cover' ? 'cover' : fit === 'tile' ? '30%' : '60%') + ';background-repeat:' + (fit === 'tile' ? 'repeat' : 'no-repeat') + ';background-position:' + (BG_POS[t.bgpos] || 'center') : '';
+  const inner = !A ? '<span>' + STI.camera + 'ยังไม่มีพื้นหลัง</span>' : A.kind === 'vid' ? '<video autoplay muted loop playsinline src="' + esc(A.url) + '" style="object-fit:' + (fit === 'contain' ? 'contain' : 'cover') + '"></video>' :
+    A.kind === 'yt' ? '<img src="https://i.ytimg.com/vi/' + esc(A.id) + '/hqdefault.jpg" alt="" referrerpolicy="no-referrer"><b class="bg-ytb">YouTube</b>' : A.kind === 'fx' ? bgFxHtml(A.fx, true) : '';
+  const urlBox = (ph, btn) => '<div class="bg-url"><input type="url" id="bgUrl" inputmode="url" autocomplete="off" spellcheck="false" placeholder="' + ph + '" value="' + esc(A && A.src === 'url' && (tab === 'anim') === !!A.anim ? t.bgurl : '') + '"><button class="btn sm" data-act="bgurl">' + btn + '</button></div>';
+  const ctl = tab === 'img' ?
+      '<div class="top-actions"><label class="btn sm primary">' + STI.camera + 'เลือกรูปจากเครื่อง<input type="file" accept="image/*" id="bgIn" hidden></label><button class="btn sm" data-act="bgrand">✨ สุ่มรูปออนไลน์</button></div>' +
+      '<span class="lbl">หรือวางลิงก์รูปออนไลน์</span>' + urlBox('https://…/รูป.jpg (คลิกขวาที่รูป → คัดลอกที่อยู่รูปภาพ)', 'ใช้ลิงก์') +
+      '<small class="bg-hint">รองรับ JPG PNG WebP · ลิงก์ต้องเป็นไฟล์รูปโดยตรง · ใช้เน็ตทุกครั้งที่เปิดแอป</small>'
+    : tab === 'anim' ?
+      '<span class="lbl">แบบสำเร็จรูป (ใช้สีธีม · ไม่ต้องต่อเน็ต)</span><div class="bg-fxs">' + Object.keys(BGFX).map(k => '<button type="button" data-bgfx="' + k + '" aria-pressed="' + !!(A && A.kind === 'fx' && A.fx === k) + '">' + bgFxHtml(k, true) + '<b>' + BGFX[k][0] + '</b></button>').join('') + '</div>' +
+      '<div class="top-actions"><label class="btn sm primary">' + STI.camera + 'เลือกวิดีโอ / GIF จากเครื่อง<input type="file" accept="video/mp4,video/webm,video/*,image/gif,image/webp" id="bgVidIn" hidden></label></div>' +
+      '<span class="lbl">หรือวางลิงก์ออนไลน์</span>' + urlBox('ลิงก์ YouTube, Giphy, GIF หรือวิดีโอ .mp4 / .webm', 'ใช้ลิงก์') +
+      '<small class="bg-hint">YouTube เล่นแบบปิดเสียงวนซ้ำ · วิดีโอในเครื่องไม่เกิน 80 MB · ตั้ง "ภาพเคลื่อนไหว: ปิด" เพื่อหยุดวิดีโอ</small>'
+    : '<small class="bg-hint">ไม่ใช้พื้นหลัง เลือก "ลายพื้นหลัง" ด้านบนแทนได้</small>';
+  return '<div class="th-grp bg-pick2"><div class="th-gh"><span class="th-gi">' + STI.camera + '</span><div><b>พื้นหลัง</b><small>ภาพนิ่งหรือภาพเคลื่อนไหว จากเครื่องหรือลิงก์ออนไลน์ (เฉพาะเครื่องนี้)</small></div></div>' +
+    '<div class="seg bg-tabs" role="group">' + [['none', 'ไม่มี'], ['img', 'ภาพนิ่ง'], ['anim', 'ภาพเคลื่อนไหว']].map(x => '<button data-bgtab="' + x[0] + '" aria-pressed="' + (tab === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
+    '<div class="bg-pick"><div class="bg-prev' + (has ? ' has k-' + A.kind : '') + '"' + (pst ? ' style="' + pst + '"' : '') + '>' + inner + (has ? '<i class="bg-dim" style="opacity:' + (dim / 100) + '"></i>' : '') + '</div>' +
+      '<div class="bg-ctl">' + ctl +
+        (has ? '<div class="bg-cur"><small class="bg-info' + (A.src === 'file' && !BG.w ? ' warn' : '') + '">ใช้อยู่: ' + what + '</small><button class="btn sm" data-act="bgremove">' + I.trash + 'เอาออก</button></div>' : '') +
+        (has && A.kind !== 'fx' && A.kind !== 'yt' ? '<div class="f"><span class="lbl">การจัดวาง</span>' + thSeg(t, 'bgfit', A.kind === 'vid' ? [['cover', 'เต็มจอ'], ['contain', 'พอดีทั้งภาพ'], ['center', 'ขนาดจริง']] : [['cover', 'เต็มจอ'], ['contain', 'พอดีทั้งรูป'], ['center', 'ขนาดจริง'], ['tile', 'ปูกระเบื้อง']]) + '</div>' +
+          '<div class="f bg-posf"><span class="lbl">จุดยึดภาพ</span><div class="bg-pos" role="group" aria-label="ตำแหน่งรูป">' + ['tl', 't', 'tr', 'l', 'c', 'r', 'bl', 'b', 'br'].map(k => '<button data-themeset="bgpos" data-val="' + k + '" aria-pressed="' + ((t.bgpos || 'c') === k) + '" aria-label="' + k + '"><i></i></button>').join('') + '</div></div>' : '') +
       '</div></div>' +
-    (has ? '<div class="th-rows">' + thRange('bgdimv', 'ความจางของรูป', dim, 0, 92, 1, '%', '0% = รูปชัดเต็มที่') + thRange('bgblurv', 'เบลอรูป', blur, 0, 30, 1, 'px', '') +
+    (has ? '<div class="th-rows">' + thRange('bgdimv', 'ความจางของพื้นหลัง', dim, 0, 92, 1, '%', '0% = ชัดเต็มที่') + thRange('bgblurv', 'เบลอพื้นหลัง', blur, 0, 30, 1, 'px', '') +
       thRange('bgbri', 'ความสว่าง', thNum(t.bgbri, 100, 40, 160), 40, 160, 5, '%', '') + thRange('bgsat', 'ความสดของสี', thNum(t.bgsat, 100, 0, 200), 0, 200, 5, '%', '0% = ขาวดำ') +
-      '<div class="f"><span class="lbl">สีที่เคลือบบนรูป</span>' + thSeg(t, 'bgtint', [['auto', 'ตามโหมด'], ['brand', 'สีธีม'], ['dark', 'ดำ'], ['light', 'ขาว']]) + '</div></div>' : '') +
+      '<div class="f"><span class="lbl">สีที่เคลือบบนพื้นหลัง</span>' + thSeg(t, 'bgtint', [['auto', 'ตามโหมด'], ['brand', 'สีธีม'], ['dark', 'ดำ'], ['light', 'ขาว']]) + '</div></div>' : '') +
   '</div>';
 }
 
@@ -1630,6 +1762,7 @@ document.addEventListener('click', e => {
   const tr = t.closest('tr[data-shov]'); if (tr && !t.closest('a,button')) saleDetail(tr.dataset.shov);
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#sdModal')) saleDetailClose(); });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'bgUrl') { e.preventDefault(); bgUseUrl(e.target.value); } });
 function showSaleHover(el) {
   const r = SF.by && SF.by[el.dataset.shov]; if (!r) return;
   let h = $('#hovercard'); if (!h) { h = document.createElement('div'); h.id = 'hovercard'; h.className = 'hovercard'; h.setAttribute('role', 'tooltip'); document.body.appendChild(h); }
@@ -4503,7 +4636,9 @@ function viewSettings() {
         '<div class="top-actions"><button class="btn primary" data-act="connect">เชื่อมต่อ</button><button class="btn sm" data-act="resetdemo">รีเซ็ตข้อมูลตัวอย่าง</button></div>') + '</section>';
 
   if (admin) {
-    const rows = S.users.map(u => '<div class="urow' + (u.active ? '' : ' off') + '" data-urow="' + esc(u.id) + '">' +
+    const rows = S.users.map((u, ui) => '<div class="urow' + (u.active ? '' : ' off') + (S.uMoved === u.id ? ' moved' : '') + '" data-urow="' + esc(u.id) + '">' +
+      '<div class="umove" role="group" aria-label="ลำดับของ ' + esc(u.name) + '"><button type="button" data-umove="' + esc(u.id) + '" data-dir="-1" aria-label="เลื่อน ' + esc(u.name) + ' ขึ้น" title="เลื่อนขึ้น"' + (ui === 0 ? ' disabled' : '') + '><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><b>' + (ui + 1) + '</b>' +
+        '<button type="button" data-umove="' + esc(u.id) + '" data-dir="1" aria-label="เลื่อน ' + esc(u.name) + ' ลง" title="เลื่อนลง"' + (ui === S.users.length - 1 ? ' disabled' : '') + '><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></div>' +
       '<div class="uphoto"><label class="ph-pick" title="' + (u.photo ? 'เปลี่ยนรูป' : 'ใส่รูป') + '">' + avUser(u, 'md') + '<span class="ph-cam" aria-hidden="true">+</span><input type="file" accept="image/*" data-photofor="' + esc(u.id) + '" hidden aria-label="รูปของ ' + esc(u.name) + '"></label>' +
       (u.photo ? '<button class="ph-x" data-rmphoto="' + esc(u.id) + '" aria-label="ลบรูปของ ' + esc(u.name) + '">×</button>' : '') + '</div>' +
       '<input type="color" value="' + esc(u.color || '#5B6B7A') + '" data-u="color" aria-label="สี">' +
@@ -6821,6 +6956,10 @@ document.addEventListener('click', async e => {
   // user admin
   if (d.themepick) { setTheme(Object.assign({ preset: d.themepick }, d.themepick === 'classic' ? { sidebar: 'plain', header: 'plain' } : getTheme().preset === 'classic' ? { sidebar: 'gradient', header: 'gradient' } : {}, (THEMES.find(x => x.id === d.themepick) || {}).mode ? { mode: THEMES.find(x => x.id === d.themepick).mode } : {})); return render(); }
   if (d.themeset) { setTheme({ [d.themeset]: d.val }); return render(); }
+  if (d.umove) { moveUser(d.umove, +d.dir || 1); return; }
+  if (d.bgtab) { BGT.tab = d.bgtab; if (d.bgtab === 'none' && bgActive()) { setTheme({ bgsrc: 'none' }); toast('ปิดพื้นหลังแล้ว'); } return render(); }
+  if (d.bgfx) { BGT.tab = 'anim'; setTheme({ bgsrc: 'fx', bgfx: d.bgfx, pattern: 'none' }); return render(); }
+  if (d.barcol) { setTheme({ [d.barcol + 'c']: 'theme' }); return render(); }
   if (d.insttab) { INST.tab = d.insttab; renderLogin(); drawQr(); return; }
   if (d.quick) { S.f.quick = d.quick; return render(); }
   if (d.ctype) { LS.set('chartType', d.ctype); S.animIn = true; return render(); }
@@ -6943,7 +7082,9 @@ document.addEventListener('click', async e => {
     case 'install': return installApp();
     case 'insthelp': INST.help = !INST.help; renderLogin(); if (INST.help) drawQr(); return;
     case 'copyapp': try { await navigator.clipboard.writeText(appUrl()); toast('คัดลอกลิงก์แล้ว ส่งให้ทีมหรือเปิดบนอีกเครื่องได้เลย'); } catch (x) { toast(appUrl()); } return;
-    case 'bgremove': try { localStorage.removeItem('kiwngan:bgimg'); } catch (x) {} bgPut(null).catch(() => {}); bgUse(null); applyTheme(); toast('เอารูปพื้นหลังออกแล้ว'); return render();
+    case 'bgremove': { const A = bgActive(); if (A && A.src === 'file') { try { localStorage.removeItem('kiwngan:bgimg'); } catch (x) {} bgPut(null).catch(() => {}); bgUse(null); } setTheme({ bgsrc: 'none' }); BGT.tab = ''; toast('เอาพื้นหลังออกแล้ว'); return render(); }
+    case 'bgurl': return bgUseUrl(($('#bgUrl') || {}).value);
+    case 'bgrand': BGT.tab = 'img'; return bgUseUrl('https://picsum.photos/seed/kn' + Date.now().toString(36) + '/2560/1440', true);
     case 'themereset': LS.del('theme'); applyTheme(); toast('คืนค่าธีมเริ่มต้นแล้ว'); return render();
     case 'print': return printReport();
     case 'connect': return connect();
@@ -7000,6 +7141,7 @@ document.addEventListener('input', e => {
     if (k === 'bgdimv') { const d = document.querySelector('.bg-prev .bg-dim'); if (d) d.style.opacity = v / 100; }
     return;
   }
+  if (t.dataset && t.dataset.barc) { const p = t.dataset.barc, rs = document.documentElement.style; document.documentElement.setAttribute('data-' + p + 'x', ''); rs.setProperty('--' + p + '1', $('#' + p + 'C1').value); rs.setProperty('--' + p + '2', $('#' + p + 'C2').value); return; }
   if ((t.id === 'thC1' || t.id === 'thC2') && $('#thC1') && $('#thC2')) { // live preview while dragging the picker
     document.documentElement.style.setProperty('--brand', $('#thC1').value); document.documentElement.style.setProperty('--brand-2', $('#thC2').value); return;
   }
@@ -7052,13 +7194,18 @@ document.addEventListener('change', e => {
   }
   if (t.dataset.rsec) { reportState().sec[t.dataset.rsec] = t.checked; saveReportState(); return render(); }
   if (t.id === 'logoIn' && t.files && t.files[0]) return readLogo(t.files[0]);
-  if (t.id === 'bgIn' && t.files && t.files[0]) {
-    const f = t.files[0]; t.value = ''; toast('กำลังเตรียมรูป…');
+  if ((t.id === 'bgIn' || t.id === 'bgVidIn') && t.files && t.files[0]) {
+    const f = t.files[0]; t.value = ''; toast(/^video\//.test(f.type) ? 'กำลังเตรียมวิดีโอ…' : 'กำลังเตรียมรูป…');
     bgPrepare(f).then(async r => {
-      try { await bgPut(r); } catch (x) { return toast('บันทึกรูปไม่ได้ (พื้นที่เครื่องเต็ม?) ลองรูปที่เล็กลง', true); }
+      try { await bgPut(r); } catch (x) { return toast('บันทึกไฟล์ไม่ได้ (พื้นที่เครื่องเต็ม?) ลองไฟล์ที่เล็กลง', true); }
       try { localStorage.removeItem('kiwngan:bgimg'); } catch (x) {}
-      bgUse(r); if (getTheme().pattern !== 'none') setTheme({ pattern: 'none' }); applyTheme(); toast('ตั้งรูปพื้นหลังแล้ว · ' + r.w + '×' + r.h + ' px'); render();
-    }).catch(e => toast(e.message || 'เปิดรูปไม่ได้', true)); return;
+      bgUse(r); BGT.tab = r.kind === 'vid' || r.kind === 'gif' ? 'anim' : 'img'; setTheme({ bgsrc: 'file', pattern: 'none' });
+      toast((r.kind === 'vid' ? 'ตั้งวิดีโอพื้นหลังแล้ว' : r.kind === 'gif' ? 'ตั้ง GIF พื้นหลังแล้ว' : 'ตั้งรูปพื้นหลังแล้ว') + ' · ' + r.w + '×' + r.h + ' px'); render();
+    }).catch(e => toast(e.message || 'เปิดไฟล์ไม่ได้', true)); return;
+  }
+  if (t.dataset && t.dataset.barc) {   // สีแบนเนอร์/เมนู: ไม่วาดทั้งหน้า (หน้าต่างเลือกสีบน iPhone จะได้ไม่ปิดเอง)
+    const p = t.dataset.barc; setTheme({ [p + 'c']: 'custom', [p + '1']: $('#' + p + 'C1').value, [p + '2']: $('#' + p + 'C2').value });
+    const b = document.querySelector('[data-barcol="' + p + '"]'); if (b) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); } return;
   }
   if (t.dataset.photofor && t.files && t.files[0]) return setPhoto(t.dataset.photofor, t.files[0]);
   if (t.id === 'eImgIn' && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return addEditorFiles(f); }

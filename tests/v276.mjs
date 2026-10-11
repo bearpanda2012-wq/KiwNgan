@@ -15,7 +15,7 @@ const login = async (name, admin) => {
 };
 await pg.goto('http://127.0.0.1:8797/index.html'); await pg.waitForTimeout(800);
 await login('แอดมิน', true); await pg.evaluate(() => T.go('settings')); await pg.waitForTimeout(900);
-eq('theme groups shown', await pg.locator('#s-theme .th-grp').count(), 3);
+eq('theme groups shown', await pg.locator('#s-theme .th-grp').count(), 4);   // v2.77 เพิ่มกลุ่มแบนเนอร์/เมนู
 // ความโปร่งแสง
 await pg.evaluate(() => { const r = document.querySelector('[data-thrange="glass"]'); r.value = 40; r.dispatchEvent(new Event('input', { bubbles: true })); });
 await pg.waitForTimeout(200);
