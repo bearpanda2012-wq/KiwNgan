@@ -4702,3 +4702,4 @@ body{scrollbar-gutter:stable}
 .mq-c.idle{background:linear-gradient(150deg,color-mix(in oklab,var(--mc) 6%,var(--surface)),var(--surface) 75%)}
 .mq-tags:empty{display:none}
 .mq-tags em.free{background:color-mix(in oklab,#2B8A5A 12%,var(--surface));color:#2B8A5A}
+.mq-c.all{--mc:#3A4250}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mq-c.all{--mc:#8C96A8}}:root[data-theme="dark"] .mq-c.all{--mc:#8C96A8}

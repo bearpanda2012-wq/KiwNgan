@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.74.3';
+const APP_VERSION = '2.74.4';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4881,7 +4881,7 @@ function viewProd() {
     const old = run.reduce((mx, p) => Math.max(mx, daysBetween(String(pStageSince(p) || today()).slice(0, 10), today()) || 0), 0);
     return { m: m, run: run.length, wait: wt.length, urg: all.filter(pUrgent).length, old: old, tot: all.length }; });
   const mx = Math.max(1, ...mq.map(x => x.tot)), allRun = open.filter(p => p.stage === 'machine').length;
-  const MQ_COL = { router: '#EA580C', laser: '#DB2777', punching: '#7C3AED', waterjet: '#0284C7' }, MQ_HUE = ['#0D9488', '#B45309', '#4F46E5', '#BE123C', '#15803D', '#0E7490'];
+  const MQ_COL = { router: '#A61E4D', laser: '#5B7A1A', punching: '#8B5A2B', waterjet: '#3F5873' }, MQ_HUE = ['#3730A3', '#6B6F80', '#7A5C99', '#2F6B5E'];   // โทนที่ไม่ซ้ำสีขั้นตอน (ฟ้า ส้ม ชมพู ม่วง เขียวน้ำทะเล เหลือง เขียว)
   const mqCol = (m, i) => MQ_COL[String(m).toLowerCase().replace(/[^a-z]/g, '')] || MQ_HUE[i % MQ_HUE.length];   // แต่ละเครื่องมีสีของตัวเอง
   const chips = '<div class="mq' + (S.animIn ? ' in' : '') + '"><div class="mq-h"><b>' + PIC.machine + 'คิวงานแต่ละเครื่อง</b><small>กดที่เครื่องเพื่อดูเฉพาะงานของเครื่องนั้น</small></div><div class="mq-grid">' +
     '<button type="button" class="mq-c all" data-pm="all" aria-pressed="' + (F === 'all') + '" style="--i:0"><span class="mq-ic">' + STI.all + '</span><span class="mq-t"><b>ทุกเครื่อง</b><small>ลงเครื่องอยู่ ' + allRun + ' งาน</small></span></button>' +
