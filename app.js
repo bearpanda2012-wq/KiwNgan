@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.78.0';
+const APP_VERSION = '2.79.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1255,6 +1255,69 @@ const BG = { url: '', w: 0, h: 0, size: 0, ready: false };
 const bgDb = () => new Promise((res, rej) => { try { const r = indexedDB.open('kiwngan-bg', 1); r.onupgradeneeded = () => r.result.createObjectStore('img'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } });
 async function bgGet() { const db = await bgDb(); return new Promise((res, rej) => { const q = db.transaction('img').objectStore('img').get('bg'); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); }
 async function bgPut(v) { const db = await bgDb(); return new Promise((res, rej) => { const tx = db.transaction('img', 'readwrite'); if (v) tx.objectStore('img').put(v, 'bg'); else tx.objectStore('img').delete('bg'); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+async function bgGetK(k) { const db = await bgDb(); return new Promise((res, rej) => { const q = db.transaction('img').objectStore('img').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); }
+async function bgPutK(k, v) { const db = await bgDb(); return new Promise((res, rej) => { const tx = db.transaction('img', 'readwrite'); if (v) tx.objectStore('img').put(v, k); else tx.objectStore('img').delete(k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+/* ธีมที่บันทึกไว้: เก็บค่าธีมทั้งชุด + ไฟล์พื้นหลังในเครื่อง (ถ้าใช้อยู่) แล้วโหลดกลับมาใช้ได้ค่าเดิม */
+const TS = { name: '', busy: false };
+const themeSaves = () => { const a = LS.get('themeSaves', []); return Array.isArray(a) ? a : []; };
+function themeColors(t) {
+  const team = isHex((S.settings || {}).accent) ? S.settings.accent : '#0B6B70', p = THEMES.find(x => x.id === t.preset) || {};
+  return t.preset === 'custom' ? [isHex(t.c1) ? t.c1 : team, isHex(t.c2) ? t.c2 : '#5B3FD6'] : [p.c1 || team, p.c2 || '#5B3FD6'];
+}
+async function themeSave(name) {
+  name = String(name || '').trim().slice(0, 40); if (!name) { toast('ตั้งชื่อธีมก่อนบันทึก', true); const i = $('#tsName'); if (i) i.focus(); return; }
+  const t = getTheme(), A = bgActive(t), list = themeSaves(), old = list.find(x => x.name === name), id = old ? old.id : 'ts' + Date.now().toString(36);
+  let file = false;
+  if (A && A.src === 'file') { try { const rec = await bgGet(); if (rec) { await bgPutK('save:' + id, rec); file = true; } } catch (e) { toast('บันทึกไฟล์พื้นหลังไม่ได้ (พื้นที่เครื่องเต็ม?) บันทึกเฉพาะค่าสี', true); } }
+  else if (old && old.file) bgPutK('save:' + id, null).catch(() => {});
+  const ent = { id: id, name: name, ts: Date.now(), theme: t, file: file, bgk: A ? A.kind + (A.kind === 'fx' ? ':' + A.fx : '') : '' };
+  LS.set('themeSaves', [ent].concat(list.filter(x => x.id !== id)).slice(0, 24));
+  TS.name = ''; toast((old ? 'อัปเดตธีม "' : 'บันทึกธีม "') + name + '" แล้ว'); render();
+}
+async function themeLoad(id) {
+  const e = themeSaves().find(x => x.id === id); if (!e) return;
+  const t = Object.assign({}, THEME_DEFAULT, e.theme);
+  if (e.file) { try { const rec = await bgGetK('save:' + id); if (rec) { await bgPut(rec); bgUse(rec); } else toast('ไม่พบไฟล์พื้นหลังของธีมนี้ในเครื่อง ใช้พื้นหลังปัจจุบันแทน', true); } catch (x) {} }
+  LS.set('theme', t); BGT.tab = ''; applyTheme(); toast('ใช้ธีม "' + e.name + '" แล้ว'); render();
+}
+function themeDel(id) {
+  const e = themeSaves().find(x => x.id === id); LS.set('themeSaves', themeSaves().filter(x => x.id !== id));
+  if (e && e.file) bgPutK('save:' + id, null).catch(() => {});
+  TS.del = ''; toast('ลบธีม "' + (e ? e.name : '') + '" แล้ว'); render();
+}
+/* ส่งออก/นำเข้าไฟล์ .json ไว้ย้ายไปเครื่องอื่น (ไม่รวมไฟล์รูป/วิดีโอในเครื่อง — ลิงก์ออนไลน์และแบบสำเร็จรูปไปด้วยได้) */
+function themeExport() {
+  const list = themeSaves(); if (!list.length) return toast('ยังไม่มีธีมที่บันทึกไว้', true);
+  const blob = new Blob([JSON.stringify({ app: 'KiwNgan', kind: 'themes', v: 1, themes: list.map(x => ({ name: x.name, ts: x.ts, theme: x.theme, bgk: x.bgk })) }, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'kiwngan-themes.json'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  if (list.some(x => x.file)) toast('ส่งออกแล้ว · รูป/วิดีโอจากเครื่องไม่รวมในไฟล์ (เครื่องปลายทางต้องเลือกไฟล์เอง)');
+}
+async function themeImport(file) {
+  let d; try { d = JSON.parse(await file.text()); } catch (e) { return toast('ไฟล์ไม่ถูกต้อง', true); }
+  const arr = d && d.kind === 'themes' && Array.isArray(d.themes) ? d.themes : null; if (!arr) return toast('ไม่ใช่ไฟล์ธีมของ KiwNgan', true);
+  const keys = Object.keys(THEME_DEFAULT), list = themeSaves(); let n = 0;
+  arr.slice(0, 24).forEach((x, i) => {
+    if (!x || !x.theme || typeof x.theme !== 'object') return;
+    const th = {}; keys.forEach(k => { const v = x.theme[k]; if (v === null || ['string', 'number', 'boolean'].indexOf(typeof v) >= 0) th[k] = typeof v === 'string' ? v.slice(0, 600) : v; });
+    const noFile = th.bgsrc === 'file' || th.bgsrc === 'auto'; if (noFile) th.bgsrc = 'none';   // ไฟล์รูป/วิดีโอในเครื่องไม่ได้ติดมากับไฟล์
+    let name = String(x.name || 'ธีมนำเข้า').slice(0, 40); while (list.some(y => y.name === name)) name = name.slice(0, 36) + ' (2)';
+    list.unshift({ id: 'ts' + (Date.now() + i).toString(36), name: name, ts: Date.now(), theme: th, file: false, bgk: noFile ? '' : String(x.bgk || '').slice(0, 40) }); n++;
+  });
+  LS.set('themeSaves', list.slice(0, 24)); toast(n ? 'นำเข้า ' + n + ' ธีมแล้ว' : 'ไม่พบธีมในไฟล์', !n); render();
+}
+function themeSavesHtml() {
+  const list = themeSaves(), cur = JSON.stringify(getTheme());
+  const kindTxt = k => !k ? '' : k.indexOf('fx:') === 0 ? 'เคลื่อนไหว: ' + ((BGFX[k.slice(3)] || [])[0] || '') : k === 'vid' ? 'วิดีโอ' : k === 'yt' ? 'YouTube' : 'รูปพื้นหลัง';
+  return '<div class="ts-box"><div class="ts-h"><b>ธีมที่บันทึกไว้</b><small>บันทึกหน้าตาตอนนี้ทั้งชุด (สี แบนเนอร์ เมนู ตัวอักษร พื้นหลัง) แล้วกดใช้กลับมาได้ค่าเดิม</small></div>' +
+    '<div class="ts-save"><input id="tsName" maxlength="40" placeholder="ตั้งชื่อธีม เช่น ธีมกลางคืน" value="' + esc(TS.name) + '" autocomplete="off"><button type="button" class="btn sm primary" data-act="tssave">💾 บันทึกธีมนี้</button>' +
+      '<button type="button" class="btn sm ghost" data-act="tsexport" title="ส่งออกเป็นไฟล์ไว้ใช้เครื่องอื่น">ส่งออก</button><label class="btn sm ghost" title="นำเข้าไฟล์ธีม">นำเข้า<input type="file" accept="application/json,.json" id="tsImport" hidden></label></div>' +
+    (list.length ? '<div class="ts-list">' + list.map(x => { const c = themeColors(Object.assign({}, THEME_DEFAULT, x.theme)), on = JSON.stringify(Object.assign({}, THEME_DEFAULT, x.theme)) === cur;
+      return '<div class="ts-it' + (on ? ' on' : '') + '"><button type="button" class="ts-use" data-tsload="' + esc(x.id) + '" title="ใช้ธีมนี้"><span class="tp-prev' + (x.theme.mode === 'dark' ? ' dark' : '') + '" style="--t1:' + esc(c[0]) + ';--t2:' + esc(c[1]) + '"><i class="tp-rail"></i><i class="tp-head"></i><i class="tp-a"></i><i class="tp-b"></i></span>' +
+        '<span class="ts-tx"><b>' + esc(x.name) + '</b><small>' + (on ? '✓ ใช้อยู่' : new Date(x.ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })) + (kindTxt(x.bgk) ? ' · ' + kindTxt(x.bgk) : '') + '</small></span></button>' +
+        (TS.del === x.id ? '<span class="ts-cf"><button type="button" class="btn sm danger" data-tsdel="' + esc(x.id) + '">ลบ</button><button type="button" class="btn sm" data-tsdelask="">ไม่</button></span>'
+          : '<button type="button" class="icon-btn sm ts-x" data-tsdelask="' + esc(x.id) + '" aria-label="ลบธีม ' + esc(x.name) + '">' + I.trash + '</button>') + '</div>'; }).join('') + '</div>'
+      : '<small class="bar-note">ยังไม่มีธีมที่บันทึกไว้</small>') + '</div>';
+}
 function bgUse(rec) { if (BG.url && BG.url.indexOf('blob:') === 0) URL.revokeObjectURL(BG.url); BG.url = rec && rec.blob ? URL.createObjectURL(rec.blob) : ''; BG.w = rec ? rec.w : 0; BG.h = rec ? rec.h : 0; BG.size = rec && rec.blob ? rec.blob.size : 0; BG.kind = rec && rec.blob ? (rec.kind || (/^video\//.test(rec.blob.type) ? 'vid' : /gif/.test(rec.blob.type) ? 'gif' : 'img')) : ''; }
 async function bgLoad() { try { bgUse(await bgGet()); } catch (e) {} BG.ready = true; applyTheme(); if (S.view === 'settings') render(); }
 const BGIMG = () => { if (BG.url) return BG.url; try { return localStorage.getItem('kiwngan:bgimg') || ''; } catch (e) { return ''; } };
@@ -1429,7 +1492,7 @@ function themeSection() {
   const c1 = t.preset === 'custom' && isHex(t.c1) ? t.c1 : (THEMES.find(x => x.id === t.preset) || {}).c1 || team;
   const c2 = t.preset === 'custom' && isHex(t.c2) ? t.c2 : (THEMES.find(x => x.id === t.preset) || {}).c2 || '#5B3FD6';
   return '<section class="panel sec" id="s-theme"><div class="panel-h"><h2>ธีมและโหมดสี</h2><button class="btn sm ghost" data-act="themereset">คืนค่าเริ่มต้น</button></div>' +
-    '<p class="help">ปรับหน้าตาแอปตามชอบ ใช้เฉพาะเครื่องนี้ ไม่กระทบคนอื่นในทีม</p>' +
+    '<p class="help">ปรับหน้าตาแอปตามชอบ ใช้เฉพาะเครื่องนี้ ไม่กระทบคนอื่นในทีม</p>' + themeSavesHtml() +
     '<div class="sub" style="font-weight:600;color:var(--ink)">เทมเพลตสี</div><div class="theme-grid">' + THEMES.map(sw).join('') +
       '<label class="theme-sw custom' + (t.preset === 'custom' ? ' on' : '') + '" style="--t1:' + esc(c1) + ';--t2:' + esc(c2) + '"><span class="tp-prev"><i class="tp-rail"></i><i class="tp-head"></i><i class="tp-a"></i><i class="tp-b"></i></span><b>กำหนดเอง</b></label></div>' +
     '<div class="theme-opts">' +
@@ -1798,7 +1861,8 @@ document.addEventListener('click', e => {
   const tr = t.closest('tr[data-shov]'); if (tr && !t.closest('a,button')) saleDetail(tr.dataset.shov);
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#sdModal')) saleDetailClose(); });
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'bgUrl') { e.preventDefault(); bgUseUrl(e.target.value); } });
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'bgUrl') { e.preventDefault(); bgUseUrl(e.target.value); } if (e.key === 'Enter' && e.target && e.target.id === 'tsName') { e.preventDefault(); themeSave(e.target.value); } });
+document.addEventListener('input', e => { if (e.target && e.target.id === 'tsName') TS.name = e.target.value; });
 function showSaleHover(el) {
   const r = SF.by && SF.by[el.dataset.shov]; if (!r) return;
   let h = $('#hovercard'); if (!h) { h = document.createElement('div'); h.id = 'hovercard'; h.className = 'hovercard'; h.setAttribute('role', 'tooltip'); document.body.appendChild(h); }
@@ -6998,6 +7062,9 @@ document.addEventListener('click', async e => {
   if (d.bgfx) { BGT.tab = 'anim'; setTheme({ bgsrc: 'fx', bgfx: d.bgfx, pattern: 'none' }); return render(); }
   if (d.barcol) { setTheme({ [d.barcol + 'c']: 'theme' }); return render(); }
   if (d.bgsound) { const on = !getTheme().bgsound; setTheme({ bgsound: on }); bgSound(); toast(on ? 'เปิดเสียงพื้นหลังแล้ว' : 'ปิดเสียงพื้นหลังแล้ว'); if (S.view === 'settings') render(); return; }
+  if (d.tsload) { themeLoad(d.tsload); return; }
+  if (d.tsdelask !== undefined) { TS.del = d.tsdelask; return render(); }
+  if (d.tsdel) { themeDel(d.tsdel); return; }
   if (d.fcolreset) { setTheme({ fcol: 'theme' }); return render(); }
   if (d.insttab) { INST.tab = d.insttab; renderLogin(); drawQr(); return; }
   if (d.quick) { S.f.quick = d.quick; return render(); }
@@ -7124,6 +7191,8 @@ document.addEventListener('click', async e => {
     case 'bgremove': { const A = bgActive(); if (A && A.src === 'file') { try { localStorage.removeItem('kiwngan:bgimg'); } catch (x) {} bgPut(null).catch(() => {}); bgUse(null); } setTheme({ bgsrc: 'none' }); BGT.tab = ''; toast('เอาพื้นหลังออกแล้ว'); return render(); }
     case 'bgurl': return bgUseUrl(($('#bgUrl') || {}).value);
     case 'bgrand': BGT.tab = 'img'; return bgUseUrl('https://picsum.photos/seed/kn' + Date.now().toString(36) + '/2560/1440', true);
+    case 'tssave': return themeSave(($('#tsName') || {}).value);
+    case 'tsexport': return themeExport();
     case 'themereset': LS.del('theme'); applyTheme(); toast('คืนค่าธีมเริ่มต้นแล้ว'); return render();
     case 'print': return printReport();
     case 'connect': return connect();
@@ -7235,6 +7304,7 @@ document.addEventListener('change', e => {
   }
   if (t.dataset.rsec) { reportState().sec[t.dataset.rsec] = t.checked; saveReportState(); return render(); }
   if (t.id === 'logoIn' && t.files && t.files[0]) return readLogo(t.files[0]);
+  if (t.id === 'tsImport' && t.files && t.files[0]) { const f = t.files[0]; t.value = ''; return themeImport(f); }
   if ((t.id === 'bgIn' || t.id === 'bgVidIn') && t.files && t.files[0]) {
     const f = t.files[0]; t.value = ''; toast(/^video\//.test(f.type) ? 'กำลังเตรียมวิดีโอ…' : 'กำลังเตรียมรูป…');
     bgPrepare(f).then(async r => {
