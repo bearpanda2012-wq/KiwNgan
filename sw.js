@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.75.1';
+const CACHE = 'kiwngan-v2.75.2';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 /* ตัวนี้ลงทะเบียน 2 ที่: ที่หลัก (แอป) และ ./ring/ (ช่องด่วน: push ที่มาทางนี้คือสายเรียกเข้า/ขอดูจอแน่นอน เด้งได้ทันที) */
@@ -60,10 +60,17 @@ const URGENT = { call: 1, view: 1, remote: 1, share: 1, sos: 1 };
 const VIB = { call: [900, 350, 900, 350, 900, 350, 900, 350, 900], view: [600, 250, 600, 250, 600, 250, 600], remote: [600, 250, 600, 250, 600, 250, 600], share: [600, 250, 600, 250, 600], sos: [400, 150, 400, 150, 400, 150, 400, 150, 400] };
 const STOP = {};   // แท็กที่ผู้ใช้กดหรือปัดทิ้งแล้ว → หยุดเรียกซ้ำ
 const wait = ms => new Promise(r => setTimeout(r, ms));
-const urlOf = k => APP + '?from=push#' + (k === 'msg' || k === 'sos' ? 'msg' : k === 'low' || k === 'nostock' ? 'stock' : k === 'digest' ? 'flow' : k);
+const enc = encodeURIComponent;
+/* ปลายทางเมื่อแตะแจ้งเตือน: แชท → ห้อง+ข้อความนั้น · งาน → เปิดงานเลข Job นั้น */
+const urlOf = (k, i) => { i = i || {};
+  const msgCh = i.team ? 'team' : i.from === 'ผู้ดูแลระบบ' ? 'admin' : i.code ? 'u:' + i.code : '';
+  const h = k === 'msg' || k === 'sos' ? 'msg' + (i.mid || msgCh ? '/' + enc(i.mid || '') + '/' + enc(msgCh) + '/' + enc(i.code || '') : '')
+    : (k === 'assign' || k === 'cmt' || k === 'help' || k === 'fix') && i.code ? 'job/' + enc(i.code)
+    : k === 'low' || k === 'nostock' ? 'stock' : k === 'digest' ? 'flow' : k === 'due' ? 'home' : k;
+  return APP + '?from=push#' + h; };
 function notifOpts(k, info, extra) {
   return Object.assign({ body: '', tag: 'kiwngan-' + k + (info && info.code && k !== 'digest' ? '-' + info.code : ''), renotify: true, requireInteraction: !!URGENT[k], silent: false,
-    vibrate: VIB[k] || [300, 120, 300], icon: APP + 'icons/icon-192.png', badge: APP + 'icons/icon-192.png', data: { url: urlOf(k), k: k } }, extra || {});
+    vibrate: VIB[k] || [300, 120, 300], icon: APP + 'icons/icon-192.png', badge: APP + 'icons/icon-192.png', data: { url: urlOf(k, info), k: k } }, extra || {});
 }
 /* สายเรียกเข้า/ขอดูจอ: เด้งซ้ำทุก ~4 วินาที (มีเสียง+สั่นทุกครั้ง) จนกดรับ/ปัดทิ้ง หรือครบ ~25 วินาที — คล้ายเสียงเรียกเข้า */
 async function ring(k, title, opts) {
@@ -105,8 +112,9 @@ self.addEventListener('notificationclose', e => { STOP[e.notification.tag] = 1; 
 self.addEventListener('notificationclick', e => {
   STOP[e.notification.tag] = 1; e.notification.close();
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-    const isMsg = /#msg$/.test((e.notification.data && e.notification.data.url) || '');
-    for (const c of cs) { if (c.url.indexOf(APP) === 0 && 'focus' in c) { if (isMsg) c.postMessage({ kn: 'openmsg' }); return c.focus(); } }
+    const url = (e.notification.data && e.notification.data.url) || '', hash = url.indexOf('#') >= 0 ? url.slice(url.indexOf('#')) : '';
+    const win = cs.find(c => c.url.indexOf(APP) === 0 && 'focus' in c) || cs.find(c => 'focus' in c && new URL(c.url).pathname === new URL(APP).pathname);
+    if (win) { if (hash) win.postMessage({ kn: 'pushopen', hash: hash }); return win.focus(); }
     return self.clients.openWindow((e.notification.data && e.notification.data.url) || APP);
   }));
 });

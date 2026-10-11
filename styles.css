@@ -4842,3 +4842,13 @@ input[type=date]{min-width:0;max-width:100%}
   .rep-secs .toggle input{flex:none}
   .rep-secs .toggle{display:flex;align-self:stretch;margin:0}
 }
+
+/* v2.75.2 กดแจ้งเตือนแล้วเปิดแชทที่ข้อความนั้น: ข้อความกระพริบให้เห็น */
+.bub.bub-flash .bub-b,.help-card.bub-flash{animation:bubFlash 2.4s ease-out}
+@keyframes bubFlash{0%,100%{box-shadow:0 0 0 0 transparent}15%,45%{box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 60%,transparent),0 8px 20px -8px var(--brand)}30%,60%{box-shadow:0 0 0 1px color-mix(in oklab,var(--brand) 30%,transparent)}}
+@media (prefers-reduced-motion:reduce){.bub.bub-flash .bub-b,.help-card.bub-flash{animation:none;outline:2px solid var(--brand)}}
+
+/* v2.75.2 การ์ดบอร์ดผลิต: คืนแถบสีด้านซ้ายตามสีขั้นตอน (การ์ดด่วนยังเป็นสีส้มหนากว่า) */
+.pboard .pcard{border-left:4px solid var(--s)}
+.pboard .pcard.is-urgent{border-left:4px solid var(--urgent)}
+.pboard .pcard.is-late:not(.is-urgent){border-left-color:var(--late)}

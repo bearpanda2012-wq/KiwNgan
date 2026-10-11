@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.75.1';
+const APP_VERSION = '2.75.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1962,7 +1962,7 @@ function startMsgPolling() {
   if (M.timer) return;
   M.list = []; M.since = ''; M.loaded = false; M.seen = {}; M.stamp = '';
   pollMessages(true); rtcLoop(); pushBoot();
-  if (/#msg$/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} setTimeout(() => openMsgPanel(), 800); }
+  if (/^#(msg|job)(\/|$)/.test(location.hash)) { const h0 = location.hash; try { history.replaceState(null, '', location.pathname + location.search.replace(/[?&]from=push/, '')); } catch (e) {} setTimeout(() => pushNav(h0), 800); }
   setTimeout(openPendingLink, 500);
   M.timer = setInterval(() => { if (document.visibilityState === 'visible' || 'Notification' in window && Notification.permission === 'granted') pollMessages(); }, 20000);
 }
@@ -2064,7 +2064,7 @@ function helpCard(m) {
   const st = m.status || 'open';
   const lab = st === 'open' ? 'รอคนช่วย' : st === 'taken' ? (m.helper ? m.helper + ' กำลังช่วย' : 'มีคนรับช่วยแล้ว') : 'เรียบร้อยแล้ว';
   const canTake = st === 'open' && !mine, canClose = st !== 'done' && (mine || isAdmin() || m.helper === S.me);
-  return '<div class="help-card hc-' + st + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบคำขอนี้">' + I.trash + '</button>' : '') + '<div class="hc-top"><span class="hc-ic">' + MSG_IC.sos + '</span><div><b>' + (mine ? 'คุณขอความช่วยเหลือ' : esc(m.from) + ' ขอความช่วยเหลือ') + '</b><small>' + (m.to === 'team' ? 'ถึงทั้งทีม' : m.to === 'admin' ? 'ถึง' + ADMIN_LABEL : 'ถึง ' + esc(m.to)) + ' · ' + msgTime(m.ts) + '</small></div><span class="hc-st">' + lab + '</span></div>' +
+  return '<div class="help-card hc-' + st + '" data-mid="' + esc(m.id) + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบคำขอนี้">' + I.trash + '</button>' : '') + '<div class="hc-top"><span class="hc-ic">' + MSG_IC.sos + '</span><div><b>' + (mine ? 'คุณขอความช่วยเหลือ' : esc(m.from) + ' ขอความช่วยเหลือ') + '</b><small>' + (m.to === 'team' ? 'ถึงทั้งทีม' : m.to === 'admin' ? 'ถึง' + ADMIN_LABEL : 'ถึง ' + esc(m.to)) + ' · ' + msgTime(m.ts) + '</small></div><span class="hc-st">' + lab + '</span></div>' +
     '<p>' + msgRich(m.text) + '</p>' + (!j ? (cs => cs.length ? '<div class="bub-jobs">' + cs.slice(0, 2).map(jobMini).join('') + '</div>' : '')(jobsInText(m.text)) : '') + (j ? '<button class="hc-job" data-open="' + esc(j.id) + '">' + stBadge(j) + '<b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '') + '</small></button>' : '') +
     (canTake || canClose ? '<div class="hc-act">' + (canTake ? '<button class="btn sm primary" data-helptake="' + esc(m.id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + (canClose ? '<button class="btn sm" data-helpdone="' + esc(m.id) + '">' + STI.done + 'ปิดคำขอ</button>' : '') + '</div>' : '') + '</div>';
 }
@@ -2111,7 +2111,7 @@ function renderMsgPanel() {
     const day = String(m.ts).slice(0, 10), sep = day !== lastDay ? '<div class="mp-day"><span>' + (day === today() ? 'วันนี้' : fdY(day)) + '</span></div>' : ''; lastDay = day;
     if (m.kind === 'help') return sep + helpCard(m);
     const mine = (m.from === S.me && !m.fromAdmin) || (isAdmin() && m.from === S.me);
-    return sep + '<div class="bub' + (mine ? ' me' : '') + (m.pending ? ' pending' : '') + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบข้อความนี้">' + I.trash + '</button>' : '') + (mine ? '' : (m.fromAdmin && !isAdmin() ? '<span class="av bub-av adm">' + MSG_IC.shield + '</span>' : av(m.from, 'bub-av'))) +
+    return sep + '<div class="bub' + (mine ? ' me' : '') + (m.pending ? ' pending' : '') + '" data-mid="' + esc(m.id) + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบข้อความนี้">' + I.trash + '</button>' : '') + (mine ? '' : (m.fromAdmin && !isAdmin() ? '<span class="av bub-av adm">' + MSG_IC.shield + '</span>' : av(m.from, 'bub-av'))) +
       '<div class="bub-b">' + (mine || M.ch !== 'team' ? '' : '<small class="bub-n">' + esc(m.from) + '</small>') + msgImg(m) + (m.text ? '<p>' + msgRich(m.text) + '</p>' : '') + (m.jobId && jobById(m.jobId) ? '<button class="bub-job" data-open="' + esc(m.jobId) + '">' + esc(jobById(m.jobId).code) + '</button>' : (cs => cs.length ? '<div class="bub-jobs">' + cs.slice(0, 2).map(jobMini).join('') + '</div>' : '')(jobsInText(m.text))) + '<time>' + msgTime(m.ts) + '</time></div></div>';
   }).join('') : '<div class="mp-empty"><span class="e-ic">' + MSG_IC.chat + '</span><b>ยังไม่มีข้อความ</b><small>' + (M.ch === 'team' ? 'ส่งข้อความถึงทุกคนในทีมได้ที่นี่' : 'เริ่มคุยกับ ' + esc(cur.name)) + '</small></div>';
   const helpForm = M.help ? '<div class="mp-help"><div class="mp-help-h"><span class="hc-ic">' + MSG_IC.sos + '</span><b>ขอความช่วยเหลือ</b><button class="icon-btn sm" data-act="helpoff" aria-label="ยกเลิก">✕</button></div>' +
@@ -2288,7 +2288,7 @@ function notifyMsg(m) {
   if (msgSoundOn()) msgBuzz(help);
   ping(help);
   if (document.visibilityState !== 'visible' && 'Notification' in window && Notification.permission === 'granted') {
-    sysNotify(help ? '🛟 ' + who + ' ขอความช่วยเหลือ' : '💬 ' + who + (m.to === 'team' ? ' ถึงทั้งทีม' : ''), m.text || (m.img ? '📷 ส่งรูปมา' : ''), 'kiwngan-' + (help ? 'sos' : 'msg') + '-' + m.from, () => openMsgPanel(chanOf(m)));
+    sysNotify(help ? '🛟 ' + who + ' ขอความช่วยเหลือ' : '💬 ' + who + (m.to === 'team' ? ' ถึงทั้งทีม' : ''), m.text || (m.img ? '📷 ส่งรูปมา' : ''), 'kiwngan-' + (help ? 'sos' : 'msg') + '-' + m.from, () => pushNav('#msg/' + m.id), './#msg/' + encodeURIComponent(m.id));
   }
 }
 /* แจ้งเตือนงาน: มอบหมายให้ / ถูกส่งกลับไปแก้ / ใกล้ถึงกำหนด */
@@ -2446,15 +2446,45 @@ function ping(strong, force) {
   } catch (e) {}
 }
 function msgBuzz(help) { try { if (navigator.vibrate) navigator.vibrate(help ? [300, 120, 300, 120, 300] : [180, 90, 180]); } catch (e) {} }
-async function sysNotify(title, body, tag, onClick) {   // Android ต้องแจ้งผ่าน service worker (new Notification ใช้ไม่ได้)
+async function sysNotify(title, body, tag, onClick, url) {   // Android ต้องแจ้งผ่าน service worker (new Notification ใช้ไม่ได้)
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try {
     const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
-    if (reg && reg.showNotification) { await reg.showNotification(title, { body: body, tag: tag, renotify: true, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', vibrate: [180, 90, 180], data: { url: './#msg' } }); return; }
+    if (reg && reg.showNotification) { await reg.showNotification(title, { body: body, tag: tag, renotify: true, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', vibrate: [180, 90, 180], data: { url: url || './#msg' } }); return; }
   } catch (e) {}
   try { const n = new Notification(title, { body: body, tag: tag, icon: 'icons/icon-192.png' }); n.onclick = () => { window.focus(); if (onClick) onClick(); }; } catch (e) {}
 }
-if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.kn === 'openmsg' && S.user) openMsgPanel(); });
+if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', e => {
+  if (!e.data || !S.user) return;
+  if (e.data.kn === 'openmsg') openMsgPanel();
+  if (e.data.kn === 'pushopen') pushNav(e.data.hash || '');
+});
+/* กดแจ้งเตือน → ไปที่ต้นเรื่องเลย: #msg/<รหัสข้อความ>/<ห้อง> เปิดแชทห้องนั้นแล้วเลื่อนไปข้อความ · #job/<เลข Job> เปิดงาน · #kb #stock #flow ไปหน้านั้น */
+function pushNav(hash, tries) {
+  const h = String(hash || '').replace(/^#/, ''), p = h.split('/').map(x => { try { return decodeURIComponent(x); } catch (e) { return x; } });
+  tries = tries || 0;
+  if (p[0] === 'msg') {
+    const mid = p[1] || '', m = mid ? M.list.find(x => x.id === mid) : null;
+    if (mid && !m && tries < 6) { if (tries === 0 || tries === 3) pollMessages(); return setTimeout(() => pushNav(hash, tries + 1), 700); }   // ข้อความยังโหลดไม่ถึง รอแป๊บ
+    let ch = m ? chanOf(m) : (p[2] || '');
+    if (ch === 'admin' && isAdmin()) ch = p[3] ? 'u:' + p[3] : '';
+    if (ch && !chanList().some(c => c.id === ch)) ch = '';
+    M.help = false;
+    if (!M.open) openMsgPanel(ch || undefined); else { if (ch) M.ch = ch; renderMsgPanel(); markChanRead(M.ch); }
+    if (mid) setTimeout(() => {
+      const el = document.querySelector('#msgPanel [data-mid="' + (window.CSS && CSS.escape ? CSS.escape(mid) : mid) + '"]'); if (!el) return;
+      el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      el.classList.remove('bub-flash'); void el.offsetWidth; el.classList.add('bub-flash'); setTimeout(() => el.classList.remove('bub-flash'), 2600);
+    }, 420);
+    return;
+  }
+  if (p[0] === 'job' && p[1]) {
+    if (prodOfCode(p[1]) || designJobsOf(p[1]).length) return coOpen(p[1]);
+    if (tries < 4) return setTimeout(() => pushNav(hash, tries + 1), 800);
+    return toast('ไม่พบเลข Job ' + p[1], true);
+  }
+  if (p[0] && viewsFor(S.user).some(v => v.id === p[0])) go(p[0]);
+}
 
 /* ============ screen share & remote pointer (WebRTC, signaling via the API) ============
    ภาพหน้าจอวิ่งตรงระหว่างสองเครื่อง (peer-to-peer) — ฐานข้อมูลใช้แค่ส่งสัญญาณเริ่มต้น
@@ -4544,7 +4574,16 @@ async function digestSend(send) {
   try {
     const r = await api().digestTest({ send: !!send, topics: digestCfgC(S.draft || S.settings).topics });
     DG.prev = { title: r.title, body: r.body, alert: r.alert };
-    if (send) toast(r.demo ? 'โหมดทดลอง: ไม่ได้ส่งจริง ดูตัวอย่างด้านขวา' : r.devices ? 'ส่งสรุปเข้าเครื่องของคุณแล้ว (' + r.devices + ' เครื่อง)' : 'ส่งแล้ว แต่เครื่องของคุณยังไม่ได้เปิดแจ้งเตือน', !r.demo && !r.devices);
+    if (send) {
+      const st = r.sent;
+      if (r.demo) toast('โหมดทดลอง: ไม่ได้ส่งจริง ดูตัวอย่างด้านขวา');
+      else if (!r.devices) toast('ยังส่งไม่ได้: เครื่องของคุณยังไม่ได้เปิดแจ้งเตือน — ไปที่ บัญชีของฉัน › แจ้งเตือน แล้วกด "เปิดแจ้งเตือน"', true);
+      else if (st && st.ok) toast('ส่งสรุปแล้ว ถึง ' + st.ok + '/' + st.devices + ' เครื่อง · ถ้าไม่เด้ง ให้กด "ลงทะเบียนเครื่องนี้ใหม่" ในหน้าแจ้งเตือน');
+      else if (st && st.err) toast('ส่งไม่สำเร็จ: ' + st.err + ' (อาจต้องอนุญาตสิทธิ์ใน Apps Script ใหม่)', true);
+      else if (st) toast('ส่งไม่ถึงเครื่องเลย (รหัส ' + (st.codes.join(', ') || '-') + ') — กด "ลงทะเบียนเครื่องนี้ใหม่" ในหน้าแจ้งเตือนแล้วลองอีกครั้ง', true);
+      else toast('ส่งสรุปเข้าเครื่องของคุณแล้ว (' + r.devices + ' เครื่อง)');
+      if (r.trigger === false) setTimeout(() => toast('ยังไม่ได้ตั้งเวลาส่งอัตโนมัติ: กด "บันทึกการตั้งค่า" อีกครั้ง หรือรัน installTriggers ใน Apps Script', true), 2600);
+    }
   } catch (e) { toast(e.message, true); }
   DG.busy = false; digestDraw();
 }
