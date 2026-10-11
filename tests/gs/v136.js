@@ -1,0 +1,35 @@
+// 1.36.0: รับทราบเรื่องในคลังความรู้ · แจ้งเตือนความรู้ใหม่ · นับสต็อกหลายรายการ
+const path = require('path'); process.argv[2] = path.join(__dirname, '../../backend/Code.gs');
+const m = require('./mock.js'); const logs = []; const ol = console.log; console.log = (...a) => logs.push(a.join(' ')); m.ctx.setup(); console.log = ol;
+const pin = (logs.join('\n').match(/PIN[^0-9]*(\d{4})/) || [])[1]; const A = m.call('login', { name: 'แอดมิน', pin }).data.token;
+let ok = 0, bad = 0; const eq = (l, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + l + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
+const mk = (name, role, p) => { const r = m.call('saveUser', { user: { name, role, pin: p } }, A).data; return m.call('login', { userId: r.user.id, pin: p }).data.token; };
+const D = mk('ต้น', 'user', '1111'), P = mk('ช่าง', 'prod', '3333'), K = mk('คลัง', 'stock', '4444');
+m.cacheStore['vj:https://fcm.googleapis.com'] = 'vapid t=x'; const sent = []; global.UrlFetchApp.fetchAll = reqs => { sent.push(reqs.map(r => r.url)); return reqs.map(() => ({ getResponseCode: () => 201 })); };
+m.call('pushSub', { sub: { endpoint: 'https://fcm.googleapis.com/fcm/send/d1' } }, D);
+m.call('pushSub', { sub: { endpoint: 'https://fcm.googleapis.com/fcm/send/p1' } }, P);
+let r = m.call('kbSave', { item: { dept: 'p', cat: 'warn', title: 'ใส่แว่นทุกครั้ง', body: 'Laser', pin: 1 } }, P).data;
+const id = r.id;
+eq('new article pushes others, not author', [sent.length, sent[0] && sent[0][0].endsWith('d1')], [1, true]);
+eq('push info kind kb', JSON.parse(m.cacheStore['pinfo:ต้น']).kind, 'kb');
+m.call('kbSave', { item: { id, dept: 'p', cat: 'warn', title: 'ใส่แว่นทุกครั้ง', body: 'Laser', pin: 1 } }, P);
+eq('edit does not push again', sent.length, 1);
+r = m.call('kbAck', { id }, D).data;
+eq('ack recorded', Object.keys(r.kb.find(x => x.id === id).acks), ['ต้น']);
+m.call('kbAck', { id }, D); m.call('kbAck', { id }, K);
+eq('ack once per person', Object.keys(m.call('bootstrap', {}, A).data.kb.find(x => x.id === id).acks).sort(), ['คลัง', 'ต้น'].sort());
+m.call('kbSave', { item: { id, dept: 'p', cat: 'warn', title: 'ใส่แว่นทุกครั้ง', body: 'Laser + Router', pin: 1 } }, P);
+eq('content change clears acks', Object.keys(m.call('bootstrap', {}, A).data.kb.find(x => x.id === id).acks).length, 0);
+m.call('kbAck', { id }, D); m.call('kbSave', { item: { id, dept: 'p', cat: 'tip', title: 'ใส่แว่นทุกครั้ง', body: 'Laser + Router', pin: 1 } }, P);
+eq('category-only change keeps acks', Object.keys(m.call('bootstrap', {}, A).data.kb.find(x => x.id === id).acks), ['ต้น']);
+m.call('saleLink', {}, A); m.call('salePin', { pin: '5151' }, A);
+eq('sale view has no ack names', m.call('saleView', { k: m.call('saleOpen', { pin: '5151' }).data.key }).data.kb[0].acks, undefined);
+// นับสต็อก
+let st = m.call('stockSave', { item: { name: 'A', unit: 'แผ่น', qty: 10 } }, K).data; const a = st.items[0].id;
+st = m.call('stockSave', { item: { name: 'B', unit: 'แผ่น', qty: 5 } }, K).data; const b = st.items.find(x => x.name === 'B').id;
+eq('user cannot count', !!m.call('stockCount', { counts: [{ itemId: a, qty: 1 }] }, D).error, true);
+r = m.call('stockCount', { counts: [{ itemId: a, qty: 8 }, { itemId: b, qty: 5 }, { itemId: 'nope', qty: 1 }, { itemId: b, qty: -1 }], note: 'นับสิ้นเดือน' }, K).data;
+eq('only changed rows adjusted', [r.changed, r.items.find(x => x.id === a).qty, r.items.find(x => x.id === b).qty], [1, 8, 5]);
+eq('count log', [r.logs[0].kind, r.logs[0].qty, r.logs[0].note], ['adj', -2, 'นับสิ้นเดือน']);
+console.log(ok + ' ok, ' + bad + ' failed');
+if (bad) process.exit(1);

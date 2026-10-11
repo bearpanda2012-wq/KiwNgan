@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.35.0';
+const VERSION = '1.36.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -47,7 +47,7 @@ const SHEETS = {
   // own = 'cust' ของลูกค้า (cust = ชื่อลูกค้า, job = เลข Job) ไม่คิดมูลค่า · grade = 'ng' ตำหนิ / 'scrap' เศษ (base = วัสดุตั้งต้น, size = ขนาดเศษ) แยกจากยอดพร้อมใช้
   StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note', 'price', 'cond', 'from'],
   // คลังความรู้: 1 แถว = 1 เรื่อง · dept = d ฝ่ายแบบ / p ฝ่ายผลิต / s ฝ่ายสต็อก / g ทั่วไป (แอดมิน) · cat = tip/limit/warn/step · videos = ลิงก์วิดีโอ (JSON) ไม่เก็บไฟล์
-  Kb: ['id', 'dept', 'cat', 'title', 'body', 'videos', 'pin', 'createdBy', 'createdAt', 'updatedBy', 'updatedAt']   // price = ราคาต่อหน่วยตอนเบิก · cond = สภาพของที่รับคืน ok/ng/scrap · from = ผู้ส่งคืน
+  Kb: ['id', 'dept', 'cat', 'title', 'body', 'videos', 'pin', 'createdBy', 'createdAt', 'updatedBy', 'updatedAt', 'acks']   // acks = ใครกดรับทราบแล้ว {ชื่อ: เวลา} (แก้เนื้อหาแล้วล้าง ต้องรับทราบใหม่)   // price = ราคาต่อหน่วยตอนเบิก · cond = สภาพของที่รับคืน ok/ng/scrap · from = ผู้ส่งคืน
 };
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
@@ -162,6 +162,8 @@ const ACTIONS = {
   // คลังความรู้ (ทุกคนอ่านได้ · แก้ได้เฉพาะเรื่องของฝ่ายตัวเอง · แอดมินแก้ได้ทุกฝ่าย)
   kbSave: (p, u) => withLock_(() => kbSave_(p.item, u)),
   kbDelete: (p, u) => withLock_(() => kbDelete_(p.id, u)),
+  kbAck: (p, u) => withLock_(() => kbAck_(p.id, u)),
+  stockCount: (p, u) => withLock_(() => stockCount_(p, u)),
   image: (p, u) => imageFull_(p.id),
   // admin
   saveSettings: (p, u) => withLock_(() => { admin_(u); return saveSettings_(p.settings, u); }),
@@ -172,7 +174,7 @@ const ACTIONS = {
 
 /* ===== ความเร็ว: ตัวบอกเวอร์ชันข้อมูล (stamp) ใน cache
    หน้าเว็บส่ง stamp ล่าสุดมาด้วย ถ้าไม่มีอะไรเปลี่ยนจะตอบกลับทันทีโดยไม่ต้องอ่านชีต ===== */
-const DATA_ACTIONS_ = { kbSave: 1, kbDelete: 1, stockSave: 1, stockMove: 1, stockDelete: 1, deleteFile: 1, addComment: 1, deleteComment: 1, copyImages: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
+const DATA_ACTIONS_ = { kbSave: 1, kbDelete: 1, kbAck: 1, stockCount: 1, stockSave: 1, stockMove: 1, stockDelete: 1, deleteFile: 1, addComment: 1, deleteComment: 1, copyImages: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, saveSettings: 1, saveUser: 1, deleteUser: 1, resetPin: 1 };
 const MSG_ACTIONS_ = { sendMessage: 1, markRead: 1, helpUpdate: 1, deleteMessages: 1 };
 function stamp_(kind) {
   const c = CacheService.getScriptCache(), k = 'stamp:' + kind;
@@ -1014,6 +1016,22 @@ function stockLowPush_(it, before, after, u) {
     if (names.length) pushTo_(names, { kind: zero ? 'nostock' : 'low', from: maskName_(u.name, { role: 'user' }), title: it.name, code: String(after) + ' ' + (it.unit || ''), count: after });
   } catch (e) { /* แจ้งเตือนเป็นของเสริม */ }
 }
+/** นับสต็อกประจำเดือน: ปรับยอดหลายรายการในครั้งเดียว (บันทึกเฉพาะที่ยอดต่างจากในระบบ) */
+function stockCount_(p, u) {
+  stockEdit_(u);
+  const list = Array.isArray(p.counts) ? p.counts.slice(0, 500) : [];
+  const now = nowIso_(), note = String(p.note || 'นับสต็อก').slice(0, 200); let n = 0;
+  list.forEach(c => {
+    const q = stockNum_(c.qty); if (isNaN(q) || q < 0) return;
+    const row = rowOf_('Stock', c.itemId); if (row < 0) return;
+    const it = readRow_('Stock', row), have = stockNum_(it.qty) || 0; if (q === have) return;
+    it.qty = q; it.updatedAt = now; it.updatedBy = u.name; writeRow_('Stock', it, row);
+    writeRow_('StockLog', { id: uid_('sl_'), ts: now, itemId: it.id, kind: 'adj', qty: Math.round((q - have) * 100) / 100, bal: q, job: '', who: u.name, note: note, price: stockNum_(it.price) || '' }, -1);
+    n++;
+  });
+  if (n) log_('', u.name, 'stock', 'นับสต็อก ปรับยอด ' + n + ' รายการ');
+  return Object.assign(stockView_(u), { changed: n });
+}
 function stockDelete_(id, u) {
   stockEdit_(u);
   const row = rowOf_('Stock', id);
@@ -1040,8 +1058,25 @@ function kbList_(u, metas) {
   const im = {}; (metas || imageMeta_()).forEach(m => { if (/^k_/.test(m.jobId)) (im[m.jobId] = im[m.jobId] || []).push(m); });
   return readAll_('Kb').map(k => ({ id: k.id, dept: k.dept, cat: k.cat, title: k.title, body: k.body, videos: kbVideos_(k.videos), pin: k.pin === '1' ? 1 : 0,
     createdBy: maskName_(k.createdBy, u), createdAt: k.createdAt, updatedBy: maskName_(k.updatedBy, u), updatedAt: k.updatedAt,
+    acks: metas ? undefined : kbAcks_(k.acks, u),
     imgs: metas ? (im[k.id] || []).map(m => m.fileId).filter(Boolean).slice(0, 12) : undefined }))
     .sort((a, b) => (b.pin - a.pin) || String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+function kbAcks_(raw, u) { let o = {}; try { o = JSON.parse(raw || '{}') || {}; } catch (e) { o = {}; } const out = {}; Object.keys(o).forEach(n => { out[maskName_(n, u)] = o[n]; }); return out; }
+/** กด "รับทราบ" เรื่องในคลังความรู้ (ใช้กับเรื่องที่ปักหมุด) */
+function kbAck_(id, u) {
+  const row = rowOf_('Kb', id);
+  if (row < 0) throw new Error('ไม่พบเรื่องนี้');
+  const k = readRow_('Kb', row); let o = {}; try { o = JSON.parse(k.acks || '{}') || {}; } catch (e) { o = {}; }
+  if (!o[u.name]) { o[u.name] = nowIso_(); k.acks = JSON.stringify(o); writeRow_('Kb', k, row); }
+  return { kb: kbList_(u) };
+}
+/** มีความรู้ใหม่ → เด้งแจ้งเตือนเข้ามือถือทุกคน (ยกเว้นคนเขียน) */
+function kbPush_(k, u) {
+  try {
+    const names = usersLite_().filter(x => x.active && x.name !== u.name).map(x => x.name);
+    if (names.length) pushTo_(names, { kind: 'kb', from: maskName_(u.name, { role: 'user' }), title: k.title, code: KB_DEPTS_[k.dept] || '', count: k.pin === '1' ? 1 : 0 });
+  } catch (e) { /* แจ้งเตือนเป็นของเสริม */ }
 }
 function kbSave_(item, u) {
   if (!item) throw new Error('ไม่มีข้อมูล');
@@ -1053,9 +1088,12 @@ function kbSave_(item, u) {
   if (row > 0 && !kbCan_(u, cur.dept)) throw new Error('แก้ได้เฉพาะความรู้ของฝ่ายตัวเอง');
   const dept = KB_DEPTS_[item.dept] ? item.dept : (cur.dept || deptOf_(u));
   if (!kbCan_(u, dept)) throw new Error(dept === 'g' ? 'หมวดทั่วไปเพิ่มได้เฉพาะแอดมิน' : 'เพิ่มได้เฉพาะความรู้ของฝ่ายตัวเอง');
+  const isNew = row < 0;
+  if (!isNew && (cur.title !== title || String(cur.body || '') !== body)) cur.acks = '';   // เนื้อหาเปลี่ยน → ทุกคนต้องรับทราบใหม่
   Object.assign(cur, { dept: dept, cat: KB_CATS_[item.cat] ? item.cat : 'tip', title: title, body: body, videos: JSON.stringify(kbVideos_(item.videos)), pin: item.pin ? '1' : '', updatedBy: u.name, updatedAt: nowIso_() });
   writeRow_('Kb', cur, row);
   log_(cur.id, u.name, 'kb', (row > 0 ? 'แก้ไขความรู้ ' : 'เพิ่มความรู้ ') + title);
+  if (isNew) kbPush_(cur, u);
   return { kb: kbList_(u), id: cur.id };
 }
 function kbDelete_(id, u) {

@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.72.5';
+const CACHE = 'kiwngan-v2.73.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -37,7 +37,8 @@ const PUSH_TEXT = {
   sos: (f, i) => ['🛟 ' + f + ' ขอความช่วยเหลือ', i.title || 'แตะเพื่อเปิดดู'],
   due: (f, i) => ['⏳ งานใกล้ถึงกำหนด ' + (i.count || '') + ' งาน', (i.late ? 'เลยกำหนดแล้ว ' + i.late + ' งาน · ' : '') + (i.code || '')],
   low: (f, i) => ['📦 ' + (i.title || 'วัสดุ') + ' ใกล้หมด', 'เหลือ ' + (i.code || '') + ' · ถึงจุดสั่งซื้อแล้ว (' + f + ' เบิกล่าสุด)'],
-  nostock: (f, i) => ['🚫 ' + (i.title || 'วัสดุ') + ' หมดสต็อก', 'เหลือ 0 · ' + f + ' เบิกล่าสุด — ต้องสั่งเพิ่ม']
+  nostock: (f, i) => ['🚫 ' + (i.title || 'วัสดุ') + ' หมดสต็อก', 'เหลือ 0 · ' + f + ' เบิกล่าสุด — ต้องสั่งเพิ่ม'],
+  kb: (f, i) => ['📘 ความรู้ใหม่' + (i.code ? ' · ' + i.code : '') + (i.count ? ' (สำคัญ)' : ''), (i.title || '') + ' — โดย ' + f]
 };
 self.addEventListener('push', e => {
   e.waitUntil((async () => {
