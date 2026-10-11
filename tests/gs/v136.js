@@ -31,5 +31,13 @@ eq('user cannot count', !!m.call('stockCount', { counts: [{ itemId: a, qty: 1 }]
 r = m.call('stockCount', { counts: [{ itemId: a, qty: 8 }, { itemId: b, qty: 5 }, { itemId: 'nope', qty: 1 }, { itemId: b, qty: -1 }], note: 'นับสิ้นเดือน' }, K).data;
 eq('only changed rows adjusted', [r.changed, r.items.find(x => x.id === a).qty, r.items.find(x => x.id === b).qty], [1, 8, 5]);
 eq('count log', [r.logs[0].kind, r.logs[0].qty, r.logs[0].note], ['adj', -2, 'นับสิ้นเดือน']);
+// ช่องด่วน: โทร/ขอดูจอ ไปช่องด่วน · แจ้งเตือนทั่วไปไปช่องปกติ
+const D2 = mk('ฝน', 'user', '5555'); sent.length = 0;
+m.call('pushSub', { sub: { endpoint: 'https://fcm.googleapis.com/fcm/send/n2' }, urgent: { endpoint: 'https://fcm.googleapis.com/fcm/send/u2' } }, D2);
+m.call('rtcSend', { to: 'ฝน', sid: 's1', type: 'offer', data: { src: 'voice' } }, P);
+eq('call goes to urgent channel', sent.some(l => l.some(u => u.endsWith('/u2'))) && !sent.some(l => l.some(u => u.endsWith('/n2'))), true);
+sent.length = 0; m.call('kbSave', { item: { dept: 'p', title: 'เรื่องใหม่อีกเรื่อง' } }, P);
+eq('normal notice goes to normal channel', sent.some(l => l.some(u => u.endsWith('/n2'))) && !sent.some(l => l.some(u => u.endsWith('/u2'))), true);
+eq('bad urgent endpoint ignored', m.call('pushSub', { sub: { endpoint: 'https://fcm.googleapis.com/fcm/send/n3' }, urgent: { endpoint: 'https://evil.example/x' } }, D2).error, undefined);
 console.log(ok + ' ok, ' + bad + ' failed');
 if (bad) process.exit(1);

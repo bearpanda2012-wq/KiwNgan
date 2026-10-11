@@ -4691,3 +4691,6 @@ body{scrollbar-gutter:stable}
 @media (max-width:640px){.mq-grid{grid-template-columns:1fr 1fr}.mq-c{padding:8px 10px}.mq-ic{width:28px;height:28px}.mq-n{font-size:18px}}
 @media (prefers-reduced-motion:reduce){.mq.in .mq-c{animation:none}}
 .buy-note input{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);font:inherit;color:var(--ink)}
+.push-test{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0}.push-test small{color:var(--muted);font-size:12.5px;flex:1;min-width:200px}
+.push-tips{margin:8px 0 12px;padding:10px 14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line)}
+.push-tips summary{cursor:pointer;font-weight:700;font-size:13.5px}.push-tips ul{margin:8px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.55}

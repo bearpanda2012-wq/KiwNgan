@@ -1,14 +1,19 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.73.0';
+const CACHE = 'kiwngan-v2.74.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
+/* ตัวนี้ลงทะเบียน 2 ที่: ที่หลัก (แอป) และ ./ring/ (ช่องด่วน: push ที่มาทางนี้คือสายเรียกเข้า/ขอดูจอแน่นอน เด้งได้ทันที) */
+const RING = /\/ring\/$/.test(self.registration.scope);
+const APP = RING ? new URL('../', self.registration.scope).href : self.registration.scope;
 self.addEventListener('install', e => {
+  if (RING) { e.waitUntil(self.skipWaiting()); return; }
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
+  if (RING) return;
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return; // API and fonts go straight to the network
   // network first so updates show up immediately; fall back to cache when offline
@@ -40,34 +45,67 @@ const PUSH_TEXT = {
   nostock: (f, i) => ['🚫 ' + (i.title || 'วัสดุ') + ' หมดสต็อก', 'เหลือ 0 · ' + f + ' เบิกล่าสุด — ต้องสั่งเพิ่ม'],
   kb: (f, i) => ['📘 ความรู้ใหม่' + (i.code ? ' · ' + i.code : '') + (i.count ? ' (สำคัญ)' : ''), (i.title || '') + ' — โดย ' + f]
 };
+/* ถามเซิร์ฟเวอร์ว่าใครเรียก/เรื่องอะไร (push ไม่มีเนื้อหา) · จำกัดเวลารอ ไม่ให้แจ้งเตือนช้า */
+async function pushInfo(ms) {
+  try {
+    const m = await (await caches.open('kiwngan-meta')).match('/__meta'); if (!m) return null;
+    const meta = await m.json(), ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const tm = setTimeout(() => ctl && ctl.abort(), ms || 9000);
+    const r = await fetch(meta.api, { method: 'POST', body: JSON.stringify({ token: meta.token, action: 'pushInfo', payload: {} }), redirect: 'follow', signal: ctl ? ctl.signal : undefined });
+    clearTimeout(tm); const j = await r.json(); return j && j.ok && j.data ? j.data.info : null;
+  } catch (x) { return null; }
+}
+const URGENT = { call: 1, view: 1, remote: 1, share: 1, sos: 1 };
+const VIB = { call: [900, 350, 900, 350, 900, 350, 900, 350, 900], view: [600, 250, 600, 250, 600, 250, 600], remote: [600, 250, 600, 250, 600, 250, 600], share: [600, 250, 600, 250, 600], sos: [400, 150, 400, 150, 400, 150, 400, 150, 400] };
+const STOP = {};   // แท็กที่ผู้ใช้กดหรือปัดทิ้งแล้ว → หยุดเรียกซ้ำ
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const urlOf = k => APP + '?from=push#' + (k === 'msg' || k === 'sos' ? 'msg' : k === 'low' || k === 'nostock' ? 'stock' : k);
+function notifOpts(k, info, extra) {
+  return Object.assign({ body: '', tag: 'kiwngan-' + k + (info && info.code ? '-' + info.code : ''), renotify: true, requireInteraction: !!URGENT[k], silent: false,
+    vibrate: VIB[k] || [300, 120, 300], icon: APP + 'icons/icon-192.png', badge: APP + 'icons/icon-192.png', data: { url: urlOf(k), k: k } }, extra || {});
+}
+/* สายเรียกเข้า/ขอดูจอ: เด้งซ้ำทุก ~4 วินาที (มีเสียง+สั่นทุกครั้ง) จนกดรับ/ปัดทิ้ง หรือครบ ~25 วินาที — คล้ายเสียงเรียกเข้า */
+async function ring(k, title, opts) {
+  const tag = opts.tag; delete STOP[tag];
+  for (let i = 0; i < 7; i++) {
+    if (STOP[tag]) return;
+    await self.registration.showNotification(title, Object.assign({}, opts, { renotify: true }));
+    await wait(i === 0 ? 3500 : 4000);
+    if (STOP[tag]) return;
+    const still = await self.registration.getNotifications({ tag: tag });
+    if (!still.length) return;   // ถูกปัดทิ้งไปแล้ว
+  }
+}
 self.addEventListener('push', e => {
   e.waitUntil((async () => {
-    let info = null;
-    try {
-      const m = await (await caches.open('kiwngan-meta')).match('/__meta');
-      if (m) {
-        const meta = await m.json();
-        const r = await fetch(meta.api, { method: 'POST', body: JSON.stringify({ token: meta.token, action: 'pushInfo', payload: {} }), redirect: 'follow' });
-        const j = await r.json(); info = j && j.ok && j.data ? j.data.info : null;
-      }
-    } catch (x) { info = null; }
-    const k = info && PUSH_TEXT[info.kind] ? info.kind : 'call', t = PUSH_TEXT[k](info && info.from ? info.from : 'มีคน', info || {});
+    if (RING) {   // ช่องด่วน: แสดงทันที แล้วค่อยเติมชื่อคนโทร
+      const pre = notifOpts('call', null, { tag: 'kiwngan-ring', body: 'แตะเพื่อเปิดแอปแล้วตอบรับ' });
+      await self.registration.showNotification('📞 มีสายเรียกเข้า / ขอดูจอจาก KiwNgan', pre);
+      const info = await pushInfo(8000), k = info && URGENT[info.kind] ? info.kind : 'call';
+      const t = PUSH_TEXT[k](info && info.from ? info.from : 'มีคน', info || {});
+      return ring(k, t[0], notifOpts(k, info, { tag: 'kiwngan-ring', body: t[1] }));
+    }
+    let info = null, late = false;
+    const pend = setTimeout(() => { late = true; self.registration.showNotification('🔔 KiwNgan · มีการแจ้งเตือนใหม่', notifOpts('msg', null, { tag: 'kiwngan-pending', body: 'กำลังโหลดรายละเอียด… แตะเพื่อเปิดแอป', requireInteraction: false })); }, 2500);   // เซิร์ฟเวอร์ตอบช้า: เด้งก่อน แล้วค่อยแทนที่
+    info = await pushInfo(9000); clearTimeout(pend);
+    const k = info && PUSH_TEXT[info.kind] ? info.kind : (late ? '' : 'call');
+    if (late) { (await self.registration.getNotifications({ tag: 'kiwngan-pending' })).forEach(n => n.close()); if (!k) return self.registration.showNotification('🔔 KiwNgan · มีการแจ้งเตือนใหม่', notifOpts('msg', null, { body: 'แตะเพื่อเปิดแอปดูรายละเอียด' })); }
+    const t = PUSH_TEXT[k](info && info.from ? info.from : 'มีคน', info || {});
     if (k === 'msg' || k === 'sos') {   // แอปเปิดอยู่บนจอ: แอปเด้งแจ้งเตือน + เสียงเองแล้ว ไม่ต้องซ้ำ
       const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       if (cs.some(c => c.visibilityState === 'visible' && c.focused)) return;
     }
-    await self.registration.showNotification(t[0], {
-      body: t[1], tag: 'kiwngan-' + k + (info && info.code ? '-' + info.code : ''), renotify: true, requireInteraction: k === 'call',
-      vibrate: k === 'call' ? [500, 250, 500, 250, 500, 250, 500] : k === 'sos' ? [300, 120, 300, 120, 300] : [200, 100, 200],
-      icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: './?from=push#' + (k === 'msg' || k === 'sos' ? 'msg' : k === 'low' || k === 'nostock' ? 'stock' : k) }
-    });
+    const o = notifOpts(k, info, { body: t[1] });
+    if (URGENT[k]) return ring(k, t[0], o);
+    await self.registration.showNotification(t[0], o);
   })());
 });
+self.addEventListener('notificationclose', e => { STOP[e.notification.tag] = 1; });
 self.addEventListener('notificationclick', e => {
-  e.notification.close();
+  STOP[e.notification.tag] = 1; e.notification.close();
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
     const isMsg = /#msg$/.test((e.notification.data && e.notification.data.url) || '');
-    for (const c of cs) { if (c.url.indexOf(self.registration.scope) === 0 && 'focus' in c) { if (isMsg) c.postMessage({ kn: 'openmsg' }); return c.focus(); } }
-    return self.clients.openWindow((e.notification.data && e.notification.data.url) || './');
+    for (const c of cs) { if (c.url.indexOf(APP) === 0 && 'focus' in c) { if (isMsg) c.postMessage({ kn: 'openmsg' }); return c.focus(); } }
+    return self.clients.openWindow((e.notification.data && e.notification.data.url) || APP);
   }));
 });

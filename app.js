@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.73.0';
+const APP_VERSION = '2.74.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -808,7 +808,7 @@ const Remote = {
     return data.data;
   }
 };
-['kbSave', 'kbDelete', 'kbAck', 'stockCount', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
+['kbSave', 'kbDelete', 'kbAck', 'stockCount', 'pushTest', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -3118,7 +3118,15 @@ async function pushEnable(ask) {
     let sub = await reg.pushManager.getSubscription();
     if (sub && LS.get('pushKey', '') && LS.get('pushKey', '') !== key) { try { await sub.unsubscribe(); } catch (e) {} sub = null; }
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(key) });
-    await api().pushSub({ sub: sub.toJSON() });
+    let subU = null;   // ช่องด่วน (โทร/ขอดูจอ): เครื่องเด้งเสียงเรียกเข้าได้ทันทีโดยไม่ต้องรอถามเซิร์ฟเวอร์
+    try {
+      const r2 = await navigator.serviceWorker.register('sw.js', { scope: './ring/', updateViaCache: 'none' });
+      if (!r2.active) await new Promise(res => { const w = r2.installing || r2.waiting; if (!w) return res(); w.addEventListener('statechange', () => { if (w.state === 'activated') res(); }); setTimeout(res, 6000); });
+      subU = await r2.pushManager.getSubscription();
+      if (subU && LS.get('pushKey', '') && LS.get('pushKey', '') !== key) { try { await subU.unsubscribe(); } catch (e) {} subU = null; }
+      if (!subU) subU = await r2.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(key) });
+    } catch (e) { subU = null; }
+    await api().pushSub({ sub: sub.toJSON(), urgent: subU ? subU.toJSON() : undefined });
     LS.set('pushKey', key); LS.set('pushOn', true); pushMeta();
     if (ask) toast('เปิดแจ้งเตือนสายเรียกเข้าแล้ว — มีคนโทรมาจะเด้งบนเครื่องนี้แม้ปิดแอป');
     return true;
@@ -3126,6 +3134,7 @@ async function pushEnable(ask) {
 }
 async function pushDisable() {
   try { const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); if (sub) { await api().pushUnsub({ endpoint: sub.endpoint }).catch(() => {}); await sub.unsubscribe(); } } catch (e) {}
+  try { const r2 = await navigator.serviceWorker.getRegistration('./ring/'), s2 = r2 && await r2.pushManager.getSubscription(); if (s2) await s2.unsubscribe(); } catch (e) {}
   LS.set('pushOn', false); toast('ปิดการแจ้งเตือนบนเครื่องนี้แล้ว');
 }
 function pushBoot() { pushMeta(); if (mode() === 'sheet' && PUSH_OK && Notification.permission === 'granted' && LS.get('pushOn', true) !== false) pushEnable(false); }
@@ -3137,6 +3146,12 @@ function pushSection() {
   return '<section class="panel sec" id="s-push"><div class="panel-h"><h2>แจ้งเตือนบนเครื่อง</h2>' + (on ? '<span class="push-on">' + RTC_IC.phone + 'เปิดอยู่</span>' : '') + '</div>' +
     '<p class="help">มีคนโทรหา ขอดูจอ มีงานใหม่มอบหมายให้ งานถูกส่งกลับไปแก้ และงานใกล้ถึงกำหนด (08:00 วันทำงาน) จะเด้งแจ้งเตือนบนเครื่องนี้ แม้ปิดแอปหรือล็อกหน้าจออยู่ แตะการแจ้งเตือนเพื่อเปิดแอปแล้วรับสาย — ต้องเปิดแยกในแต่ละเครื่อง</p>' +
     (why ? '<p class="help warn">' + why + '</p>' : '') +
+    (on ? '<div class="push-test"><button class="btn" data-act="pushtest">' + RTC_IC.phone + 'ทดสอบเสียงเรียกเข้า</button><small>กดแล้วปิดแอปหรือล็อกจอภายใน 6 วินาที — เครื่องควรเด้ง มีเสียงและสั่นซ้ำจนกดรับ</small></div>' : '') +
+    '<details class="push-tips"><summary>ทำให้แจ้งเตือนเร็ว ดัง และสั่น (ตอนปิดแอป)</summary><ul>' +
+      '<li><b>Android:</b> ตั้งค่า → แอป → Chrome (หรือแอป KiwNgan) → การแจ้งเตือน → เปิด "เสียง" "สั่น" และ "แสดงบนหน้าจอ/ป๊อปอัป" · แบตเตอรี่ → <b>ไม่จำกัด / ไม่ปรับให้เหมาะสม</b> (ไม่อย่างนั้นเครื่องจะหน่วงการแจ้งเตือนตอนจอดับ)</li>' +
+      '<li><b>คอม Windows:</b> Chrome → การตั้งค่า → ระบบ → เปิด <b>"เรียกใช้แอปพื้นหลังต่อเมื่อปิด Google Chrome"</b> (ถ้าปิด Chrome หมด จะไม่มีแจ้งเตือนเลย) · ตั้งค่า Windows → ระบบ → การแจ้งเตือน → Chrome: เปิดเสียง และตั้งเป็น "สำคัญ" · ปิดโหมด "ห้ามรบกวน"</li>' +
+      '<li><b>iPhone:</b> ต้องติดตั้งลงหน้าจอโฮม · iOS ไม่ให้เว็บสั่นหรือเปลี่ยนเสียง (ใช้เสียงแจ้งเตือนปกติของเครื่อง)</li>' +
+      '<li>เสียงดังแค่ไหนขึ้นกับระดับเสียงแจ้งเตือนของเครื่อง · แอปบนเว็บยังขึ้นหน้าจอรับสายเต็มจอแบบ LINE ไม่ได้ แต่ระบบจะเด้งซ้ำพร้อมเสียงและสั่นทุก ~4 วินาทีจนกดรับ (นานสุด ~25 วินาที)</li></ul></details>' +
     '<div class="top-actions">' + (on ? '<button class="btn" data-act="notifyperm">ลงทะเบียนเครื่องนี้ใหม่</button><button class="btn ghost" data-act="pushoff">ปิดบนเครื่องนี้</button>'
       : '<button class="btn primary" data-act="notifyperm"' + (why && mode() !== 'sheet' ? ' disabled' : '') + '>' + RTC_IC.phone + 'เปิดแจ้งเตือนบนเครื่องนี้</button>') + '</div></section>';
 }
@@ -6613,6 +6628,7 @@ document.addEventListener('click', async e => {
     case 'askhelp': { const jid = d.job; closeEditor(); return openMsgPanel(null, { help: true, jobId: jid }); }
     case 'notifyperm': pushEnable(true).then(() => { renderMsgPanel(); if (S.view === 'settings') render(); }); return;
     case 'pushoff': pushDisable().then(() => render()); return;
+    case 'pushtest': if (mode() === 'sheet' && !apiAtLeast('1.36.0')) return toast('ต้องอัปเดตหลังบ้าน (Apps Script) เป็นเวอร์ชันล่าสุดก่อน', true); toast('ส่งทดสอบแล้ว — ปิดแอปหรือล็อกจอภายใน 6 วินาที'); api().pushTest({ delay: 6000 }).then(r => { if (r && !r.devices) toast('เครื่องนี้ยังไม่ได้ลงทะเบียนแจ้งเตือน กด "ลงทะเบียนเครื่องนี้ใหม่"', true); }).catch(e => toast(e.message, true)); return;
     case 'editmode': if (S.edit) { S.edit.mode = 'edit'; renderEditor(); } return;
     case 'install': return installApp();
     case 'insthelp': INST.help = !INST.help; renderLogin(); if (INST.help) drawQr(); return;

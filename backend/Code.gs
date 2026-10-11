@@ -135,9 +135,10 @@ const ACTIONS = {
   markRead: (p, u) => withLock_(() => markRead_(p.ids, u)),
   helpUpdate: (p, u) => withLock_(() => helpUpdate_(p.id, p.status, u)),
   deleteMessages: (p, u) => withLock_(() => { admin_(u); return deleteMessages_(p.ids, u); }),
-  rtcSend: (p, u) => { const r = withLock_(() => rtcSend_(p, u)); if (!r.dup) pushForSignal_(p, u); return r; },
+  rtcSend: (p, u) => { const c = CacheService.getScriptCache(), k = 'sigp:' + String(p.id || ''); if (p.id && !c.get(k)) { c.put(k, '1', 300); pushForSignal_(p, u); } const r = withLock_(() => rtcSend_(p, u)); if (!p.id && !r.dup) pushForSignal_(p, u); return r; },   // โทร/ขอดูจอ: ส่ง push ก่อนเขียนลงชีต (เด้งเร็วขึ้น) · รหัสซ้ำไม่ส่งซ้ำ
   pushKey: () => ({ key: vapid_().pub }),
-  pushSub: (p, u) => withLock_(() => pushSub_(p.sub, u)),
+  pushSub: (p, u) => withLock_(() => pushSub_(p.sub, u, p.urgent)),
+  pushTest: (p, u) => { Utilities.sleep(Math.max(0, Math.min(8000, +p.delay || 0))); pushTo_([u.name], { kind: 'call', from: 'ทดสอบระบบ', sid: '' }); return { ok: true, devices: pushList_(u).length }; },   // ทดสอบเสียงเรียกเข้า: รอสักครู่ให้ปิดแอป/ล็อกจอก่อน
   pushUnsub: (p, u) => withLock_(() => pushUnsub_(p.endpoint, u)),
   pushInfo: (p, u) => ({ info: pushInfo_(u) }),
   rtcPoll: (p, u) => Object.assign(rtcPoll_(u, p.wait, p.ack), { room: roomView_(roomGet_(), u), ds: stamp_('data'), ms: stamp_('msg') }),
@@ -1682,16 +1683,19 @@ const PUSH_HOST_ = /^https:\/\/([a-z0-9-]+\.)*(googleapis\.com|mozilla\.com|moza
 function pushKeyOf_(u) { return 'PUSH_' + u.id; }
 function pushList_(u) { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty(pushKeyOf_(u)) || '[]'); } catch (e) { return []; } }
 function pushSave_(u, list) { const pr = PropertiesService.getScriptProperties(); if (list.length) pr.setProperty(pushKeyOf_(u), JSON.stringify(list)); else pr.deleteProperty(pushKeyOf_(u)); }
-function pushSub_(sub, u) {
-  const ep = String(sub && sub.endpoint || '');
+function pushSub_(sub, u, urgent) {
+  const ep = String(sub && sub.endpoint || ''), ux = String(urgent && urgent.endpoint || '');
   if (!PUSH_HOST_.test(ep) || ep.length > 900) throw new Error('ลงทะเบียนการแจ้งเตือนไม่ได้');
   const list = pushList_(u).filter(x => x.e !== ep);
-  list.push({ e: ep, t: Date.now() });
+  const ent = { e: ep, t: Date.now() };
+  if (ux && PUSH_HOST_.test(ux) && ux.length <= 900 && ux !== ep) ent.x = ux;   // ช่องด่วน (โทร/ขอดูจอ): เครื่องรู้ทันทีว่าเป็นสายเรียกเข้า เด้งได้เลยไม่ต้องรอถามเซิร์ฟเวอร์
+  list.push(ent);
   pushSave_(u, list.slice(-6)); // สูงสุด 6 เครื่องต่อคน
   return { ok: true, devices: Math.min(list.length, 6) };
 }
 function pushUnsub_(ep, u) { pushSave_(u, pushList_(u).filter(x => x.e !== String(ep || ''))); return { ok: true }; }
 function pushInfo_(u) { try { return JSON.parse(CacheService.getScriptCache().get('pinfo:' + u.name) || 'null'); } catch (e) { return null; } }
+const PUSH_URGENT_ = { call: 1, view: 1, remote: 1, share: 1, sos: 1 };
 function pushTo_(names, info) {
   const users = usersLite_().filter(x => x.active), cache = CacheService.getScriptCache();
   names.forEach(n => {
@@ -1699,11 +1703,14 @@ function pushTo_(names, info) {
     const list = pushList_(ru); if (!list.length) return;
     cache.put('pinfo:' + n, JSON.stringify(Object.assign({}, info, { ts: Date.now() })), 120);
     let res = [];
+    const urg = !!PUSH_URGENT_[info.kind], eps = list.map(x => urg && x.x ? x.x : x.e);   // สายเรียกเข้า/ขอดูจอ/ขอความช่วยเหลือ → ส่งเข้าช่องด่วนของเครื่องที่มี
     try {
-      res = UrlFetchApp.fetchAll(list.map(x => ({ url: x.e, method: 'post', muteHttpExceptions: true, payload: '', contentType: 'application/octet-stream',
-        headers: { TTL: '60', Urgency: 'high', Authorization: vapidAuth_(x.e) } })));
+      res = UrlFetchApp.fetchAll(eps.map(ep => ({ url: ep, method: 'post', muteHttpExceptions: true, payload: '', contentType: 'application/octet-stream',
+        headers: { TTL: urg ? '45' : '600', Urgency: 'high', Authorization: vapidAuth_(ep) } })));
     } catch (e) { return; }
-    const dead = list.filter((x, i) => res[i] && [404, 410].indexOf(res[i].getResponseCode()) >= 0).map(x => x.e);
+    const dead = list.filter((x, i) => res[i] && [404, 410].indexOf(res[i].getResponseCode()) >= 0 && eps[i] === x.e).map(x => x.e);
+    const deadX = list.filter((x, i) => res[i] && [404, 410].indexOf(res[i].getResponseCode()) >= 0 && eps[i] === x.x).map(x => x.e);
+    if (deadX.length) withLock_(() => pushSave_(ru, pushList_(ru).map(x => deadX.indexOf(x.e) >= 0 ? { e: x.e, t: x.t } : x)));   // ช่องด่วนหมดอายุ → กลับไปใช้ช่องปกติ
     if (dead.length) withLock_(() => pushSave_(ru, pushList_(ru).filter(x => dead.indexOf(x.e) < 0)));
   });
 }
