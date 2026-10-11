@@ -975,7 +975,7 @@ button.kpi:hover .kpi-ic{transform:scale(1.12) rotate(-8deg)}
 @keyframes arrowDot{0%,100%{background:var(--line);transform:scale(1)}40%{background:var(--brand);transform:scale(1.35)}}
 
 /* quick filter chips with icons */
-.qchips{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 4px;scrollbar-width:none}
+.qchips{scroll-margin-top:72px;display:flex;gap:8px;overflow-x:auto;padding:2px 2px 4px;scrollbar-width:none}
 .qchips::-webkit-scrollbar{display:none}
 .qchip{--q:var(--brand);display:inline-flex;align-items:center;gap:7px;flex:none;border:1.5px solid color-mix(in oklab,var(--q) 25%,var(--line));background:var(--surface);color:var(--ink);border-radius:999px;padding:5px 12px 5px 5px;font-weight:600;font-size:13.5px;box-shadow:var(--shadow-sm);transition:transform .15s,background .15s}
 .qchip:hover{transform:translateY(-1px)}

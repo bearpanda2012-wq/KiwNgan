@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.76.0';
+const APP_VERSION = '2.76.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1962,7 +1962,7 @@ async function salePage() {
   document.addEventListener('click', e => {
     const c = e.target.closest && e.target.closest('[data-sale-refresh],[data-spst],[data-spclear],[data-spprod],[data-sfview],[data-sfstep],[data-sfopen]'); if (!c) return;
     if (c.dataset.sfview) { SF.lastOn = (document.querySelector('.sf-tabs') || { dataset: {} }).dataset.on || ''; SF.v = c.dataset.sfview; SF.anim = true; LS.set('saleView', SF.v); return draw(last, lastErr); }
-    if (c.dataset.sfstep) { SF.step = SF.step === c.dataset.sfstep && c.dataset.sfstep !== 'all' ? 'all' : c.dataset.sfstep; SF.anim = true; return draw(last, lastErr); }
+    if (c.dataset.sfstep) { const fromPipe = !!c.closest('.co-pipe, .co-kpis'); SF.step = SF.step === c.dataset.sfstep && c.dataset.sfstep !== 'all' ? 'all' : c.dataset.sfstep; SF.anim = true; draw(last, lastErr); if (fromPipe) pipeJump(); return; }
     if (c.dataset.sfopen) { const k = c.dataset.sfopen, was = !!SF.open[k]; SF.open = {}; if (!was) SF.open[k] = true; draw(last, lastErr); if (!was) setTimeout(() => { const el = document.querySelector('[data-sfopen="' + CSS.escape(k) + '"]'); if (el && el.getBoundingClientRect().top < 70) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 30); return; }
     if (c.dataset.spprod) { F.prod = F.prod === c.dataset.spprod ? '' : c.dataset.spprod; return draw(last, lastErr); }
     if (c.dataset.saleRefresh) return go();
@@ -5188,6 +5188,13 @@ function cjTile(s, i, n, attr, pressed, note, late) {
     '<span class="flow-ic ic-' + s.ic + '">' + PIC[s.ic] + '</span><b>' + n + '</b><span>' + s.label + '</span>' +
     (late ? '<em>' + STI.fire + late + ' ค้าง</em>' : '<small>' + esc(note || '') + '</small>') + '</button>';
 }
+/* กดการ์ดขั้นตอน → เลื่อนลงไปที่รายการงานของขั้นนั้น (ใช้ทั้งภาพรวมบริษัทและหน้า Sale) */
+function pipeJump() {
+  setTimeout(() => {
+    const el = document.querySelector('.qchips'); if (!el || !el.scrollIntoView) return;
+    el.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }, 40);
+}
 function coRows() {
   const byCode = {}, pool = S.jobs, cutoff = addDays(today(), -14);   // ภาพรวมบริษัท: ทุกคนเห็นงานทั้งหมด (แก้ได้เฉพาะงานตัวเอง)
   const key = c => String(c || '').trim().toLowerCase();
@@ -6576,7 +6583,7 @@ document.addEventListener('input', e => {
 function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ่มอื่นในแอปต้องตอบสนองทันที
   if (d.pclose || (t.id === 'pModal')) { pModalClose(); return true; }
   if (d.pm) { S.pm = d.pm; render(); return true; }
-  if (d.cf) { S.cf = S.cf === d.cf && d.cf !== 'all' ? 'all' : d.cf; S.animIn = true; render(); return true; }
+  if (d.cf) { const fromPipe = !!(t.closest && t.closest('.co-pipe')); S.cf = S.cf === d.cf && d.cf !== 'all' ? 'all' : d.cf; S.animIn = true; render(); if (fromPipe) pipeJump(); return true; }
   if (d.coopen) { if (t.closest && t.closest('#msgPanel')) { hideHover(); CHAT_RET = { ch: M.ch, top: ($('#mpBody') || {}).scrollTop || 0 }; closeMsgPanel(); } coOpen(d.coopen); return true; }   // เปิดจากแชท: ปิดแผงข้อความก่อน งานจะได้ไม่ถูกบัง · ปิดงานแล้วกลับมาห้องเดิม
   if (d.pship) { S.pship = !S.pship; render(); return true; }
   if (d.pjob) { pModalClose(); openEditor(d.pjob); return true; }
