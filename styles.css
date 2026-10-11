@@ -4892,3 +4892,133 @@ input[type=date]{min-width:0;max-width:100%}
 .board:not(.pboard) .card.has-tc{border-left-color:var(--tc)}
 .board:not(.pboard) .card.is-urgent:not(.is-late){border-left-color:var(--urgent)}
 .board:not(.pboard) .card.is-late{border-left-color:var(--late)}
+
+/* v2.75.5 หัวหน้าเพจแบบ "เรียบ" (ธีมคลาสสิก): รูปผู้ใช้ไม่ลอยทับปุ่ม/ข้อความ — อยู่ท้ายแถวปุ่มด้านขวา เป็นชิปพื้นขาวอ่านชัด */
+[data-header="plain"] .topbar .hero-me{background:var(--surface);border:1px solid var(--line);color:var(--ink);box-shadow:var(--shadow-sm);backdrop-filter:none}
+[data-header="plain"] .topbar .hero-me .hm-t b{color:var(--ink)}
+[data-header="plain"] .topbar .hero-me .hm-t small,[data-header="plain"] .topbar .hero-me small{color:var(--muted)}
+[data-header="plain"] .topbar .hero-me .av{box-shadow:0 0 0 2px var(--surface)}
+@media (min-width:761px){
+  [data-header="plain"] .topbar{padding-right:0;align-items:center}
+  [data-header="plain"] .topbar .hero-me{position:static;transform:none;order:3;margin:0;align-self:center;flex:none}
+  [data-header="plain"] .topbar .hero-me:hover{transform:translateY(-2px)}
+  [data-header="plain"] .topbar .top-actions{order:2;margin-left:auto}
+}
+@media (max-width:760px){
+  [data-header="plain"] .topbar .hero-me{top:0;bottom:auto;right:0;padding:2px;border-radius:50%}
+  [data-header="plain"] .topbar:has(.hero-me) > div:not(.top-actions){padding-right:58px}
+  [data-header="plain"] .topbar:has(.hero-me) .top-actions{padding-right:0}
+}
+
+/* v2.76.0 ป้าย "ด่วน" สีสดชัด (แดงส้มไล่สี + เรืองแสง + ไฟกระพริบ) ทุกหน้า */
+:root{--urgent:#E8590C;--urgent-hot:#E03131}
+.tag.urgent{background:linear-gradient(135deg,var(--urgent-hot),#FF6B00 70%,#FF922B)!important;color:#fff!important;font-weight:700;letter-spacing:.2px;border:0;box-shadow:0 0 0 1px rgba(224,49,49,.25),0 3px 10px -3px rgba(224,49,49,.75);text-shadow:0 1px 1px rgba(0,0,0,.18);animation:urgGlow 1.8s ease-in-out infinite}
+.tag.urgent svg{color:#FFF3BF;animation:urgFire 1.2s ease-in-out infinite;transform-origin:50% 90%}
+@keyframes urgGlow{0%,100%{box-shadow:0 0 0 1px rgba(224,49,49,.25),0 3px 10px -3px rgba(224,49,49,.75)}50%{box-shadow:0 0 0 3px rgba(255,107,0,.28),0 4px 14px -2px rgba(224,49,49,.85)}}
+@keyframes urgFire{0%,100%{transform:scale(1) rotate(-4deg)}50%{transform:scale(1.22) rotate(5deg)}}
+@media (prefers-reduced-motion:reduce){.tag.urgent,.tag.urgent svg{animation:none}}
+
+/* ===== v2.76.0 ธีม: ความโปร่งแสง · รูปพื้นหลังปรับละเอียด · ขนาด/ฟอนต์/เงา/ภาพเคลื่อนไหว/ลายพื้นหลัง ===== */
+/* รูปพื้นหลัง: ใช้ค่าจากตัวแปร · ไม่ขยายรูปเกินจริงเมื่อไม่เบลอ (เดิม inset -30px ทำให้รูปใหญ่และไม่คม) */
+[data-bg] body::before{inset:calc(var(--bgblur,0px) * -2);background:var(--bgimg) var(--bgpos,center)/var(--bgsize,cover) var(--bgrep,no-repeat);filter:blur(var(--bgblur,0px)) brightness(var(--bgbri,1)) saturate(var(--bgsat,1));image-rendering:auto}
+[data-bg] body::after{background:var(--bgtint,var(--bg));opacity:var(--bgdimo,.55)}
+/* ลายพื้นหลัง (ไม่มีรูป) */
+[data-pattern] body{background:var(--bg)}
+[data-pattern] body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none}
+[data-pattern="dots"] body::before{background:radial-gradient(color-mix(in oklab,var(--brand) 26%,transparent) 1.3px,transparent 1.6px) 0 0/18px 18px}
+[data-pattern="grid"] body::before{background:linear-gradient(color-mix(in oklab,var(--brand) 10%,transparent) 1px,transparent 1px) 0 0/26px 26px,linear-gradient(90deg,color-mix(in oklab,var(--brand) 10%,transparent) 1px,transparent 1px) 0 0/26px 26px}
+[data-pattern="mesh"] body::before{background:radial-gradient(60% 50% at 0% 0%,color-mix(in oklab,var(--brand) 26%,transparent),transparent 70%),radial-gradient(50% 60% at 100% 10%,color-mix(in oklab,var(--brand-2) 24%,transparent),transparent 70%),radial-gradient(60% 50% at 70% 100%,color-mix(in oklab,var(--brand-3) 22%,transparent),transparent 70%)}
+[data-pattern="diag"] body::before{background:repeating-linear-gradient(135deg,color-mix(in oklab,var(--brand) 7%,transparent) 0 2px,transparent 2px 16px)}
+[data-pattern="aurora"] body::before{inset:-20%;background:radial-gradient(35% 30% at 20% 30%,color-mix(in oklab,var(--brand) 38%,transparent),transparent 70%),radial-gradient(30% 35% at 80% 20%,color-mix(in oklab,var(--brand-2) 34%,transparent),transparent 70%),radial-gradient(40% 30% at 60% 85%,color-mix(in oklab,var(--brand-3) 30%,transparent),transparent 70%);filter:blur(30px);animation:aurora 24s ease-in-out infinite alternate}
+@keyframes aurora{0%{transform:translate(0,0) rotate(0)}50%{transform:translate(4%,-3%) rotate(8deg)}100%{transform:translate(-3%,4%) rotate(-6deg)}}
+
+/* ความโปร่งแสง: เปลี่ยนสีพื้นกล่องเฉพาะในตัวแอป (หน้าต่างป๊อปอัปยังทึบ อ่านง่าย) */
+:root{--sf0:#FFFFFF;--sf20:#F4F6F8;--sf30:#E7EBEF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--sf0:#151C22;--sf20:#1B242B;--sf30:#222D35}}
+:root[data-theme="dark"]{--sf0:#151C22;--sf20:#1B242B;--sf30:#222D35}
+[data-glass] .app{--surface:color-mix(in srgb,var(--sf0) calc(100% - var(--glass)),transparent);--surface-2:color-mix(in srgb,var(--sf20) calc(100% - var(--glass)),transparent);--surface-3:color-mix(in srgb,var(--sf30) calc(100% - var(--glass)),transparent)}
+[data-glass] .app .panel,[data-glass] .app .col,[data-glass] .app .flow,[data-glass] .app .co-pipe2,[data-glass] .app .cpx,[data-glass] .app .kpi,[data-glass] .app .rail,[data-glass] .tabbar,[data-glass] .app .mq,[data-glass] .app .filters .search{backdrop-filter:blur(var(--gblur)) saturate(1.2);-webkit-backdrop-filter:blur(var(--gblur)) saturate(1.2)}
+[data-glass] .tabbar{background:color-mix(in srgb,var(--sf0) calc(100% - var(--glass)),transparent)}
+[data-glass][data-sidebar="gradient"] .rail{background:linear-gradient(180deg,color-mix(in srgb,var(--brand) calc(100% - var(--glass)),transparent),color-mix(in srgb,var(--brand-2) calc(100% - var(--glass)),transparent))}
+[data-glass] .app .card,[data-glass] .app .co-row{backdrop-filter:blur(calc(var(--gblur) * .5));-webkit-backdrop-filter:blur(calc(var(--gblur) * .5))}
+
+/* ขนาดเนื้อหา (เฉพาะส่วนเนื้อหา · เมนูและหน้าต่างป๊อปอัปขนาดเดิม) */
+.app main{zoom:var(--uiz,1)}
+
+/* เงา */
+[data-shadow="none"]{--shadow:none;--shadow-sm:none}
+[data-shadow="none"] .app .card,[data-shadow="none"] .app .panel,[data-shadow="none"] .app .col{box-shadow:none!important}
+[data-shadow="strong"]{--shadow:0 2px 4px rgba(15,23,42,.08),0 18px 40px -12px color-mix(in oklab,var(--brand) 40%,transparent);--shadow-sm:0 2px 3px rgba(15,23,42,.08),0 10px 24px -10px rgba(15,23,42,.35)}
+
+/* ภาพเคลื่อนไหว */
+[data-motion="off"] *:not(.spinner):not(.spin),[data-motion="off"] *::before,[data-motion="off"] *::after{animation:none!important;transition:none!important}
+[data-motion="less"] .app *:not(.spinner):not(.spin),[data-motion="less"] .app *::before,[data-motion="less"] .app *::after{animation-iteration-count:1!important}
+[data-motion="off"] body::before{animation:none!important}
+
+/* หน้าตั้งค่า: กลุ่มการปรับแต่ง */
+.th-grp{padding-top:16px;margin-top:16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
+.th-gh{display:flex;align-items:center;gap:10px}
+.th-gh b{display:block;font:700 14.5px var(--f-display)}.th-gh small{display:block;color:var(--muted);font-size:12.5px}
+.th-gi{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;color:#fff;background:var(--grad);box-shadow:0 6px 14px -8px var(--brand)}
+.th-gi svg{width:18px;height:18px}
+.th-rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px 18px;align-items:start}
+.th-rng{display:flex;flex-direction:column;gap:6px;min-width:0}
+.th-rl{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.th-rl b{font-size:13px;font-weight:600}
+.th-rl output{font:700 12.5px var(--f-mono,monospace);color:var(--brand);background:color-mix(in oklab,var(--brand) 10%,var(--surface));padding:1px 8px;border-radius:99px;font-variant-numeric:tabular-nums}
+.th-rng small{color:var(--muted);font-size:11.5px}
+.th-rng input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:99px;background:linear-gradient(90deg,var(--brand) 0 var(--v,50%),var(--surface-3) var(--v,50%));outline:none;margin:4px 0}
+.th-rng input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid var(--brand);box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:grab;transition:transform .15s}
+.th-rng input[type=range]::-webkit-slider-thumb:active{transform:scale(1.15);cursor:grabbing}
+.th-rng input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--brand);box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.th-rng input[type=range]:focus-visible{box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 30%,transparent)}
+.th-fonts{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px}
+.th-fonts button,.th-pats button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;text-align:left}
+.th-fonts button small{color:var(--muted);font-weight:500;font-size:12px}
+.th-fonts button[aria-pressed="true"],.th-pats button[aria-pressed="true"]{border-color:var(--brand);background:color-mix(in oklab,var(--brand) 8%,var(--surface));box-shadow:0 0 0 2px color-mix(in oklab,var(--brand) 20%,transparent)}
+.th-pats{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.th-pats button{align-items:center;text-align:center}
+.th-pats i{width:100%;height:34px;border-radius:7px;background-color:var(--bg);border:1px solid var(--line)}
+.th-pats .pat-dots{background:radial-gradient(color-mix(in oklab,var(--brand) 40%,transparent) 1.3px,transparent 1.6px) 0 0/9px 9px var(--bg)}
+.th-pats .pat-grid{background:linear-gradient(color-mix(in oklab,var(--brand) 22%,transparent) 1px,transparent 1px) 0 0/10px 10px,linear-gradient(90deg,color-mix(in oklab,var(--brand) 22%,transparent) 1px,transparent 1px) 0 0/10px 10px var(--bg)}
+.th-pats .pat-mesh{background:radial-gradient(80% 90% at 0 0,color-mix(in oklab,var(--brand) 45%,transparent),transparent),radial-gradient(70% 90% at 100% 100%,color-mix(in oklab,var(--brand-2) 45%,transparent),transparent) var(--bg)}
+.th-pats .pat-diag{background:repeating-linear-gradient(135deg,color-mix(in oklab,var(--brand) 20%,transparent) 0 2px,transparent 2px 8px) var(--bg)}
+.th-pats .pat-aurora{background:radial-gradient(50% 70% at 25% 40%,color-mix(in oklab,var(--brand) 55%,transparent),transparent),radial-gradient(50% 70% at 80% 50%,color-mix(in oklab,var(--brand-2) 50%,transparent),transparent) var(--bg)}
+.bg-pick2 .bg-pick{border-top:0;padding-top:0}
+.bg-prev{position:relative;overflow:hidden}
+.bg-prev .bg-dim{position:absolute;inset:0;background:var(--bg);pointer-events:none}
+.bg-info{color:var(--muted);font-size:12px}.bg-info.warn{color:var(--urgent)}
+.bg-pos{display:grid;grid-template-columns:repeat(3,30px);gap:4px}
+.bg-pos button{width:30px;height:30px;border-radius:8px;border:1.5px solid var(--line);background:var(--surface-2);display:grid;place-items:center;cursor:pointer;padding:0}
+.bg-pos button i{width:8px;height:8px;border-radius:50%;background:var(--muted);opacity:.45}
+.bg-pos button[aria-pressed="true"]{border-color:var(--brand);background:color-mix(in oklab,var(--brand) 12%,var(--surface))}
+.bg-pos button[aria-pressed="true"] i{background:var(--brand);opacity:1;transform:scale(1.3)}
+.bg-ctl .f{display:flex;flex-direction:column;gap:6px}
+
+/* v2.76.0 หน้า Sale แถบฝ่ายผลิต: แต่ละขั้นสีต่างกันชัด (ไม่ให้ QC/พร้อมส่ง/ส่งแล้ว หรือ ลงเครื่อง/แพ็ค ดูเป็นสีเดียวกัน) */
+.sp-pflow .sp-pf.p-wait{--s:#364FC7}
+.sp-pflow .sp-pf.p-machine{--s:#F76707}
+.sp-pflow .sp-pf.p-paint{--s:#D6336C}
+.sp-pflow .sp-pf.p-assemble{--s:#9C36B5}
+.sp-pflow .sp-pf.p-qc{--s:#1098AD}
+.sp-pflow .sp-pf.p-pack{--s:#8D5524}
+.sp-pflow .sp-pf.p-ready{--s:#2F9E44}
+.sp-pflow .sp-pf.p-shipped{--s:#5C677D}
+.sp-pflow .sp-pf{--s-soft:color-mix(in oklab,var(--s) 13%,var(--surface));background:var(--s-soft);color:var(--s);border-color:color-mix(in oklab,var(--s) 22%,transparent)}
+.sp-pflow .sp-pf svg{color:var(--s)}
+.sp-pflow .sp-pf.on{border-color:var(--s);background:color-mix(in oklab,var(--s) 20%,var(--surface))}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sp-pflow .sp-pf{color:color-mix(in oklab,var(--s) 60%,white)}}
+:root[data-theme="dark"] .sp-pflow .sp-pf{color:color-mix(in oklab,var(--s) 60%,white)}
+
+/* v2.76.0 เปิดจากแจ้งเตือนสรุปเช้า: หน้าต่างสรุป */
+.dg-view{position:fixed;inset:0;z-index:300;display:grid;place-items:center;padding:16px;background:rgba(10,16,22,.45);backdrop-filter:blur(4px);opacity:0;transition:opacity .25s}
+.dg-view.open{opacity:1}
+.dgv-box{width:min(440px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--sf0,#fff);color:var(--ink);border-radius:20px;box-shadow:0 30px 60px -20px rgba(0,0,0,.45);transform:translateY(16px) scale(.97);transition:transform .3s cubic-bezier(.3,1.4,.5,1)}
+.dg-view.open .dgv-box{transform:none}
+.dgv-h{display:flex;align-items:center;gap:12px;padding:18px 18px 12px;background:linear-gradient(135deg,color-mix(in oklab,#F59E0B 16%,var(--sf0,#fff)),color-mix(in oklab,#F97316 8%,var(--sf0,#fff)));border-radius:20px 20px 0 0}
+.dgv-h>div{flex:1;min-width:0}.dgv-h b{display:block;font:700 17px var(--f-display)}.dgv-h small{color:var(--muted);font-size:12.5px}
+.dgv-sun{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,#F59E0B,#F97316);box-shadow:0 8px 18px -8px #F97316;flex:none}
+.dgv-sun svg{width:24px;height:24px;animation:spinSlow 12s linear infinite}
+.dgv-list{list-style:none;margin:0;padding:10px 18px;display:flex;flex-direction:column;gap:8px}
+.dgv-list li{padding:10px 12px;border-radius:12px;background:var(--sf20,#F4F6F8);font-size:14.5px;line-height:1.5;animation:riseIn .4s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i) * 60ms)}
+.dgv-f{display:flex;justify-content:flex-end;padding:6px 18px 18px}

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.75.4';
+const APP_VERSION = '2.76.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1227,8 +1227,33 @@ const THEMES = [
   { id: 'night', name: 'กลางคืน', c1: '#364FC7', c2: '#1098AD', mode: 'dark' },
   { id: 'classic', name: 'เรียบคลาสสิก', c1: '', c2: '', sidebar: 'plain', header: 'plain' }
 ];
-const THEME_DEFAULT = { bgdim: 'mid', bgblur: '0', preset: 'brand', mode: 'auto', c1: '#0B6B70', c2: '#5B3FD6', sidebar: 'gradient', header: 'gradient', radius: 'round' };
-const BGIMG = () => { try { return localStorage.getItem('kiwngan:bgimg') || ''; } catch (e) { return ''; } };
+const THEME_DEFAULT = { bgdim: 'mid', bgblur: '0', preset: 'brand', mode: 'auto', c1: '#0B6B70', c2: '#5B3FD6', sidebar: 'gradient', header: 'gradient', radius: 'round',
+  bgfit: 'cover', bgpos: 'c', bgdimv: null, bgblurv: null, bgbri: 100, bgsat: 100, bgtint: 'auto', glass: 0, gblur: 12, zoom: 100, motion: 'full', shadow: 'soft', pattern: 'none', font: 'anuphan' };
+/* รูปพื้นหลัง: เก็บไฟล์ความละเอียดสูงใน IndexedDB (เดิมเก็บใน localStorage ได้แค่ ~900KB รูปเลยถูกบีบจนแตก) */
+const BG = { url: '', w: 0, h: 0, size: 0, ready: false };
+const bgDb = () => new Promise((res, rej) => { try { const r = indexedDB.open('kiwngan-bg', 1); r.onupgradeneeded = () => r.result.createObjectStore('img'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } });
+async function bgGet() { const db = await bgDb(); return new Promise((res, rej) => { const q = db.transaction('img').objectStore('img').get('bg'); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); }
+async function bgPut(v) { const db = await bgDb(); return new Promise((res, rej) => { const tx = db.transaction('img', 'readwrite'); if (v) tx.objectStore('img').put(v, 'bg'); else tx.objectStore('img').delete('bg'); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+function bgUse(rec) { if (BG.url && BG.url.indexOf('blob:') === 0) URL.revokeObjectURL(BG.url); BG.url = rec && rec.blob ? URL.createObjectURL(rec.blob) : ''; BG.w = rec ? rec.w : 0; BG.h = rec ? rec.h : 0; BG.size = rec && rec.blob ? rec.blob.size : 0; }
+async function bgLoad() { try { bgUse(await bgGet()); } catch (e) {} BG.ready = true; applyTheme(); if (S.view === 'settings') render(); }
+const BGIMG = () => { if (BG.url) return BG.url; try { return localStorage.getItem('kiwngan:bgimg') || ''; } catch (e) { return ''; } };
+/* ย่อเฉพาะรูปที่ใหญ่เกินจอ 4K · คุณภาพสูง (ไม่บีบจนแตก) */
+async function bgPrepare(file) {
+  if (!file || !/^image\//.test(file.type)) throw new Error('เลือกไฟล์รูปภาพ (JPG, PNG, WebP)');
+  const bmp = await createImageBitmap(file), max = 3840, big = Math.max(bmp.width, bmp.height);
+  if (big <= max && file.size <= 6e6 && /jpe?g|png|webp/.test(file.type)) { const r = { blob: file, w: bmp.width, h: bmp.height }; bmp.close && bmp.close(); return r; }
+  const k = Math.min(1, max / big), c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(bmp, 0, 0, c.width, c.height); bmp.close && bmp.close();
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)); if (!blob) throw new Error('แปลงรูปไม่สำเร็จ');
+  return { blob: blob, w: c.width, h: c.height };
+}
+const BG_POS = { tl: 'left top', t: 'center top', tr: 'right top', l: 'left center', c: 'center', r: 'right center', bl: 'left bottom', b: 'center bottom', br: 'right bottom' };
+const FONTS = { anuphan: ['Anuphan', 'อนุพันธ์ (ค่าเริ่มต้น)'], bai: ['Bai Jamjuree', 'ใบจามจุรี'], sarabun: ['Sarabun', 'สารบรรณ'], prompt: ['Prompt', 'พรอมต์'], noto: ['Noto Sans Thai', 'โนโต้'], system: ['', 'ตามเครื่อง'] };
+function fontLoad(k) {
+  const f = FONTS[k]; if (!f || !f[0] || k === 'anuphan' || k === 'bai' || document.getElementById('font-' + k)) return;
+  const l = document.createElement('link'); l.id = 'font-' + k; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + f[0].replace(/ /g, '+') + ':wght@400;500;600;700&display=swap'; document.head.appendChild(l);
+}
+const thNum = (v, d, lo, hi) => { const n = +v; return v === null || v === undefined || v === '' || isNaN(n) ? d : Math.max(lo, Math.min(hi, n)); };
 const isHex = v => /^#[0-9a-f]{6}$/i.test(v || '');
 function getTheme() { return Object.assign({}, THEME_DEFAULT, LS.get('theme', {}) || {}); }
 function setTheme(patch) { const t = Object.assign(getTheme(), patch); LS.set('theme', t); applyTheme(); return t; }
@@ -1245,9 +1270,27 @@ function applyTheme() {
   root.setAttribute('data-sidebar', t.sidebar === 'plain' ? 'plain' : 'gradient');
   root.setAttribute('data-header', ['soft', 'plain'].indexOf(t.header) >= 0 ? t.header : 'gradient');
   root.setAttribute('data-radius', t.radius === 'sharp' ? 'sharp' : 'round');
-  const bg = S.screen === 'app' ? BGIMG() : '';
-  if (bg) { root.style.setProperty('--bgimg', 'url(' + bg + ')'); root.setAttribute('data-bg', t.bgdim || 'mid'); root.setAttribute('data-bgblur', t.bgblur || '0'); }
-  else { root.style.removeProperty('--bgimg'); root.removeAttribute('data-bg'); root.removeAttribute('data-bgblur'); }
+  const bg = S.screen === 'app' ? BGIMG() : '', app = S.screen === 'app', rs = root.style;
+  root.removeAttribute('data-bgblur');
+  if (bg) {
+    const fit = t.bgfit || 'cover', dim = thNum(t.bgdimv, { soft: 78, mid: 55, strong: 28 }[t.bgdim] || 55, 0, 92), blur = thNum(t.bgblurv, { 0: 0, 1: 6, 2: 16 }[t.bgblur] || 0, 0, 30);
+    rs.setProperty('--bgimg', 'url("' + bg + '")'); root.setAttribute('data-bg', 'on');
+    rs.setProperty('--bgsize', fit === 'contain' ? 'contain' : fit === 'tile' || fit === 'center' ? 'auto' : 'cover');
+    rs.setProperty('--bgrep', fit === 'tile' ? 'repeat' : 'no-repeat');
+    rs.setProperty('--bgpos', BG_POS[t.bgpos] || 'center');
+    rs.setProperty('--bgdimo', String(dim / 100)); rs.setProperty('--bgblur', blur + 'px');
+    rs.setProperty('--bgbri', String(thNum(t.bgbri, 100, 40, 160) / 100)); rs.setProperty('--bgsat', String(thNum(t.bgsat, 100, 0, 200) / 100));
+    const tint = t.bgtint === 'brand' ? 'color-mix(in oklab,var(--brand) 55%,var(--bg))' : t.bgtint === 'dark' ? '#0B1015' : t.bgtint === 'light' ? '#FFFFFF' : 'var(--bg)';
+    rs.setProperty('--bgtint', tint);
+  } else { ['--bgimg', '--bgsize', '--bgrep', '--bgpos', '--bgdimo', '--bgblur', '--bgbri', '--bgsat', '--bgtint'].forEach(k => rs.removeProperty(k)); root.removeAttribute('data-bg'); }
+  const gl = app ? thNum(t.glass, 0, 0, 85) : 0;
+  if (gl > 0) { root.setAttribute('data-glass', ''); rs.setProperty('--glass', gl + '%'); rs.setProperty('--gblur', thNum(t.gblur, 12, 0, 30) + 'px'); } else { root.removeAttribute('data-glass'); rs.removeProperty('--glass'); rs.removeProperty('--gblur'); }
+  const z = app ? thNum(t.zoom, 100, 80, 130) : 100; if (z !== 100) rs.setProperty('--uiz', String(z / 100)); else rs.removeProperty('--uiz');
+  root.setAttribute('data-motion', app && ['less', 'off'].indexOf(t.motion) >= 0 ? t.motion : 'full');
+  root.setAttribute('data-shadow', app && ['none', 'strong'].indexOf(t.shadow) >= 0 ? t.shadow : 'soft');
+  if (app && !bg && t.pattern && t.pattern !== 'none') root.setAttribute('data-pattern', t.pattern); else root.removeAttribute('data-pattern');
+  const fk = app && FONTS[t.font] ? t.font : 'anuphan'; fontLoad(fk);
+  if (fk === 'anuphan') rs.removeProperty('--f-body'); else rs.setProperty('--f-body', (FONTS[fk][0] ? '"' + FONTS[fk][0] + '",' : '') + 'system-ui,-apple-system,"Segoe UI",sans-serif');
   const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.setAttribute('content', c1);
 }
 function themeSection() {
@@ -1271,11 +1314,42 @@ function themeSection() {
       '<div class="f"><span class="lbl">หัวหน้าเพจ</span>' + seg('header', [['gradient', 'สีไล่'], ['soft', 'สีอ่อน'], ['plain', 'เรียบ']]) + '</div>' +
       '<div class="f"><span class="lbl">มุมการ์ด</span>' + seg('radius', [['round', 'โค้งมน'], ['sharp', 'เหลี่ยม']]) + '</div>' +
     '</div>' +
-    '<div class="bg-pick"><div class="bg-prev' + (BGIMG() ? ' has' : '') + '"' + (BGIMG() ? ' style="background-image:url(' + BGIMG() + ')"' : '') + '>' + (BGIMG() ? '' : '<span>' + STI.camera + 'ยังไม่มีรูป</span>') + '</div>' +
-      '<div class="bg-ctl"><b>รูปพื้นหลัง</b><small>ใช้รูปของคุณเป็นพื้นหลังแอป (เฉพาะเครื่องนี้)</small>' +
-      '<div class="top-actions"><label class="btn sm primary">' + STI.camera + (BGIMG() ? 'เปลี่ยนรูป' : 'เลือกรูป') + '<input type="file" accept="image/*" id="bgIn" hidden></label>' + (BGIMG() ? '<button class="btn sm" data-act="bgremove">' + I.trash + 'เอาออก</button>' : '') + '</div>' +
-      (BGIMG() ? '<div class="f"><span class="lbl">ความเข้มของรูป</span>' + seg('bgdim', [['soft', 'จาง'], ['mid', 'ปานกลาง'], ['strong', 'ชัด']]) + '</div><div class="f"><span class="lbl">เบลอ</span>' + seg('bgblur', [['0', 'ไม่เบลอ'], ['1', 'เบลอเล็กน้อย'], ['2', 'เบลอมาก']]) + '</div>' : '') +
-    '</div></div></section>';
+    themeMore(t) + bgSection(t) + '</section>';
+}
+/* แถบเลื่อนปรับค่า (เลื่อนแล้วเห็นผลทันที ไม่วาดหน้าใหม่) */
+function thRange(key, label, v, lo, hi, step, unit, hint) {
+  return '<label class="th-rng"><span class="th-rl"><b>' + label + '</b><output data-thout="' + key + '">' + v + unit + '</output></span>' +
+    '<input type="range" min="' + lo + '" max="' + hi + '" step="' + step + '" value="' + v + '" data-thrange="' + key + '" data-unit="' + esc(unit) + '" style="--v:' + ((v - lo) / (hi - lo) * 100) + '%">' + (hint ? '<small>' + hint + '</small>' : '') + '</label>';
+}
+function thSeg(t, key, opts) { return '<div class="seg" role="group">' + opts.map(o => '<button data-themeset="' + key + '" data-val="' + o[0] + '" aria-pressed="' + (String(t[key]) === String(o[0])) + '">' + o[1] + '</button>').join('') + '</div>'; }
+function themeMore(t) {
+  const pats = [['none', 'ไม่มี'], ['dots', 'จุด'], ['grid', 'ตาราง'], ['mesh', 'ไล่สีนุ่ม'], ['diag', 'เส้นเฉียง'], ['aurora', 'แสงออโรร่า']];
+  return '<div class="th-grp"><div class="th-gh"><span class="th-gi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="13" height="13" rx="3"/><rect x="8" y="8" width="13" height="13" rx="3" opacity=".5"/></svg></span><div><b>ความโปร่งแสง</b><small>ให้กล่อง การ์ด และเมนูโปร่งจนเห็นพื้นหลัง (สวยที่สุดเมื่อใส่รูปพื้นหลัง)</small></div></div>' +
+      '<div class="th-rows">' + thRange('glass', 'ความโปร่งแสง', thNum(t.glass, 0, 0, 85), 0, 85, 5, '%', '0% = ทึบ') + thRange('gblur', 'เบลอแบบกระจกฝ้า', thNum(t.gblur, 12, 0, 30), 0, 30, 1, 'px', 'ยิ่งมากยิ่งอ่านตัวหนังสือง่าย') + '</div></div>' +
+    '<div class="th-grp"><div class="th-gh"><span class="th-gi">' + I.settings + '</span><div><b>การแสดงผล</b><small>ขนาด ฟอนต์ เงา และภาพเคลื่อนไหว</small></div></div>' +
+      '<div class="th-rows">' + thRange('zoom', 'ขนาดเนื้อหา', thNum(t.zoom, 100, 80, 130), 80, 130, 5, '%', 'ขยาย/ย่อตัวหนังสือและการ์ดในหน้า') +
+        '<div class="f"><span class="lbl">ฟอนต์</span><div class="th-fonts">' + Object.keys(FONTS).map(k => '<button data-themeset="font" data-val="' + k + '" aria-pressed="' + ((t.font || 'anuphan') === k) + '" style="font-family:' + (FONTS[k][0] ? '\'' + FONTS[k][0] + '\',' : '') + 'system-ui">' + FONTS[k][1] + '<small>กขค 123</small></button>').join('') + '</div></div>' +
+        '<div class="f"><span class="lbl">เงาการ์ด</span>' + thSeg(t, 'shadow', [['none', 'ไม่มี'], ['soft', 'บาง'], ['strong', 'ชัด']]) + '</div>' +
+        '<div class="f"><span class="lbl">ภาพเคลื่อนไหว</span>' + thSeg(t, 'motion', [['full', 'เต็ม'], ['less', 'น้อย'], ['off', 'ปิด']]) + '</div>' +
+        (BGIMG() ? '' : '<div class="f"><span class="lbl">ลายพื้นหลัง (เมื่อไม่ใส่รูป)</span><div class="th-pats">' + pats.map(p => '<button data-themeset="pattern" data-val="' + p[0] + '" aria-pressed="' + ((t.pattern || 'none') === p[0]) + '"><i class="pat-' + p[0] + '"></i>' + p[1] + '</button>').join('') + '</div></div>') +
+      '</div></div>';
+}
+function bgSection(t) {
+  const has = !!BGIMG(), fit = t.bgfit || 'cover';
+  const dim = thNum(t.bgdimv, { soft: 78, mid: 55, strong: 28 }[t.bgdim] || 55, 0, 92), blur = thNum(t.bgblurv, { 0: 0, 1: 6, 2: 16 }[t.bgblur] || 0, 0, 30);
+  const info = has ? (BG.w ? BG.w + '×' + BG.h + ' px · ' + (BG.size / 1048576).toFixed(1) + ' MB' : 'รูปเดิม (ความละเอียดต่ำ) — เลือกใหม่อีกครั้งเพื่อให้คมชัด') : '';
+  const prevStyle = has ? 'background-image:url(&quot;' + esc(BGIMG()) + '&quot;);background-size:' + (fit === 'contain' ? 'contain' : fit === 'cover' ? 'cover' : fit === 'tile' ? '30%' : '60%') + ';background-repeat:' + (fit === 'tile' ? 'repeat' : 'no-repeat') + ';background-position:' + (BG_POS[t.bgpos] || 'center') : '';
+  return '<div class="th-grp bg-pick2"><div class="th-gh"><span class="th-gi">' + STI.camera + '</span><div><b>รูปพื้นหลัง</b><small>ใช้รูปของคุณเป็นพื้นหลังแอป (เฉพาะเครื่องนี้) · เก็บความละเอียดสูงสุด 4K ไม่บีบจนแตก</small></div></div>' +
+    '<div class="bg-pick"><div class="bg-prev' + (has ? ' has' : '') + '"' + (has ? ' style="' + prevStyle + '"' : '') + '>' + (has ? '<i class="bg-dim" style="opacity:' + (dim / 100) + '"></i>' : '<span>' + STI.camera + 'ยังไม่มีรูป</span>') + '</div>' +
+      '<div class="bg-ctl"><div class="top-actions"><label class="btn sm primary">' + STI.camera + (has ? 'เปลี่ยนรูป' : 'เลือกรูป') + '<input type="file" accept="image/*" id="bgIn" hidden></label>' + (has ? '<button class="btn sm" data-act="bgremove">' + I.trash + 'เอาออก</button>' : '') + '</div>' +
+        (info ? '<small class="bg-info' + (BG.w ? '' : ' warn') + '">' + info + '</small>' : '') +
+        (has ? '<div class="f"><span class="lbl">การจัดวาง</span>' + thSeg(t, 'bgfit', [['cover', 'เต็มจอ'], ['contain', 'พอดีทั้งรูป'], ['center', 'ขนาดจริง'], ['tile', 'ปูกระเบื้อง']]) + '</div>' +
+          '<div class="f bg-posf"><span class="lbl">จุดยึดรูป</span><div class="bg-pos" role="group" aria-label="ตำแหน่งรูป">' + ['tl', 't', 'tr', 'l', 'c', 'r', 'bl', 'b', 'br'].map(k => '<button data-themeset="bgpos" data-val="' + k + '" aria-pressed="' + ((t.bgpos || 'c') === k) + '" aria-label="' + k + '"><i></i></button>').join('') + '</div></div>' : '') +
+      '</div></div>' +
+    (has ? '<div class="th-rows">' + thRange('bgdimv', 'ความจางของรูป', dim, 0, 92, 1, '%', '0% = รูปชัดเต็มที่') + thRange('bgblurv', 'เบลอรูป', blur, 0, 30, 1, 'px', '') +
+      thRange('bgbri', 'ความสว่าง', thNum(t.bgbri, 100, 40, 160), 40, 160, 5, '%', '') + thRange('bgsat', 'ความสดของสี', thNum(t.bgsat, 100, 0, 200), 0, 200, 5, '%', '0% = ขาวดำ') +
+      '<div class="f"><span class="lbl">สีที่เคลือบบนรูป</span>' + thSeg(t, 'bgtint', [['auto', 'ตามโหมด'], ['brand', 'สีธีม'], ['dark', 'ดำ'], ['light', 'ขาว']]) + '</div></div>' : '') +
+  '</div>';
 }
 
 /* ============ job images ============ */
@@ -1962,7 +2036,7 @@ function startMsgPolling() {
   if (M.timer) return;
   M.list = []; M.since = ''; M.loaded = false; M.seen = {}; M.stamp = '';
   pollMessages(true); rtcLoop(); pushBoot();
-  if (/^#(msg|job)(\/|$)/.test(location.hash)) { const h0 = location.hash; try { history.replaceState(null, '', location.pathname + location.search.replace(/[?&]from=push/, '')); } catch (e) {} setTimeout(() => pushNav(h0), 800); }
+  if (/^#(msg|job|digest|push)(\/|$)/.test(location.hash)) { const h0 = location.hash; try { history.replaceState(null, '', location.pathname + location.search.replace(/[?&]from=push/, '')); } catch (e) {} setTimeout(() => pushNav(h0), 800); }
   setTimeout(openPendingLink, 500);
   M.timer = setInterval(() => { if (document.visibilityState === 'visible' || 'Notification' in window && Notification.permission === 'granted') pollMessages(); }, 20000);
 }
@@ -2483,8 +2557,26 @@ function pushNav(hash, tries) {
     if (tries < 4) return setTimeout(() => pushNav(hash, tries + 1), 800);
     return toast('ไม่พบเลข Job ' + p[1], true);
   }
+  if (p[0] === 'digest') { if (viewsFor(S.user).some(v => v.id === 'flow')) go('flow'); return digestShow(); }
+  if (p[0] === 'push') {   // แจ้งเตือนที่โหลดรายละเอียดไม่ทัน: ถามเซิร์ฟเวอร์ว่าเรื่องอะไร แล้วพาไปที่นั่น
+    if (mode() !== 'sheet') return;
+    return api().pushInfo({}).then(r => { const i = r && r.info; if (!i) return;
+      const k = i.kind, h = k === 'msg' || k === 'sos' ? 'msg/' + encodeURIComponent(i.mid || '') : ['assign', 'cmt', 'help', 'fix'].indexOf(k) >= 0 && i.code ? 'job/' + encodeURIComponent(i.code) : k === 'digest' ? 'digest' : k === 'low' || k === 'nostock' ? 'stock' : k === 'kb' ? 'kb' : '';
+      if (h) pushNav('#' + h); }).catch(() => {});
+  }
   if (p[0] && viewsFor(S.user).some(v => v.id === p[0])) go(p[0]);
 }
+/* เปิดจากแจ้งเตือน "สรุปงานเช้านี้": แสดงสรุปเต็ม ๆ (คำนวณจากข้อมูลล่าสุดในเครื่อง) */
+function digestShow() {
+  let el = $('#dgView'); if (el) el.remove();
+  const r = digestCalc(digestCfgC(S.settings).topics), d = new Date();
+  el = document.createElement('div'); el.id = 'dgView'; el.className = 'dg-view'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'สรุปงานเช้านี้');
+  el.innerHTML = '<div class="dgv-box"><div class="dgv-h"><span class="dgv-sun">' + DG_IC.sun + '</span><div><b>' + esc(r.title) + '</b><small>ข้อมูล ณ ' + d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.</small></div><button class="icon-btn" data-dgvx="1" aria-label="ปิด">✕</button></div>' +
+    '<ul class="dgv-list">' + r.body.split('\n').map((l, i) => '<li style="--i:' + i + '">' + esc(l) + '</li>').join('') + '</ul>' +
+    '<div class="dgv-f"><button class="btn primary" data-dgvx="1">รับทราบ</button></div></div>';
+  document.body.appendChild(el); requestAnimationFrame(() => el.classList.add('open'));
+}
+document.addEventListener('click', e => { const x = e.target.closest && e.target.closest('[data-dgvx], #dgView'); if (!x) return; if (x.id === 'dgView' && e.target !== x) return; const v = $('#dgView'); if (v) { v.classList.remove('open'); setTimeout(() => v.remove(), 250); } });
 
 /* ============ screen share & remote pointer (WebRTC, signaling via the API) ============
    ภาพหน้าจอวิ่งตรงระหว่างสองเครื่อง (peer-to-peer) — ฐานข้อมูลใช้แค่ส่งสัญญาณเริ่มต้น
@@ -6844,7 +6936,7 @@ document.addEventListener('click', async e => {
     case 'install': return installApp();
     case 'insthelp': INST.help = !INST.help; renderLogin(); if (INST.help) drawQr(); return;
     case 'copyapp': try { await navigator.clipboard.writeText(appUrl()); toast('คัดลอกลิงก์แล้ว ส่งให้ทีมหรือเปิดบนอีกเครื่องได้เลย'); } catch (x) { toast(appUrl()); } return;
-    case 'bgremove': try { localStorage.removeItem('kiwngan:bgimg'); } catch (x) {} applyTheme(); toast('เอารูปพื้นหลังออกแล้ว'); return render();
+    case 'bgremove': try { localStorage.removeItem('kiwngan:bgimg'); } catch (x) {} bgPut(null).catch(() => {}); bgUse(null); applyTheme(); toast('เอารูปพื้นหลังออกแล้ว'); return render();
     case 'themereset': LS.del('theme'); applyTheme(); toast('คืนค่าธีมเริ่มต้นแล้ว'); return render();
     case 'print': return printReport();
     case 'connect': return connect();
@@ -6894,6 +6986,13 @@ document.addEventListener('input', e => {
   if (t.id === 'sq') { SV.q = t.value; const pos = t.selectionStart; render(); const q = $('#sq'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if (t.id === 'pq' || t.id === 'cq') { S[t.id] = t.value; const pos = t.selectionStart, id = t.id; render(); const q = $('#' + id); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if (t.id === 'q') { S.f.q = t.value; const pos = t.selectionStart; render(); const q = $('#q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
+  if (t.dataset && t.dataset.thrange) {   // แถบเลื่อนธีม: เห็นผลทันที ไม่วาดหน้าใหม่
+    const k = t.dataset.thrange, v = +t.value, o = document.querySelector('[data-thout="' + k + '"]');
+    if (o) o.textContent = v + (t.dataset.unit || ''); t.style.setProperty('--v', ((v - +t.min) / (+t.max - +t.min) * 100) + '%');
+    setTheme({ [k]: v });
+    if (k === 'bgdimv') { const d = document.querySelector('.bg-prev .bg-dim'); if (d) d.style.opacity = v / 100; }
+    return;
+  }
   if ((t.id === 'thC1' || t.id === 'thC2') && $('#thC1') && $('#thC2')) { // live preview while dragging the picker
     document.documentElement.style.setProperty('--brand', $('#thC1').value); document.documentElement.style.setProperty('--brand-2', $('#thC2').value); return;
   }
@@ -6946,7 +7045,14 @@ document.addEventListener('change', e => {
   }
   if (t.dataset.rsec) { reportState().sec[t.dataset.rsec] = t.checked; saveReportState(); return render(); }
   if (t.id === 'logoIn' && t.files && t.files[0]) return readLogo(t.files[0]);
-  if (t.id === 'bgIn' && t.files && t.files[0]) { const f = t.files[0]; t.value = ''; shrinkImage(f, 1920, 900000, 0.82).then(d => { try { localStorage.setItem('kiwngan:bgimg', d); } catch (x) { return toast('รูปใหญ่เกินไปสำหรับเครื่องนี้ ลองรูปอื่น', true); } applyTheme(); toast('ตั้งรูปพื้นหลังแล้ว'); render(); }).catch(e => toast(e.message, true)); return; }
+  if (t.id === 'bgIn' && t.files && t.files[0]) {
+    const f = t.files[0]; t.value = ''; toast('กำลังเตรียมรูป…');
+    bgPrepare(f).then(async r => {
+      try { await bgPut(r); } catch (x) { return toast('บันทึกรูปไม่ได้ (พื้นที่เครื่องเต็ม?) ลองรูปที่เล็กลง', true); }
+      try { localStorage.removeItem('kiwngan:bgimg'); } catch (x) {}
+      bgUse(r); if (getTheme().pattern !== 'none') setTheme({ pattern: 'none' }); applyTheme(); toast('ตั้งรูปพื้นหลังแล้ว · ' + r.w + '×' + r.h + ' px'); render();
+    }).catch(e => toast(e.message || 'เปิดรูปไม่ได้', true)); return;
+  }
   if (t.dataset.photofor && t.files && t.files[0]) return setPhoto(t.dataset.photofor, t.files[0]);
   if (t.id === 'eImgIn' && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return addEditorFiles(f); }
   if (t.dataset.pfile && t.files && t.files.length) { const f = Array.from(t.files); t.value = ''; return addPendingFiles(f); }
@@ -7240,6 +7346,7 @@ document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === 
   const a = document.activeElement; if (a && a.type === 'color' && e.target !== a && (ev === 'pointerdown' || e.key === 'Tab' || e.key === 'Escape')) a.blur();
 }, true));
 document.addEventListener('focusout', e => { if (e.target && e.target.type === 'color' && S.renderLater) setTimeout(() => { const a = document.activeElement; if (!(a && a.type === 'color')) render(); }, 60); });
+bgLoad();
 window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION, renderPeek: renderPeek, rtcDc: rtcDc };
 if (SALE_Q) { salePage(); } else {
 if (mode() === 'sheet') ibStart(LS.get('rtpub', null));   // เปิดกล่องรับคำตอบไว้ก่อน ระหว่างรอ bootstrap ครั้งแรก

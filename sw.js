@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.75.4';
+const CACHE = 'kiwngan-v2.76.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 /* ตัวนี้ลงทะเบียน 2 ที่: ที่หลัก (แอป) และ ./ring/ (ช่องด่วน: push ที่มาทางนี้คือสายเรียกเข้า/ขอดูจอแน่นอน เด้งได้ทันที) */
@@ -66,7 +66,7 @@ const urlOf = (k, i) => { i = i || {};
   const msgCh = i.team ? 'team' : i.from === 'ผู้ดูแลระบบ' ? 'admin' : i.code ? 'u:' + i.code : '';
   const h = k === 'msg' || k === 'sos' ? 'msg' + (i.mid || msgCh ? '/' + enc(i.mid || '') + '/' + enc(msgCh) + '/' + enc(i.code || '') : '')
     : (k === 'assign' || k === 'cmt' || k === 'help' || k === 'fix') && i.code ? 'job/' + enc(i.code)
-    : k === 'low' || k === 'nostock' ? 'stock' : k === 'digest' ? 'flow' : k === 'due' ? 'home' : k;
+    : k === 'low' || k === 'nostock' ? 'stock' : k === 'digest' ? 'digest' : k === 'due' ? 'home' : k === 'pend' ? 'push' : k;
   return APP + '?from=push#' + h; };
 function notifOpts(k, info, extra) {
   return Object.assign({ body: '', tag: 'kiwngan-' + k + (info && info.code && k !== 'digest' ? '-' + info.code : ''), renotify: true, requireInteraction: !!URGENT[k], silent: false,
@@ -94,16 +94,16 @@ self.addEventListener('push', e => {
       return ring(k, t[0], notifOpts(k, info, { tag: 'kiwngan-ring', body: t[1] }));
     }
     let info = null, late = false;
-    const pend = setTimeout(() => { late = true; self.registration.showNotification('🔔 KiwNgan · มีการแจ้งเตือนใหม่', notifOpts('msg', null, { tag: 'kiwngan-pending', body: 'กำลังโหลดรายละเอียด… แตะเพื่อเปิดแอป', requireInteraction: false })); }, 2500);   // เซิร์ฟเวอร์ตอบช้า: เด้งก่อน แล้วค่อยแทนที่
-    info = await pushInfo(9000); clearTimeout(pend);
+    const pend = setTimeout(() => { late = true; self.registration.showNotification('🔔 KiwNgan · มีการแจ้งเตือนใหม่', notifOpts('pend', null, { tag: 'kiwngan-pending', body: 'กำลังโหลดรายละเอียด… แตะเพื่อเปิดแอป', requireInteraction: false })); }, 2500);   // เซิร์ฟเวอร์ตอบช้า: เด้งก่อน แล้วค่อยแทนที่
+    info = await pushInfo(15000); clearTimeout(pend);
     const k = info && PUSH_TEXT[info.kind] ? info.kind : (late ? '' : 'call');
-    if (late) { (await self.registration.getNotifications({ tag: 'kiwngan-pending' })).forEach(n => n.close()); if (!k) return self.registration.showNotification('🔔 KiwNgan · มีการแจ้งเตือนใหม่', notifOpts('msg', null, { body: 'แตะเพื่อเปิดแอปดูรายละเอียด' })); }
+    if (late) { (await self.registration.getNotifications({ tag: 'kiwngan-pending' })).forEach(n => n.close()); if (!k) return self.registration.showNotification('🔔 KiwNgan · มีการแจ้งเตือนใหม่', notifOpts('pend', null, { body: 'แตะเพื่อเปิดแอปดูรายละเอียด' })); }
     const t = PUSH_TEXT[k](info && info.from ? info.from : 'มีคน', info || {});
     if (k === 'msg' || k === 'sos') {   // แอปเปิดอยู่บนจอ: แอปเด้งแจ้งเตือน + เสียงเองแล้ว ไม่ต้องซ้ำ
       const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       if (cs.some(c => c.visibilityState === 'visible' && c.focused)) return;
     }
-    const o = notifOpts(k, info, { body: t[1] });
+    const o = notifOpts(k, info, Object.assign({ body: t[1] }, late ? { tag: 'kiwngan-pending' } : {}));
     if (URGENT[k]) return ring(k, t[0], o);
     await self.registration.showNotification(t[0], o);
   })());

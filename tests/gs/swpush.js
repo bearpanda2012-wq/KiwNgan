@@ -27,7 +27,7 @@ function load(scope, infoDelay, info) {
   const p2 = w.fire('push'); await new Promise(r => setTimeout(r, 2700));
   eq('slow server: placeholder within 2.5s', [w.shown.length, w.shown[0] && w.shown[0].tag], [1, 'kiwngan-pending']);
   await p2;
-  eq('placeholder replaced by real notice', [w.shown.length, /งานใหม่/.test(w.shown[1].t), !!w.open['kiwngan-pending']], [2, true, false]);
+  eq('placeholder replaced by real notice (same tag → replaces it, works on iPhone too)', [w.shown.length, /งานใหม่/.test(w.shown[1].t), w.shown[1].tag], [2, true, 'kiwngan-pending']);
   // ปกติ เซิร์ฟเวอร์เร็ว: ไม่มีตัวกั้น
   w = load('https://x/app/', 300, { kind: 'kb', from: 'บอส', title: 'เรื่องใหม่', code: 'ฝ่ายผลิต' });
   await w.fire('push');

@@ -35,6 +35,12 @@ const urlOf = new Function('APP', sw.match(/const enc = encodeURIComponent;[\s\S
 eq('sw url: direct message', urlOf('msg', { from: 'หมี', code: 'หมี', mid: 'm_1' }), 'https://x/?from=push#msg/m_1/' + encodeURIComponent('u:หมี') + '/' + encodeURIComponent('หมี'));
 eq('sw url: team', urlOf('msg', { from: 'หมี', code: 'หมี', mid: 'm_2', team: true }), 'https://x/?from=push#msg/m_2/team/' + encodeURIComponent('หมี'));
 eq('sw url: job comment', urlOf('cmt', { code: '69-001' }), 'https://x/?from=push#job/69-001');
+// แจ้งเตือนสรุปเช้า → หน้าภาพรวม + หน้าต่างสรุป (ไม่ไปหน้าข้อความ)
+await pg.evaluate(() => document.querySelector('#view').dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+await pg.evaluate(() => T.pushNav('#digest')); await pg.waitForTimeout(800);
+eq('digest tap → company view + summary window', await pg.evaluate(() => [S.view, !!document.querySelector('#dgView.open .dgv-list li'), document.querySelector('#msgPanel.open') ? 'chat' : 'no chat']), ['flow', true, 'no chat']);
+await pg.click('#dgView [data-dgvx]'); await pg.waitForTimeout(400);
+eq('sw url: digest + pending', [urlOf('digest', {}), urlOf('pend', null)], ['https://x/?from=push#digest', 'https://x/?from=push#push']);
 // รูปผู้ใช้มุมขวาบน → บัญชีของฉัน (ทั้งจากหน้าอื่น และตอนอยู่หน้าตั้งค่าเอง)
 for (const v of ['prod', 'settings']) {
   await pg.evaluate(() => document.querySelector('#view').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))); await pg.keyboard.press('Escape'); await pg.evaluate(v => T.go(v), v); await pg.waitForTimeout(700);
