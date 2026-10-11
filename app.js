@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.72.0';
+const APP_VERSION = '2.72.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5275,7 +5275,7 @@ function saleKbHtml(d, redraw) {   // หน้า Sale: อ่านคลั�
 const kbRerender = () => { if (KM.ctx === 'sale') { if (saleKbRerender) saleKbRerender(); } else render(); };
 document.addEventListener('click', e => {
   const t = e.target.closest && e.target.closest('[data-kbopen],[data-kbclose],[data-kbadd],[data-kbedit],[data-kbback],[data-kbdel],[data-kbsave],[data-kbdept],[data-kbcat],[data-kbvid],[data-kbplay],[data-kbbig],[data-kbtx],[data-kfdept],[data-kfcat],[data-kfvadd],[data-kfvx],[data-kfpx],[data-kfimx],[data-kfcam]');
-  if (!t) { if (e.target && e.target.id === 'kbModal') kbClose(); if (e.target && e.target.id === 'kbTheater') kbTheaterClose(); return; }
+  if (!t) { if (e.target && e.target.id === 'kbTheater') kbTheaterClose(); return; }   // หน้าต่างคลังความรู้: คลิกด้านนอกไม่ปิด (กันข้อความที่พิมพ์หาย) ต้องกดปิดเอง
   const d = t.dataset;
   if (d.kbplay) { e.preventDefault(); return kbPlay(t); }
   if (d.kbbig) { e.preventDefault(); return kbTheater(d.kbbig); }
@@ -5304,7 +5304,7 @@ document.addEventListener('keydown', e => {
   if ($('#kbTheater') && e.key === 'Escape' && !e.cancelBubble) { e.stopPropagation(); kbTheaterClose(); return; }
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.dataset && e.target.dataset.kbopen && !KM.mode) { e.preventDefault(); kbOpen(e.target.dataset.kbopen); return; }
   if (!KM.mode || !$('#kbModal') || S.lb || $('#camModal') || $('#imgView.open') || e.cancelBubble) return;   // ตัวดูรูปปิดตัวเองไปแล้ว (หยุดต่อ) ไม่ต้องปิดหน้าต่างนี้
-  if (e.key === 'Escape') { e.stopPropagation(); kbClose(); }
+  if (e.key === 'Escape') { e.stopPropagation(); if (KM.mode !== 'form') kbClose(); }   // ระหว่างเพิ่ม/แก้ Esc ไม่ปิด ต้องกดยกเลิกหรือ ✕
   else if (e.key === 'Enter' && e.target && e.target.id === 'kfVid') { e.preventDefault(); kbVidAdd(); }
 }, true);
 

@@ -43,6 +43,8 @@ await shot('v272-theater');
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
 eq('Esc closes theater only', [await pg.locator('#kbTheater').count(), await pg.locator('#kbModal').count()], [0, 1]);
 eq('admin can edit any dept', await pg.locator('#kbModal [data-kbedit]').count(), 1);
+await pg.mouse.click(30, 450); await pg.waitForTimeout(200);
+eq('outside click keeps the reader open too', await pg.locator('#kbModal').count(), 1);
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
 // add as admin into general dept
 await pg.click('[data-kbadd]'); await pg.waitForTimeout(300);
@@ -52,6 +54,11 @@ await pg.fill('#kfTitle', 'ใส่แว่นตานิรภัยทุ�
 await pg.fill('#kfVid', 'https://youtu.be/M7lc1UVf-VE'); await pg.click('[data-kfvadd]'); await pg.waitForTimeout(200);
 await pg.fill('#kfVid', 'https://www.tiktok.com/@a/video/7234567890123'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(200);
 eq('2 videos queued', await pg.locator('.kf-v').count(), 2);
+await pg.mouse.click(30, 450); await pg.waitForTimeout(200);
+eq('outside click keeps the form open', await pg.locator('#kbModal [data-kbsave]').count(), 1);
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+eq('Esc keeps the form open', [await pg.locator('#kbModal [data-kbsave]').count(), await pg.inputValue('#kfTitle')], [1, 'ใส่แว่นตานิรภัยทุกครั้ง']);
+eq('pin checkbox is small, inline', await pg.locator('#kfPin').evaluate(e => { const r = e.getBoundingClientRect(), t = e.nextElementSibling.getBoundingClientRect(); return r.width <= 22 && Math.abs((r.top + r.height / 2) - (t.top + t.height / 2)) < 14; }), true);
 await pg.setInputFiles('#kfImgIn', { name: 'a.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }); await pg.waitForTimeout(300);
 eq('image queued', await pg.locator('.kf-imgs .skg-t.pend').count(), 1);
 await shot('v272-form');

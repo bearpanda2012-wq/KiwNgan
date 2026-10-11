@@ -4554,3 +4554,8 @@ body{scrollbar-gutter:stable}
 }
 @media (prefers-reduced-motion:reduce){.kb-depts.in .kb-dt,.kb-grid.in .kb-card{animation:none}}
 .kb-form .kf-add,.kb-form label.kf-add{color:var(--kd);font-size:12px;margin:0}
+/* v2.72.1: แถวปักหมุดในฟอร์มคลังความรู้ (กล่องติ๊กเล็กอยู่ซ้าย ข้อความอยู่บรรทัดเดียวกัน) */
+.kb-form .kf-pin{display:flex;flex-direction:row;align-items:center;gap:10px;padding:10px 14px;margin:0;background:color-mix(in oklab,#C08A1A 5%,var(--surface))}
+.kb-form .kf-pin input[type=checkbox]{flex:none;width:18px;height:18px;min-height:0;padding:0;margin:0;border:0;box-shadow:none;background:none}
+.kb-form .kf-pin span{flex:1;font-size:13.5px;color:var(--ink)}
+.kb-form .kf-pin:has(input:checked){border-color:#C08A1A;box-shadow:0 0 0 1px #C08A1A}
