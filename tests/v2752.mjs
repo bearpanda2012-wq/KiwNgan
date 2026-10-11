@@ -35,5 +35,11 @@ const urlOf = new Function('APP', sw.match(/const enc = encodeURIComponent;[\s\S
 eq('sw url: direct message', urlOf('msg', { from: 'หมี', code: 'หมี', mid: 'm_1' }), 'https://x/?from=push#msg/m_1/' + encodeURIComponent('u:หมี') + '/' + encodeURIComponent('หมี'));
 eq('sw url: team', urlOf('msg', { from: 'หมี', code: 'หมี', mid: 'm_2', team: true }), 'https://x/?from=push#msg/m_2/team/' + encodeURIComponent('หมี'));
 eq('sw url: job comment', urlOf('cmt', { code: '69-001' }), 'https://x/?from=push#job/69-001');
+// รูปผู้ใช้มุมขวาบน → บัญชีของฉัน (ทั้งจากหน้าอื่น และตอนอยู่หน้าตั้งค่าเอง)
+for (const v of ['prod', 'settings']) {
+  await pg.evaluate(() => document.querySelector('#view').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))); await pg.keyboard.press('Escape'); await pg.evaluate(v => T.go(v), v); await pg.waitForTimeout(700);
+  await pg.evaluate(() => window.scrollTo(0, 0)); await pg.click('.hero-me'); await pg.waitForTimeout(900);
+  eq('avatar → my account (from ' + v + ')', await pg.evaluate(() => { const s = document.querySelector('#s-me'); const r = s && s.getBoundingClientRect(); return [S.view, !!s && r.top < innerHeight && r.bottom > 0]; }), ['settings', true]);
+}
 console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.length ? errs : 'none');
 await b.close(); srv.close(); process.exit(bad ? 1 : 0);

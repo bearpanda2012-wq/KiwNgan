@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.75.2';
+const APP_VERSION = '2.75.4';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1887,7 +1887,7 @@ async function salePage() {
   draw(cached && cached.jobs ? cached : null); go(); setInterval(go, 60000);
   document.addEventListener('click', e => {
     const c = e.target.closest && e.target.closest('[data-sale-refresh],[data-spst],[data-spclear],[data-spprod],[data-sfview],[data-sfstep],[data-sfopen]'); if (!c) return;
-    if (c.dataset.sfview) { SF.v = c.dataset.sfview; SF.anim = true; LS.set('saleView', SF.v); return draw(last, lastErr); }
+    if (c.dataset.sfview) { SF.lastOn = (document.querySelector('.sf-tabs') || { dataset: {} }).dataset.on || ''; SF.v = c.dataset.sfview; SF.anim = true; LS.set('saleView', SF.v); return draw(last, lastErr); }
     if (c.dataset.sfstep) { SF.step = SF.step === c.dataset.sfstep && c.dataset.sfstep !== 'all' ? 'all' : c.dataset.sfstep; SF.anim = true; return draw(last, lastErr); }
     if (c.dataset.sfopen) { const k = c.dataset.sfopen, was = !!SF.open[k]; SF.open = {}; if (!was) SF.open[k] = true; draw(last, lastErr); if (!was) setTimeout(() => { const el = document.querySelector('[data-sfopen="' + CSS.escape(k) + '"]'); if (el && el.getBoundingClientRect().top < 70) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 30); return; }
     if (c.dataset.spprod) { F.prod = F.prod === c.dataset.spprod ? '' : c.dataset.spprod; return draw(last, lastErr); }
@@ -3730,7 +3730,7 @@ function topbar(title, sub, extra) {
   const d = new Date();
   const hr = d.getHours(), tod = hr < 6 || hr >= 18 ? 'moon' : hr < 11 ? 'sunrise' : 'sun';
   return '<div class="topbar"><span class="hero-ic" aria-hidden="true">' + (I[S.view] || I.home) + '</span><span class="hero-dots" aria-hidden="true"><i></i><i></i><i></i></span><div><div class="eyebrow"><span class="tod ' + tod + '" aria-hidden="true">' + DECO[tod] + '</span>' + esc(s.company) + ' · วัน' + TH_D[d.getDay()] + ' ' + fdY(today()) + '</div><h1>' + title + '</h1>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
-    (S.user ? (u => '<button type="button" class="hero-me" data-view="settings" title="บัญชีของฉัน · เปลี่ยนรูปโปรไฟล์ได้ที่ตั้งค่า">' + '<span class="hm-av">' + avUser(u, 'lg') + '<i class="hm-on"></i></span><span class="hm-t"><b>' + esc(u.name || S.me) + '</b><small>' + esc(ROLES[roleOf(u)].short || ROLES[roleOf(u)].label) + '</small></span></button>')(Object.assign({}, S.user, (typeof memberBy === 'function' && memberBy(S.me)) || {})) : '') +
+    (S.user ? (u => '<button type="button" class="hero-me" data-act="gome" title="ไปที่บัญชีของฉัน (เปลี่ยนรูป ชื่อ PIN แจ้งเตือน)" aria-label="บัญชีของฉัน">' + '<span class="hm-av">' + avUser(u, 'lg') + '<i class="hm-on"></i></span><span class="hm-t"><b>' + esc(u.name || S.me) + '</b><small>' + esc(ROLES[roleOf(u)].short || ROLES[roleOf(u)].label) + '</small></span></button>')(Object.assign({}, S.user, (typeof memberBy === 'function' && memberBy(S.me)) || {})) : '') +
     '<div class="top-actions">' + (extra || '') + (S.me && ['prod', 'flow', 'stock'].indexOf(S.view) >= 0 ? '<button class="btn top-scan" data-act="scan" title="สแกน QR ฉลากงาน เปิดงานในแอป">' + SCAN_IC + '<span>สแกน QR</span></button>' : '') + (S.me ? (n => '<button class="btn top-due' + (n ? ' has' : '') + '" data-act="dueopen" title="กำหนดส่งงาน">' + STI.hourglass + '<span>กำหนดส่ง</span>' + (n ? '<b class="badge">' + n + '</b>' : '') + '</button>')(dueCount()) : '') + '<button class="btn top-msg' + (unreadAll() ? ' has' : '') + '" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span>' + (unreadAll() ? '<b class="badge msg-n">' + (unreadAll() > 99 ? '99+' : unreadAll()) + '</b>' : '') + '</button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
     newBtn() + '</div></div>';
 }
@@ -6689,7 +6689,14 @@ function saleFlowHtml(d, sel) {
   SF.anim = false;
   return pipe + kpis + '<section class="panel sf-panel"><div class="panel-h"><h2>งานตามเลข Job</h2>' + legend + '</div>' + tools + chips + rows + '</section>';
 }
-const saleTabs = () => '<div class="sf-tabs" role="tablist"><button type="button" role="tab" data-sfview="flow" aria-selected="' + (SF.v === 'flow') + '">' + I.flow + 'ภาพรวมสถานะ</button><button type="button" role="tab" data-sfview="table" aria-selected="' + (SF.v !== 'flow' && SF.v !== 'kb') + '">' + I.list + 'ตารางงานฝ่ายแบบ</button><button type="button" role="tab" data-sfview="kb" aria-selected="' + (SF.v === 'kb') + '">' + I.kb + 'คลังความรู้</button></div>';
+/* แท็บหน้า Sale: แถบสีเลื่อนตามแท็บที่เลือก (จำตำแหน่งเดิมไว้ แล้วไหลไปตำแหน่งใหม่) */
+function sfGlide() {
+  const t = document.querySelector('.sf-tabs'), on = t && t.querySelector('[aria-selected="true"]'), g = t && t.querySelector('.sf-glide'); if (!on || !g) return;
+  const x = on.offsetLeft, w = on.offsetWidth; SF.gx = x; SF.gw = w;
+  requestAnimationFrame(() => { t.classList.add('ready'); t.style.setProperty('--gx', x + 'px'); t.style.setProperty('--gw', w + 'px'); t.dataset.on = on.dataset.sfview; });
+}
+addEventListener('resize', () => { if (document.querySelector('.sf-tabs')) sfGlide(); });
+const saleTabs = () => (setTimeout(sfGlide, 0), '<div class="sf-tabs' + (SF.gw ? ' ready' : '') + '" role="tablist" style="--gx:' + (SF.gx || 0) + 'px;--gw:' + (SF.gw || 0) + 'px" data-on="' + (SF.gw ? esc(SF.lastOn || '') : '') + '"><i class="sf-glide" aria-hidden="true"></i><button type="button" role="tab" data-sfview="flow" aria-selected="' + (SF.v === 'flow') + '">' + I.flow + 'ภาพรวมสถานะ</button><button type="button" role="tab" data-sfview="table" aria-selected="' + (SF.v !== 'flow' && SF.v !== 'kb') + '">' + I.list + 'ตารางงานฝ่ายแบบ</button><button type="button" role="tab" data-sfview="kb" aria-selected="' + (SF.v === 'kb') + '">' + I.kb + 'คลังความรู้</button></div>');
 
 /* ============ events ============ */
 document.addEventListener('click', async e => {
@@ -6799,6 +6806,13 @@ document.addEventListener('click', async e => {
     case 'refresh': return load(false).then(() => { if (S.sync === 'ok') toast('อัปเดตข้อมูลล่าสุดแล้ว'); });
     case 'csv': return exportCsv();
     case 'retryload': S.login.err = ''; S.login.retry = false; S.login.busy = true; renderLogin(); return load(false);
+    case 'gome': {   // รูปผู้ใช้มุมขวาบน → หน้าตั้งค่า ส่วน "บัญชีของฉัน"
+      if ($('#moreSheet')) moreClose();
+      if (S.view !== 'settings') go('settings');
+      setTimeout(() => { const sec = $('#s-me'); if (!sec) return; sec.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        sec.classList.remove('sec-flash'); void sec.offsetWidth; sec.classList.add('sec-flash'); setTimeout(() => sec.classList.remove('sec-flash'), 2000); }, 120);
+      return;
+    }
     case 'msgopen': return M.open ? closeMsgPanel() : openMsgPanel();
     case 'moremenu': return $('#moreSheet.open') ? moreClose() : moreOpen();
     case 'moreclose': return moreClose();

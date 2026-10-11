@@ -42,6 +42,10 @@ const rows = pg.locator('[data-sfopen]'); await rows.nth(3).click(); await pg.wa
 eq('opening another row closes the previous', await pg.locator('.sf-item.open').count(), 1);
 // ตาราง Sale: ป้ายตำแหน่งงาน + ชี้แล้วขึ้นการ์ด + ไม่มีตัวกรองผู้ร่วมทำ + เลือกช่วงวันที่รับงาน
 await pg.mouse.move(5, 5); await pg.click('[data-sfview="table"]'); await pg.waitForTimeout(800);
+eq('sale tabs: glider follows selected tab', await pg.evaluate(() => { const t = document.querySelector('.sf-tabs'), on = t.querySelector('[aria-selected="true"]'), g = t.querySelector('.sf-glide').getBoundingClientRect(), r = on.getBoundingClientRect(); return [t.dataset.on, Math.abs(g.left - r.left) < 3 && Math.abs(g.width - r.width) < 3]; }), ['table', true]);
+eq('production QC chip coloured', await pg.evaluate(() => { const c = document.querySelector('.sp-pf.p-qc'); return !c || getComputedStyle(c).backgroundColor !== 'rgba(0, 0, 0, 0)'; }), true);
+await pg.locator('.sf-tabs').screenshot({ path: out + 'sale-tabs.png' });
+const pf = pg.locator('.sp-pflow'); if (await pf.count()) await pf.screenshot({ path: out + 'sale-pflow.png' });
 eq('no helper filter', await pg.locator('[data-spf="help"]').count(), 0);
 eq('no this-month option', await pg.locator('[data-spf="range"] option[value="m"]').count(), 0);
 await pg.selectOption('[data-spf="range"]', 'c'); await pg.waitForTimeout(300);

@@ -4852,3 +4852,43 @@ input[type=date]{min-width:0;max-width:100%}
 .pboard .pcard{border-left:4px solid var(--s)}
 .pboard .pcard.is-urgent{border-left:4px solid var(--urgent)}
 .pboard .pcard.is-late:not(.is-urgent){border-left-color:var(--late)}
+
+/* v2.75.3 กดรูปผู้ใช้ → บัญชีของฉัน (กล่องกระพริบให้เห็น) */
+.hero-me{cursor:pointer}
+.sec{scroll-margin-top:16px}
+.sec.sec-flash{animation:secFlash 1.8s ease-out}
+@keyframes secFlash{0%,100%{box-shadow:var(--shadow-sm)}20%,55%{box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 55%,transparent),0 14px 30px -14px var(--brand)}}
+@media (prefers-reduced-motion:reduce){.sec.sec-flash{animation:none;outline:2px solid var(--brand)}}
+
+/* v2.75.4 หน้า Sale: ป้ายผลิต QC สีชัดขึ้น */
+.sp-pf.p-qc{--s-soft:color-mix(in oklab,var(--p-qc) 14%,var(--surface));background:var(--s-soft);color:var(--p-qc)}
+.sp-pf.p-qc svg{color:var(--p-qc)}
+
+/* v2.75.4 หน้า Sale: แท็บมีแถบสีเลื่อนตาม + สีประจำแท็บ + ไอคอนขยับ */
+.sf-tabs{position:relative;isolation:isolate;--g1:#0F766E;--g2:#14B8A6;box-shadow:0 1px 2px rgba(15,23,42,.05),0 8px 20px -14px rgba(15,23,42,.25)}
+.sf-tabs[data-on="table"]{--g1:#2D5FC4;--g2:#60A5FA}
+.sf-tabs[data-on="kb"]{--g1:#6B4FC8;--g2:#C084FC}
+.sf-tabs .sf-glide{position:absolute;z-index:-1;top:4px;bottom:4px;left:0;width:var(--gw,0);transform:translateX(var(--gx,0));border-radius:9px;background:linear-gradient(120deg,var(--g1),var(--g2));box-shadow:0 8px 18px -8px var(--g1);opacity:0;overflow:hidden;transition:transform .45s cubic-bezier(.5,1.6,.4,1),width .45s cubic-bezier(.5,1.6,.4,1),background .4s,box-shadow .4s}
+.sf-tabs .sf-glide::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.45) 50%,transparent 70%);transform:translateX(-120%);animation:sfShine 3.6s ease-in-out infinite}
+@keyframes sfShine{0%,60%{transform:translateX(-120%)}85%,100%{transform:translateX(120%)}}
+.sf-tabs.ready .sf-glide{opacity:1}
+.sf-tabs.ready button[aria-selected="true"]{background:transparent;box-shadow:none;color:#fff}
+.sf-tabs button{position:relative;transition:color .25s,transform .15s}
+.sf-tabs button:hover:not([aria-selected="true"]){color:var(--ink);background:color-mix(in oklab,var(--ink) 5%,transparent)}
+.sf-tabs button:active{transform:scale(.96)}
+.sf-tabs button[data-sfview="flow"] svg{color:#0F766E}.sf-tabs button[data-sfview="table"] svg{color:#2D5FC4}.sf-tabs button[data-sfview="kb"] svg{color:#7C5CD6}
+.sf-tabs button[aria-selected="true"] svg{color:#fff!important}
+.sf-tabs button[aria-selected="true"][data-sfview="flow"] svg{animation:sfSpin 6s linear infinite}
+.sf-tabs button[aria-selected="true"][data-sfview="table"] svg{animation:sfRows 1.8s ease-in-out infinite}
+.sf-tabs button[aria-selected="true"][data-sfview="kb"] svg{animation:sfBook 2.4s ease-in-out infinite;transform-origin:50% 90%}
+.sf-tabs button:hover svg{animation-duration:.9s}
+@keyframes sfSpin{to{transform:rotate(360deg)}}
+@keyframes sfRows{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px) scale(1.08)}}
+@keyframes sfBook{0%,100%{transform:rotate(0)}25%{transform:rotate(-10deg) scale(1.08)}50%{transform:rotate(0)}75%{transform:rotate(8deg)}}
+@media (prefers-reduced-motion:reduce){.sf-tabs .sf-glide,.sf-tabs .sf-glide::after,.sf-tabs button svg{transition:none;animation:none!important}}
+
+/* v2.75.4 บอร์ดงานฝ่ายแบบ: คืนแถบสีด้านซ้ายให้ทุกการ์ด (สีประเภทงาน · ด่วน = ส้ม · เลยกำหนด = แดง) */
+.board:not(.pboard) .card{border-left:4px solid color-mix(in oklab,var(--s,var(--queue)) 70%,var(--surface))}
+.board:not(.pboard) .card.has-tc{border-left-color:var(--tc)}
+.board:not(.pboard) .card.is-urgent:not(.is-late){border-left-color:var(--urgent)}
+.board:not(.pboard) .card.is-late{border-left-color:var(--late)}
