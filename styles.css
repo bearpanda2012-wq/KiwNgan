@@ -4595,3 +4595,12 @@ body{scrollbar-gutter:stable}
 .sk-form .sf-step button[data-d="1"]{background:color-mix(in oklab,#2B8A5A 10%,var(--surface));color:#2B8A5A}
 .sk-form .sf-step button:hover{filter:brightness(.96)}
 .sk-form input:focus,.sk-form textarea:focus{border-color:color-mix(in oklab,var(--h) 60%,var(--line));box-shadow:0 0 0 3px color-mix(in oklab,var(--h) 14%,transparent)}
+/* v2.72.4: รายการงาน — ช่องสถานะกว้างพอ ไม่ทับหมายเหตุ */
+@media (min-width:961px){
+  .lhead,.row{grid-template-columns:minmax(0,1.6fr) minmax(0,.85fr) minmax(0,.9fr) 92px 116px minmax(0,1.1fr) 168px;column-gap:16px}
+  .row>.c-st{min-width:0;overflow:hidden}
+  .row .c-st .stg{max-width:100%}
+  .row .c-st .stg-meta{max-width:100%;overflow:hidden;white-space:nowrap}
+  .row>.c-note{padding-right:4px}
+}
+@media (min-width:961px) and (max-width:1250px){.lhead,.row{grid-template-columns:minmax(0,1.5fr) minmax(0,.8fr) minmax(0,.8fr) 84px 108px minmax(0,1fr) 150px;column-gap:12px}}
