@@ -55,10 +55,22 @@ await pg.screenshot({ path: out + 'v277-waves.png' });
 await pg.fill('#bgUrl', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'); await pg.click('[data-act="bgurl"]'); await pg.waitForTimeout(500);
 eq('YouTube link → muted looping embed', await pg.evaluate(() => { const f = document.querySelector('#bgLayer iframe'); return f ? /youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?.*mute=1.*loop=1/.test(f.src) : false; }), true);
 eq('settings shows current', await pg.evaluate(() => document.querySelector('.bg-cur small').textContent.indexOf('YouTube') >= 0), true);
+eq('youtube embed has js api (for sound)', await pg.evaluate(() => /enablejsapi=1/.test(document.querySelector('#bgLayer iframe').src)), true);
+eq('sound off by default + floating speaker', await pg.evaluate(() => [document.querySelector('[data-bgsound]').getAttribute('aria-pressed'), !!document.querySelector('#bgSndBtn'), document.querySelector('#bgSndBtn').className]), ['false', true, '']);
+await pg.click('.bg-cur [data-bgsound]'); await pg.waitForTimeout(300);
+eq('sound on → volume slider + speaker on', await pg.evaluate(() => [T.getTheme().bgsound, !!document.querySelector('[data-thrange="bgvol"]'), document.querySelector('#bgSndBtn').className]), [true, true, 'on']);
+await pg.click('#bgSndBtn'); await pg.waitForTimeout(300);
+eq('floating speaker mutes', await pg.evaluate(() => [T.getTheme().bgsound, document.querySelector('#bgSndBtn').className]), [false, '']);
 // วิดีโอจากเครื่อง
 if (fs.existsSync(out + 'bgv.webm')) {
   await pg.setInputFiles('#bgVidIn', out + 'bgv.webm'); await pg.waitForTimeout(2500);
   eq('video file → video layer', await pg.evaluate(() => { const v = document.querySelector('#bgLayer video'); return [!!v, v && v.muted, v && v.loop, T.getTheme().bgsrc]; }), [true, true, true, 'file']);
+  await pg.click('.bg-cur [data-bgsound]'); await pg.waitForTimeout(500);
+  eq('video sound on → unmuted', await pg.evaluate(() => [document.querySelector('#bgLayer video').muted, Math.round(document.querySelector('#bgLayer video').volume * 100)]), [false, 60]);
+  await pg.evaluate(() => { const r = document.querySelector('[data-thrange="bgvol"]'); r.value = 30; r.dispatchEvent(new Event('input', { bubbles: true })); });
+  eq('volume slider live', await pg.evaluate(() => Math.round(document.querySelector('#bgLayer video').volume * 100)), 30);
+  await pg.click('#bgSndBtn'); await pg.waitForTimeout(300);
+  eq('mute from floating button', await pg.evaluate(() => document.querySelector('#bgLayer video').muted), true);
   await pg.reload(); await pg.waitForTimeout(2200);
   eq('video survives reload', await pg.evaluate(() => !!document.querySelector('#bgLayer video') && /^blob:/.test(document.querySelector('#bgLayer video').src)), true);
   await clean(); await pg.evaluate(() => T.go('settings')); await pg.waitForTimeout(800);

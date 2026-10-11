@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.77.1';
+const APP_VERSION = '2.78.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1248,7 +1248,8 @@ const THEMES = [
 const THEME_DEFAULT = { bgdim: 'mid', bgblur: '0', preset: 'brand', mode: 'auto', c1: '#0B6B70', c2: '#5B3FD6', sidebar: 'gradient', header: 'gradient', radius: 'round',
   bgfit: 'cover', bgpos: 'c', bgdimv: null, bgblurv: null, bgbri: 100, bgsat: 100, bgtint: 'auto', glass: 0, gblur: 12, zoom: 100, motion: 'full', shadow: 'soft', pattern: 'none', font: 'anuphan',
   hdc: 'theme', hd1: '', hd2: '', hdg: 0, hdb: 12, hdt: 'auto', rlc: 'theme', rl1: '', rl2: '', rlg: 0, rlb: 12, rlt: 'auto',   // แบนเนอร์บน (hd) + เมนูซ้าย (rl)
-  bgsrc: 'auto', bgurl: '', bgfx: 'aurora' };   // พื้นหลัง: auto = ไฟล์ในเครื่องถ้ามี · file · url · fx (เคลื่อนไหวสำเร็จรูป) · none
+  bgsrc: 'auto', bgurl: '', bgfx: 'aurora',
+  fcol: 'theme', fc1: '', fc2: '', fshadow: 'none', bgsound: false, bgvol: 60 };   // bgsound: เสียงของวิดีโอ/YouTube พื้นหลัง   // สีตัวอักษร (หลัก/รอง) + เงาตัวอักษร   // พื้นหลัง: auto = ไฟล์ในเครื่องถ้ามี · file · url · fx (เคลื่อนไหวสำเร็จรูป) · none
 /* รูปพื้นหลัง: เก็บไฟล์ความละเอียดสูงใน IndexedDB (เดิมเก็บใน localStorage ได้แค่ ~900KB รูปเลยถูกบีบจนแตก) */
 const BG = { url: '', w: 0, h: 0, size: 0, ready: false };
 const bgDb = () => new Promise((res, rej) => { try { const r = indexedDB.open('kiwngan-bg', 1); r.onupgradeneeded = () => r.result.createObjectStore('img'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } });
@@ -1319,19 +1320,42 @@ function bgUseUrl(raw, rand) {
 function bgLayer(A, t) {
   let el = document.getElementById('bgLayer');
   const sig = A && A.kind !== 'img' ? A.kind + '|' + (A.url || A.id || A.fx) : '';
-  if (!sig) { if (el) el.remove(); return; }
+  if (!sig) { if (el) el.remove(); bgSndBtn(); return; }
   if (!el || el.dataset.sig !== sig) {
     if (el) el.remove();
     el = document.createElement('div'); el.id = 'bgLayer'; el.dataset.sig = sig; el.setAttribute('aria-hidden', 'true');
     if (A.kind === 'vid') el.innerHTML = '<video autoplay muted loop playsinline preload="auto" disablepictureinpicture src="' + esc(A.url) + '"></video>';
-    else if (A.kind === 'yt') el.innerHTML = '<iframe tabindex="-1" title="พื้นหลัง" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube-nocookie.com/embed/' + esc(A.id) + '?autoplay=1&mute=1&loop=1&playlist=' + esc(A.id) + '&controls=0&disablekb=1&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&fs=0"></iframe>';
+    else if (A.kind === 'yt') el.innerHTML = '<iframe tabindex="-1" title="พื้นหลัง" allow="autoplay; encrypted-media" referrerpolicy="strict-origin-when-cross-origin" src="https://www.youtube-nocookie.com/embed/' + esc(A.id) + '?autoplay=1&mute=1&loop=1&playlist=' + esc(A.id) + '&controls=0&disablekb=1&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&fs=0&enablejsapi=1"></iframe>';
     else el.innerHTML = bgFxHtml(A.fx);
+    const f = el.querySelector('iframe'); if (f) f.addEventListener('load', () => [300, 1200, 2500, 5000].forEach(ms => setTimeout(() => bgSound(), ms)));   // YouTube พร้อมแล้วค่อยสั่งเปิด/ปิดเสียง
     el.className = 'bgl-' + A.kind; document.body.insertBefore(el, document.body.firstChild);
   }
   const fit = t.bgfit || 'cover';
   el.style.setProperty('--vfit', fit === 'contain' ? 'contain' : fit === 'center' ? 'none' : 'cover');
-  const v = el.querySelector('video'); if (v) { v.muted = true; if (t.motion === 'off') v.pause(); else { const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); } }
+  const v = el.querySelector('video'); if (v) { if (t.motion === 'off') v.pause(); else if (v.paused) { v.muted = true; const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); } }
+  bgSound();
 }
+/* ปุ่มลำโพงลอยมุมล่าง: เปิด/ปิดเสียงพื้นหลังได้ทันทีจากทุกหน้า (มีเฉพาะตอนพื้นหลังเป็นวิดีโอ/YouTube) */
+function bgSndBtn() {
+  let b = document.getElementById('bgSndBtn'); const el = document.getElementById('bgLayer'), media = el && (el.className === 'bgl-vid' || el.className === 'bgl-yt') && S.screen === 'app';
+  if (!media) { if (b) b.remove(); return; }
+  const on = !!getTheme().bgsound;
+  if (!b) { b = document.createElement('button'); b.id = 'bgSndBtn'; b.type = 'button'; b.dataset.bgsound = '1'; document.body.appendChild(b); }
+  b.className = on ? 'on' : ''; b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', on ? 'ปิดเสียงพื้นหลัง' : 'เปิดเสียงพื้นหลัง'); b.title = b.getAttribute('aria-label');
+  b.innerHTML = on ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>';
+}
+/* เสียงพื้นหลัง: เบราว์เซอร์ไม่ให้เปิดเสียงเองก่อนผู้ใช้แตะหน้าจอ → เริ่มแบบปิดเสียง แล้วเปิดเมื่อแตะ/กดปุ่มครั้งแรก */
+function bgSound() {
+  bgSndBtn(); const el = document.getElementById('bgLayer'); if (!el) return;
+  const t = getTheme(), want = !!t.bgsound && t.motion !== 'off', vol = thNum(t.bgvol, 60, 0, 100), act = !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  const v = el.querySelector('video');
+  if (v) { v.volume = vol / 100; if (want && act) { v.muted = false; if (v.paused && t.motion !== 'off') { const pr = v.play(); if (pr && pr.catch) pr.catch(() => { v.muted = true; v.play().catch(() => {}); }); } } else v.muted = true; }
+  const f = el.querySelector('iframe');
+  if (f && f.contentWindow) { const cmd = (fn, a) => { try { f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: fn, args: a || [] }), '*'); } catch (e) {} };
+    if (want && act) { cmd('unMute'); cmd('setVolume', [vol]); } else cmd('mute'); }
+}
+['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, function first() { if (getTheme().bgsound) setTimeout(bgSound, 0); }, { capture: true, passive: true }));
 /* แบนเนอร์บน (hd) / เมนูซ้าย (rl): สีเอง · โปร่งแสง · เบลอ · สีตัวอักษร (อัตโนมัติ = ดูจากความสว่างของสีที่เลือก) */
 const hexLum = h => { const n = parseInt(h.slice(1), 16), c = [n >> 16 & 255, n >> 8 & 255, n & 255].map(x => { x /= 255; return x <= .03928 ? x / 12.92 : Math.pow((x + .055) / 1.055, 2.4); }); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
 function barApply(p, t, app) {
@@ -1369,6 +1393,9 @@ function applyTheme() {
   root.setAttribute('data-radius', t.radius === 'sharp' ? 'sharp' : 'round');
   const app = S.screen === 'app', rs = root.style, A = app ? bgActive(t) : null, bg = A ? (A.kind === 'img' ? A.url : 'none') : '';
   root.removeAttribute('data-bgblur'); bgLayer(A, t); barApply('hd', t, app); barApply('rl', t, app);
+  if (app && t.fcol === 'custom' && isHex(t.fc1)) { root.setAttribute('data-fcol', ''); rs.setProperty('--fc-ink', t.fc1); rs.setProperty('--fc-muted', isHex(t.fc2) ? t.fc2 : 'color-mix(in srgb,' + t.fc1 + ' 68%,transparent)'); }
+  else { root.removeAttribute('data-fcol'); rs.removeProperty('--fc-ink'); rs.removeProperty('--fc-muted'); }
+  if (app && ['soft', 'strong'].indexOf(t.fshadow) >= 0) root.setAttribute('data-fshadow', t.fshadow); else root.removeAttribute('data-fshadow');
   if (A) root.setAttribute('data-bgk', A.kind); else root.removeAttribute('data-bgk');
   if (bg) {
     const fit = t.bgfit || 'cover', dim = thNum(t.bgdimv, { soft: 78, mid: 55, strong: 28 }[t.bgdim] || 55, 0, 92), blur = thNum(t.bgblurv, { 0: 0, 1: 6, 2: 16 }[t.bgblur] || 0, 0, 30);
@@ -1425,6 +1452,12 @@ function themeMore(t) {
     '<div class="th-grp"><div class="th-gh"><span class="th-gi">' + I.settings + '</span><div><b>การแสดงผล</b><small>ขนาด ฟอนต์ เงา และภาพเคลื่อนไหว</small></div></div>' +
       '<div class="th-rows">' + thRange('zoom', 'ขนาดเนื้อหา', thNum(t.zoom, 100, 80, 130), 80, 130, 5, '%', 'ขยาย/ย่อตัวหนังสือและการ์ดในหน้า') +
         '<div class="f"><span class="lbl">ฟอนต์</span><div class="th-fonts">' + Object.keys(FONTS).map(k => '<button data-themeset="font" data-val="' + k + '" aria-pressed="' + ((t.font || 'anuphan') === k) + '" style="font-family:' + (FONTS[k][0] ? '\'' + FONTS[k][0] + '\',' : '') + 'system-ui">' + FONTS[k][1] + '<small>กขค 123</small></button>').join('') + '</div></div>' +
+        (() => { const cs = getComputedStyle(document.querySelector('.app') || document.documentElement), on = t.fcol === 'custom' && isHex(t.fc1);
+          const hx = v => { v = String(v || '').trim(); return isHex(v) ? v : ''; }, v1 = on ? t.fc1 : hx(cs.getPropertyValue('--ink')) || '#131B23', v2 = on && isHex(t.fc2) ? t.fc2 : hx(cs.getPropertyValue('--muted')) || '#5A6672';
+          return '<div class="f fcol-f"><span class="lbl">สีตัวอักษร</span><div class="bar-cols"><button type="button" class="btn sm' + (on ? '' : ' on') + '" data-fcolreset="1" aria-pressed="' + !on + '">ตามธีม</button>' +
+            '<label class="fc-pick"><input type="color" id="fcC1" data-fontc="1" value="' + esc(v1) + '" aria-label="สีตัวอักษรหลัก"><small>หลัก</small></label><label class="fc-pick"><input type="color" id="fcC2" data-fontc="1" value="' + esc(v2) + '" aria-label="สีตัวอักษรรอง"><small>รอง</small></label></div>' +
+            '<small class="bar-note">หลัก = หัวข้อ/ข้อความ · รอง = คำอธิบาย เมนูย่อย ตัวเลขเล็ก ๆ</small></div>' +
+            '<div class="f"><span class="lbl">เงาตัวอักษร (อ่านง่ายบนรูปพื้นหลัง)</span>' + thSeg(t, 'fshadow', [['none', 'ไม่มี'], ['soft', 'บาง'], ['strong', 'ชัด']]) + '</div>'; })() +
         '<div class="f"><span class="lbl">เงาการ์ด</span>' + thSeg(t, 'shadow', [['none', 'ไม่มี'], ['soft', 'บาง'], ['strong', 'ชัด']]) + '</div>' +
         '<div class="f"><span class="lbl">ภาพเคลื่อนไหว</span>' + thSeg(t, 'motion', [['full', 'เต็ม'], ['less', 'น้อย'], ['off', 'ปิด']]) + '</div>' +
         (bgActive(t) ? '' : '<div class="f"><span class="lbl">ลายพื้นหลัง (เมื่อไม่ใส่รูป)</span><div class="th-pats">' + pats.map(p => '<button data-themeset="pattern" data-val="' + p[0] + '" aria-pressed="' + ((t.pattern || 'none') === p[0]) + '"><i class="pat-' + p[0] + '"></i>' + p[1] + '</button>').join('') + '</div></div>') +
@@ -1454,7 +1487,7 @@ function bgSection(t) {
   const A = bgActive(t), fit = t.bgfit || 'cover', has = !!A;
   const tab = BGT.tab || (!A ? 'img' : A.anim ? 'anim' : 'img');   // ยังไม่มีพื้นหลัง → เปิดแท็บภาพนิ่งไว้ให้เลือกได้เลย
   const dim = thNum(t.bgdimv, { soft: 78, mid: 55, strong: 28 }[t.bgdim] || 55, 0, 92), blur = thNum(t.bgblurv, { 0: 0, 1: 6, 2: 16 }[t.bgblur] || 0, 0, 30);
-  const what = !A ? '' : A.kind === 'fx' ? 'ภาพเคลื่อนไหว: ' + BGFX[A.fx][0] : A.kind === 'yt' ? 'วิดีโอ YouTube (ปิดเสียง)' : A.src === 'url' ? (A.kind === 'vid' ? 'วิดีโอออนไลน์' : A.anim ? 'GIF ออนไลน์' : 'รูปออนไลน์') + ' · ' + esc(String(t.bgurl).replace(/^https:\/\//, '').slice(0, 48)) :
+  const what = !A ? '' : A.kind === 'fx' ? 'ภาพเคลื่อนไหว: ' + BGFX[A.fx][0] : A.kind === 'yt' ? 'วิดีโอ YouTube' : A.src === 'url' ? (A.kind === 'vid' ? 'วิดีโอออนไลน์' : A.anim ? 'GIF ออนไลน์' : 'รูปออนไลน์') + ' · ' + esc(String(t.bgurl).replace(/^https:\/\//, '').slice(0, 48)) :
     (A.kind === 'vid' ? 'วิดีโอในเครื่อง' : BG.kind === 'gif' ? 'GIF ในเครื่อง' : 'รูปในเครื่อง') + (BG.w ? ' · ' + BG.w + '×' + BG.h + ' px · ' + (BG.size / 1048576).toFixed(1) + ' MB' : ' · รูปเดิม (ความละเอียดต่ำ) — เลือกใหม่อีกครั้งเพื่อให้คมชัด');
   const pst = A && A.kind === 'img' ? 'background-image:url(&quot;' + esc(A.url) + '&quot;);background-size:' + (fit === 'contain' ? 'contain' : fit === 'cover' ? 'cover' : fit === 'tile' ? '30%' : '60%') + ';background-repeat:' + (fit === 'tile' ? 'repeat' : 'no-repeat') + ';background-position:' + (BG_POS[t.bgpos] || 'center') : '';
   const inner = !A ? '<span>' + STI.camera + 'ยังไม่มีพื้นหลัง</span>' : A.kind === 'vid' ? '<video autoplay muted loop playsinline src="' + esc(A.url) + '" style="object-fit:' + (fit === 'contain' ? 'contain' : 'cover') + '"></video>' :
@@ -1468,13 +1501,16 @@ function bgSection(t) {
       '<span class="lbl">แบบสำเร็จรูป (ใช้สีธีม · ไม่ต้องต่อเน็ต)</span><div class="bg-fxs">' + Object.keys(BGFX).map(k => '<button type="button" data-bgfx="' + k + '" aria-pressed="' + !!(A && A.kind === 'fx' && A.fx === k) + '">' + bgFxHtml(k, true) + '<b>' + BGFX[k][0] + '</b></button>').join('') + '</div>' +
       '<div class="top-actions"><label class="btn sm primary">' + STI.camera + 'เลือกวิดีโอ / GIF จากเครื่อง<input type="file" accept="video/mp4,video/webm,video/*,image/gif,image/webp" id="bgVidIn" hidden></label></div>' +
       '<span class="lbl">หรือวางลิงก์ออนไลน์</span>' + urlBox('ลิงก์ YouTube, Giphy, GIF หรือวิดีโอ .mp4 / .webm', 'ใช้ลิงก์') +
-      '<small class="bg-hint">YouTube เล่นแบบปิดเสียงวนซ้ำ · วิดีโอในเครื่องไม่เกิน 80 MB · ตั้ง "ภาพเคลื่อนไหว: ปิด" เพื่อหยุดวิดีโอ</small>'
+      '<small class="bg-hint">วิดีโอ/YouTube เล่นวนซ้ำ กดปุ่มลำโพงเพื่อเปิด-ปิดเสียง · วิดีโอในเครื่องไม่เกิน 80 MB · ตั้ง "ภาพเคลื่อนไหว: ปิด" เพื่อหยุดวิดีโอ</small>'
     : '<small class="bg-hint">ไม่ใช้พื้นหลัง เลือก "ลายพื้นหลัง" ด้านบนแทนได้</small>';
   return '<div class="th-grp bg-pick2"><div class="th-gh"><span class="th-gi">' + STI.camera + '</span><div><b>พื้นหลัง</b><small>ภาพนิ่งหรือภาพเคลื่อนไหว จากเครื่องหรือลิงก์ออนไลน์ (เฉพาะเครื่องนี้)</small></div></div>' +
     '<div class="seg bg-tabs" role="group">' + [['none', 'ไม่มี'], ['img', 'ภาพนิ่ง'], ['anim', 'ภาพเคลื่อนไหว']].map(x => '<button data-bgtab="' + x[0] + '" aria-pressed="' + (tab === x[0]) + '">' + x[1] + '</button>').join('') + '</div>' +
     '<div class="bg-pick"><div class="bg-prev' + (has ? ' has k-' + A.kind : '') + '"' + (pst ? ' style="' + pst + '"' : '') + '>' + inner + (has ? '<i class="bg-dim" style="opacity:' + (dim / 100) + '"></i>' : '') + '</div>' +
       '<div class="bg-ctl">' + ctl +
-        (has ? '<div class="bg-cur"><small class="bg-info' + (A.src === 'file' && !BG.w ? ' warn' : '') + '">ใช้อยู่: ' + what + '</small><button class="btn sm" data-act="bgremove">' + I.trash + 'เอาออก</button></div>' : '') +
+        (has ? '<div class="bg-cur"><small class="bg-info' + (A.src === 'file' && !BG.w ? ' warn' : '') + '">ใช้อยู่: ' + what + '</small>' +
+          (A.kind === 'vid' || A.kind === 'yt' ? '<button type="button" class="btn sm bg-snd' + (t.bgsound ? ' on' : '') + '" data-bgsound="1" aria-pressed="' + !!t.bgsound + '">' + (t.bgsound ? '🔊 เสียงเปิดอยู่' : '🔇 ปิดเสียงอยู่') + '</button>' : '') +
+          '<button class="btn sm" data-act="bgremove">' + I.trash + 'เอาออก</button></div>' +
+          (A.kind === 'vid' || A.kind === 'yt' ? (t.bgsound ? '<div class="th-rows">' + thRange('bgvol', 'ความดังเสียง', thNum(t.bgvol, 60, 0, 100), 0, 100, 5, '%', '') + '</div>' : '') : '') : '') +
         (has && A.kind !== 'fx' && A.kind !== 'yt' ? '<div class="f"><span class="lbl">การจัดวาง</span>' + thSeg(t, 'bgfit', A.kind === 'vid' ? [['cover', 'เต็มจอ'], ['contain', 'พอดีทั้งภาพ'], ['center', 'ขนาดจริง']] : [['cover', 'เต็มจอ'], ['contain', 'พอดีทั้งรูป'], ['center', 'ขนาดจริง'], ['tile', 'ปูกระเบื้อง']]) + '</div>' +
           '<div class="f bg-posf"><span class="lbl">จุดยึดภาพ</span><div class="bg-pos" role="group" aria-label="ตำแหน่งรูป">' + ['tl', 't', 'tr', 'l', 'c', 'r', 'bl', 'b', 'br'].map(k => '<button data-themeset="bgpos" data-val="' + k + '" aria-pressed="' + ((t.bgpos || 'c') === k) + '" aria-label="' + k + '"><i></i></button>').join('') + '</div></div>' : '') +
       '</div></div>' +
@@ -6961,6 +6997,8 @@ document.addEventListener('click', async e => {
   if (d.bgtab) { BGT.tab = d.bgtab; if (d.bgtab === 'none' && bgActive()) { setTheme({ bgsrc: 'none' }); toast('ปิดพื้นหลังแล้ว'); } return render(); }
   if (d.bgfx) { BGT.tab = 'anim'; setTheme({ bgsrc: 'fx', bgfx: d.bgfx, pattern: 'none' }); return render(); }
   if (d.barcol) { setTheme({ [d.barcol + 'c']: 'theme' }); return render(); }
+  if (d.bgsound) { const on = !getTheme().bgsound; setTheme({ bgsound: on }); bgSound(); toast(on ? 'เปิดเสียงพื้นหลังแล้ว' : 'ปิดเสียงพื้นหลังแล้ว'); if (S.view === 'settings') render(); return; }
+  if (d.fcolreset) { setTheme({ fcol: 'theme' }); return render(); }
   if (d.insttab) { INST.tab = d.insttab; renderLogin(); drawQr(); return; }
   if (d.quick) { S.f.quick = d.quick; return render(); }
   if (d.ctype) { LS.set('chartType', d.ctype); S.animIn = true; return render(); }
@@ -7139,9 +7177,11 @@ document.addEventListener('input', e => {
     const k = t.dataset.thrange, v = +t.value, o = document.querySelector('[data-thout="' + k + '"]');
     if (o) o.textContent = v + (t.dataset.unit || ''); t.style.setProperty('--v', ((v - +t.min) / (+t.max - +t.min) * 100) + '%');
     setTheme({ [k]: v });
+    if (k === 'bgvol') bgSound();
     if (k === 'bgdimv') { const d = document.querySelector('.bg-prev .bg-dim'); if (d) d.style.opacity = v / 100; }
     return;
   }
+  if (t.dataset && t.dataset.fontc) { const r = document.documentElement; r.setAttribute('data-fcol', ''); r.style.setProperty('--fc-ink', $('#fcC1').value); r.style.setProperty('--fc-muted', $('#fcC2').value); return; }
   if (t.dataset && t.dataset.barc) { const p = t.dataset.barc, rs = document.documentElement.style; document.documentElement.setAttribute('data-' + p + 'x', ''); rs.setProperty('--' + p + '1', $('#' + p + 'C1').value); rs.setProperty('--' + p + '2', $('#' + p + 'C2').value); return; }
   if ((t.id === 'thC1' || t.id === 'thC2') && $('#thC1') && $('#thC2')) { // live preview while dragging the picker
     document.documentElement.style.setProperty('--brand', $('#thC1').value); document.documentElement.style.setProperty('--brand-2', $('#thC2').value); return;
@@ -7204,6 +7244,7 @@ document.addEventListener('change', e => {
       toast((r.kind === 'vid' ? 'ตั้งวิดีโอพื้นหลังแล้ว' : r.kind === 'gif' ? 'ตั้ง GIF พื้นหลังแล้ว' : 'ตั้งรูปพื้นหลังแล้ว') + ' · ' + r.w + '×' + r.h + ' px'); render();
     }).catch(e => toast(e.message || 'เปิดไฟล์ไม่ได้', true)); return;
   }
+  if (t.dataset && t.dataset.fontc) { setTheme({ fcol: 'custom', fc1: $('#fcC1').value, fc2: $('#fcC2').value }); const b = document.querySelector('[data-fcolreset]'); if (b) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); } return; }
   if (t.dataset && t.dataset.barc) {   // สีแบนเนอร์/เมนู: ไม่วาดทั้งหน้า (หน้าต่างเลือกสีบน iPhone จะได้ไม่ปิดเอง)
     const p = t.dataset.barc; setTheme({ [p + 'c']: 'custom', [p + '1']: $('#' + p + 'C1').value, [p + '2']: $('#' + p + 'C2').value });
     const b = document.querySelector('[data-barcol="' + p + '"]'); if (b) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); } return;

@@ -5157,3 +5157,21 @@ body.auth #bgLayer{display:none}
 .urow.moved{animation:uMoved 1.1s ease}
 @keyframes uMoved{0%{box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 45%,transparent)}100%{box-shadow:0 0 0 0 transparent}}
 @media (max-width:760px){.ulist .urow{grid-template-columns:30px 52px 44px minmax(0,1fr) auto;grid-template-areas:"mv ph nm nm nm" "mv ph fl fl fl" "mv co ro ro tg" "ac ac ac ac ac"}}
+
+/* v2.78 สีตัวอักษรเอง (เฉพาะในแอป · หน้าต่างลอย/พิมพ์ใช้สีปกติ) + เงาตัวอักษร */
+[data-fcol] .app{--ink:var(--fc-ink);--muted:var(--fc-muted);color:var(--ink)}
+@media print{[data-fcol] .app{--ink:#000;--muted:#4A545E}}
+[data-fshadow="soft"] .app{text-shadow:0 1px 2px color-mix(in srgb,var(--bg) 70%,transparent)}
+[data-fshadow="strong"] .app{text-shadow:0 1px 2px var(--bg),0 0 6px color-mix(in srgb,var(--bg) 85%,transparent)}
+[data-fshadow] .app .btn.primary,[data-fshadow] .app [aria-pressed="true"],[data-fshadow] .app .rail,[data-fshadow] .app .topbar,[data-fshadow] .app .pill,[data-fshadow] .app .tag{text-shadow:none}
+.fc-pick{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.fc-pick input[type=color]{width:50px;height:38px;padding:3px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);cursor:pointer}
+.fc-pick small{color:var(--muted);font-size:12px}
+.bg-snd.on{background:var(--grad);border-color:transparent;color:#fff}
+#bgSndBtn{position:fixed;left:252px;bottom:16px;z-index:40;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);background:color-mix(in srgb,var(--surface) 82%,transparent);color:var(--muted);box-shadow:var(--shadow-sm);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);cursor:pointer;padding:0}
+#bgSndBtn svg{width:19px;height:19px}
+#bgSndBtn.on{background:var(--grad);color:#fff;border-color:transparent}
+#bgSndBtn:hover{transform:scale(1.06)}
+body.auth #bgSndBtn{display:none}
+@media (max-width:960px){#bgSndBtn{left:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
+@media print{#bgSndBtn{display:none}}
