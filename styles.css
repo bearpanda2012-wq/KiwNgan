@@ -5191,3 +5191,33 @@ body.auth #bgSndBtn{display:none}
 .ts-tx{min-width:0}.ts-tx b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ts-tx small{display:block;color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ts-x{flex:none;opacity:.55}.ts-it:hover .ts-x{opacity:1}
 .ts-cf{display:flex;gap:4px;flex:none}
+
+/* v2.80 สถานะการเชื่อมต่อเป็นไอคอน (ไม่มีข้อความ) */
+.foot-row{display:flex;align-items:center;gap:8px}
+.foot-row .me-chip{flex:1;min-width:0}
+.rail .conn,.conn{flex:none;width:30px;height:30px;padding:0;border-radius:50%;display:grid;place-items:center;font-size:0;cursor:default;position:relative;background:color-mix(in srgb,currentColor 12%,transparent)}
+.conn svg{width:17px;height:17px}
+.conn.ok{color:#22C55E}.conn.err{color:#EF4444}.conn.demo{color:#F59E0B}.conn.busy{color:#38BDF8}
+.rail .conn.ok{color:#4ADE80}
+[data-sidebar="plain"] .rail .conn.ok,[data-rltext="dark"] .rail .conn.ok{color:#16A34A}
+.conn.ok::after{content:"";position:absolute;right:1px;top:1px;width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 0 2px color-mix(in srgb,currentColor 25%,transparent);animation:connPulse 2.4s ease-in-out infinite}
+@keyframes connPulse{50%{box-shadow:0 0 0 5px transparent}}
+.conn .spin{animation:spin 1s linear infinite}
+
+/* v2.80 แก้: ปุ่ม "ตั้ง PIN" ล้นกรอบบนจอขนาดกลาง (ใช้ความกว้างของการ์ด ไม่ใช่ความกว้างจอ) */
+#s-salelink{container-type:inline-size}
+@media (min-width:860px){.spp-row{grid-template-columns:auto 1fr auto}.spp-row .pin-set{grid-column:1/-1}}
+@container (min-width:620px){.spp-row{grid-template-columns:auto minmax(140px,1fr) auto minmax(240px,auto)}.spp-row .pin-set{grid-column:auto}}
+.spp-row .pin-set{flex-wrap:nowrap;min-width:0}
+.spp-row .pin-set input{width:auto;flex:1 1 110px;min-width:0}
+.spp-row .pin-set .btn{flex:none}
+/* v2.80 มือถือ: ปุ่มสถานะในหน้าเพิ่มงานไม่หักบรรทัดกลางคำ (เรียง 3×2) · ป้าย KPI ตัดบรรทัดสวยขึ้น */
+@media (max-width:520px){.seg.status{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.seg.status button{white-space:nowrap;min-height:40px}}
+.co-kpis .kpi span{text-wrap:balance}
+
+/* v2.80 การ์ดบอร์ดงาน: วันที่ส่งต้องเห็นครบเสมอ (ไม่ถูกตัด) · ถ้าที่ไม่พอให้วันที่ขึ้นบรรทัดใหม่ชิดขวา · เลข Job แสดงครบ (ขึ้นบรรทัดได้) */
+.board .card .card-foot{flex-wrap:wrap;row-gap:6px}
+.board .card .card-foot>.due{flex:none;overflow:visible;text-overflow:clip;margin-left:auto;max-width:100%}
+.board .card .card-foot>span:not([class]){flex:1 1 0;min-width:0}
+.board .card .card-foot>.live,.board .card .card-foot>.tg{flex:0 1 auto}
+.board .card .code{white-space:normal;overflow-wrap:anywhere;word-break:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}

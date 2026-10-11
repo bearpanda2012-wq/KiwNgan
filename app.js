@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.79.0';
+const APP_VERSION = '2.80.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3994,8 +3994,13 @@ function renderShell() {
   { const T = tabSplit(); $('#tabbar').innerHTML = tabsHtml(); $('#tabbar').style.setProperty('--tabs', T.main.length + (T.more.length ? 1 : 0)); $('#tabbar').classList.toggle('has-more', !!T.more.length); }
   const connCls = mode() === 'demo' ? '' : (S.sync === 'err' ? 'err' : 'ok');
   const connTxt = mode() === 'demo' ? 'โหมดทดลอง (เก็บในเครื่องนี้)' : (S.sync === 'err' ? 'เชื่อมต่อไม่ได้' : S.sync === 'busy' ? 'กำลังซิงก์…' : (isAdmin() ? 'เชื่อมต่อ Google Sheet' : 'ซิงก์ข้อมูลแล้ว'));
-  $('#railFoot').innerHTML = '<button class="me-chip" data-go="settings" data-sec="me">' + av(S.me) + '<span><small>' + ROLES[roleOf(S.user)].label + '</small><b>' + esc(S.me) + '</b></span>' + roleChip(S.user, true) + '</button>' +
-    '<div class="conn ' + connCls + '"><i></i>' + connTxt + '</div>';
+  // สถานะการเชื่อมต่อ: ไอคอนอย่างเดียว (คำอธิบายอยู่ในป้ายเมื่อชี้/แตะค้าง) · เขียว = ซิงก์แล้ว · หมุน = กำลังซิงก์ · แดง = เชื่อมต่อไม่ได้ · ส้ม = โหมดทดลอง
+  const cIc = mode() === 'demo' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>'
+    : S.sync === 'err' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.5-8.97A6 6 0 0 1 17.7 8.1 4 4 0 0 1 17 18"/><path d="M3 3l18 18"/></svg>'
+    : S.sync === 'busy' ? '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4h-4"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.5-8.97A6 6 0 0 1 17.7 8.1 4 4 0 0 1 17 18z"/><path d="M9.5 13.2l1.8 1.8 3.6-3.6"/></svg>';
+  $('#railFoot').innerHTML = '<div class="foot-row"><button class="me-chip" data-go="settings" data-sec="me">' + av(S.me) + '<span><small>' + ROLES[roleOf(S.user)].label + '</small><b>' + esc(S.me) + '</b></span>' + roleChip(S.user, true) + '</button>' +
+    '<span class="conn ' + (connCls || 'demo') + (S.sync === 'busy' ? ' busy' : '') + '" role="status" title="' + esc(connTxt) + '" aria-label="' + esc(connTxt) + '">' + cIc + '</span></div>';
   renderTimerbar();
 }
 function renderTimerbar() {
@@ -4013,6 +4018,9 @@ function render() {
   if (!S.settings || S.screen !== 'app') return;
   { const ae = document.activeElement, v0 = $('#view'); if (ae && ae.type === 'color' && v0 && v0.contains(ae)) { S.renderLater = true; return; } }   // กำลังเลือกสีอยู่ ไม่วาดทับ (หน้าต่างเลือกสีจะปิด)
   S.renderLater = false;
+  setTimeout(() => { if (!hovEl || hovEl.isConnected) return;   // วาดใหม่แล้วแถวที่ชี้อยู่หายไป → ซ่อนการ์ดลอย (ถ้าเมาส์ยังชี้แถวเดียวกันที่วาดใหม่ ให้การ์ดอยู่ต่อ)
+    const ov = document.querySelectorAll(':hover'), last = ov[ov.length - 1], same = last && last.closest && last.closest('[data-open],[data-hov],[data-phov],[data-shov]');
+    if (same) hovEl = same; else hideHover(); }, 0);
   renderShell();
   const v = $('#view');
   let h = banner();
@@ -5144,6 +5152,7 @@ async function saveEditor() {
 /* ============ navigation ============ */
 function go(view, sec) {
   if (S.view === 'settings' && view !== 'settings' && S.draftDirty) { toast('มีการตั้งค่าที่ยังไม่บันทึก กดบันทึกหรือยกเลิกก่อน', true); return; }
+  hideHover();   // การ์ดลอยของงานในหน้าเดิมต้องหายไป (แถวที่ชี้อยู่ถูกลบไปพร้อมหน้าเดิม เลยไม่มีเหตุการณ์เมาส์ออก)
   S.view = view; LS.set('view', view); S.animIn = true; render();
   if (sec) setTimeout(() => { const el = document.getElementById('s-' + sec); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
   else window.scrollTo(0, 0);

@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.79.0';
+const CACHE = 'kiwngan-v2.80.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 /* ตัวนี้ลงทะเบียน 2 ที่: ที่หลัก (แอป) และ ./ring/ (ช่องด่วน: push ที่มาทางนี้คือสายเรียกเข้า/ขอดูจอแน่นอน เด้งได้ทันที) */
