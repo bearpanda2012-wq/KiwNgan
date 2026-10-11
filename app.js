@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.75.0';
+const APP_VERSION = '2.75.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3655,6 +3655,8 @@ function renderTimerbar() {
 
 function render() {
   if (!S.settings || S.screen !== 'app') return;
+  { const ae = document.activeElement, v0 = $('#view'); if (ae && ae.type === 'color' && v0 && v0.contains(ae)) { S.renderLater = true; return; } }   // กำลังเลือกสีอยู่ ไม่วาดทับ (หน้าต่างเลือกสีจะปิด)
+  S.renderLater = false;
   renderShell();
   const v = $('#view');
   let h = banner();
@@ -4044,7 +4046,7 @@ function viewBoard() {
       '<div class="col-list">' + (js.length ? js.map(card).join('') : '<div class="col-empty"><span class="ce-art ic-' + st + '">' + STI[st] + '<i></i><i></i><i></i></span><b>' + ST_EMPTY[st] + '</b><small>ลากการ์ดมาวางที่นี่ได้</small></div>') + '</div>' + more + '</section>';
   }).join('');
   const cnt = st => base0.filter(j => st === 'queue' ? (j.status === 'queue' || j.status === 'hold') : st === 'done' ? j.status === 'done' && finDate(j) >= cutoff : j.status === st).length;
-  const flow = '<div class="flow">' + COLS.map((st, i) => '<div class="flow-step ' + ST[st].cls + '"><span class="flow-ic ic-' + st + '">' + STI[st] + '</span><div><b>' + cnt(st) + '</b><small>' + ST[st].label + '</small></div></div>' + (i < COLS.length - 1 ? '<span class="flow-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '')).join('') + '</div>';
+  const flow = '<div class="flow">' + COLS.map((st, i) => '<div class="flow-step ' + ST[st].cls + '" data-flowgo="col:' + st + '" role="button" tabindex="0" title="ไปที่คอลัมน์ ' + esc(ST[st].label) + '"><span class="flow-ic ic-' + st + '">' + STI[st] + '</span><div><b>' + cnt(st) + '</b><small>' + ST[st].label + '</small></div></div>' + (i < COLS.length - 1 ? '<span class="flow-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '')).join('') + '</div>';
   const qn = k => base0.filter(j => (k === 'mine' ? inJob(j, S.me) : k === 'urgent' ? j.priority === 'urgent' && isOpen(j) : k === 'late' ? isLate(j) : k === 'today' ? isOpen(j) && j.due && j.due <= addDays(t, 1) : true) && (k === 'all' || isOpen(j) || k === 'mine')).length;
   const quick = '<div class="qchips">' + [['all', 'ทั้งหมด', STI.all, ''], ['mine', 'งานของฉัน', STI.user, 'doing'], ['today', 'ส่งวันนี้/พรุ่งนี้', STI.hourglass, 'review'], ['urgent', 'งานด่วน', STI.fire, 'urgent'], ['late', 'เลยกำหนด', STI.clock, 'late']]
     .filter(x => x[0] !== 'mine' || (S.me && isLead()))
@@ -5007,7 +5009,7 @@ function viewProd() {
       '<div class="col-list">' + (js.length ? js.map(pcard).join('') : '<div class="col-empty"><span class="ce-art ic-' + st + '">' + PIC[st] + '<i></i><i></i><i></i></span><b>' + (st === 'machine' && F !== 'all' ? 'ไม่มีงานรอเครื่อง ' + esc(F) : PSTG[st].empty) + '</b><small>' + (st === 'wait' ? 'งาน CAM ที่เสร็จจะเข้ามาที่นี่เอง' : '') + '</small></div>') + '</div>' + more + '</section>';
   }).join('');
   const cnt = st => open.filter(p => p.stage === st).length;
-  const flow = '<div class="flow pflow">' + PCOLS.map((st, i) => '<div class="flow-step ' + PSTG[st].cls + '"><span class="flow-ic ic-' + st + '">' + PIC[st] + '</span><div><b>' + cnt(st) + '</b><small>' + PSTG[st].label + '</small></div></div>' + (i < PCOLS.length - 1 ? '<span class="flow-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '')).join('') + '</div>';
+  const flow = '<div class="flow pflow">' + PCOLS.map((st, i) => '<div class="flow-step ' + PSTG[st].cls + '" data-flowgo="pcol:' + st + '" role="button" tabindex="0" title="ไปที่คอลัมน์ ' + esc(PSTG[st].label) + '"><span class="flow-ic ic-' + st + '">' + PIC[st] + '</span><div><b>' + cnt(st) + '</b><small>' + PSTG[st].label + '</small></div></div>' + (i < PCOLS.length - 1 ? '<span class="flow-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '')).join('') + '</div>';
   /* คิวงานแยกตามเครื่อง: กำลังลงเครื่อง (ยังไม่ติ๊กเสร็จ) + รอผลิตที่เลือกเครื่องนี้ไว้ · งานด่วน · รอนานสุด · แถบโหลดเทียบเครื่องที่งานมากสุด (กดเพื่อกรองช่องลงเครื่อง) */
   const inWait = (p, m) => p.stage === 'wait' && pms(p).some(x => x.m === m);
   const mq = machinesList().map(m => { const run = open.filter(p => inMachine(p, m)), wt = open.filter(p => inWait(p, m)), all = run.concat(wt);
@@ -6876,7 +6878,12 @@ document.addEventListener('change', e => {
   if (t.id === 'helpTopic' && t.value) { const x = $('#msgText'); if (x) { x.value = t.value + (x.value ? ' — ' + x.value : ''); x.focus(); } t.value = ''; return; }
   if (t.id === 'fMonth') { S.f.month = t.value; return render(); }
   if ((t.id === 'hFrom' || t.id === 'hTo') && t.value) { homeRange(); S.hr.preset = 'custom'; S.hr[t.id === 'hFrom' ? 'from' : 'to'] = t.value; homeRange(); saveHomeRange(); return render(); }
-  if (t.id === 'thC1' || t.id === 'thC2') { setTheme({ preset: 'custom', c1: $('#thC1').value, c2: $('#thC2').value }); return render(); }
+  if (t.id === 'thC1' || t.id === 'thC2') {   // ไม่วาดทั้งหน้า: บน iPhone หน้าต่างเลือกสีจะปิดเองทุกครั้งที่พิมพ์เลข/กดลบ
+    const c1 = $('#thC1').value, c2 = $('#thC2').value; setTheme({ preset: 'custom', c1: c1, c2: c2 });
+    document.querySelectorAll('.theme-sw.on').forEach(x => x.classList.remove('on'));
+    const cs = document.querySelector('.theme-sw.custom'); if (cs) { cs.classList.add('on'); cs.style.setProperty('--t1', c1); cs.style.setProperty('--t2', c2); }
+    return;
+  }
   if (/^r(From|To|Member|Group|Scope|Orient)$/.test(t.id)) {
     const r = reportState(), k = t.id.slice(1).toLowerCase();
     if (k === 'from' || k === 'to') { if (!t.value) return render(); r[k] = t.value; r.preset = 'custom'; if (r.from > r.to) { if (k === 'from') r.to = r.from; else r.from = r.to; } }
@@ -7164,6 +7171,22 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|u
   } catch (e) {}
 })();
 try { applyTheme(); } catch (e) {}
+/* กดช่องแบนเนอร์ขั้นตอนด้านบน → เลื่อนไปที่คอลัมน์นั้นในบอร์ด แล้วกระพริบให้เห็น */
+function flowGo(key) {
+  const p = String(key).split(':'), el = document.querySelector('[data-' + (p[0] === 'pcol' ? 'pcol' : 'col') + '="' + p[1] + '"]'); if (!el) return;
+  const rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  el.scrollIntoView({ behavior: rm ? 'auto' : 'smooth', block: 'start', inline: 'center' });
+  document.querySelectorAll('.col.col-flash').forEach(x => x.classList.remove('col-flash'));
+  void el.offsetWidth; el.classList.add('col-flash'); clearTimeout(flowGo.t); flowGo.t = setTimeout(() => el.classList.remove('col-flash'), 2200);
+  document.querySelectorAll('.flow-step.go').forEach(x => x.classList.remove('go'));
+  const tile = document.querySelector('[data-flowgo="' + key + '"]'); if (tile) { void tile.offsetWidth; tile.classList.add('go'); setTimeout(() => tile.classList.remove('go'), 700); }
+}
+document.addEventListener('click', e => { const f = e.target.closest && e.target.closest('[data-flowgo]'); if (f) flowGo(f.dataset.flowgo); });
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset && e.target.dataset.flowgo) { e.preventDefault(); flowGo(e.target.dataset.flowgo); } });
+['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, e => {   // แตะ/กดที่อื่น = เลือกสีเสร็จแล้ว (Safari ไม่ย้ายโฟกัสไปที่ปุ่ม)
+  const a = document.activeElement; if (a && a.type === 'color' && e.target !== a && (ev === 'pointerdown' || e.key === 'Tab' || e.key === 'Escape')) a.blur();
+}, true));
+document.addEventListener('focusout', e => { if (e.target && e.target.type === 'color' && S.renderLater) setTimeout(() => { const a = document.activeElement; if (!(a && a.type === 'color')) render(); }, 60); });
 window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION, renderPeek: renderPeek, rtcDc: rtcDc };
 if (SALE_Q) { salePage(); } else {
 if (mode() === 'sheet') ibStart(LS.get('rtpub', null));   // เปิดกล่องรับคำตอบไว้ก่อน ระหว่างรอ bootstrap ครั้งแรก
