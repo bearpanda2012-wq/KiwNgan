@@ -17,12 +17,13 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.39.0';
+const VERSION = '1.40.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
 const RT_URL = '';
 const RT_KEY = '';
+const EX_TOK = '';  // รหัสอ่านข้อมูลสต็อกจาก Express (Supabase ex_pull) — ใส่ตอน deploy ไม่เก็บใน git
 const ARCHIVE_MONTHS = 12;   // งานที่เสร็จนานกว่านี้ย้ายไปไฟล์เก็บถาวร (ทุกวันที่ 1)
 const BACKUP_DAYS = 30;      // เก็บไฟล์สำรองย้อนหลังกี่วัน
 const SESSION_DAYS = 30;
@@ -705,6 +706,7 @@ function bootstrap_(u, stamp) {
     cmtCount: commentCounts_(),
     prods: prodsRecent_().map(x => maskProd_(x, u)),
     stock: can_(u, 'stock.view') ? stockView_(u) : null,
+    ex: can_(u, 'stock.view') && RT_URL && RT_KEY && EX_TOK ? { url: RT_URL, key: RT_KEY, tok: EX_TOK } : null,   // สต็อกจาก Express (ซิงก์ผ่าน Supabase อ่านอย่างเดียว)
     kb: kbList_(u),
     salePin: isAdmin_(u) ? !!PropertiesService.getScriptProperties().getProperty('SALE_PIN') : undefined,
     salePins: isAdmin_(u) ? Object.keys(salePins_()) : undefined,

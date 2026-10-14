@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.83.0';
+const APP_VERSION = '2.84.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -236,7 +236,7 @@ function qHit(hay, q) {
   const qn = coNorm(ql), hn = coNorm(h); if (qn && hn.indexOf(qn) >= 0) return true;
   const ws = ql.split(/\s+/).filter(Boolean); return ws.length > 1 && ws.every(w => h.indexOf(w) >= 0 || (coNorm(w) && hn.indexOf(coNorm(w)) >= 0));
 }
-const SEARCH_IDS = ['q', 'pq', 'cq', 'sq', 'kbQ', 'cntQ', 'spQ', 'sfQ'];
+const SEARCH_IDS = ['q', 'pq', 'cq', 'sq', 'kbQ', 'cntQ', 'spQ', 'sfQ', 'exQ'];
 const qX = (id, v) => String(v || '').trim() ? '<button type="button" class="cq-x" data-qclear="' + id + '" aria-label="ล้างคำค้น">✕</button>' : '';   // ปุ่มล้างคำค้น (มือถือ/Safari ไม่มีปุ่ม ✕ ในตัว)
 const qOn = v => String(v || '').trim() ? ' on' : '';
 const pad = n => ('0' + n).slice(-2);
@@ -958,7 +958,7 @@ async function load(silent, boot) {
     S.settings = normalizeSettings(d.settings);
     S.users = orderUsers(d.users || []); S.user = d.me; S.me = d.me.name; setTimeout(themePull, 400); LS.set('userOrder', Array.isArray(S.settings.userOrder) ? S.settings.userOrder : []);
     const prevJobs = S.loaded && S.me && S.jobs && S.jobs.length ? S.jobs : null, prevStock = S.loaded && S.me ? S.stock : null, prevKb = S.loaded && S.me ? S.kb : null;
-    S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || []; S.files = d.files || []; S.prods = d.prods || []; S.stock = d.stock || null; S.kb = Array.isArray(d.kb) ? d.kb : null; S.salePinOn = !!d.salePin; S.salePins = d.salePins || []; S.apiV = d.version || '';
+    S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || []; S.files = d.files || []; S.prods = d.prods || []; S.stock = d.stock || null; exStart(d.ex || null); S.kb = Array.isArray(d.kb) ? d.kb : null; S.salePinOn = !!d.salePin; S.salePins = d.salePins || []; S.apiV = d.version || '';
     if (!viewsFor(S.user).some(v => v.id === S.view) || (S.screen !== 'app' && isProdRole() && S.view !== 'flow')) S.view = isProdRole() ? 'prod' : 'home';   // ฝ่ายผลิตเข้าระบบแล้วเปิดบอร์ดผลิตเลย
     { const pc = S.loaded ? S.cmtCount : null; S.cmtCount = d.cmtCount || {}; if (pc) setTimeout(() => cmtAlerts(pc), 0); }
     if (d.rt !== undefined) { rtSetup(d.rt); ibStart(d.rt); }
@@ -6049,7 +6049,7 @@ document.addEventListener('keydown', e => {
 /* ================= คลังวัสดุ (ฝ่ายสต็อก) =================
    ดูได้: สิทธิ์ stock.view · รับเข้า/เบิกออก/ปรับยอด/เพิ่ม-แก้-ลบ/ใส่รูป: สิทธิ์ stock.edit
    รูปสินค้าใช้ระบบรูปเดียวกับงาน (ชีต Images, jobId = รหัสวัสดุ s_…) เก็บใน Drive โฟลเดอร์ รูปงาน/คลังวัสดุ */
-const SV = { q: '', cat: 'all', sort: 'status', anim: false };
+const SV = { q: '', cat: 'all', sort: 'status', anim: false, src: LS.get('stockSrc', 'app') };
 const SM = { id: '', mode: '', kind: 'out', pend: [], del: false, busy: false, f: null, cond: 'ok', rpend: [] };
 const SKF = { all: 1, low: 1, scrap: 1, cust: 1 };
 const SK = { in: { label: 'รับเข้า', cls: 'sk-in', sign: '+' }, out: { label: 'เบิกออก', cls: 'sk-out', sign: '−' }, adj: { label: 'ปรับยอด', cls: 'sk-adj', sign: '±' }, ret: { label: 'รับคืน', cls: 'sk-ret', sign: '+' }, back: { label: 'คืนลูกค้า', cls: 'sk-back', sign: '−' } };
@@ -6122,7 +6122,155 @@ function stLevel(x) {
   const q = +x.qty || 0, mn = +x.min || 0, cap = Math.max(mn * 2, q, 1), pct = Math.max(q > 0 ? 4 : 0, Math.min(100, q / cap * 100));
   return '<span class="sk-lv"><i style="width:' + pct.toFixed(1) + '%"></i>' + (mn ? '<u style="left:' + Math.min(100, mn / cap * 100).toFixed(1) + '%" title="จุดสั่งซื้อ ' + esc(stNum(mn)) + '"></u>' : '') + '</span>';
 }
+/* ================= สต็อกจาก Express (ซิงก์อ่านอย่างเดียว) =================
+   ตัวซิงก์บนเครื่องแม่ข่ายอ่านไฟล์ Express (ไม่แก้อะไรใน Express) แล้วส่งเฉพาะแถวที่เปลี่ยนขึ้น Supabase
+   แอปดึงเฉพาะที่เปลี่ยนตั้งแต่ครั้งก่อน (ver) แล้วเก็บไว้ในเครื่อง (IndexedDB) · เปิดหน้านี้อยู่ = อัปเดตทุก 20 วินาที */
+const EX = { cfg: null, items: new Map(), locs: new Map(), tabs: {}, agent: null, ver: 0, busy: false, err: '', at: 0, loaded: false, recent: null, recentAt: 0, card: null, timer: 0 };
+const EV = { q: '', grp: 'bal', loc: '', sort: 'cod', lim: 200, open: '' };
+const EX_OP = { '0': ['รับซื้อ', 1], '1': ['รับเข้า/ปรับ', 1], '2': ['รับคืนจากลูกค้า', 1], '3': ['โอนเข้า', 1], '4': ['โอนออก', -1], '6': ['เบิก', -1], '7': ['คืนผู้ขาย', -1], '8': ['ปรับยอด', 1], '9': ['ขาย', -1] };
+const exOn = () => !!(EX.cfg && EX.cfg.tok);
+const exUnit = c => ((EX.tabs.units || {})[c]) || c || '';
+const exLocN = c => ((EX.tabs.locs || {})[c]) || c || '–';
+const exGrpN = c => ((EX.tabs.groups || {})[c]) || c || '–';
+const exDepN = c => ((EX.tabs.deps || {})[c]) || c || '';
+const exDate = d => d && d.length === 8 ? fd(d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8)) : '';
+const exN = v => { v = +v || 0; return Math.abs(v - Math.round(v)) < 1e-9 ? Math.round(v).toLocaleString('th-TH') : v.toLocaleString('th-TH', { maximumFractionDigits: 2 }); };
+async function exRpc(fn, body) {
+  const c = EX.cfg, r = await fetch(c.url.replace(/\/$/, '') + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: c.key, Authorization: 'Bearer ' + c.key, 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ tok: c.tok }, body || {})) });
+  if (!r.ok) throw new Error(r.status === 401 ? 'สิทธิ์อ่านข้อมูล Express ไม่ถูกต้อง' : 'โหลดข้อมูล Express ไม่สำเร็จ (' + r.status + ')');
+  return r.json();
+}
+/* แคชในเครื่อง: เปิดครั้งต่อไปเห็นทันที แล้วดึงแค่ส่วนที่เปลี่ยน */
+function exDb() { return new Promise((res, rej) => { const q = indexedDB.open('kn-ex', 1); q.onupgradeneeded = () => q.result.createObjectStore('kv'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
+async function exLoadCache() {
+  try { const db = await exDb(); const v = await new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get('snap'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+    if (v && v.tok === EX.cfg.tok && v.items) { EX.items = new Map(v.items.map(r => [r[0], r])); EX.locs = new Map(v.locs.map(r => [r[0] + '|' + r[1], r])); EX.tabs = v.tabs || {}; EX.agent = v.agent || null; EX.ver = v.ver || 0; EX.loaded = true; } } catch (e) {}
+}
+async function exSaveCache() {
+  try { const db = await exDb(); db.transaction('kv', 'readwrite').objectStore('kv').put({ tok: EX.cfg.tok, items: [...EX.items.values()], locs: [...EX.locs.values()], tabs: EX.tabs, agent: EX.agent, ver: EX.ver }, 'snap'); } catch (e) {}
+}
+async function exSync(force) {
+  if (!exOn() || EX.busy) return; EX.busy = true;
+  let changed = false;
+  try {
+    if (!EX.loaded && !EX.ver) await exLoadCache();
+    for (let i = 0; i < 40; i++) {
+      const r = await exRpc('ex_pull', { since: EX.ver, lim: 4000 });
+      (r.items || []).forEach(x => { if (x[15]) EX.items.delete(x[0]); else EX.items.set(x[0], x); changed = true; });
+      (r.locs || []).forEach(x => { const k = x[0] + '|' + x[1]; if (x[5]) EX.locs.delete(k); else EX.locs.set(k, x); changed = true; });
+      if (r.tabs && Object.keys(r.tabs).length) { EX.tabs = Object.assign({}, EX.tabs, r.tabs); changed = true; }
+      if (JSON.stringify(r.agent || null) !== JSON.stringify(EX.agent)) { EX.agent = r.agent || null; changed = true; }
+      EX.ver = Math.max(EX.ver, +r.ver || 0);
+      if (!r.more) break;
+    }
+    EX.loaded = true; EX.err = ''; EX.at = Date.now();
+    if (changed) { EX.recentAt = 0; exSaveCache(); }
+  } catch (e) { EX.err = e.message || String(e); changed = true; }
+  EX.busy = false;
+  if ((changed || force) && S.view === 'stock' && SV.src === 'ex') { render(); if (EX.card) exCardDraw(); }
+  if (S.view === 'stock' && SV.src === 'ex' && (!EX.recent || Date.now() - EX.recentAt > 60000)) exRecentLoad();
+}
+async function exRecentLoad() {
+  EX.recentAt = Date.now();
+  try { EX.recent = await exRpc('ex_recent', { days: 7, lim: 200 }); } catch (e) { EX.recent = EX.recent || []; }
+  if (S.view === 'stock' && SV.src === 'ex') render();
+}
+function exStart(cfg) {
+  const was = EX.cfg && EX.cfg.tok; EX.cfg = cfg && cfg.tok ? cfg : null;
+  if (!EX.cfg) return; if (was === EX.cfg.tok && EX.timer) return;
+  clearTimeout(EX.timer);
+  if (S.view === 'stock' && S.screen === 'app') setTimeout(render, 0);   // แท็บ "ยอดจาก Express" โผล่ทันที
+  const tick = () => { const live = S.view === 'stock' && SV.src === 'ex' && document.visibilityState === 'visible'; exSync(); EX.timer = setTimeout(tick, live ? 20000 : 180000); };
+  tick();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && exOn() && S.view === 'stock' && SV.src === 'ex') exSync(); });
+/* สถานะตัวซิงก์: ส่งสัญญาณทุก 5 นาที ถ้าเงียบเกิน 12 นาที = มีปัญหา */
+function exAgentState() {
+  const a = EX.agent; if (!a || !a.at) return { cls: 'off', txt: 'ยังไม่มีข้อมูลจากตัวซิงก์' };
+  const age = (Date.now() - Date.parse(a.at)) / 60000;
+  const t = new Date(a.at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+  return age > 12 ? { cls: 'off', txt: 'ตัวซิงก์เงียบไปตั้งแต่ ' + (age > 1440 ? exDate(new Date(a.at).toISOString().slice(0, 10).replace(/-/g, '')) + ' ' : '') + t + ' · เช็กเครื่องแม่ข่าย' } : { cls: 'on', txt: 'เชื่อมกับ Express · ตรวจล่าสุด ' + t + (a.dir ? ' · ' + a.dir : '') };
+}
+function exTabs() {
+  if (!exOn()) return '';
+  return '<div class="ex-tabs" role="tablist"><button type="button" role="tab" data-exsrc="app" aria-selected="' + (SV.src !== 'ex') + '">' + I.stock + 'คลังในแอป</button><button type="button" role="tab" data-exsrc="ex" aria-selected="' + (SV.src === 'ex') + '"><span class="ex-dot ' + exAgentState().cls + '"></span>ยอดจาก Express</button></div>';
+}
+function exLocsOf(cod) { const o = []; EX.locs.forEach(l => { if (l[0] === cod) o.push(l); }); return o.sort((a, b) => Math.abs(b[2]) - Math.abs(a[2])); }
+function viewExpress() {
+  const st = exAgentState(), all = [...EX.items.values()], q = EV.q.trim();
+  const byLoc = EV.loc ? new Set([...EX.locs.values()].filter(l => l[1] === EV.loc).map(l => l[0])) : null;
+  const withBal = all.filter(x => Math.abs(+x[6] || 0) > 1e-9);
+  const grpCnt = {}; withBal.forEach(x => { grpCnt[x[3]] = (grpCnt[x[3]] || 0) + 1; });
+  const list = all.filter(x => (q ? true : EV.grp === 'all' ? true : EV.grp === 'bal' ? Math.abs(+x[6] || 0) > 1e-9 : EV.grp === 'neg' ? (+x[6] || 0) < -1e-9 : x[3] === EV.grp && Math.abs(+x[6] || 0) > 1e-9) &&
+      (!byLoc || byLoc.has(x[0])) && (!q || qHit([x[0], x[1], x[2], x[3], exGrpN(x[3]), x[11], x[12]], q)))
+    .sort((a, b) => EV.sort === 'bal' ? (+b[6] || 0) - (+a[6] || 0) : EV.sort === 'val' ? (+b[7] || 0) - (+a[7] || 0) : EV.sort === 'name' ? String(a[1]).localeCompare(String(b[1]), 'th') : String(a[0]).localeCompare(String(b[0])));
+  const totVal = withBal.reduce((s, x) => s + (+x[7] || 0), 0), neg = all.filter(x => (+x[6] || 0) < -1e-9).length;
+  const rec = EX.recent || [], wkIn = rec.filter(m => (EX_OP[m[3]] || [])[1] > 0).length, wkOut = rec.filter(m => (EX_OP[m[3]] || [])[1] < 0).length;
+  const kpi = (cls, ic, lab, n, sub, g) => '<button type="button" class="sk-kpi ' + cls + '"' + (g ? ' data-exgrp="' + g + '"' : '') + '><span class="ski">' + ic + '</span><span class="skt"><small>' + lab + '</small><b class="tnum">' + n + '</b><em>' + sub + '</em></span></button>';
+  const kpis = '<div class="sk-kpis">' + kpi('k-all', I.stock, 'รหัสสินค้าใน Express', exN(all.length), 'ทุกกลุ่ม', 'all') + kpi('k-low', STI.layers || I.stock, 'มียอดคงเหลือ', exN(withBal.length), 'มูลค่า ' + baht(totVal), 'bal') +
+    kpi('k-zero', STI.fire, 'ยอดติดลบ', exN(neg), neg ? 'ควรตรวจใน Express' : 'ไม่มี', neg ? 'neg' : '') + kpi('k-mv', STI.clock, 'เคลื่อนไหว 7 วัน', exN(rec.length), 'รับ ' + wkIn + ' · ออก ' + wkOut, '') + '</div>';
+  const grps = Object.keys(grpCnt).sort((a, b) => grpCnt[b] - grpCnt[a]).slice(0, 14);
+  const chips = '<div class="qchips sk-chips">' + [['bal', 'มียอด', withBal.length], ['all', 'ทั้งหมด', all.length]].concat(neg ? [['neg', 'ติดลบ', neg]] : []).concat(grps.map(g => [g, exGrpN(g), grpCnt[g]]))
+    .map(x => '<button class="qchip' + (x[0] === 'neg' ? ' q-late' : '') + '" data-exgrp="' + esc(x[0]) + '" aria-pressed="' + (EV.grp === x[0]) + '"' + (x[0].length <= 4 && !/^(bal|all|neg)$/.test(x[0]) ? ' title="กลุ่ม ' + esc(x[0]) + '"' : '') + '>' + esc(x[1]) + '<b>' + exN(x[2]) + '</b></button>').join('') + '</div>';
+  const locOpts = [...new Set([...EX.locs.values()].map(l => l[1]))].sort().map(c => '<option value="' + esc(c) + '"' + (EV.loc === c ? ' selected' : '') + '>' + esc(c + ' · ' + exLocN(c)) + '</option>').join('');
+  const tools = '<div class="sk-tools ex-tools"><label class="search' + qOn(EV.q) + '">' + I.search + '<input id="exQ" type="search" autocomplete="off" enterkeyhint="search" placeholder="ค้นหารหัส ชื่อสินค้า กลุ่ม…" value="' + esc(EV.q) + '" aria-label="ค้นหาสินค้าใน Express">' + qX('exQ', EV.q) + '</label>' +
+    '<select class="sel" data-exloc="1" aria-label="คลัง"><option value="">ทุกคลัง</option>' + locOpts + '</select>' +
+    '<select class="sel" data-exsort="1" aria-label="เรียง">' + [['cod', 'เรียงตามรหัส'], ['name', 'เรียงตามชื่อ'], ['bal', 'ยอดมากสุด'], ['val', 'มูลค่ามากสุด']].map(o => '<option value="' + o[0] + '"' + (EV.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>';
+  const row = x => { const ls = exLocsOf(x[0]), b = +x[6] || 0;
+    return '<button type="button" class="ex-row' + (b < -1e-9 ? ' neg' : Math.abs(b) < 1e-9 ? ' zero' : '') + '" data-excard="' + esc(x[0]) + '"><span class="ex-c"><b>' + coHl(x[0], q) + '</b><small>' + esc(exGrpN(x[3])) + '</small></span>' +
+      '<span class="ex-n">' + coHl(x[1] || '–', q) + (x[2] ? '<small>' + esc(x[2]) + '</small>' : '') + (ls.length ? '<span class="ex-locs">' + ls.slice(0, 4).map(l => '<i title="' + esc(exLocN(l[1])) + '">' + esc(l[1]) + ' <b>' + exN(l[2]) + '</b></i>').join('') + (ls.length > 4 ? '<i>+' + (ls.length - 4) + '</i>' : '') + '</span>' : '') + '</span>' +
+      '<span class="ex-q"><b class="tnum">' + exN(b) + '</b><small>' + esc(exUnit(x[5])) + '</small></span><span class="ex-v"><b class="tnum">' + (+x[8] ? baht(+x[8]) : '–') + '</b><small>' + (+x[7] ? 'รวม ' + baht(+x[7]) : 'ต่อหน่วย') + '</small></span></button>'; };
+  const body = !EX.loaded ? '<div class="sk-empty"><span class="spin-dot dark"></span><b>กำลังโหลดข้อมูลจาก Express…</b><small>ครั้งแรกใช้เวลาสักครู่ ครั้งต่อไปเปิดได้ทันที</small></div>'
+    : list.length ? '<div class="ex-list"><div class="ex-head"><span>รหัส</span><span>ชื่อสินค้า · ยอดแยกคลัง</span><span>คงเหลือ</span><span>ทุน/หน่วย</span></div>' + list.slice(0, EV.lim).map(row).join('') + '</div>' +
+      (list.length > EV.lim ? '<div class="col-more">แสดง ' + EV.lim + ' จาก ' + exN(list.length) + ' รายการ <button class="btn ghost sm" data-exmore="1">แสดงเพิ่ม</button></div>' : '')
+    : '<div class="sk-empty"><span>' + I.stock + '</span><b>' + (q ? 'ไม่พบ "' + esc(q) + '"' : 'ไม่มีสินค้าในมุมมองนี้') + '</b>' + (q ? '<small>ลองพิมพ์บางส่วนของรหัสหรือชื่อ</small><button type="button" class="btn sm" data-qclear="exQ">ล้างคำค้น</button>' : '') + '</div>';
+  const hist = !EX.recent ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : rec.length ? '<ol class="sk-log ex-log">' + rec.slice(0, 40).map(m => { const op = EX_OP[m[3]] || ['รายการ', 1], it = EX.items.get(m[10]);
+      return '<li class="' + (op[1] > 0 ? 'k-in' : 'k-out') + '" data-excard="' + esc(m[10]) + '"><span class="sk-ph none mini ex-ic"><i>' + (op[1] > 0 ? '↓' : '↑') + '</i></span><div><b>' + esc((it && it[1]) || m[10]) + '</b><small>' + esc(exDate(m[1]) + ' · ' + m[0] + (m[8] ? ' · ' + exDepN(m[8]) : '')) + '</small>' + (m[9] && (!it || m[9] !== it[1]) ? '<small class="sl-note">' + esc(m[9]) + '</small>' : '') + '</div>' +
+        '<span class="sl-q"><span class="sl-k">' + op[0] + '</span><b class="tnum">' + (op[1] > 0 ? '+' : '−') + exN(Math.abs(+m[4] || 0)) + '</b><em>' + esc(m[2]) + '</em></span></li>'; }).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ไม่มีการเคลื่อนไหว 7 วันล่าสุด</b></div>';
+  const banner = '<div class="ex-status ' + st.cls + '"><span class="ex-dot ' + st.cls + '"></span><b>' + esc(st.txt) + '</b><small>ข้อมูลจากโปรแกรม Express ดูได้อย่างเดียว · รับ/เบิกให้คีย์ใน Express แล้วยอดจะขึ้นที่นี่เองภายใน 1 นาที</small>' +
+    (EX.err ? '<em class="ex-err">' + esc(EX.err) + '</em>' : '') + '<button type="button" class="btn ghost sm" data-exsync="1"' + (EX.busy ? ' disabled' : '') + '>' + (EX.busy ? 'กำลังอัปเดต…' : 'อัปเดตเดี๋ยวนี้') + '</button></div>';
+  return topbar('คลังวัสดุ', 'ยอดคงเหลือจากโปรแกรม Express (บัญชี) อัปเดตอัตโนมัติ') + exTabs() + banner + kpis +
+    '<div class="sk-wrap"><section class="panel sk-main"><div class="panel-h"><h2>สินค้าใน Express</h2><span class="sub">' + exN(list.length) + ' รายการ</span></div>' + tools +
+    (q ? '<div class="co-sres" role="status"><b>' + exN(list.length) + '</b> รายการตรงกับ "' + esc(q) + '"<small>ค้นจากทุกรหัส ไม่สนกลุ่มที่เลือก</small></div>' : chips) + body + '</section>' +
+    '<section class="panel sk-side"><div class="panel-h"><h2>เคลื่อนไหว 7 วันล่าสุด</h2></div>' + hist + '</section></div>';
+}
+/* สต็อกการ์ดของรหัสเดียว */
+async function exCardOpen(cod) {
+  EX.card = { cod: cod, rows: null, err: '' }; exCardDraw();
+  try { EX.card.rows = await exRpc('ex_card', { cod: cod, lim: 300 }); } catch (e) { if (EX.card) EX.card.err = e.message; }
+  if (EX.card && EX.card.cod === cod) exCardDraw();
+}
+function exCardClose() { EX.card = null; const m = $('#exModal'); if (m) m.remove(); }
+function exCardDraw() {
+  const c = EX.card; let m = $('#exModal'); if (!c) { if (m) m.remove(); return; }
+  const it = EX.items.get(c.cod) || [c.cod, '', '', '', '', '', 0, 0, 0], ls = exLocsOf(c.cod), u = exUnit(it[5]);
+  if (!m) { m = document.createElement('div'); m.id = 'exModal'; m.className = 'pmodal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); m.addEventListener('click', e => { if (e.target === m) exCardClose(); }); }
+  const rows = c.rows, x = '<button type="button" class="icon-btn" data-excclose="1" aria-label="ปิด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+  m.innerHTML = '<div class="pm-card ex-card"><div class="pm-h"><div><div class="eyebrow">Express · ' + esc(exGrpN(it[3])) + '</div><h3>' + esc(c.cod) + '</h3><p class="sub">' + esc(it[1] || '') + (it[2] ? ' · ' + esc(it[2]) : '') + '</p></div>' + x + '</div><div class="pm-b">' +
+    '<div class="ex-sum"><div><small>คงเหลือรวม</small><b class="tnum">' + exN(it[6]) + '</b><em>' + esc(u) + '</em></div><div><small>ทุนต่อหน่วย</small><b class="tnum">' + (+it[8] ? baht(+it[8]) : '–') + '</b><em>มูลค่า ' + baht(+it[7] || 0) + '</em></div><div><small>ซื้อล่าสุด</small><b>' + (exDate(it[9]) || '–') + '</b><em>' + (+it[10] ? baht(+it[10]) : '') + (it[11] ? ' · ' + esc(it[11]) : '') + '</em></div></div>' +
+    (ls.length ? '<div class="ex-lbox"><b>แยกตามคลัง</b>' + ls.map(l => '<span><i>' + esc(l[1]) + '</i>' + esc(exLocN(l[1])) + '<b class="tnum">' + exN(l[2]) + ' ' + esc(u) + '</b></span>').join('') + '</div>' : '') +
+    (it[12] ? '<p class="sf-note">' + esc(it[12]) + '</p>' : '') +
+    '<div><b class="ex-h">สต็อกการ์ด ' + (rows ? '(' + rows.length + (rows.length >= 300 ? '+' : '') + ' รายการ ปีนี้)' : '') + '</b>' +
+    (c.err ? '<p class="ex-err">' + esc(c.err) + '</p>' : !rows ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : !rows.length ? '<div class="sk-empty sm"><b>ยังไม่มีการเคลื่อนไหวปีนี้</b></div>' :
+      '<div class="ex-crd"><div class="ex-ch"><span>วันที่ · เอกสาร</span><span>รายการ</span><span>คลัง</span><span>จำนวน</span></div>' + rows.map(r => { const op = EX_OP[r[3]] || ['รายการ', 1];
+        return '<div class="ex-cr ' + (op[1] > 0 ? 'in' : 'out') + '"><span><b>' + esc(exDate(r[1])) + '</b><small>' + esc(r[0]) + '</small></span><span>' + op[0] + (r[9] && r[9] !== it[1] ? '<small>' + esc(r[9]) + '</small>' : '') + (r[8] ? '<small>' + esc(exDepN(r[8])) + '</small>' : '') + '</span><span>' + esc(r[2] || '–') + '</span><span class="tnum"><b>' + (op[1] > 0 ? '+' : '−') + exN(Math.abs(+r[4] || 0)) + '</b>' + (+r[5] ? '<small>@' + exN(r[5]) + '</small>' : '') + '</span></div>'; }).join('') + '</div>') +
+    '</div></div></div>';
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-exsrc],[data-exgrp],[data-exmore],[data-exsync],[data-excard],[data-excclose]'); if (!t) return;
+  const d = t.dataset;
+  if (d.excclose) return exCardClose();
+  if (d.excard) { e.preventDefault(); return exCardOpen(d.excard); }
+  if (d.exsrc) { SV.src = d.exsrc; try { LS.set('stockSrc', SV.src); } catch (x) {} render(); if (SV.src === 'ex') exSync(true); return; }
+  if (d.exgrp) { EV.grp = EV.grp === d.exgrp && d.exgrp !== 'bal' ? 'bal' : d.exgrp; EV.lim = 200; return render(); }
+  if (d.exmore) { EV.lim += 300; return render(); }
+  if (d.exsync) { exSync(true); return render(); }
+});
+document.addEventListener('change', e => { const t = e.target; if (!t || !t.dataset) return; if (t.dataset.exloc) { EV.loc = t.value; EV.lim = 200; render(); } else if (t.dataset.exsort) { EV.sort = t.value; render(); } });
+document.addEventListener('input', e => { const t = e.target; if (!t || t.id !== 'exQ' || e.isComposing) return; EV.q = t.value; EV.lim = 200; const pos = t.selectionStart; render(); const n = $('#exQ'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) {} } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && EX.card) { exCardClose(); e.stopPropagation(); } }, true);
 function viewStock() {
+  if (SV.src === 'ex' && exOn()) return viewExpress();
   if (!S.stock) return topbar('คลังวัสดุ', 'ยังไม่มีข้อมูล') + '<div class="empty">' + (P.can(S.user, 'stock.view') ? 'กำลังโหลด… ถ้าไม่ขึ้น ให้แอดมินอัปเดต Apps Script เป็นเวอร์ชันล่าสุด' : 'ไม่มีสิทธิ์ดูคลังวัสดุ') + '</div>';
   const all = stockItems(), logs = S.stock.logs || [], ed = canStock(), q = SV.q.trim().toLowerCase();
   const an = S.animIn || SV.anim; SV.anim = false;   // เล่นแอนิเมชันเฉพาะตอนเข้าหน้า/เปลี่ยนตัวกรอง (ซิงก์ข้อมูลแล้วไม่เด้ง)
@@ -6157,7 +6305,7 @@ function viewStock() {
   const hist = logs.length ? '<ol class="sk-log' + (an ? ' in' : '') + '">' + logs.slice(0, 30).map(l => { const it = stItem(l.itemId), sk = SK[l.kind] || SK.adj;
     return '<li class="' + sk.cls + '" style="--i:' + Math.min(30, logs.indexOf(l)) + '"' + (it ? ' data-sopen="' + esc(it.id) + '"' : '') + '>' + (it ? stPhoto(it, 'mini') : '<span class="sk-ph none mini"><i>' + I.stock + '</i></span>') + '<div><b>' + esc(nameOf(l.itemId)) + '</b><small>' + esc(fdt(String(l.ts).slice(0, 16))) + ' · ' + esc(l.who || '') + (l.job ? ' · Job ' + esc(l.job) : '') + esc(stRetInfo(l)) + '</small>' + (l.note ? '<small class="sl-note">' + esc(l.note) + '</small>' : '') + '</div>' +
       '<span class="sl-q"><span class="sl-k">' + (it ? skLabel(it, l.kind in SK ? l.kind : 'adj') : sk.label) + '</span><b class="tnum">' + (l.kind === 'adj' ? (+l.qty >= 0 ? '+' : '−') : sk.sign) + stNum(Math.abs(+l.qty)) + '</b><em>เหลือ ' + stNum(l.bal) + '</em></span></li>'; }).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ยังไม่มีการเคลื่อนไหว</b></div>';
-  return topbar('คลังวัสดุ', ed ? 'กดการ์ดเพื่อดูรายละเอียด รับเข้า เบิกออก หรือเพิ่มรูป · เพิ่มวัสดุด้วยปุ่ม + มุมขวาล่าง' : 'ดูยอดคงเหลือได้อย่างเดียว · ฝ่ายสต็อกเป็นคนรับเข้า/เบิกออก') + kpis + alert + calert +
+  return topbar('คลังวัสดุ', ed ? 'กดการ์ดเพื่อดูรายละเอียด รับเข้า เบิกออก หรือเพิ่มรูป · เพิ่มวัสดุด้วยปุ่ม + มุมขวาล่าง' : 'ดูยอดคงเหลือได้อย่างเดียว · ฝ่ายสต็อกเป็นคนรับเข้า/เบิกออก') + exTabs() + kpis + alert + calert +
     '<div class="sk-wrap"><section class="panel sk-main"><div class="panel-h"><h2>วัสดุในคลัง</h2><span class="sub">' + list.length + ' รายการ</span></div>' + tools + (q ? '<div class="co-sres" role="status"><b>' + list.length + '</b> รายการตรงกับ "' + esc(SV.q.trim()) + '"<small>ค้นจากวัสดุทั้งหมด ไม่สนหมวดที่เลือก</small></div>' : chips) + grid + '</section>' +
     '<section class="panel sk-side"><div class="panel-h"><h2>ความเคลื่อนไหวล่าสุด</h2></div>' + hist + '</section></div>';
 }
