@@ -81,7 +81,7 @@ namespace KiwNganEx {
       catch {
         // .NET รุ่นใหม่ต้องลงทะเบียนโค้ดเพจไทยก่อน
         Type t = Type.GetType("System.Text.CodePagesEncodingProvider, System.Text.Encoding.CodePages");
-        if (t != null) { object inst = t.GetProperty("Instance").GetValue(null, null); Encoding.RegisterProvider((EncodingProvider)inst); }
+        if (t != null) { object inst = t.GetProperty("Instance").GetValue(null, null); typeof(Encoding).GetMethod("RegisterProvider").Invoke(null, new object[] { inst }); }   // ผ่าน reflection: คอมไพล์ได้ทั้ง .NET Framework และ .NET ใหม่
         enc = Encoding.GetEncoding(874);
       }
     }
