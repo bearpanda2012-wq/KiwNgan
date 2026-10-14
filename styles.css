@@ -5538,3 +5538,6 @@ body.auth #bgSndBtn{display:none}
 /* v2.87.3 ตัวกรองกลุ่มสินค้า Express: ขึ้นบรรทัดใหม่ให้พอดีกรอบ ไม่ต้องเลื่อนข้าง */
 .ex-chips{flex-wrap:wrap;overflow:visible;row-gap:8px}
 .ex-chips .qchip{max-width:100%;min-width:0}
+/* v2.87.4 ปุ่มเลือกราคา (ทุนเฉลี่ย / ราคาซื้อล่าสุด) ไม่ตกขอบ */
+.sk-seg.ex-basis{grid-template-columns:repeat(2,auto)}
+.ex-basis button{white-space:nowrap;padding:0 14px}

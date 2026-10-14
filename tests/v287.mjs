@@ -91,6 +91,8 @@ eq('cancelled', await pg.evaluate(id => EX.pend.find(x => x.id === id).status, i
 eq('pending KPI = 1 left', await pg.evaluate(() => document.querySelector('.sk-kpi.k-wait b').textContent), '1');
 // จากหน้าคำนวณราคา → บันทึกตามจำนวน
 await pg.click('[data-excalc]'); await pg.waitForTimeout(300);
+eq('basis buttons fit text', await pg.evaluate(() => [...document.querySelectorAll('.ex-basis button')].every(b => b.scrollWidth <= b.clientWidth + 1)), true);
+await pg.locator('.ex-calcbar').screenshot({ path: new URL('out/v2874-basis.png', import.meta.url).pathname });
 await pg.click('[data-xpfromcalc]'); await pg.waitForTimeout(300);
 eq('calc → pend modal with qty prefilled', await pg.evaluate(() => [!!document.querySelector('#exCalc'), document.querySelectorAll('#exPend [data-xpq]').length, document.querySelector('[data-xpq="0"]').value]), [false, 2, '1']);
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);

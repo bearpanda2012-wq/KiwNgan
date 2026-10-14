@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.87.3';
+const APP_VERSION = '2.87.4';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6541,7 +6541,7 @@ function exCalcDraw() {
   if (!m) { m = document.createElement('div'); m.id = 'exCalc'; m.className = 'pmodal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); m.addEventListener('click', e => { if (e.target === m) { EV.calc = false; exCalcDraw(); } }); }
   const ae = document.activeElement, keep = ae && ae.dataset && ae.dataset.exq ? { c: ae.dataset.exq, a: ae.selectionStart } : null;
   m.innerHTML = '<div class="pm-card ex-card ex-calc"><div class="pm-h"><div><div class="eyebrow">Express · คำนวณราคา</div><h3 style="font-family:inherit">' + r.rows.length + ' รายการ · ' + baht(r.tot) + '</h3><p class="sub">ใส่จำนวนที่ต้องการ (เริ่มต้น = ยอดคงเหลือ) ระบบคูณราคาให้</p></div><button type="button" class="icon-btn" data-excalcx="1" aria-label="ปิด">✕</button></div><div class="pm-b">' +
-    '<div class="ex-calcbar"><div class="seg"><button type="button" data-exbasis="cost" aria-pressed="' + (EV.basis !== 'last') + '">ทุนเฉลี่ย</button><button type="button" data-exbasis="last" aria-pressed="' + (EV.basis === 'last') + '">ราคาซื้อล่าสุด</button></div>' +
+    '<div class="ex-calcbar"><div class="seg sk-seg ex-basis"><button type="button" data-exbasis="cost" aria-pressed="' + (EV.basis !== 'last') + '">ทุนเฉลี่ย</button><button type="button" data-exbasis="last" aria-pressed="' + (EV.basis === 'last') + '">ราคาซื้อล่าสุด</button></div>' +
       '<button type="button" class="btn sm ghost" data-exqfill="bal">จำนวน = คงเหลือทั้งหมด</button><button type="button" class="btn sm ghost" data-exqfill="1">จำนวน = 1</button></div>' +
     (r.rows.length ? '<div class="ex-ct"><div class="ex-cth"><span>สินค้า</span><span>คงเหลือ</span><span>จำนวน</span><span>ราคา/หน่วย</span><span>รวม</span><span></span></div>' +
       r.rows.map(y => '<div class="ex-ctr"><span><b>' + esc(y.x[0]) + '</b><small>' + esc(y.x[1] || '') + '</small></span><span class="tnum">' + exN(y.x[6]) + ' <small>' + esc(exUnit(y.x[5])) + '</small></span>' +
