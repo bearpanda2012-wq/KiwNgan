@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.92.0';
+const APP_VERSION = '2.92.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5505,6 +5505,7 @@ function closeViewPopups() {
 function go(view, sec) {
   if (S.view === 'settings' && view !== 'settings' && S.draftDirty) { toast('มีการตั้งค่าที่ยังไม่บันทึก กดบันทึกหรือยกเลิกก่อน', true); return; }
   hideHover(); closeViewPopups();   // การ์ดลอยของงานในหน้าเดิมต้องหายไป (แถวที่ชี้อยู่ถูกลบไปพร้อมหน้าเดิม เลยไม่มีเหตุการณ์เมาส์ออก)
+  if (view === 'stock') { try { EV.kAnim = false; } catch (e) {} }
   S.view = view; LS.set('view', view); S.animIn = true; render();
   if (sec) setTimeout(() => { const el = document.getElementById('s-' + sec); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
   else window.scrollTo(0, 0);
@@ -6531,7 +6532,8 @@ function viewExpress() {
   kpi.i = 0;
   const lows = all.filter(exLowOf).sort((a, b) => ((+a[6] || 0) - exMin(a[0])) - ((+b[6] || 0) - exMin(b[0]))), nMin = Object.keys(EX.mins || {}).filter(c => EX.items.has(c)).length;
   const xw = exWait(), xo = xw.filter(xpOld).length;
-  const kpis = '<div class="sk-kpis ex-kpis">' + kpi('k-tot', ST_IC.sheet, 'สินค้าทั้งหมด', exN(all.length), 'รหัสใน Express · ไม่มียอด ' + exN(all.length - withBal.length), 'all', 100) +
+  const kIn = !EV.kAnim; EV.kAnim = true;   // แอนิเมชันเข้าเฉพาะครั้งแรกที่เปิดแท็บนี้ (อัปเดตทุก 20 วิไม่เด้งซ้ำ)
+  const kpis = '<div class="sk-kpis ex-kpis' + (kIn ? ' in' : '') + '">' + kpi('k-tot', ST_IC.sheet, 'สินค้าทั้งหมด', exN(all.length), 'รหัสใน Express · ไม่มียอด ' + exN(all.length - withBal.length), 'all', 100) +
     kpi('k-all', ST_IC.box, 'มีของในคลัง', exN(withBal.length), 'มูลค่ารวม ' + baht(totVal), 'bal', all.length ? withBal.length / all.length * 100 : 0) +
     kpi('k-low', STI.fire, 'ใกล้หมด', exN(lows.length), !nMin ? 'ยังไม่ตั้งจุดสั่งซื้อ · กดที่สินค้าเพื่อตั้ง' : lows.length ? 'ถึงจุดสั่งซื้อแล้ว · ควรสั่งเพิ่ม' : 'ของพอ · ตั้งจุดสั่งซื้อไว้ ' + exN(nMin) + ' รหัส', 'low', nMin ? lows.length / nMin * 100 : 0) +
     kpi('k-zero', PIC.xmark || STI.fire, 'ยอดติดลบ', exN(neg), neg ? 'ออกเกินยอด · ตรวจใน Express' : 'ไม่มี · ยอดปกติทุกรหัส', neg ? 'neg' : '', withBal.length ? neg / withBal.length * 100 : 0, neg ? '' : 'list') +
@@ -6842,7 +6844,7 @@ document.addEventListener('click', e => {
     return; }
   if (d.excclose) return exCardClose();
   if (d.excard) { e.preventDefault(); return exCardOpen(d.excard); }
-  if (d.exsrc) { if (d.exthen) { SV.cat = d.exthen; SV.anim = true; } SV.src = d.exsrc; try { LS.set('stockSrc', SV.src); } catch (x) {} render(); if (SV.src === 'ex') exSync(true); return; }
+  if (d.exsrc) { if (d.exthen) { SV.cat = d.exthen; SV.anim = true; } if (d.exsrc === 'ex') EV.kAnim = false; SV.src = d.exsrc; try { LS.set('stockSrc', SV.src); } catch (x) {} render(); if (SV.src === 'ex') exSync(true); return; }
   if (d.exgrp) { const fromKpi = !!d.exgo; EV.grp = fromKpi ? d.exgrp : EV.grp === d.exgrp && d.exgrp !== 'bal' ? 'bal' : d.exgrp; EV.lim = 200; render(); if (fromKpi) exGo('list'); return; }
   if (d.exgo) return exGo(d.exgo);
   if (d.exmore) { EV.lim += 300; return render(); }

@@ -65,6 +65,8 @@ await pg.setViewportSize({ width: 1400, height: 900 });
 await pg.click('.sk-kpi.k-all'); await pg.waitForTimeout(300);
 eq('count-up lands on real numbers', await pg.evaluate(() => [...document.querySelectorAll('.ex-kpis b[data-cnt]')].every(b => b.textContent.replace(/,/g, '') === b.dataset.cnt)), true);
 eq('cards have meters', await pg.locator('.ex-kpis .k-bar u').count(), 6);
+eq('soft palette: light card background, colored number (not white-on-color)', await pg.evaluate(() => { const c = document.querySelector('.ex-kpis .sk-kpi.k-low'), b = c.querySelector('.skt b'); const lum = s => { const m = s.match(/[\d.]+/g).map(Number); return (0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2]); }; const bgImg = getComputedStyle(c).backgroundImage; return [getComputedStyle(b).color !== 'rgb(255, 255, 255)', /gradient/.test(bgImg)]; }), [true, true]);
+eq('entrance animation only on first render (no replay on 20s refresh)', await pg.evaluate(() => { const first = document.querySelector('.ex-kpis').classList.contains('in'); T.render(); return [document.querySelector('.ex-kpis').classList.contains('in')]; }), [false]);
 await pg.evaluate(() => scrollTo(0, 0)); await pg.waitForTimeout(1200); await pg.locator('.ex-kpis').screenshot({ path: new URL('out/v292-kpis.png', import.meta.url).pathname });
 eq('pending empty state', await pg.evaluate(() => /ไม่มีรายการรอลง/.test(document.querySelector('#xpPanel').textContent)), true);
 // เปิดสินค้า → บันทึกเบิก
