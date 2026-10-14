@@ -5535,3 +5535,6 @@ body.auth #bgSndBtn{display:none}
 .ex-pnew input,.xp-doc input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;color:var(--ink);min-height:38px;box-sizing:border-box}
 .ex-pnew input:focus,.xp-doc input:focus{outline:2px solid color-mix(in oklab,var(--brand) 55%,transparent);outline-offset:0;border-color:var(--brand)}
 .sk-seg.xp-kind{grid-template-columns:repeat(2,minmax(0,1fr))}.xp-kind button{white-space:nowrap;padding:0 12px}
+/* v2.87.3 ตัวกรองกลุ่มสินค้า Express: ขึ้นบรรทัดใหม่ให้พอดีกรอบ ไม่ต้องเลื่อนข้าง */
+.ex-chips{flex-wrap:wrap;overflow:visible;row-gap:8px}
+.ex-chips .qchip{max-width:100%;min-width:0}

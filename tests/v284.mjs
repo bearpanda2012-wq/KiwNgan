@@ -147,6 +147,8 @@ if (real) {
   console.log('real data render ms', Math.round(ms), 'items', real.items.length);
   eq('real data renders under 400ms', ms < 400, true);
   await pg.locator('#view').screenshot({ path: new URL('out/v284-real.png', import.meta.url).pathname });
+  await pg.locator('.ex-chips').screenshot({ path: new URL('out/v2873-chips.png', import.meta.url).pathname });
+  eq('real data: chips fit panel', await pg.evaluate(() => { const c = document.querySelector('.ex-chips'); return c.scrollWidth <= c.clientWidth + 1; }), true);
 }
 // เครื่องมือคลังในแอป (ใบขอซื้อ · นับสต็อก · แจ้งต้องสั่ง) ยังอยู่ในแท็บ Express
 await pg.setViewportSize({ width: 1400, height: 900 }); await pg.evaluate(() => { SV.src = 'ex'; T.render(); }); await pg.waitForTimeout(300);

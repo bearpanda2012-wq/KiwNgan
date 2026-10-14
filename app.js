@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.87.2';
+const APP_VERSION = '2.87.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6491,7 +6491,7 @@ function viewExpress() {
     kpi('k-wait', XP_IC, 'รอลง Express', exN(xw.length), xw.length ? (xo ? 'ค้างเกิน 1 วัน ' + xo + ' รายการ' : 'บันทึกในแอป · รอคีย์ใน Express') : 'ลงครบทุกรายการแล้ว', 'wait') +
     kpi('k-mv', STI.clock, 'เคลื่อนไหว 7 วัน', exN(rec.length), 'รับเข้า ' + wkIn + ' · ออก ' + wkOut, '') + '</div>';
   const grps = Object.keys(grpCnt).sort((a, b) => grpCnt[b] - grpCnt[a]).slice(0, 14);
-  const chips = '<div class="qchips sk-chips">' + [['bal', 'มียอด', withBal.length]].concat(EV.grp === 'all' ? [['all', 'ทั้งหมด', all.length]] : []).concat(lows.length || EV.grp === 'low' ? [['low', 'ใกล้หมด', lows.length]] : []).concat(EV.sel.size || EV.grp === 'sel' ? [['sel', 'ที่เลือกไว้', EV.sel.size]] : []).concat(neg ? [['neg', 'ติดลบ', neg]] : []).concat(grps.map(g => [g, exGrpN(g), grpCnt[g]]))
+  const chips = '<div class="qchips sk-chips ex-chips">' + [['bal', 'มียอด', withBal.length]].concat(EV.grp === 'all' ? [['all', 'ทั้งหมด', all.length]] : []).concat(lows.length || EV.grp === 'low' ? [['low', 'ใกล้หมด', lows.length]] : []).concat(EV.sel.size || EV.grp === 'sel' ? [['sel', 'ที่เลือกไว้', EV.sel.size]] : []).concat(neg ? [['neg', 'ติดลบ', neg]] : []).concat(grps.map(g => [g, exGrpN(g), grpCnt[g]]))
     .map(x => '<button class="qchip' + (x[0] === 'neg' || x[0] === 'low' ? ' q-late' : '') + '" data-exgrp="' + esc(x[0]) + '" aria-pressed="' + (EV.grp === x[0]) + '"' + (x[0].length <= 4 && !/^(bal|all|neg|low|sel)$/.test(x[0]) ? ' title="กลุ่ม ' + esc(x[0]) + '"' : '') + '>' + esc(x[1]) + '<b>' + exN(x[2]) + '</b></button>').join('') + '</div>';
   const locOpts = [...new Set([...EX.locs.values()].map(l => l[1]))].sort().map(c => '<option value="' + esc(c) + '"' + (EV.loc === c ? ' selected' : '') + '>' + esc(c + ' · ' + exLocN(c)) + '</option>').join('');
   const tools = '<div class="sk-tools ex-tools"><label class="search' + qOn(EV.q) + '">' + I.search + '<input id="exQ" type="search" autocomplete="off" enterkeyhint="search" placeholder="ค้นหารหัส ชื่อสินค้า กลุ่ม…" value="' + esc(EV.q) + '" aria-label="ค้นหาสินค้าใน Express">' + qX('exQ', EV.q) + '</label>' +

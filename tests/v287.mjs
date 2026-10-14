@@ -103,6 +103,7 @@ await pg.fill('[data-xpq="0"]', '1'); eq('kind buttons fit text', await pg.evalu
 await pg.keyboard.press('Escape'); await pg.keyboard.press('Escape');
 // ผู้ใช้ที่ไม่ใช่ฝ่ายสต็อก: ดู/ค้นหาได้อย่างเดียว
 eq('non-stock: no record buttons', await pg.evaluate(() => { const real = S.user.role; S.user.role = 'user'; T.render(); const r = [document.querySelectorAll('[data-xpnew],[data-xpcancel],[data-xpdoc]').length, /ดูและค้นหาได้อย่างเดียว/.test(document.querySelector('.ex-status').textContent), document.querySelectorAll('#xpPanel .xp-list li').length > 0]; S.user.role = real; T.render(); return r; }), [0, true, true]);
+eq('group chips wrap inside panel', await pg.evaluate(() => { const c = document.querySelector('.ex-chips'); return c.scrollWidth <= c.clientWidth + 1 && [...c.children].every(b => b.getBoundingClientRect().right <= c.getBoundingClientRect().right + 1); }), true);
 // มือถือ
 await pg.setViewportSize({ width: 390, height: 844 }); await pg.evaluate(() => T.render()); await pg.waitForTimeout(300);
 eq('mobile: no horizontal overflow', await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
