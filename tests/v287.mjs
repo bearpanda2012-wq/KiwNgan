@@ -72,6 +72,15 @@ await pg.evaluate(() => { EV.grp = 'bal'; EV.rowAnim = true; T.render(); }); awa
 await pg.locator('.ex-tabs').screenshot({ path: new URL('out/v293-tabs.png', import.meta.url).pathname });
 { const bx = await pg.locator('#exList').boundingBox(); await pg.locator('#exList').scrollIntoViewIfNeeded(); const b2 = await pg.locator('#exList').boundingBox(); await pg.screenshot({ path: new URL('out/v293-list.png', import.meta.url).pathname, clip: { x: b2.x, y: Math.max(0, b2.y), width: b2.width, height: Math.min(560, 900 - Math.max(0, b2.y)) } }); }
 eq('group chips + rows carry group colour', await pg.evaluate(() => [!!document.querySelector('.ex-chip .ex-cd'), getComputedStyle(document.querySelector('.ex-row')).getPropertyValue('--g').trim().startsWith('#'), document.querySelector('.ex-tabs').dataset.on]), [true, true, 'ex']);
+// 2.93.1: ค้นหาแล้วบอกหมวด · กดหมวดเพื่อกรอง
+await pg.fill('#exQ', 'ZZ-0000'); await pg.waitForTimeout(400);
+const sg = await pg.evaluate(() => ({ chips: [...document.querySelectorAll('.ex-sgrps [data-exsgrp]')].map(b => b.dataset.exsgrp), pill: !!document.querySelector('.ex-list.srch .ex-g'), txt: document.querySelector('.ex-sres').textContent }));
+console.log('search groups', JSON.stringify(sg));
+eq('search shows categories of hits', [sg.chips.length >= 1, sg.pill, /อยู่ใน \d+ หมวด/.test(sg.txt)], [true, true, true]);
+if (sg.chips.length > 1) { await pg.click('.ex-sgrps [data-exsgrp="' + sg.chips[1] + '"]'); await pg.waitForTimeout(300);
+  eq('click category narrows results', await pg.evaluate(g => [...document.querySelectorAll('.ex-row')].every(r => EX.items.get(r.dataset.excard)[3] === g), sg.chips[1]), true); }
+await pg.locator('.ex-sres').scrollIntoViewIfNeeded(); await pg.locator('#exList').screenshot({ path: new URL('out/v2931-search.png', import.meta.url).pathname });
+await pg.fill('#exQ', ''); await pg.waitForTimeout(300);
 eq('pending empty state', await pg.evaluate(() => /ไม่มีรายการรอลง/.test(document.querySelector('#xpPanel').textContent)), true);
 // เปิดสินค้า → บันทึกเบิก
 await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-n'); await pg.waitForTimeout(400);

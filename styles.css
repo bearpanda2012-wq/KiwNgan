@@ -5694,3 +5694,13 @@ body.auth #bgSndBtn{display:none}
 @media (prefers-reduced-motion:reduce){.ex-list.in .ex-row,.ex-tabi{animation:none!important;transition:none}}
 .ex-tabs{width:max-content;align-self:flex-start;justify-self:start}
 .ex-head span:nth-child(n+3){text-align:left}.ex-head span:nth-last-child(-n+2){text-align:right}
+/* v2.93.1 ค้นหา: บอกหมวดของผลที่เจอ */
+.ex-sres{display:flex;flex-direction:column;gap:2px}
+.ex-sgrps{margin-top:8px}
+.ex-list.srch .ex-g{display:inline-flex!important;width:max-content;max-width:100%;padding:2px 9px 2px 7px;border-radius:999px;background:color-mix(in oklab,var(--g) 12%,var(--surface));color:color-mix(in oklab,var(--g) 75%,#000);font-weight:700;font-size:11.5px;box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--g) 25%,transparent)}
+.ex-list.srch .ex-g i{width:8px;height:8px}
+.ex-list.srch .ex-g{display:flex!important;margin-top:5px!important}
+.qchip.ex-chip[aria-pressed="true"]{background:color-mix(in oklab,var(--ch) 15%,var(--surface));color:var(--ink);border-color:color-mix(in oklab,var(--ch) 55%,transparent);box-shadow:0 0 0 3px color-mix(in oklab,var(--ch) 12%,transparent)}
+.qchip.ex-chip[aria-pressed="true"] b{background:var(--ch);color:#fff}
+.sk-chips .qchip.ex-chip[style][aria-pressed="true"]{background:color-mix(in oklab,var(--ch) 15%,var(--surface));color:var(--ink);border-color:color-mix(in oklab,var(--ch) 55%,transparent)}
+.sk-chips .qchip.ex-chip[style][aria-pressed="true"] b{background:var(--ch);color:#fff}

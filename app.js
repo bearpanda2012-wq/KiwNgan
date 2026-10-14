@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.93.0';
+const APP_VERSION = '2.93.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6527,9 +6527,13 @@ function viewExpress() {
   const byLoc = EV.loc ? new Set([...EX.locs.values()].filter(l => l[1] === EV.loc).map(l => l[0])) : null;
   const withBal = all.filter(x => Math.abs(+x[6] || 0) > 1e-9);
   const grpCnt = {}; withBal.forEach(x => { grpCnt[x[3]] = (grpCnt[x[3]] || 0) + 1; });
-  const list = all.filter(x => (q ? true : EV.grp === 'all' ? true : EV.grp === 'bal' ? Math.abs(+x[6] || 0) > 1e-9 : EV.grp === 'neg' ? (+x[6] || 0) < -1e-9 : EV.grp === 'low' ? exLowOf(x) : EV.grp === 'sel' ? EV.sel.has(x[0]) : x[3] === EV.grp && Math.abs(+x[6] || 0) > 1e-9) &&
+  let list = all.filter(x => (q ? true : EV.grp === 'all' ? true : EV.grp === 'bal' ? Math.abs(+x[6] || 0) > 1e-9 : EV.grp === 'neg' ? (+x[6] || 0) < -1e-9 : EV.grp === 'low' ? exLowOf(x) : EV.grp === 'sel' ? EV.sel.has(x[0]) : x[3] === EV.grp && Math.abs(+x[6] || 0) > 1e-9) &&
       (!byLoc || byLoc.has(x[0])) && (!q || qHit([x[0], x[1], x[2], x[3], exGrpN(x[3]), x[11], x[12]], q)))
     .sort((a, b) => EV.grp === 'low' && EV.sort === 'cod' ? ((+a[6] || 0) - exMin(a[0])) - ((+b[6] || 0) - exMin(b[0])) : EV.sort === 'bal' ? (+b[6] || 0) - (+a[6] || 0) : EV.sort === 'val' ? (+b[7] || 0) - (+a[7] || 0) : EV.sort === 'name' ? String(a[1]).localeCompare(String(b[1]), 'th') : String(a[0]).localeCompare(String(b[0])));
+  // ค้นหา: บอกว่าผลที่เจออยู่หมวดไหนบ้าง · กดหมวดเพื่อดูเฉพาะหมวดนั้น
+  const sGrp = {}; if (q) list.forEach(x => { sGrp[x[3]] = (sGrp[x[3]] || 0) + 1; });
+  if (!q || !sGrp[EV.sgrp]) EV.sgrp = '';
+  const sTot = list.length; if (q && EV.sgrp) list = list.filter(x => x[3] === EV.sgrp);
   const totVal = withBal.reduce((s, x) => s + (+x[7] || 0), 0), neg = all.filter(x => (+x[6] || 0) < -1e-9).length;
   const rec = EX.recent || [], wkIn = rec.filter(m => (EX_OP[m[3]] || [])[1] > 0).length, wkOut = rec.filter(m => (EX_OP[m[3]] || [])[1] < 0).length;
   // การ์ดสรุป: กดแล้วกรอง + เลื่อนไปที่รายการนั้น · ตัวเลขนับขึ้นตอนเปิดหน้า · แถบเล็กบอกสัดส่วน
@@ -6560,7 +6564,7 @@ function viewExpress() {
       '<span class="ex-n">' + coHl(x[1] || '–', q) + (x[2] ? '<small>' + esc(x[2]) + '</small>' : '') + (ls.length ? '<span class="ex-locs">' + ls.slice(0, 4).map(l => '<i title="' + esc(exLocN(l[1])) + '">' + esc(l[1]) + ' <b>' + exN(l[2]) + '</b></i>').join('') + (ls.length > 4 ? '<i>+' + (ls.length - 4) + '</i>' : '') + '</span>' : '') + '</span>' +
       '<span class="ex-q"><b class="tnum">' + exN(b) + '</b><small>' + esc(exUnit(x[5])) + '</small></span><span class="ex-v"><b class="tnum">' + (+x[8] ? baht(+x[8]) : '–') + '</b><small>' + (+x[7] ? 'รวม ' + baht(+x[7]) : 'ต่อหน่วย') + '</small></span></button>'; };
   const body = !EX.loaded ? '<div class="sk-empty"><span class="spin-dot dark"></span><b>กำลังโหลดข้อมูลจาก Express…</b><small>ครั้งแรกใช้เวลาสักครู่ ครั้งต่อไปเปิดได้ทันที</small></div>'
-    : list.length ? '<div class="ex-list' + (ro ? ' ro' : '') + (rowAnim ? ' in' : '') + '"><div class="ex-head">' + (ro ? '' : '<span class="ex-ck" role="checkbox" aria-checked="' + (list.slice(0, EV.lim).every(x => EV.sel.has(x[0])) ? 'true' : list.slice(0, EV.lim).some(x => EV.sel.has(x[0])) ? 'mixed' : 'false') + '" aria-label="เลือกทั้งหมดที่แสดง" data-exselall="1" title="เลือกทั้งหมดที่แสดง (' + Math.min(list.length, EV.lim) + ')"></span>') + '<span>รหัส</span><span>ชื่อสินค้า · ยอดแยกคลัง</span><span>คงเหลือ</span><span>ทุน/หน่วย</span></div>' + list.slice(0, EV.lim).map(row).join('') + '</div>' +
+    : list.length ? '<div class="ex-list' + (ro ? ' ro' : '') + (q ? ' srch' : '') + (rowAnim ? ' in' : '') + '"><div class="ex-head">' + (ro ? '' : '<span class="ex-ck" role="checkbox" aria-checked="' + (list.slice(0, EV.lim).every(x => EV.sel.has(x[0])) ? 'true' : list.slice(0, EV.lim).some(x => EV.sel.has(x[0])) ? 'mixed' : 'false') + '" aria-label="เลือกทั้งหมดที่แสดง" data-exselall="1" title="เลือกทั้งหมดที่แสดง (' + Math.min(list.length, EV.lim) + ')"></span>') + '<span>รหัส</span><span>ชื่อสินค้า · ยอดแยกคลัง</span><span>คงเหลือ</span><span>ทุน/หน่วย</span></div>' + list.slice(0, EV.lim).map(row).join('') + '</div>' +
       (list.length > EV.lim ? '<div class="col-more">แสดง ' + EV.lim + ' จาก ' + exN(list.length) + ' รายการ <button class="btn ghost sm" data-exmore="1">แสดงเพิ่ม</button></div>' : '')
     : '<div class="sk-empty"><span>' + I.stock + '</span><b>' + (q ? 'ไม่พบ "' + esc(q) + '"' : 'ไม่มีสินค้าในมุมมองนี้') + '</b>' + (q ? '<small>ลองพิมพ์บางส่วนของรหัสหรือชื่อ</small><button type="button" class="btn sm" data-qclear="exQ">ล้างคำค้น</button>' : '') + '</div>';
   const hist = !EX.recent ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : rec.length ? '<ol class="sk-log ex-log">' + rec.slice(0, 40).map(m => { const op = EX_OP[m[3]] || ['รายการ', 1], it = EX.items.get(m[10]);
@@ -6578,7 +6582,10 @@ function viewExpress() {
   const selBar = !ro && EV.sel.size ? '<div class="ex-selbar"><span><b>เลือก ' + exN(EV.sel.size) + ' รายการ</b><small>มูลค่ารวม ' + baht(exCalcRows(selItems).tot) + '</small></span><button type="button" class="btn sm" data-exgrp="sel">ดูเฉพาะที่เลือก</button>' + (canStock() ? '<button type="button" class="btn sm" data-xpnew="">บันทึกเบิก/รับ</button>' : '') + '<button type="button" class="btn sm primary" data-excalc="1">คำนวณราคา</button><button type="button" class="btn sm ghost" data-exselclr="1">ล้าง</button></div>' : '';
   return topbar('คลังวัสดุ', 'ยอดคงเหลือจากโปรแกรม Express (บัญชี) อัปเดตอัตโนมัติ') + exTabs() + appTools + banner + lowAlert + kpis + selBar +
     '<div class="sk-wrap"><section class="panel sk-main" id="exList"><div class="panel-h"><h2>สินค้าใน Express</h2><span class="sub">' + exN(list.length) + ' รายการ</span></div>' + tools +
-    (q ? '<div class="co-sres" role="status"><b>' + exN(list.length) + '</b> รายการตรงกับ "' + esc(q) + '"<small>ค้นจากทุกรหัส ไม่สนกลุ่มที่เลือก</small></div>' : chips) + body + '</section>' +
+    (q ? '<div class="co-sres ex-sres" role="status"><span><b>' + exN(sTot) + '</b> รายการตรงกับ "' + esc(q) + '"' + (Object.keys(sGrp).length ? ' · อยู่ใน <b>' + Object.keys(sGrp).length + '</b> หมวด' : '') + '</span><small>ค้นจากทุกรหัส ไม่สนกลุ่มที่เลือก · กดหมวดเพื่อดูเฉพาะหมวดนั้น</small></div>' +
+      (Object.keys(sGrp).length ? '<div class="qchips sk-chips ex-chips ex-sgrps">' + (EV.sgrp ? '<button class="qchip ex-chip fx" style="--ch:#6366B8" data-exsgrp=""><i class="ex-cic">' + ST_IC.sheet + '</i><span>ทุกหมวด</span><b>' + exN(sTot) + '</b></button>' : '') +
+        Object.keys(sGrp).sort((a, b) => sGrp[b] - sGrp[a]).map(g => '<button class="qchip ex-chip" style="--ch:' + exGrpCol(g) + '" data-exsgrp="' + esc(g) + '" aria-pressed="' + (EV.sgrp === g) + '" title="หมวด ' + esc(g) + '"><i class="ex-cd"></i><span>' + esc(exGrpN(g)) + '</span><b>' + exN(sGrp[g]) + '</b></button>').join('') + '</div>' : '')
+    : chips) + body + '</section>' +
     '<div class="sk-side ex-side">' + exPendPanel() + '<section class="panel" id="exHist"><div class="panel-h"><h2>เคลื่อนไหว 7 วันล่าสุด</h2></div>' + hist + '</section></div></div>';
 }
 /* ---- เลือกหลายรายการ → คำนวณจำนวนและราคา ---- */
@@ -6831,7 +6838,7 @@ function exCardDraw() {
     '</div></div></div>';
 }
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-exsel],[data-exselall],[data-excalc],[data-excalcx],[data-exselclr],[data-exbasis],[data-exqfill],[data-excopy],[data-exprint],[data-expdf],[data-exunsel],[data-exminsave],[data-exsrc],[data-exgrp],[data-exgo],[data-exmore],[data-exsync],[data-excard],[data-excclose]'); if (!t) return;
+  const t = e.target.closest && e.target.closest('[data-exsel],[data-exselall],[data-excalc],[data-excalcx],[data-exselclr],[data-exbasis],[data-exqfill],[data-excopy],[data-exprint],[data-expdf],[data-exunsel],[data-exminsave],[data-exsrc],[data-exgrp],[data-exsgrp],[data-exgo],[data-exmore],[data-exsync],[data-excard],[data-excclose]'); if (!t) return;
   const d = t.dataset;
   if (!canStock() && (d.exsel || d.exselall || d.excalc || d.exqfill || d.exbasis || d.exunsel || d.excopy || d.exprint || d.expdf || d.exselclr || d.exminsave)) { e.preventDefault(); e.stopPropagation(); return toast('ดูได้อย่างเดียว · ฝ่ายสต็อกเป็นผู้แก้ไข', true); }
   const redraw = () => { render(); if (EX.card) exCardDraw(); if (EV.calc) exCalcDraw(); };
@@ -6854,6 +6861,7 @@ document.addEventListener('click', e => {
   if (d.excclose) return exCardClose();
   if (d.excard) { e.preventDefault(); return exCardOpen(d.excard); }
   if (d.exsrc) { if (d.exthen) { SV.cat = d.exthen; SV.anim = true; } if (d.exsrc === 'ex') EV.kAnim = false; SV.src = d.exsrc; try { LS.set('stockSrc', SV.src); } catch (x) {} render(); if (SV.src === 'ex') exSync(true); return; }
+  if (d.exsgrp !== undefined) { EV.sgrp = EV.sgrp === d.exsgrp ? '' : d.exsgrp; EV.rowAnim = true; EV.lim = 200; return render(); }
   if (d.exgrp) { EV.rowAnim = true; const fromKpi = !!d.exgo; EV.grp = fromKpi ? d.exgrp : EV.grp === d.exgrp && d.exgrp !== 'bal' ? 'bal' : d.exgrp; EV.lim = 200; render(); if (fromKpi) exGo('list'); return; }
   if (d.exgo) return exGo(d.exgo);
   if (d.exmore) { EV.lim += 300; return render(); }
@@ -6869,7 +6877,7 @@ document.addEventListener('input', e => { const t = e.target; if (!t || !t.datas
   const f = document.querySelector('#exCalc .ex-ctf span'); if (f) f.textContent = 'รวม ' + r.rows.length + ' รายการ · จำนวน ' + exN(r.qty);
   const sb = document.querySelector('.ex-selbar small'); if (sb) sb.textContent = 'มูลค่ารวม ' + baht(r.tot);
 });
-document.addEventListener('input', e => { const t = e.target; if (!t || t.id !== 'exQ' || e.isComposing) return; EV.q = t.value; EV.lim = 200; const pos = t.selectionStart; render(); const n = $('#exQ'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) {} } });
+document.addEventListener('input', e => { const t = e.target; if (!t || t.id !== 'exQ' || e.isComposing) return; EV.q = t.value; EV.sgrp = ''; EV.lim = 200; const pos = t.selectionStart; render(); const n = $('#exQ'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) {} } });
 document.addEventListener('keydown', e => { if (EV.pnew) return; if (e.key === 'Escape' && EV.calc) { EV.calc = false; exCalcDraw(); e.stopPropagation(); return; } if (e.key === 'Escape' && EX.card) { exCardClose(); e.stopPropagation(); } }, true);
 function viewStock() {
   if (SV.src === 'ex' && exOn()) return viewExpress();
