@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.42.0';
+const VERSION = '1.43.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -47,6 +47,7 @@ const SHEETS = {
   Stock: ['id', 'name', 'cat', 'unit', 'qty', 'min', 'loc', 'note', 'updatedAt', 'updatedBy', 'price', 'own', 'cust', 'job', 'grade', 'base', 'size'],   // price = ราคาต่อหน่วย (บาท) ใช้คิดต้นทุนวัสดุต่อเลข Job
   // own = 'cust' ของลูกค้า (cust = ชื่อลูกค้า, job = เลข Job) ไม่คิดมูลค่า · grade = 'ng' ตำหนิ / 'scrap' เศษ (base = วัสดุตั้งต้น, size = ขนาดเศษ) แยกจากยอดพร้อมใช้
   StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note', 'price', 'cond', 'from'],
+  ExMin: ['id', 'min', 'updatedAt', 'updatedBy'],   // จุดสั่งซื้อของสินค้าใน Express (id = รหัสสินค้า Express) ตั้งในแอป · Express ไม่ถูกแก้
   // คลังความรู้: 1 แถว = 1 เรื่อง · dept = d ฝ่ายแบบ / p ฝ่ายผลิต / s ฝ่ายสต็อก / g ทั่วไป (แอดมิน) · cat = tip/limit/warn/step · videos = ลิงก์วิดีโอ (JSON) ไม่เก็บไฟล์
   Kb: ['id', 'dept', 'cat', 'title', 'body', 'videos', 'pin', 'createdBy', 'createdAt', 'updatedBy', 'updatedAt', 'acks']   // acks = ใครกดรับทราบแล้ว {ชื่อ: เวลา} (แก้เนื้อหาแล้วล้าง ต้องรับทราบใหม่)   // price = ราคาต่อหน่วยตอนเบิก · cond = สภาพของที่รับคืน ok/ng/scrap · from = ผู้ส่งคืน
 };
@@ -167,6 +168,7 @@ const ACTIONS = {
   stockSave: (p, u) => withLock_(() => stockSave_(p.item, u)),
   stockMove: (p, u) => withLock_(() => stockMove_(p, u)),
   stockDelete: (p, u) => withLock_(() => stockDelete_(p.id, u)),
+  exMinSet: (p, u) => withLock_(() => exMinSet_(p, u)),
   // คลังความรู้ (ทุกคนอ่านได้ · แก้ได้เฉพาะเรื่องของฝ่ายตัวเอง · แอดมินแก้ได้ทุกฝ่าย)
   kbSave: (p, u) => withLock_(() => kbSave_(p.item, u)),
   kbDelete: (p, u) => withLock_(() => kbDelete_(p.id, u)),
@@ -706,7 +708,7 @@ function bootstrap_(u, stamp) {
     cmtCount: commentCounts_(),
     prods: prodsRecent_().map(x => maskProd_(x, u)),
     stock: can_(u, 'stock.view') ? stockView_(u) : null,
-    ex: can_(u, 'stock.view') && RT_URL && RT_KEY && EX_TOK ? { url: RT_URL, key: RT_KEY, tok: EX_TOK } : null,   // สต็อกจาก Express (ซิงก์ผ่าน Supabase อ่านอย่างเดียว)
+    ex: can_(u, 'stock.view') && RT_URL && RT_KEY && EX_TOK ? { url: RT_URL, key: RT_KEY, tok: EX_TOK, mins: exMins_() } : null,   // สต็อกจาก Express (ซิงก์ผ่าน Supabase อ่านอย่างเดียว)
     kb: kbList_(u),
     salePin: isAdmin_(u) ? !!PropertiesService.getScriptProperties().getProperty('SALE_PIN') : undefined,
     salePins: isAdmin_(u) ? Object.keys(salePins_()) : undefined,
@@ -984,6 +986,20 @@ const STOCK_KINDS_ = { in: 'รับเข้า', out: 'เบิกออก'
 const STOCK_COND_ = { ok: 'สภาพดี', ng: 'มีตำหนิ', scrap: 'เศษ' };
 const stockSize_ = v => String(v || '').trim().replace(/\s+/g, ' ').replace(/\s*[xX*×]\s*/g, '×').slice(0, 40);
 const stockNum_ = v => { const n = Math.round(Number(String(v === undefined ? '' : v).replace(/,/g, '')) * 100) / 100; return isFinite(n) ? n : NaN; };
+/* จุดสั่งซื้อของสินค้า Express (ตั้งในแอป) → { รหัส: จำนวน } */
+function exMins_() { const o = {}; try { readAll_('ExMin').forEach(r => { const n = stockNum_(r.min); if (r.id && n > 0) o[r.id] = n; }); } catch (e) {} return o; }
+function exMinSet_(p, u) {
+  stockEdit_(u);
+  const list = Array.isArray(p.items) ? p.items : [{ cod: p.cod, min: p.min }];
+  if (!list.length || list.length > 500) throw new Error('ส่งรายการจุดสั่งซื้อได้ครั้งละไม่เกิน 500 รายการ');
+  list.forEach(x => {
+    const cod = String(x.cod || '').trim().slice(0, 40); if (!cod) return;
+    const n = stockNum_(x.min); if (x.min !== '' && x.min != null && !(n >= 0)) throw new Error('จุดสั่งซื้อต้องเป็นตัวเลข');
+    writeRow_('ExMin', { id: cod, min: n > 0 ? n : '', updatedAt: nowIso_(), updatedBy: u.name }, rowOf_('ExMin', cod));
+  });
+  bump_('data');
+  return { exMins: exMins_() };
+}
 function stockView_(u) {
   const items = readAll_('Stock').map(x => Object.assign(x, { qty: stockNum_(x.qty) || 0, min: stockNum_(x.min) || 0, price: stockNum_(x.price) || 0 }));
   // ล่าสุด 300 รายการ + การเบิกที่ระบุเลข Job ย้อนหลัง 1 ปี (ใช้คิดต้นทุนวัสดุต่อเลข Job ในหน้าสรุปรายงาน)
@@ -2028,7 +2044,7 @@ function digestCfg_(s) {
 }
 const DIGEST_DAYS_ = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'], DIGEST_MON_ = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 /* สรุปจากข้อมูลจริง (ฟังก์ชันเดียวกับ digestBuild ในแอป ใช้ดูตัวอย่างโหมดทดลอง) */
-function digestBuild_(jobs, prods, items, today, yday, dow, topics) {
+function digestBuild_(jobs, prods, items, today, yday, dow, topics, exLow) {
   const on = k => !topics || topics.indexOf(k) >= 0;
   const num = v => { const n = Number(v); return isFinite(n) ? n : 0; }, d10 = v => String(v || '').slice(0, 10);
   const late = x => x.due && d10(x.due) < today, due = x => d10(x.due) === today;
@@ -2046,8 +2062,9 @@ function digestBuild_(jobs, prods, items, today, yday, dow, topics) {
   if (on('due')) lines.push(dueA.length ? '📅 ครบกำหนดวันนี้ ' + dueA.length + ' งาน: ' + codes(dueA) : '📅 วันนี้ไม่มีงานครบกำหนด');
   if (on('late')) lines.push(lateA.length ? '⚠️ เลยกำหนด ' + lateA.length + ' งาน: ' + codes(lateA) : '✅ ไม่มีงานเลยกำหนด');
   if (on('shipped')) lines.push(sh ? '🚚 เมื่อวานส่งมอบแล้ว ' + sh + ' งาน' : '🚚 เมื่อวานไม่มีงานส่งมอบ');
+  if (on('stock') && exLow && exLow.length) lines.push('📦 Express ใกล้หมด ' + exLow.length + ' รายการ: ' + exLow.slice(0, 3).map(x => x[1] || x[0]).join(', ') + (exLow.length > 3 ? ' …' : ''));
   if (on('stock')) lines.push(low.length ? '📦 ใกล้หมด ' + low.length + ' รายการ: ' + low.slice(0, 3).map(x => x.name).join(', ') + (low.length > 3 ? ' …' : '') : '📦 วัสดุพอทุกรายการ');
-  const alert = (on('design') || on('late') ? jl : 0) + (on('prod') || on('late') ? pl : 0) + (on('stock') ? low.length : 0);
+  const alert = (on('design') || on('late') ? jl : 0) + (on('prod') || on('late') ? pl : 0) + (on('stock') ? low.length + (exLow ? exLow.length : 0) : 0);
   return { title: '☀️ สรุปงานเช้านี้ · ' + DIGEST_DAYS_[dow] + ' ' + (+today.slice(8, 10)) + ' ' + DIGEST_MON_[m - 1], body: lines.join('\n'), alert: alert };
 }
 function digestNow_(topics) {
@@ -2055,7 +2072,16 @@ function digestNow_(topics) {
   const dow = +Utilities.formatDate(now, tz_(), 'u') % 7;
   let items = []; try { items = readAll_('Stock'); } catch (e) {}
   let prods = []; try { prods = readAll_('Prod'); } catch (e) {}
-  return digestBuild_(readAll_('Jobs'), prods, items, today, yday, dow, topics);
+  return digestBuild_(readAll_('Jobs'), prods, items, today, yday, dow, topics, exLow_());
+}
+/* สินค้า Express ที่ยอด ≤ จุดสั่งซื้อ (ถามจาก Supabase · ไม่มีการตั้งค่า = ว่าง) */
+function exLow_() {
+  const mins = exMins_(); if (!RT_URL || !RT_KEY || !EX_TOK || !Object.keys(mins).length) return [];
+  try {
+    const r = UrlFetchApp.fetch(RT_URL + '/rest/v1/rpc/ex_low', { method: 'post', contentType: 'application/json', headers: { apikey: RT_KEY, Authorization: 'Bearer ' + RT_KEY }, payload: JSON.stringify({ tok: EX_TOK, mins: mins }), muteHttpExceptions: true });
+    if (r.getResponseCode() !== 200) return [];
+    const v = JSON.parse(r.getContentText()); return Array.isArray(v) ? v : [];
+  } catch (e) { return []; }
 }
 const digestInfo_ = r => ({ kind: 'digest', from: '', title: r.title, code: r.body, count: r.alert });
 function digestTo_(cfg) {

@@ -3,7 +3,7 @@
 const { chromium } = await import(process.env.PW);
 import http from 'http'; import fs from 'fs'; import path from 'path';
 const root = new URL('..', import.meta.url).pathname, PORT = 8832;
-const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,render,exStart,exSync};window.S=S;window.SV=SV;window.EX=EX;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(PORT);
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,render,exStart,exSync};window.S=S;window.SV=SV;window.EX=EX;window.EV=EV;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(PORT);
 const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1400, height: 900 } });
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 let ok = 0, bad = 0; const eq = (lbl, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
@@ -100,6 +100,46 @@ await pg.click('.ex-row[data-excard="RM-SB-02-0104"]'); await pg.waitForTimeout(
 eq('phone: card fits', await pg.evaluate(() => { const c = document.querySelector('#exModal .pm-card').getBoundingClientRect(); return c.right <= innerWidth + 1 && c.left >= -1; }), true);
 await pg.screenshot({ path: new URL('out/v284-phone.png', import.meta.url).pathname });
 await pg.keyboard.press('Escape');
+// v2.86: จุดสั่งซื้อ / ใกล้หมด / เลือกหลายรายการ + คำนวณราคา
+await pg.setViewportSize({ width: 1400, height: 900 }); await pg.evaluate(() => { SV.src = 'ex'; EX.cfg.tok = 'exr_test_token_123456789012345'; EX.err = ''; EV.grp = 'bal'; EV.q = ''; T.render(); }); await pg.waitForTimeout(300);
+eq('no mins: hint to set reorder point', await pg.locator('.ex-minhint').count(), 1);
+await pg.click('.ex-row[data-excard="RM-SB-02-0104"]'); await pg.waitForSelector('#exMinIn');
+await pg.fill('#exMinIn', '5'); await pg.click('[data-exminsave]'); await pg.waitForTimeout(500);
+eq('min saved → item low (bal 3 ≤ 5)', await pg.evaluate(() => [EX.mins['RM-SB-02-0104'], document.querySelector('#exModal .ex-minbox').classList.contains('low')]), [5, true]);
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+eq('low KPI + alert + row tag', await pg.evaluate(() => [document.querySelector('.sk-kpi.k-low b').textContent, !!document.querySelector('.ex-lowalert'), !!document.querySelector('.ex-row[data-excard="RM-SB-02-0104"] .ex-lowtag')]), ['1', true, true]);
+await pg.click('.ex-lowalert'); await pg.waitForTimeout(200);
+eq('low filter lists only low items', await pg.evaluate(() => [...document.querySelectorAll('.ex-row')].map(r => r.dataset.excard)), ['RM-SB-02-0104']);
+// ยอดลดลงจนถึงจุดสั่งซื้อระหว่างเปิดหน้า → เตือน
+await pg.evaluate(() => { EX.mins['GST-CL-FSS8083'] = 0.5; EX.lowSet = new Set([...EX.items.values()].filter(x => +EX.mins[x[0]] > 0 && +x[6] <= +EX.mins[x[0]]).map(x => x[0])); });
+extra = { items: [['GST-CL-FSS8083', 'สีน้ำ 4SEASON TOA8083 แบบด้าน ภายนอก', '', 'GST1', '0', 'กป', 0, 0, 174.77, '20260901', 180, '', '', '', '20261014', 0]], locs: [], tabs: {}, agent: { at: new Date().toISOString(), host: 'SERVER', dir: 'ROY69' }, more: false, ver: 3005, top: 3005 };
+const toasts = []; await pg.exposeFunction('__t', x => toasts.push(x)); await pg.evaluate(() => { const o = window.toast; new MutationObserver(() => { document.querySelectorAll('.toast,#toast').forEach(t => window.__t(t.textContent)); }).observe(document.body, { childList: true, subtree: true, characterData: true }); });
+await pg.evaluate(async () => { EX.ver = 3000; await T.exSync(true); }); await pg.waitForTimeout(500);
+eq('toast when item newly drops to reorder point', toasts.some(t => /ใกล้หมด: สีน้ำ 4SEASON/.test(t)), true);
+// เลือกหลายรายการ → คำนวณ
+await pg.evaluate(() => { EV.grp = 'bal'; EV.sel.clear(); T.render(); }); await pg.waitForTimeout(200);
+await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-ck'); await pg.waitForTimeout(150);
+eq('checkbox selects without opening card', await pg.evaluate(() => [EV.sel.size, !!document.querySelector('#exModal'), !!document.querySelector('.ex-selbar')]), [1, false, true]);
+await pg.click('.ex-row[data-excard="NEG-001"] .ex-ck'); await pg.waitForTimeout(150);
+eq('selection bar total = 3×760 + 1×100 (neg bal → 1)', await pg.evaluate(() => document.querySelector('.ex-selbar small').textContent), 'มูลค่ารวม ฿2,380');
+await pg.click('[data-excalc]'); await pg.waitForTimeout(200);
+eq('calc lists 2 rows', await pg.locator('#exCalc .ex-ctr').count(), 2);
+await pg.fill('[data-exq="RM-SB-02-0104"]', '10'); await pg.waitForTimeout(150);
+eq('change qty updates total live', await pg.evaluate(() => document.querySelector('#exCalcTot').textContent), '฿7,700');
+await pg.click('[data-exbasis="last"]'); await pg.waitForTimeout(150);
+eq('switch to last purchase price', await pg.evaluate(() => document.querySelector('#exCalcTot').textContent), '฿7,700');
+await pg.click('[data-exqfill="1"]'); await pg.waitForTimeout(150);
+eq('qty = 1 for all', await pg.evaluate(() => document.querySelector('#exCalcTot').textContent), '฿860');
+await pg.click('[data-excopy]'); await pg.waitForTimeout(200);
+await pg.locator('#exCalc .pm-card').screenshot({ path: new URL('out/v286-calc.png', import.meta.url).pathname });
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
+eq('selection remembered after reload', await pg.evaluate(() => JSON.parse(localStorage.getItem('kiwngan:exSel') || '{}')), { 'RM-SB-02-0104': '1', 'NEG-001': '1' });
+await pg.evaluate(() => { EV.grp = 'bal'; T.render(); }); await pg.waitForTimeout(150);
+await pg.click('.ex-head .ex-ck'); await pg.waitForTimeout(150);
+eq('select-all visible', await pg.evaluate(() => EV.sel.size === document.querySelectorAll('.ex-row').length), true);
+await pg.click('[data-exselclr]'); await pg.waitForTimeout(150);
+eq('clear selection', await pg.evaluate(() => [EV.sel.size, !!document.querySelector('.ex-selbar')]), [0, false]);
+await pg.evaluate(() => scrollTo(0, 0)); await pg.screenshot({ path: new URL('out/v286-express.png', import.meta.url).pathname });
 // ข้อมูลจริง (ถ้ามีในเครื่อง): วาดหน้า 13,000+ รหัสได้เร็ว
 if (real) {
   await pg.setViewportSize({ width: 1400, height: 900 });

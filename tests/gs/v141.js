@@ -35,4 +35,11 @@ sent.length = 0; m.ctx.morningReminders(); Date.prototype.getDay = realDay;
 const info = JSON.parse(m.cacheStore['pinfo:ต้น'] || '{}');
 eq('helper/assignee gets one visit push', [sent.length >= 1, info.kind, info.count], [true, 'visit', 2]);
 eq('push text has today + tomorrow', [/วันนี้ อาคาร ABC · สำรวจหน้างาน 10:00/.test(info.body), /คอนโด X · วัดพื้นที่หน้างาน 14:30/.test(info.body), info.title], [true, true, 'วันนี้ 1 นัด']);
+// 1.43.0: จุดสั่งซื้อของสินค้า Express (เก็บในแอป)
+eq('designer cannot set Express min', !!m.call('exMinSet', { cod: 'RM-1', min: 5 }, D).error, true);
+let mr = m.call('exMinSet', { cod: 'RM-1', min: 5 }, A).data;
+eq('admin sets min', mr.exMins, { 'RM-1': 5 });
+mr = m.call('exMinSet', { items: [{ cod: 'RM-2', min: '2.5' }, { cod: 'RM-1', min: '' }] }, A).data;
+eq('bulk set + clear', mr.exMins, { 'RM-2': 2.5 });
+eq('bad number rejected', !!m.call('exMinSet', { cod: 'RM-3', min: 'abc' }, A).error, true);
 console.log(ok + ' ok, ' + bad + ' failed'); process.exit(bad ? 1 : 0);

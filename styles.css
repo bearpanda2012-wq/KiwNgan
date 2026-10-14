@@ -5428,3 +5428,57 @@ body.auth #bgSndBtn{display:none}
 .dsf-row>*{min-width:0;width:100%}
 .dsf-row input,.dsf-row select{box-sizing:border-box}
 .ds-fs .toggle small{display:block;color:var(--muted);font-size:12px;font-weight:400;margin-top:1px}
+
+/* ===== Express: ใกล้หมด · เลือกหลายรายการ · คำนวณราคา (v2.86.0) ===== */
+.ex-head,.ex-row{grid-template-columns:24px minmax(120px,170px) minmax(0,1fr) 110px 110px}
+.ex-ck{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line);background:var(--surface);display:grid;place-items:center;cursor:pointer;flex:none;transition:background .12s,border-color .12s}
+.ex-ck:hover{border-color:var(--brand)}
+.ex-ck[aria-checked="true"]{background:var(--brand);border-color:var(--brand)}
+.ex-ck[aria-checked="true"]::after{content:"";width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:translateY(-1px) rotate(45deg)}
+.ex-ck[aria-checked="mixed"]{background:var(--brand);border-color:var(--brand)}
+.ex-ck[aria-checked="mixed"]::after{content:"";width:9px;height:2px;background:#fff;border-radius:1px}
+.ex-row.sel{background:color-mix(in oklab,var(--brand) 7%,var(--surface))}
+.ex-row.low{box-shadow:inset 3px 0 0 #DC2626}
+.ex-lowtag,.ex-mintag{display:inline-flex;align-items:center;gap:3px;font-style:normal;font-size:10.5px;font-weight:600;margin-top:3px;padding:1px 7px;border-radius:99px}
+.ex-lowtag{color:#B91C1C;background:color-mix(in oklab,#DC2626 12%,var(--surface))}
+.ex-lowtag svg{width:11px;height:11px}
+.ex-mintag{color:var(--muted);background:var(--surface-2)}
+.ex-lowalert{margin:0 0 14px}
+.ex-minhint{display:flex;align-items:center;gap:6px;margin:0 0 14px;font-size:12.5px;color:var(--muted)}
+.ex-minhint svg{width:14px;height:14px}
+.ex-selbar{position:sticky;top:8px;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;margin:0 0 14px;border-radius:12px;background:color-mix(in oklab,var(--brand) 10%,var(--surface));border:1px solid color-mix(in oklab,var(--brand) 35%,var(--line));box-shadow:var(--shadow-sm)}
+.ex-selbar>span{display:flex;flex-direction:column;margin-right:auto}
+.ex-selbar b{font-size:14px}.ex-selbar small{color:var(--brand);font-weight:600;font-size:13px}
+.ex-minbox{display:grid;grid-template-columns:1fr 110px auto;gap:8px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--surface-2)}
+.ex-minbox>span{display:flex;flex-direction:column}
+.ex-minbox small{color:var(--muted);font-size:12px}
+.ex-minbox.low{background:color-mix(in oklab,#DC2626 9%,var(--surface));}
+.ex-minbox.low small{color:#B91C1C;font-weight:600}
+.ex-minbox input{width:100%;box-sizing:border-box}
+.ex-cardsel{display:flex;justify-content:flex-end}
+.ex-calc{width:min(860px,100%)}
+.ex-calcbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ex-ct{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px}
+.ex-cth,.ex-ctr,.ex-ctf{display:grid;grid-template-columns:minmax(0,1fr) 90px 96px 100px 110px 30px;gap:8px;align-items:center;padding:7px 10px}
+.ex-cth{background:var(--surface-2);font-size:11px;color:var(--muted);font-weight:600}
+.ex-ctr{border-top:1px solid var(--line)}
+.ex-ctr>span:first-child{min-width:0}.ex-ctr b{font-family:var(--f-mono);font-size:12px}
+.ex-ctr small{display:block;color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ex-ctr input{width:100%;box-sizing:border-box;text-align:right}
+.ex-cth span:nth-child(n+2),.ex-ctr>span:nth-child(n+2){text-align:right}
+.ex-ctf{display:flex;justify-content:space-between;border-top:2px solid var(--ink);font-weight:600}
+.ex-ctf b{font:700 18px var(--f-display);color:var(--brand)}
+@media (max-width:720px){
+  .ex-row{grid-template-columns:24px minmax(0,1fr) auto}
+  .ex-row .ex-ck{grid-row:1/span 2;align-self:center}
+  .ex-row .ex-c,.ex-row .ex-n{grid-column:2}
+  .ex-row .ex-q{grid-column:3;grid-row:1/span 2}
+  .ex-cth{display:none}
+  .ex-ctr{grid-template-columns:1fr 1fr 30px;row-gap:4px}
+  .ex-ctr>span:first-child{grid-column:1/-1}
+  .ex-ctr>span:nth-child(2){text-align:left}
+  .ex-ctr>span:nth-child(4){display:none}
+  .ex-minbox{grid-template-columns:1fr 90px}
+  .ex-minbox>span{grid-column:1/-1}
+}
+.ex-calcbar .seg button{white-space:nowrap}
