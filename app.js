@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.94.1';
+const APP_VERSION = '2.95.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3109,7 +3109,7 @@ function pushNav(hash, tries) {
     if (mode() !== 'sheet') return;
     const ep = navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(g => g.pushManager.getSubscription()).then(x => x ? x.endpoint : '').catch(() => '') : Promise.resolve('');
     return ep.then(e => api().pushInfo(e ? { ep: e } : {})).then(r => { const i = r && r.info; if (!i) return;
-      const k = i.kind, h = k === 'msg' || k === 'sos' ? 'msg/' + encodeURIComponent(i.mid || '') : ['assign', 'cmt', 'help', 'fix', 'visit', 'prodnew', 'prodready'].indexOf(k) >= 0 && i.code ? 'job/' + encodeURIComponent(i.code) : k === 'digest' ? 'digest' : k === 'low' || k === 'nostock' ? 'stock' : k === 'kb' ? 'kb' : '';
+      const k = i.kind, h = k === 'msg' || k === 'sos' ? 'msg/' + encodeURIComponent(i.mid || '') : ['assign', 'cmt', 'help', 'fix', 'visit', 'prodnew', 'prodready'].indexOf(k) >= 0 && i.code ? 'job/' + encodeURIComponent(i.code) : k === 'digest' ? 'digest' : k === 'low' || k === 'nostock' || k === 'exlow' ? 'stock' : k === 'kb' ? 'kb' : '';
       if (h) pushNav('#' + h); }).catch(() => {});
   }
   if (p[0] && viewsFor(S.user).some(v => v.id === p[0])) go(p[0]);
@@ -6410,8 +6410,13 @@ function stLevel(x) {
 const EX = { cfg: null, items: new Map(), locs: new Map(), tabs: {}, agent: null, ver: 0, busy: false, err: '', at: 0, loaded: false, recent: null, recentAt: 0, card: null, timer: 0 };
 const EV = { q: '', grp: 'bal', loc: '', sort: 'cod', lim: 200, open: '', sel: new Map(Object.entries(LS.get('exSel', {}) || {})), basis: LS.get('exBasis', 'cost'), calc: false };
 /* จุดสั่งซื้อ (ตั้งในแอป) · ใกล้หมด = ยอด ≤ จุดสั่งซื้อ */
-const exMin = cod => +((EX.mins || {})[cod]) || 0;
-const exLowOf = x => { const m = exMin(x[0]); return m > 0 && (+x[6] || 0) <= m; };
+/* แจ้งเตือนใกล้หมด 2 แบบ: (1) ค่ารวม '*' ใช้กับทุกรายการทุกหมวด (2) ตั้งเฉพาะรายการ — รายการที่ตั้งเองชนะค่ารวม */
+const exMinOwn = cod => cod === '*' ? 0 : +((EX.mins || {})[cod]) || 0;
+const exMinAll = () => +((EX.mins || {})['*']) || 0;
+const exMin = cod => exMinOwn(cod) || exMinAll();
+const exLowOf = x => { const b = +x[6] || 0, own = exMinOwn(x[0]); if (own > 0) return b <= own; const g = exMinAll(); return g > 0 && b > 1e-9 && b <= g; };   // ค่ารวม: ไม่นับรหัสที่ไม่มียอดอยู่แล้ว
+const exHitOf = x => { const m = exMin(x[0]); return m > 0 && (+x[6] || 0) <= m; };   // ใช้เด้งเตือน (รวมตัวที่เพิ่งลดจนหมด)
+const exOwnN = () => Object.keys(EX.mins || {}).filter(c => c !== '*' && EX.items.has(c)).length;
 function exSelSave() { try { LS.set('exSel', Object.fromEntries(EV.sel)); } catch (e) {} }
 const exPrice = x => EV.basis === 'last' ? (+x[10] || +x[8] || 0) : (+x[8] || +x[10] || 0);
 const EX_OP = { '0': ['รับซื้อ', 1], '1': ['รับเข้า/ปรับ', 1], '2': ['รับคืนจากลูกค้า', 1], '3': ['โอนเข้า', 1], '4': ['โอนออก', -1], '6': ['เบิก', -1], '7': ['คืนผู้ขาย', -1], '8': ['ปรับยอด', 1], '9': ['ขาย', -1] };
@@ -6454,7 +6459,7 @@ async function exSync(force) {
     const wasLoaded = EX.loaded; EX.loaded = true; EX.err = ''; EX.at = Date.now();
     if (changed) { EX.recentAt = 0; exSaveCache(); }
     // แจ้งเตือนในแอป: สินค้าที่เพิ่งลดลงถึงจุดสั่งซื้อ (เทียบกับรอบก่อน)
-    const lowNow = new Set([...EX.items.values()].filter(exLowOf).map(x => x[0]));
+    const lowNow = new Set([...EX.items.values()].filter(exHitOf).map(x => x[0]));
     if (wasLoaded && EX.lowSet) { const fresh = [...lowNow].filter(c => !EX.lowSet.has(c)); if (fresh.length && canSeeStock()) toast('📦 ใกล้หมด: ' + fresh.slice(0, 3).map(c => (EX.items.get(c) || [c, c])[1] || c).join(', ') + (fresh.length > 3 ? ' และอีก ' + (fresh.length - 3) + ' รายการ' : '') + ' (Express)', true); }
     EX.lowSet = lowNow;
     if ((changed || force) && exWait().length) exPendMatchNow();
@@ -6541,12 +6546,12 @@ function viewExpress() {
     '<span class="ski">' + ic + '</span><span class="skt"><small>' + lab + '</small><b class="tnum" data-cnt="' + String(n).replace(/[^0-9.-]/g, '') + '">' + n + '</b><em>' + sub + '</em>' +
     (pct != null ? '<i class="k-bar"><u style="--w:' + Math.max(pct > 0 ? 3 : 0, Math.min(100, pct)).toFixed(1) + '%"></u></i>' : '') + '</span><span class="k-go" aria-hidden="true">ดูรายการ ›</span></button>';
   kpi.i = 0;
-  const lows = all.filter(exLowOf).sort((a, b) => ((+a[6] || 0) - exMin(a[0])) - ((+b[6] || 0) - exMin(b[0]))), nMin = Object.keys(EX.mins || {}).filter(c => EX.items.has(c)).length;
+  const lows = all.filter(exLowOf).sort((a, b) => ((+a[6] || 0) - exMin(a[0])) - ((+b[6] || 0) - exMin(b[0]))), nMin = exOwnN(), gMin = exMinAll(), armed = nMin || gMin;
   const xw = exWait(), xo = xw.filter(xpOld).length;
   const kIn = !EV.kAnim; EV.kAnim = true;   // แอนิเมชันเข้าเฉพาะครั้งแรกที่เปิดแท็บนี้ (อัปเดตทุก 20 วิไม่เด้งซ้ำ)
   const kpis = '<div class="sk-kpis ex-kpis' + (kIn ? ' in' : '') + '">' + kpi('k-tot', ST_IC.sheet, 'สินค้าทั้งหมด', exN(all.length), 'รหัสใน Express · ไม่มียอด ' + exN(all.length - withBal.length), 'all', 100) +
     kpi('k-all', ST_IC.box, 'มีของในคลัง', exN(withBal.length), 'มูลค่ารวม ' + baht(totVal), 'bal', all.length ? withBal.length / all.length * 100 : 0) +
-    kpi('k-low', STI.fire, 'ใกล้หมด', exN(lows.length), !nMin ? 'ยังไม่ตั้งจุดสั่งซื้อ · กดที่สินค้าเพื่อตั้ง' : lows.length ? 'ถึงจุดสั่งซื้อแล้ว · ควรสั่งเพิ่ม' : 'ของพอ · ตั้งจุดสั่งซื้อไว้ ' + exN(nMin) + ' รหัส', 'low', nMin ? lows.length / nMin * 100 : 0) +
+    kpi('k-low', STI.fire, 'ใกล้หมด', exN(lows.length), !armed ? 'ยังไม่ตั้งแจ้งเตือน · กด "ตั้งแจ้งเตือน"' : lows.length ? 'ถึงจุดที่ตั้งไว้ · ควรสั่งเพิ่ม' : 'ของพอ · ' + (gMin ? 'เตือนทุกรายการเมื่อเหลือ ≤ ' + exN(gMin) : 'ตั้งไว้ ' + exN(nMin) + ' รหัส'), 'low', gMin ? (withBal.length ? lows.length / withBal.length * 100 : 0) : nMin ? lows.length / nMin * 100 : 0) +
     kpi('k-zero', PIC.xmark || STI.fire, 'ยอดติดลบ', exN(neg), neg ? 'ออกเกินยอด · ตรวจใน Express' : 'ไม่มี · ยอดปกติทุกรหัส', neg ? 'neg' : '', withBal.length ? neg / withBal.length * 100 : 0, neg ? '' : 'list') +
     kpi('k-wait', XP_IC, 'รอลง Express', exN(xw.length), xw.length ? (xo ? 'ค้างเกิน 1 วัน ' + xo + ' รายการ' : 'บันทึกในแอป · รอคีย์ใน Express') : 'ลงครบทุกรายการแล้ว', 'wait', xw.length ? (xw.length - xo) / xw.length * 100 : 100) +
     kpi('k-mv', STI.clock, 'เคลื่อนไหว 7 วัน', exN(rec.length), 'รับเข้า ' + wkIn + ' · ออก ' + wkOut, '', rec.length ? wkIn / rec.length * 100 : 0, 'hist') + '</div>';
@@ -6576,8 +6581,8 @@ function viewExpress() {
   const appAll = S.stock ? stockItems() : [], appNeed = appAll.filter(x => stReg(x) && (stLow(x) || stZero(x)));
   const appTools = !S.stock ? '' : '<div class="ex-apptools">' + (appNeed.length ? '<button type="button" class="sk-alert" data-exsrc="app" data-exthen="low"><span>' + STI.fire + '</span><b>คลังในแอป: ต้องสั่งเพิ่ม ' + appNeed.length + ' รายการ</b><small>' + esc(appNeed.slice(0, 4).map(x => x.name).join(' · ')) + (appNeed.length > 4 ? ' …' : '') + '</small><em>ดูทั้งหมด ›</em></button>' : '') +
     (canStock() ? '<div class="ex-appbtns"><button type="button" class="btn sk-tbtn t-buy" data-buyopen="1">' + SKT_IC.buy + '<span>ใบขอซื้อ</span>' + (appNeed.length ? '<em>' + appNeed.length + '</em>' : '') + '</button><button type="button" class="btn sk-tbtn t-cnt" data-cntopen="1">' + SKT_IC.count + '<span>นับสต็อก</span></button></div>' : '') + '</div>';
-  const lowAlert = lows.length ? '<button type="button" class="sk-alert ex-lowalert" data-exgrp="low"><span>' + STI.fire + '</span><b>Express: ใกล้หมด ' + lows.length + ' รายการ</b><small>' + esc(lows.slice(0, 4).map(x => (x[1] || x[0]) + ' (' + exN(x[6]) + '/' + exN(exMin(x[0])) + ')').join(' · ')) + (lows.length > 4 ? ' …' : '') + '</small><em>ดูทั้งหมด ›</em></button>'
-    : !nMin && canStock() ? '<p class="ex-minhint">' + STI.fire + 'ยังไม่ได้ตั้งจุดสั่งซื้อ · กดที่สินค้าแล้วใส่ "จุดสั่งซื้อ" ระบบจะเตือนเมื่อยอดใน Express ลดถึงจุดนั้น</p>' : '';
+  const lowAlert = lows.length ? '<button type="button" class="sk-alert ex-lowalert" data-exgrp="low"><span>' + STI.fire + '</span><b>Express: ใกล้หมด ' + lows.length + ' รายการ</b><small>' + esc(lows.slice(0, 4).map(x => (x[1] || x[0]) + ' (' + exN(x[6]) + '/' + exN(exMin(x[0])) + ')').join(' · ')) + (lows.length > 4 ? ' …' : '') + '</small><em>ดูทั้งหมด ›</em></button>' + exAlStrip(gMin, nMin)
+    : exAlStrip(gMin, nMin);
   const selItems = [...EV.sel.keys()].map(c => EX.items.get(c)).filter(Boolean);
   const selIn = !EV.selShown; EV.selShown = !!EV.sel.size;
   const selBar = !ro && EV.sel.size ? '<div class="ex-selbar ex-float' + (selIn ? ' pop' : '') + '"><span class="ex-sbi">' + PIC.check + '<b class="ex-sbn">' + exN(EV.sel.size) + '</b></span><span><b>เลือก ' + exN(EV.sel.size) + ' รายการ</b><small>มูลค่ารวม ' + baht(exCalcRows(selItems).tot) + '</small></span><button type="button" class="btn sm" data-exgrp="sel">ดูเฉพาะที่เลือก</button>' + (canStock() ? '<button type="button" class="btn sm" data-xpnew="">บันทึกเบิก/รับ</button>' : '') + '<button type="button" class="btn sm primary" data-excalc="1">คำนวณราคา</button><button type="button" class="btn sm ghost" data-exselclr="1">ล้าง</button></div>' : '';
@@ -6589,6 +6594,105 @@ function viewExpress() {
     : chips) + body + selBar + '</section>' +
     '<div class="sk-side ex-side">' + exPendPanel() + '<section class="panel" id="exHist"><div class="panel-h"><h2>เคลื่อนไหว 7 วันล่าสุด</h2></div>' + hist + '</section></div></div>';
 }
+/* ---- ตั้งแจ้งเตือนสินค้าใกล้หมด (ฝ่ายสต็อก) ----
+   1) ทุกรายการในครั้งเดียว: ค่ารวม '*' ใช้กับสินค้าทุกตัวทุกหมวดที่ยังมียอด
+   2) เลือกรายการเอง: ค้นหาแล้วตั้งเฉพาะตัว (ชนะค่ารวม) · บันทึกผ่าน exMinSet เดิม (ส่งเป็นชุด) */
+function exAlStrip(g, n) {
+  const on = g > 0 || n > 0, st = !on ? 'ยังไม่ได้ตั้ง · ตั้งได้ทั้งแบบทุกรายการในครั้งเดียว หรือเลือกเฉพาะรายการ' : [g ? 'ทุกรายการทุกหมวด: เตือนเมื่อเหลือ ≤ ' + exN(g) : '', n ? 'ตั้งเฉพาะ ' + exN(n) + ' รายการ' : ''].filter(Boolean).join(' · ');
+  return '<div class="ex-albar' + (on ? ' on' : '') + '"><span class="ex-alic">' + MSG_IC.bell + '</span><span class="ex-alt"><b>แจ้งเตือนสินค้าใกล้หมด' + (on ? ' <em>เปิดอยู่</em>' : '') + '</b><small>' + esc(st) + '</small></span>' +
+    (canStock() ? '<span class="ex-albtns"><button type="button" class="btn sm primary" data-exal="all">' + MSG_IC.bell + '<span>ตั้งทุกรายการ</span></button><button type="button" class="btn sm" data-exal="pick">' + I.search + '<span>เลือกรายการเอง</span></button></span>' : '') + '</div>';
+}
+function exAlOpen(tab) {
+  if (!canStock()) return toast('ตั้งแจ้งเตือนได้เฉพาะฝ่ายสต็อก', true);
+  const g = exMinAll(); EV.al = { tab: tab === 'pick' ? 'pick' : 'all', on: g > 0, g: g ? String(g) : '2', q: '', ed: {} }; exAlDraw();
+  setTimeout(() => { const i = $(EV.al && EV.al.tab === 'pick' ? '#xaQ' : '#xaG'); if (i && !i.disabled) i.focus(); }, 60);
+}
+const exAlG = () => { const a = EV.al; return a && a.on ? Math.max(0, +a.g || 0) : 0; };
+const exAlV = c => { const a = EV.al; return a && Object.prototype.hasOwnProperty.call(a.ed, c) ? a.ed[c] : exMinOwn(c) ? String(exMinOwn(c)) : ''; };
+function exAlChanges() {
+  const a = EV.al, out = []; if (!a) return out;
+  if (exAlG() !== exMinAll()) out.push({ cod: '*', min: exAlG() ? String(exAlG()) : '' });
+  Object.keys(a.ed).forEach(c => { const v = String(a.ed[c]).trim(), n = v === '' ? 0 : +v; if (n !== exMinOwn(c) || (v !== '' && !(n >= 0))) out.push({ cod: c, min: v === '' || n === 0 ? '' : v }); });
+  return out;
+}
+function exAlDraw() {
+  let m = $('#exAl'); const a = EV.al; if (!a) { if (m) m.remove(); return; }
+  if (!m) { m = document.createElement('div'); m.id = 'exAl'; m.className = 'pmodal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m);
+    m.addEventListener('click', e => { if (e.target === m) { EV.al = null; exAlDraw(); } }); }
+  const tabs = '<div class="xa-tabs" role="tablist">' + [['all', 'ทุกรายการในครั้งเดียว', 'ตั้งจำนวนเดียว ใช้กับทุกหมวด', MSG_IC.bell], ['pick', 'เลือกรายการเอง', 'ค้นหาแล้วตั้งเฉพาะตัว', I.search]].map((t, i) =>
+    '<button type="button" role="tab" class="xa-tab" aria-selected="' + (a.tab === t[0]) + '" data-exaltab="' + t[0] + '"><span class="xa-ti">' + t[3] + '</span><span><b>' + (i + 1) + '. ' + t[1] + '</b><small>' + t[2] + '</small></span></button>').join('') + '</div>';
+  const own = exOwnN();
+  const body = a.tab === 'all'
+    ? '<label class="xa-sw"><input type="checkbox" id="xaOn"' + (a.on ? ' checked' : '') + '><i aria-hidden="true"></i><span><b>เปิดแจ้งเตือนทุกรายการ ทุกหมวดหมู่</b><small>ใช้กับสินค้าทุกตัวใน Express ที่ยังมียอดอยู่</small></span></label>' +
+      '<div class="xa-big' + (a.on ? '' : ' off') + '"><span>เตือนเมื่อเหลือ ≤</span><button type="button" class="xa-step" data-exalstep="-1" aria-label="ลด"' + (a.on ? '' : ' disabled') + '>−</button><input id="xaG" type="number" min="0" step="any" inputmode="decimal" value="' + esc(a.g) + '" aria-label="จำนวนที่เหลือ"' + (a.on ? '' : ' disabled') + '><button type="button" class="xa-step" data-exalstep="1" aria-label="เพิ่ม"' + (a.on ? '' : ' disabled') + '>+</button><span>หน่วย</span></div>' +
+      '<div class="xa-quick"><small>ค่าที่ใช้บ่อย</small>' + [1, 2, 3, 5, 10, 20].map(n => '<button type="button" class="qchip" data-exalg="' + n + '" aria-pressed="' + (a.on && +a.g === n) + '">' + n + '</button>').join('') + '</div>' +
+      '<div id="xaPrev" class="xa-prev"></div>' +
+      '<p class="xa-note">' + STI.fire + '<span>รายการที่ตั้งเองในข้อ 2 ใช้จำนวนของตัวเองแทนค่ารวม' + (own ? ' (ตอนนี้ตั้งเฉพาะไว้ ' + exN(own) + ' รายการ)' : '') + ' · เด้งแจ้งเตือนเมื่อยอดลดลงถึงจุดนี้ ไม่เตือนซ้ำจนกว่าจะเติมของ</span></p>'
+    : '<label class="search xa-q">' + I.search + '<input id="xaQ" type="search" autocomplete="off" placeholder="ค้นหารหัส ชื่อสินค้า หรือชื่อหมวด…" value="' + esc(a.q) + '" aria-label="ค้นหาสินค้า"></label>' +
+      '<div class="xa-bulk" id="xaBulkW"><span>ใส่จำนวนเดียวกันให้ทุกรายการที่ค้นเจอ</span><input id="xaBulk" type="number" min="0" step="any" inputmode="decimal" placeholder="เช่น 5" aria-label="จำนวนสำหรับทุกรายการที่ค้นเจอ"><button type="button" class="btn sm" data-exalbulk="1">ใส่ให้ทั้งหมด</button></div>' +
+      '<div id="xaRes" class="xa-list"></div><div class="xa-h"><b>ตั้งเฉพาะรายการไว้</b><span id="xaSetN"></span></div><div id="xaSet" class="xa-list xa-set"></div>';
+  m.innerHTML = '<div class="pm-card ex-card xa-card"><div class="pm-h"><div><div class="eyebrow">Express · แจ้งเตือน</div><h3 style="font-family:inherit">ตั้งแจ้งเตือนสินค้าใกล้หมด</h3><p class="sub">เด้งแจ้งเตือนฝ่ายสต็อกเมื่อยอดใน Express ลดถึงจำนวนที่ตั้ง</p></div><button type="button" class="icon-btn" data-exalx="1" aria-label="ปิด">✕</button></div>' +
+    '<div class="pm-b">' + tabs + '<div class="xa-body">' + body + '</div></div><div class="pm-f"><span class="xa-dirty" id="xaDirty"></span><span style="flex:1"></span><button type="button" class="btn ghost" data-exalx="1">ปิด</button><button type="button" class="btn primary" data-exalsave="1"' + (a.saving ? ' disabled' : '') + '>' + (a.saving ? 'กำลังบันทึก…' : 'บันทึก') + '</button></div></div>';
+  exAlRes();
+}
+function exAlMatch() { const a = EV.al, q = (a.q || '').trim(); if (!q) return [];
+  return [...EX.items.values()].filter(x => qHit([x[0], x[1], x[2], x[3], exGrpN(x[3])], q)).sort((p, r) => ((+r[6] || 0) > 1e-9) - ((+p[6] || 0) > 1e-9) || String(p[0]).localeCompare(String(r[0]))); }
+function exAlRow(x) { const c = x[0], v = exAlV(c), g = exAlG(), b = +x[6] || 0, n = v === '' ? 0 : +v, eff = n || g, low = eff > 0 && (n ? b <= n : b > 1e-9 && b <= g);
+  return '<div class="xa-r' + (n > 0 ? ' set' : '') + (low ? ' low' : '') + '"><span class="xa-t"><b>' + esc(c) + '</b><small>' + esc(x[1] || '') + '</small><i style="--ch:' + exGrpCol(x[3]) + '">' + esc(exGrpN(x[3])) + '</i></span>' +
+    '<span class="xa-b"><small>คงเหลือ</small><b class="tnum">' + exN(b) + '</b><small>' + esc(exUnit(x[5])) + '</small></span>' +
+    '<label class="xa-in"><small>เตือนเมื่อ ≤</small><input type="number" min="0" step="any" inputmode="decimal" data-exalin="' + esc(c) + '" value="' + esc(v) + '" placeholder="' + (g ? 'รวม ' + exN(g) : 'ไม่ตั้ง') + '" aria-label="เตือนเมื่อ ' + esc(c) + ' เหลือ ≤"></label>' +
+    (n > 0 ? '<button type="button" class="icon-btn sm" data-exalrm="' + esc(c) + '" aria-label="ไม่ตั้งเฉพาะ ' + esc(c) + '" title="ไม่ตั้งเฉพาะ (ใช้ค่ารวม)">✕</button>' : '<span></span>') + '</div>'; }
+function exAlRes() {
+  const a = EV.al; if (!a) return; const g = exAlG();
+  const pv = $('#xaPrev'); if (pv) { const hit = g ? [...EX.items.values()].filter(x => !exMinOwn(x[0]) && (+x[6] || 0) > 1e-9 && (+x[6] || 0) <= g).sort((p, r) => (+p[6] || 0) - (+r[6] || 0)) : [], cover = g ? [...EX.items.values()].filter(x => (+x[6] || 0) > 1e-9).length : 0;
+    pv.innerHTML = !g ? '<div class="xa-off">ปิดอยู่ · ใช้เฉพาะรายการที่ตั้งเองในข้อ 2</div>'
+      : '<div class="xa-stat"><span><b class="tnum">' + exN(cover) + '</b><small>รายการที่มียอด (ทุกหมวด) จะถูกเฝ้าดู</small></span><span class="' + (hit.length ? 'warn' : 'ok') + '"><b class="tnum">' + exN(hit.length) + '</b><small>' + (hit.length ? 'ตอนนี้เหลือ ≤ ' + exN(g) + ' แล้ว จะขึ้นใกล้หมดทันที' : 'ตอนนี้ยังไม่มีรายการไหนถึง') + '</small></span></div>' +
+        (hit.length ? '<div class="xa-peek">' + hit.slice(0, 6).map(x => '<span><b>' + esc(x[1] || x[0]) + '</b><em>' + exN(x[6]) + ' ' + esc(exUnit(x[5])) + '</em></span>').join('') + (hit.length > 6 ? '<span class="more">และอีก ' + exN(hit.length - 6) + ' รายการ</span>' : '') + '</div>' : ''); }
+  const rs = $('#xaRes'); if (rs) { const mt = exAlMatch();
+    rs.innerHTML = !(a.q || '').trim() ? '<div class="xa-empty">' + I.search + '<span>พิมพ์รหัส ชื่อ หรือชื่อหมวด (เช่น วัตถุดิบ) เพื่อค้นหาสินค้าที่จะตั้งแจ้งเตือน</span></div>'
+      : !mt.length ? '<div class="xa-empty"><span>ไม่พบ "' + esc(a.q) + '"</span></div>'
+      : mt.slice(0, 50).map(exAlRow).join('') + (mt.length > 50 ? '<div class="xa-more">แสดง 50 จาก ' + exN(mt.length) + ' รายการ · พิมพ์เพิ่มให้แคบลง (ปุ่ม "ใส่ให้ทั้งหมด" ใช้กับทุก ' + exN(Math.min(mt.length, 500)) + ' รายการที่ค้นเจอ)</div>' : '');
+    const bw = $('#xaBulkW'); if (bw) bw.hidden = !mt.length; }
+  exAlSetDraw(); exAlDirty();
+}
+function exAlSetDraw() {
+  const st = $('#xaSet'); if (!st) return; const a = EV.al;
+  const cods = [...new Set(Object.keys(EX.mins || {}).filter(c => c !== '*').concat(Object.keys(a.ed)))].filter(c => +exAlV(c) > 0 && EX.items.has(c)).sort();
+  $('#xaSetN').textContent = cods.length ? exN(cods.length) + ' รายการ' : '';
+  st.innerHTML = cods.length ? cods.map(c => exAlRow(EX.items.get(c))).join('') : '<div class="xa-empty"><span>ยังไม่ได้ตั้งเฉพาะรายการ · ค้นหาด้านบนแล้วใส่จำนวน</span></div>';
+}
+function exAlDirty() { const el = $('#xaDirty'); if (!el) return; const n = exAlChanges().length; el.textContent = n ? 'ยังไม่บันทึก ' + n + ' การเปลี่ยนแปลง' : ''; }
+function exAlSave() {
+  const a = EV.al; if (!a || a.saving) return; const ch = exAlChanges();
+  if (a.on && !(exAlG() > 0)) return toast('ใส่จำนวนที่จะเตือน (มากกว่า 0) หรือปิดสวิตช์', true);
+  if (ch.some(x => x.min !== '' && !(+x.min >= 0))) return toast('จำนวนต้องเป็นตัวเลข', true);
+  if (!ch.length) { EV.al = null; exAlDraw(); return toast('ไม่มีอะไรเปลี่ยน'); }
+  a.saving = true; exAlDraw();
+  const parts = []; for (let i = 0; i < ch.length; i += 500) parts.push(ch.slice(i, i + 500));
+  parts.reduce((p, part) => p.then(() => api().exMinSet({ items: part }).then(r => { EX.mins = (r && r.exMins) || EX.mins; })), Promise.resolve())
+    .then(() => { EX.lowSet = new Set([...EX.items.values()].filter(exHitOf).map(x => x[0])); EV.al = null; exAlDraw(); const g = exMinAll(), n = exOwnN();
+      toast('บันทึกแจ้งเตือนแล้ว · ' + [g ? 'ทุกรายการ ≤ ' + exN(g) : 'ปิดค่ารวม', n ? 'เฉพาะ ' + exN(n) + ' รายการ' : ''].filter(Boolean).join(' · ')); render(); })
+    .catch(er => { if (EV.al) { EV.al.saving = false; exAlDraw(); } toast(er.message || 'บันทึกไม่สำเร็จ', true); });
+}
+document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-exal],[data-exalx],[data-exaltab],[data-exalg],[data-exalstep],[data-exalbulk],[data-exalrm],[data-exalsave]'); if (!t) return; const d = t.dataset, a = EV.al;
+  if (d.exal) return exAlOpen(d.exal); if (!a) return;
+  if (d.exalx) { EV.al = null; return exAlDraw(); }
+  if (d.exaltab) { a.tab = d.exaltab; exAlDraw(); const i = $(a.tab === 'pick' ? '#xaQ' : '#xaG'); if (i && !i.disabled) i.focus(); return; }
+  if (d.exalg) { a.on = true; a.g = d.exalg; return exAlDraw(); }
+  if (d.exalstep) { a.g = String(Math.max(0, (+a.g || 0) + +d.exalstep)); return exAlDraw(); }
+  if (d.exalrm) { a.ed[d.exalrm] = ''; return exAlRes(); }
+  if (d.exalbulk) { const v = (($('#xaBulk') || {}).value || '').trim(); if (!(+v > 0)) return toast('ใส่จำนวนที่จะเตือน (มากกว่า 0)', true);
+    const mt = exAlMatch().slice(0, 500); mt.forEach(x => { a.ed[x[0]] = v; }); exAlRes(); return toast('ใส่ ≤ ' + v + ' ให้ ' + exN(mt.length) + ' รายการ · กดบันทึกเพื่อใช้งาน'); }
+  if (d.exalsave) return exAlSave();
+});
+document.addEventListener('input', e => { const a = EV.al, t = e.target; if (!a || !t.closest || !t.closest('#exAl')) return;
+  if (t.id === 'xaQ') { a.q = t.value; return exAlRes(); }
+  if (t.id === 'xaG') { a.g = t.value; document.querySelectorAll('#exAl [data-exalg]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.exalg === +a.g))); return exAlRes(); }
+  if (t.id === 'xaOn') { a.on = t.checked; if (a.on && !(+a.g > 0)) a.g = '2'; return exAlDraw(); }
+  if (t.dataset.exalin) { const c = t.dataset.exalin; a.ed[c] = t.value; document.querySelectorAll('#exAl [data-exalin]').forEach(o => { if (o !== t && o.dataset.exalin === c) o.value = t.value; }); return exAlDirty(); }
+});
+document.addEventListener('change', e => { const a = EV.al, t = e.target; if (!a || !t.dataset || !t.dataset.exalin || !t.closest('#exAl')) return; exAlSetDraw(); exAlDirty(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && EV.al) { EV.al = null; exAlDraw(); e.stopPropagation(); } }, true);
 /* ---- เลือกหลายรายการ → คำนวณจำนวนและราคา ---- */
 function exCalcRows(items) {
   let tot = 0, qty = 0;
@@ -6835,8 +6939,8 @@ function exCardDraw() {
     '<div class="ex-sum"><div><small>คงเหลือรวม</small><b class="tnum">' + exN(it[6]) + '</b><em>' + esc(u) + '</em></div><div><small>ทุนต่อหน่วย</small><b class="tnum">' + (+it[8] ? baht(+it[8]) : '–') + '</b><em>มูลค่า ' + baht(+it[7] || 0) + '</em></div><div><small>ซื้อล่าสุด</small><b>' + (exDate(it[9]) || '–') + '</b><em>' + (+it[10] ? baht(+it[10]) : '') + (it[11] ? ' · ' + esc(it[11]) : '') + '</em></div></div>' +
     (ls.length ? '<div class="ex-lbox"><b>แยกตามคลัง</b>' + ls.map(l => '<span><i>' + esc(l[1]) + '</i>' + esc(exLocN(l[1])) + '<b class="tnum">' + exN(l[2]) + ' ' + esc(u) + '</b></span>').join('') + '</div>' : '') +
     (it[12] ? '<p class="sf-note">' + esc(it[12]) + '</p>' : '') +
-    '<div class="ex-minbox' + (exLowOf(it) ? ' low' : '') + '"><span><b>จุดสั่งซื้อ</b><small>' + (exMin(c.cod) ? (exLowOf(it) ? 'ใกล้หมดแล้ว · ยอด ' + exN(it[6]) + ' ≤ ' + exN(exMin(c.cod)) : 'เตือนเมื่อยอดเหลือ ≤ ' + exN(exMin(c.cod)) + ' ' + esc(u)) : 'ยังไม่ได้ตั้ง · ตั้งแล้วระบบเตือนเมื่อใกล้หมด') + '</small></span>' +
-      (canStock() ? '<input type="number" step="any" min="0" inputmode="decimal" id="exMinIn" value="' + (exMin(c.cod) || '') + '" placeholder="เช่น 10" aria-label="จุดสั่งซื้อ"><button type="button" class="btn sm primary" data-exminsave="' + esc(c.cod) + '"' + (c.saving ? ' disabled' : '') + '>' + (c.saving ? 'กำลังบันทึก…' : 'บันทึก') + '</button>' : '<b class="tnum">' + (exMin(c.cod) ? exN(exMin(c.cod)) + ' ' + esc(u) : '–') + '</b>') + '</div>' +
+    '<div class="ex-minbox' + (exLowOf(it) ? ' low' : '') + '"><span><b>จุดสั่งซื้อ</b><small>' + (exMin(c.cod) ? (exLowOf(it) ? 'ใกล้หมดแล้ว · ยอด ' + exN(it[6]) + ' ≤ ' + exN(exMin(c.cod)) : 'เตือนเมื่อยอดเหลือ ≤ ' + exN(exMin(c.cod)) + ' ' + esc(u) + (exMinOwn(c.cod) ? ' (ตั้งเฉพาะรายการนี้)' : ' (ค่ารวมทุกรายการ)')) : 'ยังไม่ได้ตั้ง · ตั้งแล้วระบบเตือนเมื่อใกล้หมด') + '</small></span>' +
+      (canStock() ? '<input type="number" step="any" min="0" inputmode="decimal" id="exMinIn" value="' + (exMinOwn(c.cod) || '') + '" placeholder="' + (exMinAll() ? 'ค่ารวม ' + exN(exMinAll()) : 'เช่น 10') + '" aria-label="จุดสั่งซื้อ"><button type="button" class="btn sm primary" data-exminsave="' + esc(c.cod) + '"' + (c.saving ? ' disabled' : '') + '>' + (c.saving ? 'กำลังบันทึก…' : 'บันทึก') + '</button>' : '<b class="tnum">' + (exMin(c.cod) ? exN(exMin(c.cod)) + ' ' + esc(u) : '–') + '</b>') + '</div>' +
     (() => { const pw = exPendOf(c.cod), net = exPendNet(c.cod); return '<div class="ex-pbox' + (pw.length ? ' on' : '') + '"><div><b>รอลง Express</b><small>' + (pw.length ? pw.length + ' รายการ · ยอดหลังลงครบ ≈ <b class="tnum">' + exN((+it[6] || 0) + net) + '</b> ' + esc(u) : (canStock() ? 'เบิกหรือรับของชิ้นนี้? บันทึกไว้ก่อน แล้วคีย์ใน Express ภายหลัง' : 'ไม่มีรายการรอ · บันทึกเบิก/รับได้เฉพาะฝ่ายสต็อก')) + '</small>' +
       pw.map(r => '<span class="ex-pl ' + (r.kind === 'in' ? 'k-in' : 'k-out') + '">' + (r.kind === 'in' ? '+' : '−') + exN(r.qty) + ' · ' + esc(r.who + ' ' + xpWhen(r.ts) + (r.job ? ' · Job ' + r.job : '')) + '</span>').join('') + '</div>' + (canStock() ? '<button type="button" class="btn sm primary" data-xpnew="' + esc(c.cod) + '">บันทึกเบิก/รับ</button>' : '') + '</div>'; })() +
     (canStock() ? '<div class="ex-cardsel"><button type="button" class="btn sm' + (EV.sel.has(c.cod) ? ' primary' : '') + '" data-exsel="' + esc(c.cod) + '">' + (EV.sel.has(c.cod) ? '✓ เลือกไว้แล้ว' : '+ เลือกเพื่อคำนวณราคา') + '</button></div>' : '') +
@@ -6871,7 +6975,7 @@ document.addEventListener('click', e => {
   if (d.expdf) return exCalcPrint(true);
   if (d.exminsave) { const cod = d.exminsave, v = (($('#exMinIn') || {}).value || '').trim(); if (v !== '' && !(+v >= 0)) return toast('จุดสั่งซื้อต้องเป็นตัวเลข', true);
     EX.card.saving = true; exCardDraw();
-    api().exMinSet({ cod: cod, min: v }).then(r => { EX.mins = (r && r.exMins) || EX.mins; EX.lowSet = new Set([...EX.items.values()].filter(exLowOf).map(x => x[0])); toast(+v > 0 ? 'ตั้งจุดสั่งซื้อ ' + cod + ' = ' + v : 'ยกเลิกจุดสั่งซื้อ ' + cod); })
+    api().exMinSet({ cod: cod, min: v }).then(r => { EX.mins = (r && r.exMins) || EX.mins; EX.lowSet = new Set([...EX.items.values()].filter(exHitOf).map(x => x[0])); toast(+v > 0 ? 'ตั้งจุดสั่งซื้อ ' + cod + ' = ' + v : 'ยกเลิกจุดสั่งซื้อ ' + cod); })
       .catch(er => toast(er.message || 'บันทึกไม่สำเร็จ', true)).finally(() => { if (EX.card) EX.card.saving = false; redraw(); });
     return; }
   if (d.excclose) return exCardClose();

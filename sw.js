@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.94.1';
+const CACHE = 'kiwngan-v2.95.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 /* ตัวนี้ลงทะเบียน 2 ที่: ที่หลัก (แอป) และ ./ring/ (ช่องด่วน: push ที่มาทางนี้คือสายเรียกเข้า/ขอดูจอแน่นอน เด้งได้ทันที) */
@@ -42,6 +42,7 @@ const PUSH_TEXT = {
   sos: (f, i) => ['🛟 ' + f + ' ขอความช่วยเหลือ', i.title || 'แตะเพื่อเปิดดู'],
   due: (f, i) => ['⏳ งานใกล้ถึงกำหนด ' + (i.count || '') + ' งาน', (i.late ? 'เลยกำหนดแล้ว ' + i.late + ' งาน · ' : '') + (i.code || '')],
   low: (f, i) => ['📦 ' + (i.title || 'วัสดุ') + ' ใกล้หมด', 'เหลือ ' + (i.code || '') + ' · ถึงจุดสั่งซื้อแล้ว (' + f + ' เบิกล่าสุด)'],
+  exlow: (f, i) => ['📦 Express ใกล้หมด ' + (i.count || '') + ' รายการ', (i.title || '') + ' · ถึงจุดที่ตั้งแจ้งเตือนแล้ว'],
   nostock: (f, i) => ['🚫 ' + (i.title || 'วัสดุ') + ' หมดสต็อก', 'เหลือ 0 · ' + f + ' เบิกล่าสุด — ต้องสั่งเพิ่ม'],
   prodnew: (f, i) => ['🏭 งานใหม่รอผลิต · ' + (i.code || '') + (i.count ? ' (ด่วน)' : ''), (i.title ? i.title + ' · ' : '') + 'จาก ' + f + ' — แตะเพื่อเปิดงาน'],
   prodready: (f, i) => ['📦 งานพร้อมส่ง · ' + (i.code || '') + (i.count ? ' (ด่วน)' : ''), (i.title ? i.title + ' · ' : '') + f + ' แจ้งพร้อมส่ง — เตรียมส่งมอบ'],
@@ -78,7 +79,7 @@ const urlOf = (k, i) => { i = i || {};
   const msgCh = i.team ? 'team' : i.from === 'ผู้ดูแลระบบ' ? 'admin' : i.code ? 'u:' + i.code : '';
   const h = k === 'msg' || k === 'sos' ? 'msg' + (i.mid || msgCh ? '/' + enc(i.mid || '') + '/' + enc(msgCh) + '/' + enc(i.code || '') : '')
     : (k === 'assign' || k === 'cmt' || k === 'help' || k === 'fix' || k === 'visit' || k === 'prodnew' || k === 'prodready') && i.code ? 'job/' + enc(i.code)
-    : k === 'low' || k === 'nostock' ? 'stock' : k === 'digest' ? 'digest' : k === 'due' || k === 'visit' ? 'home' : k === 'pend' ? 'push' : k;
+    : k === 'low' || k === 'nostock' || k === 'exlow' ? 'stock' : k === 'digest' ? 'digest' : k === 'due' || k === 'visit' ? 'home' : k === 'pend' ? 'push' : k;
   return APP + '?from=push#' + h; };
 function notifOpts(k, info, extra) {
   return Object.assign({ body: '', tag: 'kiwngan-' + k + (info && info.code && k !== 'digest' ? '-' + info.code : ''), renotify: true, requireInteraction: !!URGENT[k], silent: false,

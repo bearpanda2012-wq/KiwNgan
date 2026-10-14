@@ -61,6 +61,6 @@ global.Utilities = {
   sleep: () => {}, DigestAlgorithm: { SHA_256: 1 }, Charset: { UTF_8: 1 }, newBlob: (s, type, name) => ({ name, type, getBytes: () => Array.from(Buffer.from(s)) }), base64Decode: b => Array.from(Buffer.from(b, 'base64'))
 };
 const src = fs.readFileSync(process.argv[2], 'utf8');
-const ctx = new Function(src + '\nreturn { doPost, setup, archiveOld, backupNow, installTriggers, migrateImagesToDrive, morningReminders, digestTick: typeof digestTick === "function" ? digestTick : null, exPendPair_: typeof exPendPair_ === "function" ? exPendPair_ : null };')();
+const ctx = new Function(src + '\nreturn { doPost, setup, archiveOld, backupNow, installTriggers, migrateImagesToDrive, morningReminders, digestTick: typeof digestTick === "function" ? digestTick : null, exPendPair_: typeof exPendPair_ === "function" ? exPendPair_ : null, exLowWatch_: typeof exLowWatch_ === "function" ? exLowWatch_ : null };')();
 const call = (action, payload, token) => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify({ action, payload, token }) } }).t);
 module.exports = { DRIVE, ARCH, ctx, call, sheets, cacheStore, props, reads: () => reads, resetReads: () => { reads = 0; } };

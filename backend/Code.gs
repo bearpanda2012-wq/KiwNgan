@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.45.0';
+const VERSION = '1.46.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -1003,6 +1003,8 @@ function exMinSet_(p, u) {
     const n = stockNum_(x.min); if (x.min !== '' && x.min != null && !(n >= 0)) throw new Error('จุดสั่งซื้อต้องเป็นตัวเลข');
     writeRow_('ExMin', { id: cod, min: n > 0 ? n : '', updatedAt: nowIso_(), updatedBy: u.name }, rowOf_('ExMin', cod));
   });
+  try { digestEnsure_(); } catch (e) {}   // ตัวเฝ้าใกล้หมดอาศัย digestTick รายชั่วโมง
+  exLowSeenSet_(null);   // เปลี่ยนค่าที่ตั้ง → เริ่มนับใหม่ ไม่เด้งรายการที่ต่ำอยู่แล้วซ้ำทีเดียวหลายร้อย
   bump_('data');
   return { exMins: exMins_() };
 }
@@ -2176,6 +2178,31 @@ function exLow_() {
     const v = JSON.parse(r.getContentText()); return Array.isArray(v) ? v : [];
   } catch (e) { return []; }
 }
+/* เฝ้าสินค้า Express ใกล้หมด (ทุกชั่วโมงจาก digestTick): รายการที่เพิ่งลดถึงจุดที่ตั้ง → เด้งแจ้งเตือนฝ่ายสต็อก 1 ข้อความรวม
+   ค่าที่ตั้ง: '*' = ทุกรายการทุกหมวด (เฉพาะที่ยังมียอด) · รหัสที่ตั้งเฉพาะชนะค่ารวม */
+function exLowSeen_() {
+  const pr = PropertiesService.getScriptProperties(), n = +(pr.getProperty('EXLOW_N') || -1); if (n < 0) return null;
+  let a = []; for (let i = 0; i < n; i++) { try { a = a.concat(JSON.parse(pr.getProperty('EXLOW_' + i) || '[]')); } catch (e) {} }
+  return a;
+}
+function exLowSeenSet_(cods) {
+  const pr = PropertiesService.getScriptProperties(), old = +(pr.getProperty('EXLOW_N') || 0);
+  for (let i = 0; i < old; i++) pr.deleteProperty('EXLOW_' + i);
+  if (!cods) { pr.deleteProperty('EXLOW_N'); return; }
+  let n = 0; for (let i = 0; i < cods.length; i += 300) pr.setProperty('EXLOW_' + (n++), JSON.stringify(cods.slice(i, i + 300)));
+  pr.setProperty('EXLOW_N', String(n));
+}
+function exLowWatch_() {
+  const mins = exMins_(); if (!Object.keys(mins).length) return 0;
+  const low = exLow_(), now = low.map(x => String(x[0])), seen = exLowSeen_();
+  exLowSeenSet_(now);
+  if (!seen) return 0;   // รอบแรกหลังตั้งค่า: จำไว้เฉย ๆ
+  const was = {}; seen.forEach(c => { was[c] = 1; });
+  const fresh = low.filter(x => !was[String(x[0])]); if (!fresh.length) return 0;
+  const to = usersLite_().filter(x => x.active && can_(x, 'stock.edit')).map(x => x.name); if (!to.length) return 0;
+  pushTo_(to, { kind: 'exlow', from: 'Express', title: fresh.slice(0, 3).map(x => (x[1] || x[0]) + ' (' + x[2] + ')').join(', ') + (fresh.length > 3 ? ' …' : ''), code: '', count: fresh.length });
+  return fresh.length;
+}
 const digestInfo_ = r => ({ kind: 'digest', from: '', title: r.title, code: r.body, count: r.alert });
 function digestTo_(cfg) {
   const act = usersLite_().filter(x => x.active).map(x => x.name), to = cfg.to.filter(n => act.indexOf(n) >= 0);
@@ -2185,6 +2212,7 @@ function digestTriggerOn_() { try { return ScriptApp.getProjectTriggers().some(t
 function digestEnsure_() { if (!digestTriggerOn_()) ScriptApp.newTrigger('digestTick').timeBased().everyHours(1).create(); return true; }
 /** ทำงานทุกชั่วโมง: ถึงเวลาที่ตั้งไว้ → ส่งสรุปครั้งเดียวต่อวัน */
 function digestTick() {
+  try { exLowWatch_(); } catch (e) { /* แจ้งเตือนเป็นของเสริม */ }
   const cfg = digestCfg_(); if (!cfg.on) return;
   const now = new Date(), hr = +Utilities.formatDate(now, tz_(), 'H'), u = +Utilities.formatDate(now, tz_(), 'u'), today = Utilities.formatDate(now, tz_(), 'yyyy-MM-dd');
   if (hr < cfg.hour || hr > cfg.hour + 2) return;   // ช่วงเผื่อ 2 ชม. เผื่อรอบก่อนพลาด

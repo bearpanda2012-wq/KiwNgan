@@ -102,7 +102,7 @@ await pg.screenshot({ path: new URL('out/v284-phone.png', import.meta.url).pathn
 await pg.keyboard.press('Escape');
 // v2.86: จุดสั่งซื้อ / ใกล้หมด / เลือกหลายรายการ + คำนวณราคา
 await pg.setViewportSize({ width: 1400, height: 900 }); await pg.evaluate(() => { SV.src = 'ex'; EX.cfg.tok = 'exr_test_token_123456789012345'; EX.err = ''; EV.grp = 'bal'; EV.q = ''; T.render(); }); await pg.waitForTimeout(300);
-eq('no mins: hint to set reorder point', await pg.locator('.ex-minhint').count(), 1);
+eq('no mins: alert-setup strip (off)', await pg.locator('.ex-albar:not(.on) [data-exal]').count(), 2);
 await pg.click('.ex-row[data-excard="RM-SB-02-0104"]'); await pg.waitForSelector('#exMinIn');
 await pg.fill('#exMinIn', '5'); await pg.click('[data-exminsave]'); await pg.waitForTimeout(500);
 eq('min saved → item low (bal 3 ≤ 5)', await pg.evaluate(() => [EX.mins['RM-SB-02-0104'], document.querySelector('#exModal .ex-minbox').classList.contains('low')]), [5, true]);
