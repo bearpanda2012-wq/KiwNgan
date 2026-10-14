@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.44.1';
+const VERSION = '1.45.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -893,6 +893,7 @@ function ensureProd_(job, u) {
               history: JSON.stringify([{ t: now.slice(0, 16), by: u.name, s: 'wait', x: 'ออกแบบเสร็จ ส่งเข้าผลิต' }]) };
   writeRow_('Prod', p, -1);
   log_(p.id, u.name, 'prod', p.code + ' → รอผลิต');
+  notifyProd_(null, p, u);
   return p;
 }
 function prodSave_(data, u) {
@@ -964,6 +965,7 @@ function prodSave_(data, u) {
   cur.updatedAt = now; cur.updatedBy = u.name;
   writeRow_('Prod', cur, row);
   log_(cur.id, u.name, 'prod', cur.code + (before ? (before.stage !== cur.stage ? ' ' + before.stage + '→' + cur.stage : ' แก้ไข') : ' → ' + cur.stage));
+  notifyProd_(before, cur, u);
   return toObj_('Prod', SHEETS.Prod, SHEETS.Prod.map(h => cur[h] === undefined ? '' : String(cur[h])));
 }
 /** ผล QC ของงานผลิต: it = หัวข้อตรวจ, res = pass/fail, ok/ng = จำนวนชิ้นผ่าน/เสีย, fails = ไม่ผ่านกี่รอบ */
@@ -2216,6 +2218,19 @@ function notifyJob_(before, after, u) {
       pushTo_([after.assignee], { kind: 'fix', from: maskName_(u.name, { role: 'user' }), code: after.code, title: after.title || '' });
     const added = helpersOf_(after).filter(n => n !== u.name && helpersOf_(before).indexOf(n) < 0);
     if (added.length && after.status !== 'done') pushTo_(added, { kind: 'help', from: maskName_(u.name, { role: 'user' }), code: after.code, title: after.title || '' });
+  } catch (e) { /* แจ้งเตือนเป็นของเสริม */ }
+}
+
+/* แจ้งเตือนฝ่ายผลิตเมื่องานใหม่เข้า "รอผลิต" · แจ้งฝ่ายสต็อกเมื่องานเข้า "พร้อมส่ง"
+   ผู้รับ = ผู้ใช้ที่เปิดใช้งาน มีสิทธิ์ของฝ่ายนั้น (prod.edit / prod.ship) ไม่รวมแอดมินและคนที่กดเอง */
+function notifyProd_(before, cur, u) {
+  try {
+    const isNew = cur.stage === 'wait' && !before;
+    const isReady = cur.stage === 'ready' && !!before && before.stage !== 'ready' && before.stage !== 'shipped' || cur.stage === 'ready' && !before;
+    if (!isNew && !isReady) return;
+    const perm = isNew ? 'prod.edit' : 'prod.ship';
+    const to = usersLite_().filter(x => x.active && x.role !== 'admin' && x.name !== u.name && can_(x, perm)).map(x => x.name);
+    if (to.length) pushTo_(to, { kind: isNew ? 'prodnew' : 'prodready', from: maskName_(u.name, { role: 'user' }), code: cur.code, title: cur.title || '', count: cur.priority === 'urgent' ? 1 : 0 });
   } catch (e) { /* แจ้งเตือนเป็นของเสริม */ }
 }
 

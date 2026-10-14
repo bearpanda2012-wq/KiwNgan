@@ -1,5 +1,5 @@
 // KiwNgan service worker: app shell offline, data always from the network
-const CACHE = 'kiwngan-v2.88.0';
+const CACHE = 'kiwngan-v2.89.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 /* ตัวนี้ลงทะเบียน 2 ที่: ที่หลัก (แอป) และ ./ring/ (ช่องด่วน: push ที่มาทางนี้คือสายเรียกเข้า/ขอดูจอแน่นอน เด้งได้ทันที) */
@@ -43,6 +43,8 @@ const PUSH_TEXT = {
   due: (f, i) => ['⏳ งานใกล้ถึงกำหนด ' + (i.count || '') + ' งาน', (i.late ? 'เลยกำหนดแล้ว ' + i.late + ' งาน · ' : '') + (i.code || '')],
   low: (f, i) => ['📦 ' + (i.title || 'วัสดุ') + ' ใกล้หมด', 'เหลือ ' + (i.code || '') + ' · ถึงจุดสั่งซื้อแล้ว (' + f + ' เบิกล่าสุด)'],
   nostock: (f, i) => ['🚫 ' + (i.title || 'วัสดุ') + ' หมดสต็อก', 'เหลือ 0 · ' + f + ' เบิกล่าสุด — ต้องสั่งเพิ่ม'],
+  prodnew: (f, i) => ['🏭 งานใหม่รอผลิต · ' + (i.code || '') + (i.count ? ' (ด่วน)' : ''), (i.title ? i.title + ' · ' : '') + 'จาก ' + f + ' — แตะเพื่อเปิดงาน'],
+  prodready: (f, i) => ['📦 งานพร้อมส่ง · ' + (i.code || '') + (i.count ? ' (ด่วน)' : ''), (i.title ? i.title + ' · ' : '') + f + ' แจ้งพร้อมส่ง — เตรียมส่งมอบ'],
   visit: (f, i) => ['📍 นัดหน้างาน ' + (i.title || ''), i.body || 'แตะเพื่อเปิดดูงาน'],
   digest: (f, i) => [i.title || '☀️ สรุปงานเช้านี้', i.code || 'แตะเพื่อเปิดดูภาพรวมบริษัท'],
   kb: (f, i) => ['📘 ความรู้ใหม่' + (i.code ? ' · ' + i.code : '') + (i.count ? ' (สำคัญ)' : ''), (i.title || '') + ' — โดย ' + f]
@@ -75,7 +77,7 @@ const enc = encodeURIComponent;
 const urlOf = (k, i) => { i = i || {};
   const msgCh = i.team ? 'team' : i.from === 'ผู้ดูแลระบบ' ? 'admin' : i.code ? 'u:' + i.code : '';
   const h = k === 'msg' || k === 'sos' ? 'msg' + (i.mid || msgCh ? '/' + enc(i.mid || '') + '/' + enc(msgCh) + '/' + enc(i.code || '') : '')
-    : (k === 'assign' || k === 'cmt' || k === 'help' || k === 'fix' || k === 'visit') && i.code ? 'job/' + enc(i.code)
+    : (k === 'assign' || k === 'cmt' || k === 'help' || k === 'fix' || k === 'visit' || k === 'prodnew' || k === 'prodready') && i.code ? 'job/' + enc(i.code)
     : k === 'low' || k === 'nostock' ? 'stock' : k === 'digest' ? 'digest' : k === 'due' || k === 'visit' ? 'home' : k === 'pend' ? 'push' : k;
   return APP + '?from=push#' + h; };
 function notifOpts(k, info, extra) {

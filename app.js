@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.88.0';
+const APP_VERSION = '2.89.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3109,7 +3109,7 @@ function pushNav(hash, tries) {
     if (mode() !== 'sheet') return;
     const ep = navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(g => g.pushManager.getSubscription()).then(x => x ? x.endpoint : '').catch(() => '') : Promise.resolve('');
     return ep.then(e => api().pushInfo(e ? { ep: e } : {})).then(r => { const i = r && r.info; if (!i) return;
-      const k = i.kind, h = k === 'msg' || k === 'sos' ? 'msg/' + encodeURIComponent(i.mid || '') : ['assign', 'cmt', 'help', 'fix', 'visit'].indexOf(k) >= 0 && i.code ? 'job/' + encodeURIComponent(i.code) : k === 'digest' ? 'digest' : k === 'low' || k === 'nostock' ? 'stock' : k === 'kb' ? 'kb' : '';
+      const k = i.kind, h = k === 'msg' || k === 'sos' ? 'msg/' + encodeURIComponent(i.mid || '') : ['assign', 'cmt', 'help', 'fix', 'visit', 'prodnew', 'prodready'].indexOf(k) >= 0 && i.code ? 'job/' + encodeURIComponent(i.code) : k === 'digest' ? 'digest' : k === 'low' || k === 'nostock' ? 'stock' : k === 'kb' ? 'kb' : '';
       if (h) pushNav('#' + h); }).catch(() => {});
   }
   if (p[0] && viewsFor(S.user).some(v => v.id === p[0])) go(p[0]);
