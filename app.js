@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.84.0';
+const APP_VERSION = '2.84.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6229,7 +6229,11 @@ function viewExpress() {
         '<span class="sl-q"><span class="sl-k">' + op[0] + '</span><b class="tnum">' + (op[1] > 0 ? '+' : '−') + exN(Math.abs(+m[4] || 0)) + '</b><em>' + esc(m[2]) + '</em></span></li>'; }).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ไม่มีการเคลื่อนไหว 7 วันล่าสุด</b></div>';
   const banner = '<div class="ex-status ' + st.cls + '"><span class="ex-dot ' + st.cls + '"></span><b>' + esc(st.txt) + '</b><small>ข้อมูลจากโปรแกรม Express ดูได้อย่างเดียว · รับ/เบิกให้คีย์ใน Express แล้วยอดจะขึ้นที่นี่เองภายใน 1 นาที</small>' +
     (EX.err ? '<em class="ex-err">' + esc(EX.err) + '</em>' : '') + '<button type="button" class="btn ghost sm" data-exsync="1"' + (EX.busy ? ' disabled' : '') + '>' + (EX.busy ? 'กำลังอัปเดต…' : 'อัปเดตเดี๋ยวนี้') + '</button></div>';
-  return topbar('คลังวัสดุ', 'ยอดคงเหลือจากโปรแกรม Express (บัญชี) อัปเดตอัตโนมัติ') + exTabs() + banner + kpis +
+  // เครื่องมือของคลังในแอป (ใบขอซื้อ · นับสต็อก · แจ้งต้องสั่ง) ใช้ได้จากแท็บนี้ด้วย ไม่ต้องสลับกลับ
+  const appAll = S.stock ? stockItems() : [], appNeed = appAll.filter(x => stReg(x) && (stLow(x) || stZero(x)));
+  const appTools = !S.stock ? '' : '<div class="ex-apptools">' + (appNeed.length ? '<button type="button" class="sk-alert" data-exsrc="app" data-exthen="low"><span>' + STI.fire + '</span><b>คลังในแอป: ต้องสั่งเพิ่ม ' + appNeed.length + ' รายการ</b><small>' + esc(appNeed.slice(0, 4).map(x => x.name).join(' · ')) + (appNeed.length > 4 ? ' …' : '') + '</small><em>ดูทั้งหมด ›</em></button>' : '') +
+    (canStock() ? '<div class="ex-appbtns"><button type="button" class="btn sk-tbtn t-buy" data-buyopen="1">' + SKT_IC.buy + '<span>ใบขอซื้อ</span>' + (appNeed.length ? '<em>' + appNeed.length + '</em>' : '') + '</button><button type="button" class="btn sk-tbtn t-cnt" data-cntopen="1">' + SKT_IC.count + '<span>นับสต็อก</span></button></div>' : '') + '</div>';
+  return topbar('คลังวัสดุ', 'ยอดคงเหลือจากโปรแกรม Express (บัญชี) อัปเดตอัตโนมัติ') + exTabs() + appTools + banner + kpis +
     '<div class="sk-wrap"><section class="panel sk-main"><div class="panel-h"><h2>สินค้าใน Express</h2><span class="sub">' + exN(list.length) + ' รายการ</span></div>' + tools +
     (q ? '<div class="co-sres" role="status"><b>' + exN(list.length) + '</b> รายการตรงกับ "' + esc(q) + '"<small>ค้นจากทุกรหัส ไม่สนกลุ่มที่เลือก</small></div>' : chips) + body + '</section>' +
     '<section class="panel sk-side"><div class="panel-h"><h2>เคลื่อนไหว 7 วันล่าสุด</h2></div>' + hist + '</section></div>';
@@ -6261,7 +6265,7 @@ document.addEventListener('click', e => {
   const d = t.dataset;
   if (d.excclose) return exCardClose();
   if (d.excard) { e.preventDefault(); return exCardOpen(d.excard); }
-  if (d.exsrc) { SV.src = d.exsrc; try { LS.set('stockSrc', SV.src); } catch (x) {} render(); if (SV.src === 'ex') exSync(true); return; }
+  if (d.exsrc) { if (d.exthen) { SV.cat = d.exthen; SV.anim = true; } SV.src = d.exsrc; try { LS.set('stockSrc', SV.src); } catch (x) {} render(); if (SV.src === 'ex') exSync(true); return; }
   if (d.exgrp) { EV.grp = EV.grp === d.exgrp && d.exgrp !== 'bal' ? 'bal' : d.exgrp; EV.lim = 200; return render(); }
   if (d.exmore) { EV.lim += 300; return render(); }
   if (d.exsync) { exSync(true); return render(); }

@@ -108,6 +108,17 @@ if (real) {
   eq('real data renders under 400ms', ms < 400, true);
   await pg.locator('#view').screenshot({ path: new URL('out/v284-real.png', import.meta.url).pathname });
 }
+// เครื่องมือคลังในแอป (ใบขอซื้อ · นับสต็อก · แจ้งต้องสั่ง) ยังอยู่ในแท็บ Express
+await pg.setViewportSize({ width: 1400, height: 900 }); await pg.evaluate(() => { SV.src = 'ex'; T.render(); }); await pg.waitForTimeout(300);
+eq('Express tab still has buy-list + count buttons', await pg.evaluate(() => [!!document.querySelector('.ex-apptools [data-buyopen]'), !!document.querySelector('.ex-apptools [data-cntopen]')]), [true, true]);
+await pg.click('.ex-apptools [data-cntopen]'); await pg.waitForTimeout(400);
+eq('count opens from Express tab', await pg.locator('#cntModal').count(), 1);
+await pg.keyboard.press('Escape'); await pg.evaluate(() => { const m = document.querySelector('#cntModal'); if (m) m.remove(); }); await pg.waitForTimeout(200);
+await pg.click('.ex-apptools [data-buyopen]'); await pg.waitForTimeout(400);
+eq('buy list opens from Express tab', await pg.locator('#buyModal').count(), 1);
+await pg.evaluate(() => { const m = document.querySelector('#buyModal'); if (m) m.remove(); document.body.classList.remove('pm-open'); });
+const hasNeed = await pg.locator('.ex-apptools .sk-alert').count();
+if (hasNeed) { await pg.click('.ex-apptools .sk-alert'); await pg.waitForTimeout(400); eq('need-to-order alert jumps to app tab filtered', await pg.evaluate(() => [SV.src, SV.cat]), ['app', 'low']); await pg.evaluate(() => { SV.src = 'ex'; SV.cat = 'all'; T.render(); }); }
 // ฝั่งแอปเดิมยังใช้ได้
 await pg.click('[data-exsrc="app"]'); await pg.waitForTimeout(300);
 eq('switch back to app stock', await pg.evaluate(() => !!document.querySelector('.sk-grid') && !document.querySelector('.ex-list')), true);

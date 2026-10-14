@@ -5345,3 +5345,7 @@ body.auth #bgSndBtn{display:none}
 .ex-ic i{font-style:normal;font-weight:700;font-size:15px}
 .ex-log li.k-in .ex-ic{color:#15803D}.ex-log li.k-out .ex-ic{color:#C2410C}
 .ex-tabs{display:flex;width:max-content}
+.ex-apptools{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;margin:0 0 14px}
+.ex-apptools:empty{display:none}
+.ex-apptools .sk-alert{flex:1 1 320px;margin:0}
+.ex-appbtns{display:flex;gap:8px;align-items:center;margin-left:auto}
