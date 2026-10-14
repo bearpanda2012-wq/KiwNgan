@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.91.0';
+const APP_VERSION = '2.92.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4356,6 +4356,7 @@ function render() {
   { const gs = v.querySelector('.gscroll'), tl = gs && gs.querySelector('.gtoday'); if (gs && tl && gs.scrollWidth > gs.clientWidth) { const tr = tl.parentNode; gs.scrollLeft = Math.max(0, tr.offsetLeft + tl.offsetLeft - gs.clientWidth * 0.6); } }   // เลื่อนไทม์ไลน์ให้เห็น "วันนี้"
   paintAllThumbs(v);
   renderMsgFab();
+  if (S.view === 'stock' && SV.src === 'ex' && typeof exCountUp === 'function') exCountUp();
   if (S.animIn) {
     S.animIn = false;
     const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -6490,6 +6491,27 @@ function exTabs() {
   return '<div class="ex-tabs" role="tablist"><button type="button" role="tab" data-exsrc="app" aria-selected="' + (SV.src !== 'ex') + '">' + I.stock + 'คลังในแอป</button><button type="button" role="tab" data-exsrc="ex" aria-selected="' + (SV.src === 'ex') + '"><span class="ex-dot ' + exAgentState().cls + '"></span>ยอดจาก Express</button></div>';
 }
 function exLocsOf(cod) { const o = []; EX.locs.forEach(l => { if (l[0] === cod) o.push(l); }); return o.sort((a, b) => Math.abs(b[2]) - Math.abs(a[2])); }
+/* เลื่อนไปที่ส่วนนั้นแบบนุ่ม ๆ แล้วกะพริบกรอบให้เห็นว่ามาถึงแล้ว */
+function exGo(where) {
+  setTimeout(() => {
+    const el = $(where === 'pend' ? '#xpPanel' : where === 'hist' ? '#exHist' : '#exList'); if (!el) return;
+    const rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: rm ? 'auto' : 'smooth', block: 'start' });
+    el.classList.remove('ex-flash'); void el.offsetWidth; el.classList.add('ex-flash'); setTimeout(() => el.classList.remove('ex-flash'), 1600);
+  }, 40);
+}
+/* ตัวเลขในการ์ดนับขึ้น (เฉพาะตอนค่าเปลี่ยน ไม่เล่นซ้ำทุกครั้งที่อัปเดต) */
+function exCountUp() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  EX.kseen = EX.kseen || {};
+  document.querySelectorAll('.ex-kpis b[data-cnt]').forEach((b, k) => {
+    const to = +b.dataset.cnt, key = 'k' + k; if (!isFinite(to) || EX.kseen[key] === to) return;
+    const from = EX.kseen[key] || 0; EX.kseen[key] = to; if (from === to) return;
+    const t0 = performance.now(), dur = 900, txt = v => Math.round(v).toLocaleString('th-TH');
+    const step = t => { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3); if (!b.isConnected) return; b.textContent = txt(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); };
+    b.textContent = txt(from); requestAnimationFrame(step);
+  });
+}
 function viewExpress() {
   const ro = !canStock();   // ไม่ใช่ฝ่ายสต็อก: ดูและค้นหาได้อย่างเดียว (ไม่มีเลือก/คำนวณ/บันทึก)
   if (ro && (EV.sel.size || EV.grp === 'sel' || EV.calc)) { EV.sel.clear(); exSelSave(); EV.calc = false; if (EV.grp === 'sel') EV.grp = 'bal'; }
@@ -6502,15 +6524,19 @@ function viewExpress() {
     .sort((a, b) => EV.grp === 'low' && EV.sort === 'cod' ? ((+a[6] || 0) - exMin(a[0])) - ((+b[6] || 0) - exMin(b[0])) : EV.sort === 'bal' ? (+b[6] || 0) - (+a[6] || 0) : EV.sort === 'val' ? (+b[7] || 0) - (+a[7] || 0) : EV.sort === 'name' ? String(a[1]).localeCompare(String(b[1]), 'th') : String(a[0]).localeCompare(String(b[0])));
   const totVal = withBal.reduce((s, x) => s + (+x[7] || 0), 0), neg = all.filter(x => (+x[6] || 0) < -1e-9).length;
   const rec = EX.recent || [], wkIn = rec.filter(m => (EX_OP[m[3]] || [])[1] > 0).length, wkOut = rec.filter(m => (EX_OP[m[3]] || [])[1] < 0).length;
-  const kpi = (cls, ic, lab, n, sub, g) => '<button type="button" class="sk-kpi ' + cls + '"' + (g === 'wait' ? ' data-xpgo="1"' : g ? ' data-exgrp="' + g + '" aria-pressed="' + (EV.grp === g && !q) + '"' : '') + '><span class="ski">' + ic + '</span><span class="skt"><small>' + lab + '</small><b class="tnum">' + n + '</b><em>' + sub + '</em></span></button>';
+  // การ์ดสรุป: กดแล้วกรอง + เลื่อนไปที่รายการนั้น · ตัวเลขนับขึ้นตอนเปิดหน้า · แถบเล็กบอกสัดส่วน
+  const kpi = (cls, ic, lab, n, sub, g, pct, go) => '<button type="button" class="sk-kpi ' + cls + '"' + (g === 'wait' ? ' data-xpgo="1"' : g ? ' data-exgrp="' + g + '" data-exgo="list" aria-pressed="' + (EV.grp === g && !q) + '"' : go ? ' data-exgo="' + go + '"' : '') + ' style="--d:' + (kpi.i = (kpi.i || 0) + 1) % 7 + '">' +
+    '<span class="ski">' + ic + '</span><span class="skt"><small>' + lab + '</small><b class="tnum" data-cnt="' + String(n).replace(/[^0-9.-]/g, '') + '">' + n + '</b><em>' + sub + '</em>' +
+    (pct != null ? '<i class="k-bar"><u style="--w:' + Math.max(pct > 0 ? 3 : 0, Math.min(100, pct)).toFixed(1) + '%"></u></i>' : '') + '</span><span class="k-go" aria-hidden="true">ดูรายการ ›</span></button>';
+  kpi.i = 0;
   const lows = all.filter(exLowOf).sort((a, b) => ((+a[6] || 0) - exMin(a[0])) - ((+b[6] || 0) - exMin(b[0]))), nMin = Object.keys(EX.mins || {}).filter(c => EX.items.has(c)).length;
   const xw = exWait(), xo = xw.filter(xpOld).length;
-  const kpis = '<div class="sk-kpis ex-kpis">' + kpi('k-tot', ST_IC.sheet, 'สินค้าทั้งหมด', exN(all.length), 'รหัสใน Express · ไม่มียอด ' + exN(all.length - withBal.length), 'all') +
-    kpi('k-all', ST_IC.box, 'มีของในคลัง', exN(withBal.length), 'มูลค่ารวม ' + baht(totVal), 'bal') +
-    kpi('k-low', STI.fire, 'ใกล้หมด', exN(lows.length), !nMin ? 'ยังไม่ตั้งจุดสั่งซื้อ · กดที่สินค้าเพื่อตั้ง' : lows.length ? 'ถึงจุดสั่งซื้อแล้ว · ควรสั่งเพิ่ม' : 'ของพอ · ตั้งจุดสั่งซื้อไว้ ' + exN(nMin) + ' รหัส', 'low') +
-    kpi('k-zero', PIC.xmark || STI.fire, 'ยอดติดลบ', exN(neg), neg ? 'ออกเกินยอด · ตรวจใน Express' : 'ไม่มี · ยอดปกติทุกรหัส', neg ? 'neg' : '') +
-    kpi('k-wait', XP_IC, 'รอลง Express', exN(xw.length), xw.length ? (xo ? 'ค้างเกิน 1 วัน ' + xo + ' รายการ' : 'บันทึกในแอป · รอคีย์ใน Express') : 'ลงครบทุกรายการแล้ว', 'wait') +
-    kpi('k-mv', STI.clock, 'เคลื่อนไหว 7 วัน', exN(rec.length), 'รับเข้า ' + wkIn + ' · ออก ' + wkOut, '') + '</div>';
+  const kpis = '<div class="sk-kpis ex-kpis">' + kpi('k-tot', ST_IC.sheet, 'สินค้าทั้งหมด', exN(all.length), 'รหัสใน Express · ไม่มียอด ' + exN(all.length - withBal.length), 'all', 100) +
+    kpi('k-all', ST_IC.box, 'มีของในคลัง', exN(withBal.length), 'มูลค่ารวม ' + baht(totVal), 'bal', all.length ? withBal.length / all.length * 100 : 0) +
+    kpi('k-low', STI.fire, 'ใกล้หมด', exN(lows.length), !nMin ? 'ยังไม่ตั้งจุดสั่งซื้อ · กดที่สินค้าเพื่อตั้ง' : lows.length ? 'ถึงจุดสั่งซื้อแล้ว · ควรสั่งเพิ่ม' : 'ของพอ · ตั้งจุดสั่งซื้อไว้ ' + exN(nMin) + ' รหัส', 'low', nMin ? lows.length / nMin * 100 : 0) +
+    kpi('k-zero', PIC.xmark || STI.fire, 'ยอดติดลบ', exN(neg), neg ? 'ออกเกินยอด · ตรวจใน Express' : 'ไม่มี · ยอดปกติทุกรหัส', neg ? 'neg' : '', withBal.length ? neg / withBal.length * 100 : 0, neg ? '' : 'list') +
+    kpi('k-wait', XP_IC, 'รอลง Express', exN(xw.length), xw.length ? (xo ? 'ค้างเกิน 1 วัน ' + xo + ' รายการ' : 'บันทึกในแอป · รอคีย์ใน Express') : 'ลงครบทุกรายการแล้ว', 'wait', xw.length ? (xw.length - xo) / xw.length * 100 : 100) +
+    kpi('k-mv', STI.clock, 'เคลื่อนไหว 7 วัน', exN(rec.length), 'รับเข้า ' + wkIn + ' · ออก ' + wkOut, '', rec.length ? wkIn / rec.length * 100 : 0, 'hist') + '</div>';
   const grps = Object.keys(grpCnt).sort((a, b) => grpCnt[b] - grpCnt[a]).slice(0, 14);
   const chips = '<div class="qchips sk-chips ex-chips">' + [['bal', 'มียอด', withBal.length]].concat(EV.grp === 'all' ? [['all', 'ทั้งหมด', all.length]] : []).concat(lows.length || EV.grp === 'low' ? [['low', 'ใกล้หมด', lows.length]] : []).concat(EV.sel.size || EV.grp === 'sel' ? [['sel', 'ที่เลือกไว้', EV.sel.size]] : []).concat(neg ? [['neg', 'ติดลบ', neg]] : []).concat(grps.map(g => [g, exGrpN(g), grpCnt[g]]))
     .map(x => '<button class="qchip' + (x[0] === 'neg' || x[0] === 'low' ? ' q-late' : '') + '" data-exgrp="' + esc(x[0]) + '" aria-pressed="' + (EV.grp === x[0]) + '"' + (x[0].length <= 4 && !/^(bal|all|neg|low|sel)$/.test(x[0]) ? ' title="กลุ่ม ' + esc(x[0]) + '"' : '') + '>' + esc(x[1]) + '<b>' + exN(x[2]) + '</b></button>').join('') + '</div>';
@@ -6540,9 +6566,9 @@ function viewExpress() {
   const selItems = [...EV.sel.keys()].map(c => EX.items.get(c)).filter(Boolean);
   const selBar = !ro && EV.sel.size ? '<div class="ex-selbar"><span><b>เลือก ' + exN(EV.sel.size) + ' รายการ</b><small>มูลค่ารวม ' + baht(exCalcRows(selItems).tot) + '</small></span><button type="button" class="btn sm" data-exgrp="sel">ดูเฉพาะที่เลือก</button>' + (canStock() ? '<button type="button" class="btn sm" data-xpnew="">บันทึกเบิก/รับ</button>' : '') + '<button type="button" class="btn sm primary" data-excalc="1">คำนวณราคา</button><button type="button" class="btn sm ghost" data-exselclr="1">ล้าง</button></div>' : '';
   return topbar('คลังวัสดุ', 'ยอดคงเหลือจากโปรแกรม Express (บัญชี) อัปเดตอัตโนมัติ') + exTabs() + appTools + banner + lowAlert + kpis + selBar +
-    '<div class="sk-wrap"><section class="panel sk-main"><div class="panel-h"><h2>สินค้าใน Express</h2><span class="sub">' + exN(list.length) + ' รายการ</span></div>' + tools +
+    '<div class="sk-wrap"><section class="panel sk-main" id="exList"><div class="panel-h"><h2>สินค้าใน Express</h2><span class="sub">' + exN(list.length) + ' รายการ</span></div>' + tools +
     (q ? '<div class="co-sres" role="status"><b>' + exN(list.length) + '</b> รายการตรงกับ "' + esc(q) + '"<small>ค้นจากทุกรหัส ไม่สนกลุ่มที่เลือก</small></div>' : chips) + body + '</section>' +
-    '<div class="sk-side ex-side">' + exPendPanel() + '<section class="panel"><div class="panel-h"><h2>เคลื่อนไหว 7 วันล่าสุด</h2></div>' + hist + '</section></div></div>';
+    '<div class="sk-side ex-side">' + exPendPanel() + '<section class="panel" id="exHist"><div class="panel-h"><h2>เคลื่อนไหว 7 วันล่าสุด</h2></div>' + hist + '</section></div></div>';
 }
 /* ---- เลือกหลายรายการ → คำนวณจำนวนและราคา ---- */
 function exCalcRows(items) {
@@ -6709,7 +6735,7 @@ document.addEventListener('click', e => {
   if (d.xpcopy) { const tx = exPendText(); navigator.clipboard.writeText(tx).then(() => toast('คัดลอกรายการรอลงแล้ว · วางใน LINE ได้เลย'), () => prompt('คัดลอกข้อความนี้', tx)); return; }
   if (d.xpprint) return exPendPrint();
   if (d.xppdf) return exPendPrint(true);
-  if (d.xpgo) { const n = $('#xpPanel'); if (n) n.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  if (d.xpgo) return exGo('pend');
 });
 document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset || !EV.pnew) return; if (t.dataset.xpq !== undefined) EV.pnew.rows[+t.dataset.xpq].qty = t.value; });
 document.addEventListener('change', e => { const t = e.target; if (!t || !t.dataset || !EV.pnew) return; if (t.dataset.xploc !== undefined) EV.pnew.rows[+t.dataset.xploc].loc = t.value; });
@@ -6794,7 +6820,7 @@ function exCardDraw() {
     '</div></div></div>';
 }
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-exsel],[data-exselall],[data-excalc],[data-excalcx],[data-exselclr],[data-exbasis],[data-exqfill],[data-excopy],[data-exprint],[data-expdf],[data-exunsel],[data-exminsave],[data-exsrc],[data-exgrp],[data-exmore],[data-exsync],[data-excard],[data-excclose]'); if (!t) return;
+  const t = e.target.closest && e.target.closest('[data-exsel],[data-exselall],[data-excalc],[data-excalcx],[data-exselclr],[data-exbasis],[data-exqfill],[data-excopy],[data-exprint],[data-expdf],[data-exunsel],[data-exminsave],[data-exsrc],[data-exgrp],[data-exgo],[data-exmore],[data-exsync],[data-excard],[data-excclose]'); if (!t) return;
   const d = t.dataset;
   if (!canStock() && (d.exsel || d.exselall || d.excalc || d.exqfill || d.exbasis || d.exunsel || d.excopy || d.exprint || d.expdf || d.exselclr || d.exminsave)) { e.preventDefault(); e.stopPropagation(); return toast('ดูได้อย่างเดียว · ฝ่ายสต็อกเป็นผู้แก้ไข', true); }
   const redraw = () => { render(); if (EX.card) exCardDraw(); if (EV.calc) exCalcDraw(); };
@@ -6817,7 +6843,8 @@ document.addEventListener('click', e => {
   if (d.excclose) return exCardClose();
   if (d.excard) { e.preventDefault(); return exCardOpen(d.excard); }
   if (d.exsrc) { if (d.exthen) { SV.cat = d.exthen; SV.anim = true; } SV.src = d.exsrc; try { LS.set('stockSrc', SV.src); } catch (x) {} render(); if (SV.src === 'ex') exSync(true); return; }
-  if (d.exgrp) { EV.grp = EV.grp === d.exgrp && d.exgrp !== 'bal' ? 'bal' : d.exgrp; EV.lim = 200; return render(); }
+  if (d.exgrp) { const fromKpi = !!d.exgo; EV.grp = fromKpi ? d.exgrp : EV.grp === d.exgrp && d.exgrp !== 'bal' ? 'bal' : d.exgrp; EV.lim = 200; render(); if (fromKpi) exGo('list'); return; }
+  if (d.exgo) return exGo(d.exgo);
   if (d.exmore) { EV.lim += 300; return render(); }
   if (d.exsync) { exSync(true); return render(); }
 });

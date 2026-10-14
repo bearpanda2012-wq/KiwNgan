@@ -53,6 +53,19 @@ eq('no "ทั้งหมด" chip any more', await pg.locator('.qchip[data-exg
 await pg.click('.sk-kpi.k-tot'); await pg.waitForTimeout(250);
 eq('total card filters all + pressed', await pg.evaluate(() => [EV.grp, document.querySelector('.sk-kpi.k-tot').getAttribute('aria-pressed')]), ['all', 'true']);
 await pg.click('.sk-kpi.k-all'); await pg.waitForTimeout(250);
+// 2.92: กดการ์ด → เลื่อนไปที่รายการ · ตัวเลขนับขึ้นจนถึงค่าจริง
+await pg.setViewportSize({ width: 1400, height: 600 });
+await pg.evaluate(() => scrollTo(0, 0)); await pg.click('.sk-kpi.k-mv'); await pg.waitForTimeout(900);
+eq('movement card scrolls to history', await pg.evaluate(() => { const r = document.querySelector('#exHist').getBoundingClientRect(); return r.top >= -2 && r.top < innerHeight / 2; }), true);
+await pg.evaluate(() => scrollTo(0, 0)); await pg.click('.sk-kpi.k-low'); await pg.waitForTimeout(900);
+eq('low card filters + scrolls to list', await pg.evaluate(() => { const r = document.querySelector('#exList').getBoundingClientRect(); return [EV.grp, r.top >= -2 && r.top < innerHeight / 2]; }), ['low', true]);
+await pg.evaluate(() => scrollTo(0, 0)); await pg.click('.sk-kpi.k-wait'); await pg.waitForTimeout(900);
+eq('pending card scrolls to pending panel', await pg.evaluate(() => { const r = document.querySelector('#xpPanel').getBoundingClientRect(); return r.top >= -2 && r.top < innerHeight / 2; }), true);
+await pg.setViewportSize({ width: 1400, height: 900 });
+await pg.click('.sk-kpi.k-all'); await pg.waitForTimeout(300);
+eq('count-up lands on real numbers', await pg.evaluate(() => [...document.querySelectorAll('.ex-kpis b[data-cnt]')].every(b => b.textContent.replace(/,/g, '') === b.dataset.cnt)), true);
+eq('cards have meters', await pg.locator('.ex-kpis .k-bar u').count(), 6);
+await pg.evaluate(() => scrollTo(0, 0)); await pg.waitForTimeout(1200); await pg.locator('.ex-kpis').screenshot({ path: new URL('out/v292-kpis.png', import.meta.url).pathname });
 eq('pending empty state', await pg.evaluate(() => /ไม่มีรายการรอลง/.test(document.querySelector('#xpPanel').textContent)), true);
 // เปิดสินค้า → บันทึกเบิก
 await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-n'); await pg.waitForTimeout(400);
