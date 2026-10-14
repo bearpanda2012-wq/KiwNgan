@@ -1,0 +1,109 @@
+// v2.87: รอลง Express — บันทึกเบิก/รับในแอป · รายการรอ · ยกเลิก/ลงเอง · การ์ดสรุป 6 ใบ
+// ข้อมูลจำลอง (ไม่ใช้ข้อมูลจริงของบริษัท) · ถ้ามี tests/out/exfix.json (ข้อมูลจริง ไม่ขึ้น git) จะใช้ทดสอบความเร็วด้วย
+const { chromium } = await import(process.env.PW);
+import http from 'http'; import fs from 'fs'; import path from 'path';
+const root = new URL('..', import.meta.url).pathname, PORT = 8834;
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,render,exStart,exSync};window.exPendText=exPendText;window.digestCalc=digestCalc;window.S=S;window.SV=SV;window.EX=EX;window.EV=EV;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(PORT);
+const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1400, height: 900 } });
+const errs = []; pg.on('pageerror', e => errs.push(e.message));
+let ok = 0, bad = 0; const eq = (lbl, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
+
+// ---- ข้อมูลจำลองแบบเดียวกับที่ ex_pull ส่งมา ----
+const real = fs.existsSync(new URL('out/exfix.json', import.meta.url)) ? JSON.parse(fs.readFileSync(new URL('out/exfix.json', import.meta.url))) : null;
+const items = [], locs = [], moves = [];
+const it = (cod, des, grp, unit, bal, unitpr) => { items.push([cod, des, '', grp, '0', unit, bal, bal * unitpr, unitpr, '20260901', unitpr, 'SUP01', '', '', '20261001', 0]); };
+it('RM-SB-02-0104', 'เหล็กกล่อง 2 mm. 1"x4"', 'RM', 'ส', 5, 760); locs.push(['RM-SB-02-0104', 'RM', 5, 3800, '20261012', 0]);
+it('GST-CL-FSS8083', 'สีน้ำ 4SEASON TOA8083 แบบด้าน ภายนอก', 'GST1', 'กป', 1, 174.77); locs.push(['GST-CL-FSS8083', 'GST1', 1, 174.77, '20261010', 0]);
+it('NEG-001', 'ของติดลบ', 'RM', 'ผน', -2, 100); locs.push(['NEG-001', 'RM', -2, -200, '20261011', 0]);
+for (let i = 0; i < 2500; i++) it('ZZ-' + String(i).padStart(5, '0'), 'เศษวัสดุ ' + i, i % 3 ? 'ZZ' : 'CU', 'ชน', i % 4 ? 0 : i % 7 + 1, 10);
+items.filter(x => x[6]).forEach(x => { if (!locs.some(l => l[0] === x[0])) locs.push([x[0], x[3], x[6], x[7], '20261001', 0]); });
+const td = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '');
+moves.push(['OU6910010', td, 'RM', '6', 2, 760, 1520, '', '115', '451/16512', 'RM-SB-02-0104'], ['RR6910003', td, 'RM', '0', 7, 760, 5320, 'SUP01', '', 'เหล็กกล่อง 2 mm. 1"x4"', 'RM-SB-02-0104']);
+const tabs = { units: { 'ส': 'เส้น', 'กป': 'กระป๋อง', 'ชน': 'ชิ้น', 'ผน': 'แผ่น' }, locs: { RM: 'วัตถุดิบ', GST1: 'วัสดุสิ้นเปลืองรง.', ZZ: 'เศษ', CU: 'วัสดุลูกค้า' }, groups: { RM: 'วัตถุดิบ', GST1: 'วัสดุสิ้นเปลืองรง.อื่น', ZZ: 'เศษวัสดุ', CU: 'ลูกค้า' }, deps: { '115': 'ฝ่ายผลิต' } };
+let agentAt = new Date().toISOString(), pulls = [], extra = null;
+await pg.route('https://ex.test/rest/v1/rpc/**', async route => {
+  const fn = route.request().url().split('/').pop(), body = JSON.parse(route.request().postData() || '{}');
+  if (body.tok !== 'exr_test_token_123456789012345') return route.fulfill({ status: 401, body: '{"message":"bad token"}' });
+  let out;
+  if (fn === 'ex_pull') {
+    pulls.push(body.since);
+    if (+body.since === 0) out = { items: items.slice(0, 2000), locs: [], tabs: {}, agent: { at: agentAt, host: 'SERVER', dir: 'ROY69' }, more: true, ver: 2000, top: 3000 };
+    else if (+body.since === 2000) out = { items: items.slice(2000), locs: locs, tabs: tabs, agent: { at: agentAt, host: 'SERVER', dir: 'ROY69' }, more: false, ver: 3000, top: 3000 };
+    else out = extra && +body.since === 3000 ? extra : { items: [], locs: [], tabs: {}, agent: { at: agentAt, host: 'SERVER', dir: 'ROY69' }, more: false, ver: +body.since, top: +body.since };
+  } else if (fn === 'ex_recent') out = moves;
+  else if (fn === 'ex_card') out = moves.filter(m => m[10] === body.cod).map(m => m.slice(0, 10).concat('ROY69'));
+  route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(out) });
+});
+
+await pg.addInitScript(() => { try { if (!sessionStorage.getItem('x')) { localStorage.clear(); sessionStorage.setItem('x', 1); indexedDB.deleteDatabase('kn-ex'); } navigator.serviceWorker.register = () => Promise.resolve(); } catch (e) {} });
+await pg.goto('http://127.0.0.1:' + PORT + '/index.html'); await pg.waitForTimeout(700);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234');
+await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(800);
+await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('stock'); }); await pg.waitForTimeout(400);
+eq('no Express tab without config', await pg.locator('.ex-tabs').count(), 0);
+await pg.evaluate(() => T.exStart({ url: 'https://ex.test', key: 'k', tok: 'exr_test_token_123456789012345' })); await pg.waitForTimeout(800);
+eq('tabs appear', await pg.locator('.ex-tabs [data-exsrc="ex"]').count(), 1);
+await pg.click('[data-exsrc="ex"]');
+await pg.waitForFunction(() => document.querySelectorAll('.ex-row').length > 0, null, { timeout: 8000 }).catch(() => {});
+await pg.waitForTimeout(500);
+// การ์ดสรุป 6 ใบ (รวม "สินค้าทั้งหมด")
+eq('6 KPI cards incl. total + pending', await pg.evaluate(() => [...document.querySelectorAll('.ex-kpis .sk-kpi small')].map(e => e.textContent)), ['สินค้าทั้งหมด', 'มีของในคลัง', 'ใกล้หมด', 'ยอดติดลบ', 'รอลง Express', 'เคลื่อนไหว 7 วัน']);
+eq('total card counts all codes', await pg.evaluate(() => document.querySelector('.sk-kpi.k-tot b').textContent), items.length.toLocaleString('th-TH'));
+eq('no "ทั้งหมด" chip any more', await pg.locator('.qchip[data-exgrp="all"]').count(), 0);
+await pg.click('.sk-kpi.k-tot'); await pg.waitForTimeout(250);
+eq('total card filters all + pressed', await pg.evaluate(() => [EV.grp, document.querySelector('.sk-kpi.k-tot').getAttribute('aria-pressed')]), ['all', 'true']);
+await pg.click('.sk-kpi.k-all'); await pg.waitForTimeout(250);
+eq('pending empty state', await pg.evaluate(() => /ไม่มีรายการรอลง/.test(document.querySelector('#xpPanel').textContent)), true);
+// เปิดสินค้า → บันทึกเบิก
+await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-n'); await pg.waitForTimeout(400);
+eq('card shows pending box', await pg.locator('#exModal .ex-pbox [data-xpnew="RM-SB-02-0104"]').count(), 1);
+await pg.click('#exModal [data-xpnew]'); await pg.waitForTimeout(300);
+eq('pend modal opens on top', await pg.evaluate(() => !!document.querySelector('#exPend') && document.querySelector('#exPend .pm-h h3').textContent), 'บันทึกเบิกออก 1 รายการ');
+eq('location preselected', await pg.evaluate(() => document.querySelector('[data-xploc="0"]').value), 'RM');
+await pg.click('[data-xpsave]'); await pg.waitForTimeout(200);
+eq('qty required', await pg.locator('#exPend').count(), 1);
+await pg.fill('[data-xpq="0"]', '2'); await pg.fill('#xpJob', 'R69-555'); await pg.fill('#xpNote', 'หน้างาน A');
+await pg.click('[data-xpsave]'); await pg.waitForTimeout(600);
+eq('saved → modal closed', await pg.locator('#exPend').count(), 0);
+eq('pending row stored', await pg.evaluate(() => EX.pend.map(r => [r.cod, r.kind, r.qty, r.job, r.note, r.loc, r.status])), [['RM-SB-02-0104', 'out', 2, 'R69-555', 'หน้างาน A', 'RM', 'wait']]);
+eq('card shows projected balance', await pg.evaluate(() => /ยอดหลังลงครบ ≈ 3/.test(document.querySelector('#exModal .ex-pbox').textContent)), true);
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+eq('row tag รอลง −2', await pg.evaluate(() => document.querySelector('.ex-row[data-excard="RM-SB-02-0104"] .ex-pendtag').textContent), 'รอลง −2');
+eq('pending KPI = 1', await pg.evaluate(() => document.querySelector('.sk-kpi.k-wait b').textContent), '1');
+eq('panel lists entry', await pg.evaluate(() => document.querySelectorAll('#xpPanel .xp-list > li.st-wait').length), 1);
+// หลายรายการจากที่เลือก → รับเข้า
+await pg.click('.ex-row[data-excard="GST-CL-FSS8083"] .ex-ck'); await pg.click('.ex-row[data-excard="NEG-001"] .ex-ck'); await pg.waitForTimeout(200);
+await pg.click('.ex-selbar [data-xpnew]'); await pg.waitForTimeout(300);
+await pg.click('[data-xpkind="in"]'); await pg.fill('[data-xpq="0"]', '4'); await pg.fill('[data-xpq="1"]', '3');
+eq('kind switch keeps qty', await pg.evaluate(() => [document.querySelector('#exPend h3').textContent, document.querySelector('[data-xpq="0"]').value]), ['บันทึกรับเข้า 2 รายการ', '4']);
+await pg.click('[data-xpsave]'); await pg.waitForTimeout(600);
+eq('3 waiting now', await pg.evaluate(() => EX.pend.filter(r => r.status === 'wait').map(r => r.kind + r.qty).sort()), ['in3', 'in4', 'out2']);
+eq('copy text grouped', await pg.evaluate(() => { const t = exPendText(); return [/เบิกออก 1 รายการ/.test(t), /รับเข้า 2 รายการ/.test(t), /Job R69-555/.test(t)]; }), [true, true, true]);
+// ลงแล้วเอง (ฝ่ายสต็อก/แอดมิน) + ยกเลิก
+const id0 = await pg.evaluate(() => EX.pend.find(r => r.kind === 'out').id);
+await pg.click('#xpPanel [data-xpdoc="' + id0 + '"]'); await pg.waitForTimeout(200);
+await pg.fill('#xpDoc', 'PD6910099'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(500);
+eq('manual done with doc', await pg.evaluate(id => { const r = EX.pend.find(x => x.id === id); return [r.status, r.doc]; }, id0), ['done', 'PD6910099']);
+eq('done shown in history', await pg.evaluate(() => /ลงแล้ว PD6910099/.test(document.querySelector('.xp-done').textContent)), true);
+const id1 = await pg.evaluate(() => EX.pend.find(r => r.kind === 'in' && r.status === 'wait').id);
+await pg.click('#xpPanel [data-xpcancel="' + id1 + '"]'); await pg.waitForTimeout(500);
+eq('cancelled', await pg.evaluate(id => EX.pend.find(x => x.id === id).status, id1), 'cancel');
+eq('pending KPI = 1 left', await pg.evaluate(() => document.querySelector('.sk-kpi.k-wait b').textContent), '1');
+// จากหน้าคำนวณราคา → บันทึกตามจำนวน
+await pg.click('[data-excalc]'); await pg.waitForTimeout(300);
+await pg.click('[data-xpfromcalc]'); await pg.waitForTimeout(300);
+eq('calc → pend modal with qty prefilled', await pg.evaluate(() => [!!document.querySelector('#exCalc'), document.querySelectorAll('#exPend [data-xpq]').length, document.querySelector('[data-xpq="0"]').value]), [false, 2, '1']);
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+eq('escape closes pend modal', await pg.locator('#exPend').count(), 0);
+// สรุปเช้า (ตัวอย่างในแอป)
+eq('digest preview has pending line', await pg.evaluate(() => /🧾 รอลง Express 1 รายการ/.test(digestCalc().body)), true);
+await pg.evaluate(() => { scrollTo(0, 0); document.querySelectorAll('*').forEach(e => { if (e.scrollTop) e.scrollTop = 0; }); }); await pg.waitForTimeout(200); await pg.screenshot({ path: new URL('out/v287-express.png', import.meta.url).pathname }); await pg.locator('.ex-kpis').screenshot({ path: new URL('out/v287-kpis.png', import.meta.url).pathname });
+await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-n'); await pg.waitForTimeout(300); await pg.click('#exModal [data-xpnew]'); await pg.waitForTimeout(300);
+await pg.fill('[data-xpq="0"]', '1'); await pg.screenshot({ path: new URL('out/v287-pend.png', import.meta.url).pathname });
+await pg.keyboard.press('Escape'); await pg.keyboard.press('Escape');
+// มือถือ
+await pg.setViewportSize({ width: 390, height: 844 }); await pg.evaluate(() => T.render()); await pg.waitForTimeout(300);
+eq('mobile: no horizontal overflow', await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+await pg.locator('#xpPanel').scrollIntoViewIfNeeded(); await pg.screenshot({ path: new URL('out/v287-mobile.png', import.meta.url).pathname });
+console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.length ? errs : 'none');
+await b.close(); srv.close(); process.exit(bad || errs.length ? 1 : 0);

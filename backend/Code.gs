@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.43.0';
+const VERSION = '1.44.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -47,7 +47,8 @@ const SHEETS = {
   Stock: ['id', 'name', 'cat', 'unit', 'qty', 'min', 'loc', 'note', 'updatedAt', 'updatedBy', 'price', 'own', 'cust', 'job', 'grade', 'base', 'size'],   // price = ราคาต่อหน่วย (บาท) ใช้คิดต้นทุนวัสดุต่อเลข Job
   // own = 'cust' ของลูกค้า (cust = ชื่อลูกค้า, job = เลข Job) ไม่คิดมูลค่า · grade = 'ng' ตำหนิ / 'scrap' เศษ (base = วัสดุตั้งต้น, size = ขนาดเศษ) แยกจากยอดพร้อมใช้
   StockLog: ['id', 'ts', 'itemId', 'kind', 'qty', 'bal', 'job', 'who', 'note', 'price', 'cond', 'from'],
-  ExMin: ['id', 'min', 'updatedAt', 'updatedBy'],   // จุดสั่งซื้อของสินค้าใน Express (id = รหัสสินค้า Express) ตั้งในแอป · Express ไม่ถูกแก้
+  ExMin: ['id', 'min', 'updatedAt', 'updatedBy'],
+  ExPend: ['id', 'ts', 'cod', 'des', 'unit', 'kind', 'qty', 'loc', 'dep', 'job', 'note', 'who', 'status', 'doc', 'docDat', 'docKey', 'doneAt', 'doneBy'],   // รอลง Express: บันทึกในแอป → คีย์ใน Express → จับคู่เลขเอกสารเอง   // จุดสั่งซื้อของสินค้าใน Express (id = รหัสสินค้า Express) ตั้งในแอป · Express ไม่ถูกแก้
   // คลังความรู้: 1 แถว = 1 เรื่อง · dept = d ฝ่ายแบบ / p ฝ่ายผลิต / s ฝ่ายสต็อก / g ทั่วไป (แอดมิน) · cat = tip/limit/warn/step · videos = ลิงก์วิดีโอ (JSON) ไม่เก็บไฟล์
   Kb: ['id', 'dept', 'cat', 'title', 'body', 'videos', 'pin', 'createdBy', 'createdAt', 'updatedBy', 'updatedAt', 'acks']   // acks = ใครกดรับทราบแล้ว {ชื่อ: เวลา} (แก้เนื้อหาแล้วล้าง ต้องรับทราบใหม่)   // price = ราคาต่อหน่วยตอนเบิก · cond = สภาพของที่รับคืน ok/ng/scrap · from = ผู้ส่งคืน
 };
@@ -169,6 +170,9 @@ const ACTIONS = {
   stockMove: (p, u) => withLock_(() => stockMove_(p, u)),
   stockDelete: (p, u) => withLock_(() => stockDelete_(p.id, u)),
   exMinSet: (p, u) => withLock_(() => exMinSet_(p, u)),
+  exPendAdd: (p, u) => { if (!can_(u, 'stock.view')) throw new Error('ไม่มีสิทธิ์'); return withLock_(() => exPendAdd_(p, u)); },
+  exPendSet: (p, u) => withLock_(() => exPendSet_(p, u)),
+  exPendMatch: (p, u) => { if (!can_(u, 'stock.view')) throw new Error('ไม่มีสิทธิ์'); const r = exPendMatch_(false); return { matched: r.matched, exPend: r.matched ? exPendList_() : undefined }; },
   // คลังความรู้ (ทุกคนอ่านได้ · แก้ได้เฉพาะเรื่องของฝ่ายตัวเอง · แอดมินแก้ได้ทุกฝ่าย)
   kbSave: (p, u) => withLock_(() => kbSave_(p.item, u)),
   kbDelete: (p, u) => withLock_(() => kbDelete_(p.id, u)),
@@ -708,7 +712,7 @@ function bootstrap_(u, stamp) {
     cmtCount: commentCounts_(),
     prods: prodsRecent_().map(x => maskProd_(x, u)),
     stock: can_(u, 'stock.view') ? stockView_(u) : null,
-    ex: can_(u, 'stock.view') && RT_URL && RT_KEY && EX_TOK ? { url: RT_URL, key: RT_KEY, tok: EX_TOK, mins: exMins_() } : null,   // สต็อกจาก Express (ซิงก์ผ่าน Supabase อ่านอย่างเดียว)
+    ex: can_(u, 'stock.view') && RT_URL && RT_KEY && EX_TOK ? { url: RT_URL, key: RT_KEY, tok: EX_TOK, mins: exMins_(), pend: exPendList_() } : null,   // สต็อกจาก Express (ซิงก์ผ่าน Supabase อ่านอย่างเดียว)
     kb: kbList_(u),
     salePin: isAdmin_(u) ? !!PropertiesService.getScriptProperties().getProperty('SALE_PIN') : undefined,
     salePins: isAdmin_(u) ? Object.keys(salePins_()) : undefined,
@@ -999,6 +1003,89 @@ function exMinSet_(p, u) {
   });
   bump_('data');
   return { exMins: exMins_() };
+}
+/* ===== รอลง Express: บันทึกเบิก/รับในแอป → ฝ่ายสต็อกคีย์ใน Express → ระบบจับคู่เอกสารให้เอง =====
+   แอปไม่เขียนอะไรลง Express · จับคู่จาก รหัสเดียวกัน + ประเภทเดียวกัน + จำนวนเท่ากัน + วันที่เอกสารไม่ก่อนวันบันทึกเกิน 3 วัน */
+const EXP_KIND_ = { out: 'เบิกออก', in: 'รับเข้า' };
+const EXP_OPS_ = { out: ['6', '9', '4', '7'], in: ['0', '1', '2', '3'] };
+const xpYmd_ = (d, add) => { const t = new Date(String(d).slice(0, 10) + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + (add || 0)); return t.toISOString().slice(0, 10).replace(/-/g, ''); };
+function exPendList_() {
+  let rows = []; try { rows = readAll_('ExPend'); } catch (e) { return []; }
+  const cut = Utilities.formatDate(new Date(Date.now() - 14 * 864e5), tz_(), 'yyyy-MM-dd');
+  return rows.filter(r => r.status === 'wait' || String(r.doneAt || r.ts).slice(0, 10) >= cut).map(r => Object.assign(r, { qty: stockNum_(r.qty) || 0 }));
+}
+function exPendAdd_(p, u) {
+  const kind = String(p.kind || ''); if (!EXP_KIND_[kind]) throw new Error('เลือกประเภท: เบิกออก หรือ รับเข้า');
+  const list = Array.isArray(p.items) ? p.items : [p];
+  if (!list.length || list.length > 100) throw new Error('บันทึกได้ครั้งละ 1–100 รายการ');
+  const job = String(p.job || '').trim().slice(0, 40), note = String(p.note || '').trim().slice(0, 200), dep = String(p.dep || '').trim().slice(0, 12);
+  const ok = list.map(x => {
+    const cod = String(x.cod || '').trim().slice(0, 40), n = stockNum_(x.qty);
+    if (!cod) throw new Error('ไม่มีรหัสสินค้า');
+    if (!(n > 0)) throw new Error('จำนวนของ ' + cod + ' ต้องมากกว่า 0');
+    return { cod: cod, n: n, des: String(x.des || '').slice(0, 120), unit: String(x.unit || '').slice(0, 20), loc: String(x.loc || '').trim().slice(0, 12) };
+  });
+  const ts = nowIso_();
+  ok.forEach(x => writeRow_('ExPend', { id: uid_('xp'), ts: ts, cod: x.cod, des: x.des, unit: x.unit, kind: kind, qty: x.n, loc: x.loc, dep: dep, job: job, note: note, who: u.name, status: 'wait' }, -1));
+  log_('', u.name, 'stock', 'รอลง Express · ' + EXP_KIND_[kind] + ' ' + ok.length + ' รายการ' + (job ? ' (Job ' + job + ')' : ''));
+  bump_('data');
+  return { exPend: exPendList_() };
+}
+function exPendSet_(p, u) {
+  const row = rowOf_('ExPend', p.id); if (row < 0) throw new Error('ไม่พบรายการ');
+  const r = readRow_('ExPend', row), act = String(p.act || '');
+  if (act === 'cancel') {
+    if (r.status !== 'wait') throw new Error('รายการนี้ลง Express แล้ว ยกเลิกไม่ได้');
+    if (r.who !== u.name && !can_(u, 'stock.edit')) throw new Error('ยกเลิกได้เฉพาะคนที่บันทึก หรือฝ่ายสต็อก');
+    Object.assign(r, { status: 'cancel', doneAt: nowIso_(), doneBy: u.name });
+  } else if (act === 'done') {
+    stockEdit_(u); const doc = String(p.doc || '').trim().slice(0, 30); if (!doc) throw new Error('ใส่เลขที่เอกสาร Express');
+    Object.assign(r, { status: 'done', doc: doc, docDat: '', docKey: '', doneAt: nowIso_(), doneBy: u.name });
+  } else if (act === 'reopen') {
+    stockEdit_(u); Object.assign(r, { status: 'wait', doc: '', docDat: '', docKey: '', doneAt: '', doneBy: '' });
+  } else throw new Error('คำสั่งไม่ถูกต้อง');
+  writeRow_('ExPend', r, row); bump_('data');
+  return { exPend: exPendList_() };
+}
+/* จับคู่ (ฟังก์ชันล้วน ทดสอบได้): wait = รายการรอ, moves = [k, doc, dat, loc, op, qty, dep, cod], used = { k: 1 } */
+function exPendPair_(wait, moves, used) {
+  const free = moves.filter(m => !used[m[0]]), out = [], left = [];
+  const fits = (w, m) => m[7] === w.cod && EXP_OPS_[w.kind].indexOf(String(m[4])) >= 0 && String(m[2]) >= xpYmd_(w.ts, -3);
+  const rank = (w, m) => (w.loc && m[3] !== w.loc ? 'b' : 'a') + (String(m[2]) >= xpYmd_(w.ts) ? 'a' : 'b') + m[2] + m[1];
+  const best = (w, q) => free.filter(m => fits(w, m) && Math.abs(Math.abs(+m[5] || 0) - q) < 1e-6).sort((a, b) => rank(w, a) < rank(w, b) ? -1 : 1)[0];
+  wait.slice().sort((a, b) => String(a.ts) < String(b.ts) ? -1 : 1).forEach(w => {
+    const m = best(w, stockNum_(w.qty)); if (!m) return left.push(w);
+    free.splice(free.indexOf(m), 1); out.push({ w: w, m: m });
+  });
+  // คีย์รวมหลายรายการเป็นบรรทัดเดียว (รหัส/ประเภทเดียวกัน จำนวนรวมเท่ากัน)
+  const grp = {}; left.forEach(w => { (grp[w.cod + '|' + w.kind] = grp[w.cod + '|' + w.kind] || []).push(w); });
+  Object.keys(grp).forEach(k => { const g = grp[k]; if (g.length < 2) return;
+    const m = best(g[0], g.reduce((s, w) => s + stockNum_(w.qty), 0)); if (!m) return;
+    free.splice(free.indexOf(m), 1); g.forEach(w => out.push({ w: w, m: m }));
+  });
+  return out;
+}
+function exPendMatch_(force) {
+  if (!RT_URL || !RT_KEY || !EX_TOK) return { matched: 0 };
+  const c = CacheService.getScriptCache(); if (!force && c.get('xpm')) return { matched: 0, skip: true }; c.put('xpm', '1', 15);
+  let all = []; try { all = readAll_('ExPend'); } catch (e) { return { matched: 0 }; }
+  const wait = all.filter(r => r.status === 'wait'); if (!wait.length) return { matched: 0 };
+  const since = wait.map(w => xpYmd_(w.ts, -3)).sort()[0], cods = wait.map(w => w.cod).filter((x, i, a) => a.indexOf(x) === i).slice(0, 300);
+  let moves = [];
+  try {
+    const r = UrlFetchApp.fetch(RT_URL + '/rest/v1/rpc/ex_find', { method: 'post', contentType: 'application/json', headers: { apikey: RT_KEY, Authorization: 'Bearer ' + RT_KEY }, payload: JSON.stringify({ tok: EX_TOK, cods: cods, since: since }), muteHttpExceptions: true });
+    if (r.getResponseCode() !== 200) return { matched: 0 };
+    moves = JSON.parse(r.getContentText()) || [];
+  } catch (e) { return { matched: 0 }; }
+  const used = {}; all.forEach(r => { if (r.docKey) used[r.docKey] = 1; });
+  const pairs = exPendPair_(wait, moves, used); if (!pairs.length) return { matched: 0 };
+  return withLock_(() => {
+    let n = 0;
+    pairs.forEach(pr => { const row = rowOf_('ExPend', pr.w.id); if (row < 0) return; const r = readRow_('ExPend', row); if (r.status !== 'wait') return;
+      Object.assign(r, { status: 'done', doc: pr.m[1], docDat: pr.m[2], docKey: pr.m[0], doneAt: nowIso_(), doneBy: 'อัตโนมัติ' }); writeRow_('ExPend', r, row); n++; });
+    if (n) bump_('data');
+    return { matched: n };
+  });
 }
 function stockView_(u) {
   const items = readAll_('Stock').map(x => Object.assign(x, { qty: stockNum_(x.qty) || 0, min: stockNum_(x.min) || 0, price: stockNum_(x.price) || 0 }));
@@ -2044,7 +2131,7 @@ function digestCfg_(s) {
 }
 const DIGEST_DAYS_ = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'], DIGEST_MON_ = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 /* สรุปจากข้อมูลจริง (ฟังก์ชันเดียวกับ digestBuild ในแอป ใช้ดูตัวอย่างโหมดทดลอง) */
-function digestBuild_(jobs, prods, items, today, yday, dow, topics, exLow) {
+function digestBuild_(jobs, prods, items, today, yday, dow, topics, exLow, xpend) {
   const on = k => !topics || topics.indexOf(k) >= 0;
   const num = v => { const n = Number(v); return isFinite(n) ? n : 0; }, d10 = v => String(v || '').slice(0, 10);
   const late = x => x.due && d10(x.due) < today, due = x => d10(x.due) === today;
@@ -2063,8 +2150,10 @@ function digestBuild_(jobs, prods, items, today, yday, dow, topics, exLow) {
   if (on('late')) lines.push(lateA.length ? '⚠️ เลยกำหนด ' + lateA.length + ' งาน: ' + codes(lateA) : '✅ ไม่มีงานเลยกำหนด');
   if (on('shipped')) lines.push(sh ? '🚚 เมื่อวานส่งมอบแล้ว ' + sh + ' งาน' : '🚚 เมื่อวานไม่มีงานส่งมอบ');
   if (on('stock') && exLow && exLow.length) lines.push('📦 Express ใกล้หมด ' + exLow.length + ' รายการ: ' + exLow.slice(0, 3).map(x => x[1] || x[0]).join(', ') + (exLow.length > 3 ? ' …' : ''));
+  const xw = (xpend || []).filter(r => r.status === 'wait'), xo = xw.filter(r => String(r.ts).slice(0, 10) < yday);
+  if (on('stock') && xw.length) lines.push('🧾 รอลง Express ' + xw.length + ' รายการ' + (xo.length ? ' · ค้างเกิน 1 วัน ' + xo.length : ''));
   if (on('stock')) lines.push(low.length ? '📦 ใกล้หมด ' + low.length + ' รายการ: ' + low.slice(0, 3).map(x => x.name).join(', ') + (low.length > 3 ? ' …' : '') : '📦 วัสดุพอทุกรายการ');
-  const alert = (on('design') || on('late') ? jl : 0) + (on('prod') || on('late') ? pl : 0) + (on('stock') ? low.length + (exLow ? exLow.length : 0) : 0);
+  const alert = (on('design') || on('late') ? jl : 0) + (on('prod') || on('late') ? pl : 0) + (on('stock') ? low.length + (exLow ? exLow.length : 0) + xo.length : 0);
   return { title: '☀️ สรุปงานเช้านี้ · ' + DIGEST_DAYS_[dow] + ' ' + (+today.slice(8, 10)) + ' ' + DIGEST_MON_[m - 1], body: lines.join('\n'), alert: alert };
 }
 function digestNow_(topics) {
@@ -2072,7 +2161,8 @@ function digestNow_(topics) {
   const dow = +Utilities.formatDate(now, tz_(), 'u') % 7;
   let items = []; try { items = readAll_('Stock'); } catch (e) {}
   let prods = []; try { prods = readAll_('Prod'); } catch (e) {}
-  return digestBuild_(readAll_('Jobs'), prods, items, today, yday, dow, topics, exLow_());
+  try { exPendMatch_(true); } catch (e) {}
+  return digestBuild_(readAll_('Jobs'), prods, items, today, yday, dow, topics, exLow_(), exPendList_());
 }
 /* สินค้า Express ที่ยอด ≤ จุดสั่งซื้อ (ถามจาก Supabase · ไม่มีการตั้งค่า = ว่าง) */
 function exLow_() {
