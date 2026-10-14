@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.85.0';
+const APP_VERSION = '2.85.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3096,7 +3096,7 @@ function pushNav(hash, tries) {
     if (mode() !== 'sheet') return;
     const ep = navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(g => g.pushManager.getSubscription()).then(x => x ? x.endpoint : '').catch(() => '') : Promise.resolve('');
     return ep.then(e => api().pushInfo(e ? { ep: e } : {})).then(r => { const i = r && r.info; if (!i) return;
-      const k = i.kind, h = k === 'msg' || k === 'sos' ? 'msg/' + encodeURIComponent(i.mid || '') : ['assign', 'cmt', 'help', 'fix'].indexOf(k) >= 0 && i.code ? 'job/' + encodeURIComponent(i.code) : k === 'digest' ? 'digest' : k === 'low' || k === 'nostock' ? 'stock' : k === 'kb' ? 'kb' : '';
+      const k = i.kind, h = k === 'msg' || k === 'sos' ? 'msg/' + encodeURIComponent(i.mid || '') : ['assign', 'cmt', 'help', 'fix', 'visit'].indexOf(k) >= 0 && i.code ? 'job/' + encodeURIComponent(i.code) : k === 'digest' ? 'digest' : k === 'low' || k === 'nostock' ? 'stock' : k === 'kb' ? 'kb' : '';
       if (h) pushNav('#' + h); }).catch(() => {});
   }
   if (p[0] && viewsFor(S.user).some(v => v.id === p[0])) go(p[0]);
@@ -5147,7 +5147,8 @@ const DG_IC = {
 };
 const DG_DAYS = [['wd', 'จันทร์–ศุกร์', [1, 2, 3, 4, 5]], ['sat', 'จันทร์–เสาร์', [1, 2, 3, 4, 5, 6]], ['all', 'ทุกวัน', [0, 1, 2, 3, 4, 5, 6]]];
 const DG_WEEK = [1, 2, 3, 4, 5, 6, 0], DG_DOWL = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
-const DG_TOPICS = [['design', '🎨', 'ฝ่ายแบบ', 'งานค้าง · เลยกำหนด · ครบกำหนดวันนี้'], ['prod', '🏭', 'ฝ่ายผลิต', 'งานในไลน์ · ลงเครื่อง · พร้อมส่ง · ด่วน'],
+const DG_TOPICS = [['design', '🎨', 'ฝ่ายแบบ', 'งานค้าง · เลยกำหนด · ครบกำหนดวันนี้'], ['visit', '📍', 'นัดหน้างานวันนี้', 'ทีมออกแบบ: สำรวจ · วัดพื้นที่ · เข้าหน้างาน (บอกโครงการและเวลา)'], ['prod', '🏭', 'ฝ่ายผลิต', 'งานในไลน์ · ลงเครื่อง · พร้อมส่ง · ด่วน'],
+
   ['due', '📅', 'งานครบกำหนดวันนี้', 'บอกรหัสงานที่ต้องเสร็จ/ส่งวันนี้'], ['late', '⚠️', 'งานเลยกำหนด', 'บอกรหัสงานที่เลยกำหนดแล้ว'],
   ['shipped', '🚚', 'ส่งมอบเมื่อวาน', 'จำนวนงานที่ส่งลูกค้าไปเมื่อวาน'], ['stock', '📦', 'วัสดุใกล้หมด', 'รายการที่ถึงจุดสั่งซื้อ']];
 const DG_TK = DG_TOPICS.map(t => t[0]);
@@ -5179,6 +5180,8 @@ function digestBuild(jobs, prods, items, td, yd, dow, topics) {
   const dueA = po.filter(due).concat(jo.filter(due)), lateA = po.filter(late).concat(jo.filter(late));
   const m = +td.slice(5, 7), lines = [];
   if (on('design')) lines.push('🎨 ฝ่ายแบบ ค้าง ' + jo.length + ' งาน' + (jl ? ' · เลยกำหนด ' + jl : '') + (jt ? ' · ครบกำหนดวันนี้ ' + jt : ''));
+  if (on('visit')) { const vt = []; jobs.forEach(j => { if (j.status !== 'done') dsVisits(j).forEach(v => { if (String(v.at).slice(0, 10) === td) vt.push({ j: j, v: v }); }); }); vt.sort((a, b) => String(a.v.at).localeCompare(String(b.v.at)));
+    if (vt.length) lines.push('📍 นัดหน้างานวันนี้ ' + vt.length + ': ' + vt.slice(0, 3).map(x => (x.j.title || x.j.code) + ' · ' + x.v.t + (String(x.v.at).length > 10 ? ' ' + String(x.v.at).slice(11, 16) + ' น.' : '')).join(', ') + (vt.length > 3 ? ' …' : '')); }
   if (on('prod')) lines.push('🏭 ฝ่ายผลิต ' + po.length + ' งาน · ลงเครื่อง ' + mc + ' · พร้อมส่ง ' + pr + (pl ? ' · เลยกำหนด ' + pl : '') + (pt ? ' · ส่งวันนี้ ' + pt : '') + (pu ? ' · ด่วน ' + pu : ''));
   if (on('due')) lines.push(dueA.length ? '📅 ครบกำหนดวันนี้ ' + dueA.length + ' งาน: ' + codes(dueA) : '📅 วันนี้ไม่มีงานครบกำหนด');
   if (on('late')) lines.push(lateA.length ? '⚠️ เลยกำหนด ' + lateA.length + ' งาน: ' + codes(lateA) : '✅ ไม่มีงานเลยกำหนด');

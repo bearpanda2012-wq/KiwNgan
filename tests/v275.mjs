@@ -46,10 +46,10 @@ await pg.click('[data-dgdays="wd"]'); await pg.waitForTimeout(100);
 await pg.click('.dg-day:has([data-dgday="6"])'); await pg.waitForTimeout(100);
 eq('ticking sat after preset → matches จันทร์–เสาร์', await pg.locator('.dg-seg .on').innerText(), 'จันทร์–เสาร์');
 // เรื่องที่จะส่ง
-eq('all topics on by default', [await pg.locator('.dg-t').count(), await pg.locator('.dg-t.on').count()], [6, 6]);
+eq('all topics on by default', [await pg.locator('.dg-t').count(), await pg.locator('.dg-t.on').count()], [7, 7]);   // v2.85.1 +นัดหน้างาน
 await pg.click('.dg-t:has([data-dgtopic="stock"])'); await pg.click('.dg-t:has([data-dgtopic="shipped"])'); await pg.waitForTimeout(150);
-eq('preview follows topics', [await pg.locator('.dg-t.on').count(), /วัสดุ|ใกล้หมด/.test(await pg.locator('.dg-ntf').innerText()), await pg.locator('.dg-ntf li').count()], [4, false, 4]);
-for (const k of ['design', 'prod', 'due']) await pg.click('.dg-t:has([data-dgtopic="' + k + '"])');
+eq('preview follows topics', [await pg.locator('.dg-t.on').count(), /วัสดุ|ใกล้หมด/.test(await pg.locator('.dg-ntf').innerText()), await pg.locator('.dg-ntf li').count()], [5, false, 4]);   // นัดหน้างาน: ไม่มีนัด = ไม่ขึ้นบรรทัด
+for (const k of ['design', 'visit', 'prod', 'due']) await pg.click('.dg-t:has([data-dgtopic="' + k + '"])');
 await pg.click('.dg-t:has([data-dgtopic="late"])'); await pg.waitForTimeout(150);
 eq('cannot untick last topic', [await pg.locator('.dg-t.on').count(), await pg.locator('.dg-ntf li').count()], [1, 1]);
 await pg.click('.dg-t:has([data-dgtopic="stock"])'); await pg.waitForTimeout(100);

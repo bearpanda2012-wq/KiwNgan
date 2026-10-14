@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.41.0';
+const VERSION = '1.42.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -729,9 +729,26 @@ function cleanJob_(j) {
    ใช้เลข Job ร่วมกับงาน CAD/CAM ได้ · Jobshop ทำเสร็จแล้วเข้า "รอผลิต" */
 const DS_TYPES_ = { 'ออกแบบ Façade': 0, 'ออกแบบ คอนโด/บ้าน': 0, 'ออกแบบ รีโนเวทบ้าน': 0, 'ออกแบบ Jobshop': 1, 'ออกแบบ Catalog/สินค้าใหม่': 0 };
 const isDsType_ = t => Object.prototype.hasOwnProperty.call(DS_TYPES_, String(t || ''));
+/* นัดหน้างานของงานออกแบบ (สำรวจ / วัดพื้นที่ / เข้าหน้างาน 3 ช่วง) — เหมือน dsVisits ในแอป */
+function dsVisits_(j) {
+  const t = String(j.taskType || ''); if (!isDsType_(t)) return [];
+  let d = {}; try { d = JSON.parse(j.ds || '{}') || {}; } catch (e) {}
+  const v = [];
+  if (t === 'ออกแบบ Façade' && d.survey && d.surveyAt) v.push({ t: 'สำรวจหน้างาน', at: String(d.surveyAt) });
+  if (t === 'ออกแบบ คอนโด/บ้าน' && d.measureAt) v.push({ t: 'วัดพื้นที่หน้างาน', at: String(d.measureAt) });
+  if (t === 'ออกแบบ รีโนเวทบ้าน') [['v1', 'ตรวจหน้างานครั้งแรก'], ['v2', 'ช่วงกลางโครงการ'], ['v3', 'ก่อนส่งมอบงาน']].forEach(x => { if (d[x[0]]) v.push({ t: x[1], at: String(d[x[0]]) }); });
+  return v;
+}
+/* นัดหน้างานในช่วงวันที่ [from, to] ของงานที่ยังไม่เสร็จ → [{ job, t, at }] เรียงตามเวลา */
+function visitsBetween_(jobs, from, to) {
+  const out = [];
+  jobs.forEach(j => { if (j.status === 'done') return; dsVisits_(j).forEach(v => { const d = v.at.slice(0, 10); if (d >= from && d <= to) out.push({ job: j, t: v.t, at: v.at }); }); });
+  return out.sort((a, b) => a.at.localeCompare(b.at));
+}
+const visitTxt_ = v => (v.job.title || v.job.code) + ' · ' + v.t + (v.at.length > 10 ? ' ' + v.at.slice(11, 16) + ' น.' : '');
 function dsAutoCode_() {
-  const tz = Session.getScriptTimeZone() || 'Asia/Bangkok', d = new Date(), yy = String((+Utilities.formatDate(d, tz, 'yyyy') + 543) % 100).padStart(2, '0');
-  const pre = 'DS' + yy + Utilities.formatDate(d, tz, 'MM') + '-';
+  const ymd = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd'), yy = String((+ymd.slice(0, 4) + 543) % 100).padStart(2, '0');
+  const pre = 'DS' + yy + ymd.slice(5, 7) + '-';
   const n = readAll_('Jobs').map(j => String(j.code || '')).filter(c => c.indexOf(pre) === 0).map(c => parseInt(c.slice(pre.length), 10) || 0);
   return pre + String((n.length ? Math.max.apply(null, n) : 0) + 1).padStart(3, '0');
 }
@@ -1980,15 +1997,24 @@ function nightly() {
 function morningReminders() {
   const d = new Date().getDay(); if (d === 0 || d === 6) return;   // ไม่เตือนเสาร์-อาทิตย์
   const today = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd'), tm = Utilities.formatDate(new Date(Date.now() + 864e5), tz_(), 'yyyy-MM-dd');
-  const by = {};
-  readAll_('Jobs').forEach(j => { if (j.status !== 'done' && j.assignee && j.due && j.due <= tm) (by[j.assignee] = by[j.assignee] || []).push(j); });
-  Object.keys(by).forEach(n => {
-    const js = by[n], late = js.filter(j => j.due < today).length;
-    try { pushTo_([n], { kind: 'due', from: '', code: js.map(j => j.code).slice(0, 3).join(', '), count: js.length, late: late }); } catch (e) {}
+  const by = {}, jobs = readAll_('Jobs');
+  jobs.forEach(j => { if (j.status !== 'done' && j.assignee && j.due && j.due <= tm) (by[j.assignee] = by[j.assignee] || []).push(j); });
+  // นัดหน้างานของทีมออกแบบ: วันนี้ + วันทำงานถัดไป (ศุกร์ → ถึงจันทร์) แจ้งผู้รับผิดชอบและผู้ร่วมทำงาน
+  const nx = Utilities.formatDate(new Date(Date.now() + (d === 5 ? 3 : 1) * 864e5), tz_(), 'yyyy-MM-dd'), vis = {};
+  visitsBetween_(jobs, today, nx).forEach(v => { [v.job.assignee].concat(String(v.job.helpers || '').split(',')).map(x => String(x || '').trim()).filter(Boolean).forEach(n => { (vis[n] = vis[n] || []).push(v); }); });
+  Object.keys(by).concat(Object.keys(vis)).filter((n, i, a) => a.indexOf(n) === i).forEach(n => {
+    const js = by[n] || [], late = js.filter(j => j.due < today).length, vs = vis[n] || [];
+    try {
+      if (vs.length) {   // 1 คน = 1 แจ้งเตือน (รวมเรื่องงานใกล้กำหนดไว้ท้าย)
+        const tdv = vs.filter(v => v.at.slice(0, 10) === today);
+        pushTo_([n], { kind: 'visit', from: '', title: (tdv.length ? 'วันนี้ ' + tdv.length + ' นัด' : 'พรุ่งนี้ ' + vs.length + ' นัด'), code: vs.length === 1 ? vs[0].job.code : '',
+          body: vs.slice(0, 3).map(v => (v.at.slice(0, 10) === today ? 'วันนี้ ' : '') + visitTxt_(v)).join(' · ') + (js.length ? ' | งานใกล้กำหนด ' + js.length + ' งาน' : ''), count: vs.length });
+      } else pushTo_([n], { kind: 'due', from: '', code: js.map(j => j.code).slice(0, 3).join(', '), count: js.length, late: late });
+    } catch (e) {}
   });
 }
 /* ---------- สรุปงานประจำเช้า → ส่งแจ้งเตือนให้เจ้าของ/หัวหน้า (ตั้งเวลา วัน และผู้รับในหน้า ตั้งค่า > สรุปประจำวัน) ---------- */
-const DIGEST_TOPICS_ = ['design', 'prod', 'due', 'late', 'shipped', 'stock'];
+const DIGEST_TOPICS_ = ['design', 'visit', 'prod', 'due', 'late', 'shipped', 'stock'];
 /* วันที่ส่ง: [0=อา. … 6=ส.] (ค่าเก่า 'wd' / 'sat' / 'all' แปลงให้) · หัวข้อ: ไม่ระบุ = ทุกหัวข้อ */
 function digestDays_(v) {
   if (Array.isArray(v)) return v.map(Number).filter((n, i, a) => n >= 0 && n <= 6 && n === Math.floor(n) && a.indexOf(n) === i).sort();
@@ -2015,6 +2041,7 @@ function digestBuild_(jobs, prods, items, today, yday, dow, topics) {
   const dueA = po.filter(due).concat(jo.filter(due)), lateA = po.filter(late).concat(jo.filter(late));
   const m = +today.slice(5, 7), lines = [];
   if (on('design')) lines.push('🎨 ฝ่ายแบบ ค้าง ' + jo.length + ' งาน' + (jl ? ' · เลยกำหนด ' + jl : '') + (jt ? ' · ครบกำหนดวันนี้ ' + jt : ''));
+  if (on('visit')) { const vt = visitsBetween_(jobs, today, today); if (vt.length) lines.push('📍 นัดหน้างานวันนี้ ' + vt.length + ': ' + vt.slice(0, 3).map(visitTxt_).join(', ') + (vt.length > 3 ? ' …' : '')); }
   if (on('prod')) lines.push('🏭 ฝ่ายผลิต ' + po.length + ' งาน · ลงเครื่อง ' + mc + ' · พร้อมส่ง ' + pr + (pl ? ' · เลยกำหนด ' + pl : '') + (pt ? ' · ส่งวันนี้ ' + pt : '') + (pu ? ' · ด่วน ' + pu : ''));
   if (on('due')) lines.push(dueA.length ? '📅 ครบกำหนดวันนี้ ' + dueA.length + ' งาน: ' + codes(dueA) : '📅 วันนี้ไม่มีงานครบกำหนด');
   if (on('late')) lines.push(lateA.length ? '⚠️ เลยกำหนด ' + lateA.length + ' งาน: ' + codes(lateA) : '✅ ไม่มีงานเลยกำหนด');
