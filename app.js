@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.90.0';
+const APP_VERSION = '2.91.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4465,7 +4465,7 @@ function ganttPanel(pool) {
     }).join('');
     const endTxt = r.open ? (r.due ? (r.late ? '<em class="late">เลย ' + fd(r.due) + '</em>' : 'จบ ' + fd(r.due)) : 'ยังไม่กำหนด') : '<em class="ok">จบแล้ว ' + fd(r.fin) + '</em>';
     return '<div class="grow' + (r.open ? '' : ' closed') + '" data-open="' + esc(last.id) + '" role="button" tabindex="0">' +
-      '<div class="glab"><span class="gl1"><b class="mono">' + esc(r.code) + '</b>' + stPill(last) + '</span><small>' + (r.group ? '<i class="gdot" style="background:' + (groupColor(r.group) || '#64748B') + '"></i>' + esc(groupShort(r.group)) + ' · ' : '') + esc(last.title || '') + '</small></div>' +
+      '<div class="glab"><span class="gl1"><b class="mono">' + esc(r.code) + '</b>' + ((jj => jj ? jobTh(jj, 'in sm') : '')(r.js.find(x => imgsOf(x.id).length))) + stPill(last) + '</span><small>' + (r.group ? '<i class="gdot" style="background:' + (groupColor(r.group) || '#64748B') + '"></i>' + esc(groupShort(r.group)) + ' · ' : '') + esc(last.title || '') + '</small></div>' +
       '<div class="gtrack">' + bars + '</div><div class="gend">' + endTxt + '</div></div>';
   };
   return head + '<div class="gantt"><div class="gscroll"><div class="ghead"><div class="glab"></div><div class="gtrack">' + ticks + '</div><div class="gend"></div></div>' +
@@ -4652,7 +4652,7 @@ function minutesOn(date, member) {
 }
 function aItem(j) {
   const di = dueInfo(j), run = runningOf(j.id);
-  return '<button class="aitem" data-open="' + esc(j.id) + '">' + stBadge(j) + '<span style="min-width:0"><span class="code">' + esc(j.code) + '</span> ' + (imgsOf(j.id).length ? '<span class="img-chip">' + STI.camera + imgsOf(j.id).length + '</span> ' : '') +
+  return '<button class="aitem" data-open="' + esc(j.id) + '">' + stBadge(j) + '<span style="min-width:0"><span class="code">' + esc(j.code) + '</span> ' + jobTh(j, 'in') + ' ' +
     (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span> ' : '') + (run ? '<span class="tag late">● จับเวลา</span>' : '') +
     '<small>' + esc([j.title, groupShort(j.group), j.taskType].filter(Boolean).join(' · ')) + '</small></span>' +
     '<span style="text-align:right">' + stgHtml(stageOf(j, j.status === 'done' && typeof prodOfCode === 'function' && S.prods ? prodOfCode(j.code) : null), 'sm') + '<small class="' + (di.cls === 'late' ? 'tag late' : /soon/.test(di.cls) ? 'tag ' + di.cls : '') + '">' + esc(di.text) + '</small></span></button>';
@@ -4772,7 +4772,7 @@ function viewList() {
   const body = rows.length ? rows.map((j, i) => {
     const di = dueInfo(j), run = runningOf(j.id), mins = totalMinutes(j), tc = typeColor(j.taskType);
     return '<div class="row' + (tc ? ' has-tc' : '') + (isLate(j) ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + '"' + (tc ? ' style="--tc:' + tc + '"' : '') + ' data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
-      '<div class="cell c-main"><div class="code"><span class="qno">' + (i + 1) + '</span>' + stBadge(j) + esc(j.code) + (imgsOf(j.id).length ? '<span class="img-chip">' + STI.camera + imgsOf(j.id).length + '</span>' : '') + '</div><div class="meta">' + (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">แก้ไข</span>' : '') +
+      '<div class="cell c-main"><div class="code"><span class="qno">' + (i + 1) + '</span>' + stBadge(j) + esc(j.code) + jobTh(j, 'in') + '</div><div class="meta">' + (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">แก้ไข</span>' : '') +
         typeChip(j.taskType) + groupChip(j.group) + (j.title ? '<span>' + esc(j.title) + '</span>' : '') + lvBars(j.level) + cardExtras(j) + '</div></div>' +
       '<div class="cell c-who"><span class="who">' + avTeam(j) + '<span>' + esc(j.assignee || 'ยังไม่มอบหมาย') + (helpersOf(j).length ? '<small class="helpers">+ ' + esc(helpersOf(j).join(', ')) + '</small>' : '') + '<small>Sale ' + esc(j.sale || '–') + '</small></span></span></div>' +
       '<div class="cell c-time">' + (run ? '<span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : '<span class="tnum">' + (mins ? fdur(mins) : '–') + '</span>') + '<small>เริ่ม ' + fdt(j.startedAt) + '</small></div>' +
@@ -5602,6 +5602,20 @@ function pDueTag(p) {   // กำหนดส่งของงานผลิ�
   const n = daysBetween(today(), p.due), done = p.stage === 'ready', cls = done ? '' : n < 0 ? ' late' : n <= 1 ? ' soon' : '';
   return '<span class="tag pt-due' + cls + '" title="กำหนดส่ง ' + esc(fdY(p.due)) + '">' + (cls === ' late' ? STI.fire : STI.calendar) + (done ? 'ส่ง ' + fd(p.due) : n < 0 ? 'เลยส่ง ' + (-n) + ' วัน' : n === 0 ? 'ส่งวันนี้' : n === 1 ? 'ส่งพรุ่งนี้' : 'ส่ง ' + fd(p.due)) + '</span>';
 }
+/* รูปตัวอย่างเล็กบนการ์ด/แถวงาน (กดดูรูปเต็มจอ) · ใช้ span เพราะหลายแถวเป็น <button> อยู่แล้ว */
+function miniTh(img, jobId, n, cls) {
+  if (!img) return '';
+  return '<span class="card-th mth' + (cls ? ' ' + cls : '') + '" role="button" tabindex="0" data-lbopen="' + esc(img.id) + '" data-lbjob="' + esc(jobId) + '" title="ดูรูป' + (n > 1 ? ' (' + n + ' รูป)' : '') + '" aria-label="ดูรูปงาน">' + thumbImg(img) + (n > 1 ? '<b>' + n + '</b>' : '') + '</span>';
+}
+const jobTh = (j, cls) => { const im = imgsOf(j.id); return im.length ? miniTh(im[0], j.id, im.length, cls) : ''; };
+function codeTh(r, cls) {   // แถวตามเลข Job: รูปของงานผลิตก่อน แล้วค่อยรูปจากงานออกแบบ
+  const t = r.prod ? pThumb(r.prod) : null; if (t) return miniTh(t.img, t.job.id, imgsOf(t.job.id).length, cls);
+  for (const j of designJobsOf(r.code)) { const im = imgsOf(j.id); if (im.length) return miniTh(im[0], j.id, im.length, cls); }
+  return '';
+}
+const mthOpen = (e, t) => { e.preventDefault(); e.stopPropagation(); openLightbox(t.dataset.lbjob, t.dataset.lbopen); };
+document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('.mth[data-lbopen]'); if (t) mthOpen(e, t); }, true);
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('mth')) mthOpen(e, e.target); }, true);
 function pThumb(p) { const own = imgsOf(p.id); if (own.length) return { img: own[0], job: { id: p.id } }; for (const j of designJobsOf(p.code)) { const im = imgsOf(j.id); if (im.length) return { img: im[0], job: j }; } return null; }
 const stIdx = st => PCOLS.indexOf(st === 'shipped' ? 'ready' : st);
 function pTrack(p) {   // แถบความคืบหน้าแบบเดียวกับฝ่ายแบบ: รอผลิต → เครื่อง → สี → แพ็ค → พร้อมส่ง
@@ -5871,7 +5885,7 @@ function coX(r, o) {
     h += m.map(x => '<span class="co-mc' + (x.d ? ' on' : '') + '">' + (x.d ? '✓ ' : PIC.machine) + esc(x.m) + '</span>').join('');
     if (r.prod.paint === 'no') h += '<span class="co-sk">ไม่ทำสี</span>';
     if (r.prod.assy === 'no') h += '<span class="co-sk">ไม่ประกอบ</span>';
-    { const ni = (Array.isArray(r.prod.imgs) ? r.prod.imgs.length : (typeof imgsOf === 'function' && r.prod.id ? imgsOf(r.prod.id).length : 0)); if (ni) h += '<span class="co-sk co-ph">' + STI.camera + ni + '</span>'; }
+    { const ni = Array.isArray(r.prod.imgs) ? r.prod.imgs.length : 0; if (ni) h += '<span class="co-sk co-ph">' + STI.camera + ni + '</span>'; }
     if (r.prod.note) h += '<span class="co-pnote" title="' + esc(r.prod.note) + '">' + STI.note + esc(String(r.prod.note).slice(0, 60)) + '</span>';
     if (cur && !m.length) h += tc(cur.taskType);
   } else if (cur) {
@@ -5942,7 +5956,7 @@ function viewFlow() {
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
   const hovJob = r => { const o = r.jobs.filter(j => j.status !== 'done'); return (o[0] || r.jobs.slice().sort((a, b) => String(finDate(b)).localeCompare(String(finDate(a))))[0] || {}).id || ''; };
   const table = list.length ? '<div class="co-list">' + list.slice(0, 200).map((r, k) => '<button type="button" class="co-row ' + coStg(r) + ' co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + '" style="--i:' + Math.min(k, 24) + '" data-coopen="' + esc(r.code) + '"' + (hovJob(r) ? ' data-hov="' + esc(hovJob(r)) + '"' : r.prod ? ' data-phov="' + esc(r.prod.id) + '"' : '') + '>' +
-      '<span class="co-code"><b>' + coHl(r.code, q) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + coHl(r.title || '–', q) + '</small></span>' + coX(r) +
+      '<span class="co-code"><span class="co-cline"><b>' + coHl(r.code, q) + '</b>' + codeTh(r, 'in') + '</span>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + coHl(r.title || '–', q) + '</small></span>' + coX(r) +
       '<span class="co-mid">' + coRoute(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
       '<span class="co-meta">' + coDate(r) + '<small class="co-age' + (r.late ? ' late' : '') + '">' + (r.since && r.step !== 'shipped' && r.step !== 'ddone' ? (r.late ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(Math.max(0, daysBetween(String(r.since).slice(0, 10), today()))) : '') + '</small></span></button>').join('') + '</div>' +
       (list.length > 200 ? '<div class="col-more">แสดง 200 จาก ' + list.length + ' รายการ ใช้ช่องค้นหาเพื่อหางานอื่น</div>' : '')
@@ -7848,7 +7862,7 @@ function saleFlowHtml(d, sel) {
   SF.by = {}; list.forEach(r => { SF.by[r.code] = r; });
   const rows = list.length ? '<div class="co-list sf-list">' + list.slice(0, 300).map((r, k) => { const op = !!SF.open[r.code];
       return '<div class="sf-item' + (op ? ' open' : '') + '"><button type="button" class="co-row ' + coStg(r) + ' co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + (SF.anim ? ' in' : '') + '" style="--i:' + Math.min(k, 24) + '" data-sfopen="' + esc(r.code) + '" data-shov="' + esc(r.code) + '" aria-expanded="' + op + '">' +
-        '<span class="co-code"><b>' + coHl(r.code, qq) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + coHl(r.title || '–', qq) + '</small></span>' + coX(r, { sale: !sel }) +
+        '<span class="co-code"><span class="co-cline"><b>' + coHl(r.code, qq) + '</b>' + codeTh(r, 'in') + '</span>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + coHl(r.title || '–', qq) + '</small></span>' + coX(r, { sale: !sel }) +
         '<span class="co-mid">' + coRoute(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
         '<span class="co-meta">' + dateBox(r) + '<span class="sf-chev">' + I.next + '</span></span></button>' +
         (op ? detail(r) : '') + '</div>'; }).join('') + '</div>'

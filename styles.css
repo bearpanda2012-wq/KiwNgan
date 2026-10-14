@@ -5592,3 +5592,12 @@ body.auth #bgSndBtn{display:none}
 @keyframes reShine{0%,70%{left:-60%}100%{left:130%}}
 @keyframes reTwinkle{0%,100%{opacity:0;transform:scale(.3) rotate(0)}40%,60%{opacity:1;transform:scale(1) rotate(45deg)}}
 @media (prefers-reduced-motion:reduce){.rt-end,.re-seal,.re-core::after,.re-sp{animation:none!important}.re-core svg{animation:none;stroke-dashoffset:0}.re-sp{opacity:.9}}
+/* v2.91 รูปตัวอย่างเล็กบนทุกแถว/การ์ดงาน (แบบเดียวกับการ์ดบนบอร์ด) */
+.card-th.mth{display:inline-block;cursor:zoom-in;background:var(--surface-2);vertical-align:middle;transition:transform .15s}
+.card-th.mth:hover,.card-th.mth:focus-visible{transform:scale(1.12);outline:none}
+.card-th.mth img{width:100%;height:100%;object-fit:cover;display:block}
+.card-th.mth.in{width:30px;height:30px;border-radius:8px;margin-left:2px}
+.card-th.mth.in b{font-size:9.5px;padding:1px 3px}
+.co-cline{display:flex;align-items:center;gap:8px;min-width:0}
+.co-cline b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-th.mth.in.sm{width:24px;height:24px;border-radius:6px}
