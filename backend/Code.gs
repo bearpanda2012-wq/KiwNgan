@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.40.0';
+const VERSION = '1.41.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -31,7 +31,7 @@ const MAX_PIN_FAILS = 5;
 
 const SHEETS = {
   Jobs: ['id', 'code', 'title', 'group', 'taskType', 'qty', 'level', 'assignee', 'sale', 'priority', 'revision',
-         'status', 'received', 'due', 'startedAt', 'finishedAt', 'minutes', 'note', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'helpers', 'checklist'],
+         'status', 'received', 'due', 'startedAt', 'finishedAt', 'minutes', 'note', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'helpers', 'checklist', 'ds'],
   TimeLogs: ['id', 'jobId', 'member', 'start', 'end', 'minutes'],
   Activity: ['ts', 'jobId', 'who', 'action', 'detail'],
   Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo', 'perms'],   // perms ว่าง = ใช้สิทธิ์เริ่มต้นของตำแหน่ง
@@ -725,7 +725,18 @@ function cleanJob_(j) {
   return out;
 }
 
+/* ทีมออกแบบดีไซน์ (ฝ่ายแบบ): รายละเอียดงานขึ้นต้นด้วย "ออกแบบ " · เลข Job เว้นว่างได้ (ระบบตั้งให้ DSyymm-nnn)
+   ใช้เลข Job ร่วมกับงาน CAD/CAM ได้ · Jobshop ทำเสร็จแล้วเข้า "รอผลิต" */
+const DS_TYPES_ = { 'ออกแบบ Façade': 0, 'ออกแบบ คอนโด/บ้าน': 0, 'ออกแบบ รีโนเวทบ้าน': 0, 'ออกแบบ Jobshop': 1, 'ออกแบบ Catalog/สินค้าใหม่': 0 };
+const isDsType_ = t => Object.prototype.hasOwnProperty.call(DS_TYPES_, String(t || ''));
+function dsAutoCode_() {
+  const tz = Session.getScriptTimeZone() || 'Asia/Bangkok', d = new Date(), yy = String((+Utilities.formatDate(d, tz, 'yyyy') + 543) % 100).padStart(2, '0');
+  const pre = 'DS' + yy + Utilities.formatDate(d, tz, 'MM') + '-';
+  const n = readAll_('Jobs').map(j => String(j.code || '')).filter(c => c.indexOf(pre) === 0).map(c => parseInt(c.slice(pre.length), 10) || 0);
+  return pre + String((n.length ? Math.max.apply(null, n) : 0) + 1).padStart(3, '0');
+}
 function saveJob_(job, u) {
+  if (job && !String(job.code || '').trim() && !job.id && isDsType_(job.taskType)) job.code = dsAutoCode_();
   if (!job || !String(job.code || '').trim()) throw new Error('กรุณาใส่เลข Job');
   const data = cleanJob_(job);
   data.code = String(data.code).trim();
@@ -750,7 +761,9 @@ function saveJob_(job, u) {
   } else {
     if (!can_(u, 'design.add')) throw new Error('ไม่มีสิทธิ์ลงงานใหม่ของฝ่ายแบบ');
     // เลข Job ซ้ำ: ทุกงานจบที่ CAM → เพิ่มงาน CAM ของเลขเดิมได้ถ้ายังไม่มีงาน CAM ของเลขนั้น · รายละเอียดอื่นซ้ำไม่ได้
-    const same = readAll_('Jobs').filter(x => x.code.toLowerCase() === data.code.toLowerCase());
+    const nds = isDsType_(data.taskType);
+    const same = readAll_('Jobs').filter(x => x.code.toLowerCase() === data.code.toLowerCase() && isDsType_(x.taskType) === nds);
+    if (same.length && nds) throw new Error('มีงานออกแบบเลข ' + data.code + ' อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1 หรือเว้นว่างให้ระบบตั้งเลขให้');
     if (same.length) {
       const types = settings_().taskTypes || [];
       const cat = t => { const f = types.find(x => x.name === t); return f ? f.cat : (/CAM$/.test(t || '') ? 'cam' : 'draw'); };
@@ -819,6 +832,7 @@ function deleteJob_(id, u) {
    ขั้น: wait รอผลิต → machine ลงเครื่อง (เลือกได้หลายเครื่อง ครบทุกเครื่องแล้วไปต่อเอง) → paint ทำสี (ข้ามได้) → assemble ประกอบติดตั้ง (ข้ามได้) → pack แพ็ค → ready พร้อมส่ง → shipped ส่งแล้ว
    อัปเดตได้: ฝ่ายผลิต หัวหน้างาน แอดมิน · คนอื่นดูอย่างเดียว */
 function toProd_(taskType) {
+  if (isDsType_(taskType)) return DS_TYPES_[taskType] === 1;
   const t = (settings_().taskTypes || []).find(x => x.name === taskType);
   if (t && t.prod !== undefined) return t.prod === true || t.prod === 'true';
   return /CAM/i.test(String(taskType || ''));

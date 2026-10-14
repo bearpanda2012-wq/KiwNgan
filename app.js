@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.84.1';
+const APP_VERSION = '2.85.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -284,7 +284,8 @@ function avUser(u, cls, name) {
 }
 function cardExtras(j) {
   const nf = filesOf(j.id).length, nc = (S.cmtCount || {})[j.id] || 0, cl = clChip(j);
-  return nf || nc || cl ? '<div class="card-x">' + cl + (nf ? '<span class="tg" title="ไฟล์งาน ' + nf + ' ไฟล์">' + STI.clip + nf + '</span>' : '') + (nc ? '<span class="tg" title="คอมเมนต์ ' + nc + '">' + STI.cmt + nc + '</span>' : '') + '</div>' : '';
+  const dt = dsTag(j);
+  return nf || nc || cl || dt ? '<div class="card-x">' + dt + cl + (nf ? '<span class="tg" title="ไฟล์งาน ' + nf + ' ไฟล์">' + STI.clip + nf + '</span>' : '') + (nc ? '<span class="tg" title="คอมเมนต์ ' + nc + '">' + STI.cmt + nc + '</span>' : '') + '</div>' : '';
 }
 function avTeam(j) {
   const hs = helpersOf(j); if (!hs.length) return av(j.assignee);
@@ -327,6 +328,7 @@ const TYPE_COLORS = ['#2563EB', '#EA580C', '#9333EA', '#059669', '#CA8A04', '#DB
 const GROUP_COLORS = ['#0EA5E9', '#8B5CF6', '#F43F5E', '#10B981', '#F59E0B', '#6366F1', '#14B8A6', '#A855F7'];
 function typeColor(name) {
   if (!name) return '';
+  { const k = dsKindOf(name); if (k) return k.col; }
   const list = S.settings.taskTypes || [], i = list.findIndex(x => x.name === name);
   if (i < 0) return '#64748B';
   return /^#[0-9a-f]{6}$/i.test(list[i].color || '') ? list[i].color : TYPE_COLORS[i % TYPE_COLORS.length];
@@ -345,8 +347,11 @@ const hasCamPart = j => !!j && ['cam', 'cadcam'].indexOf(taskCat(j.taskType)) >=
 const CAT_LABEL = { draw: 'เขียนแบบ', cam: 'CAM', cadcam: 'CAD+CAM' };
 /* เลข Job ซ้ำ: ทุกงานจบที่ CAM → เพิ่มงาน "ทำ CAM" ของเลขเดิมได้ (ถ้ายังไม่มีงาน CAM ของเลขนั้น) · รายละเอียดอื่นซ้ำไม่ได้ */
 function codeClash(code, taskType, jobs, skipId) {
-  const same = (jobs || []).filter(x => x.id !== skipId && String(x.code).toLowerCase() === String(code).toLowerCase());
+  if (!String(code || '').trim()) return '';
+  const nds = isDs(taskType);   // ทีมออกแบบดีไซน์ใช้เลข Job ร่วมกับงาน CAD/CAM ได้ · เช็กซ้ำเฉพาะในทีมเดียวกัน
+  const same = (jobs || []).filter(x => x.id !== skipId && String(x.code).toLowerCase() === String(code).toLowerCase() && isDs(x.taskType) === nds);
   if (!same.length) return '';
+  if (nds) return 'มีงานออกแบบเลข ' + code + ' อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1 หรือเว้นว่างให้ระบบตั้งเลขให้';
   if (taskCat(taskType) !== 'cam') return 'มีเลข Job ' + code + ' อยู่แล้ว — เพิ่มซ้ำได้เฉพาะงาน "ทำ CAM" ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1';
   if (same.some(x => ['cam', 'cadcam'].indexOf(taskCat(x.taskType)) >= 0)) return 'เลข Job ' + code + ' มีงาน CAM' + (same.some(x => taskCat(x.taskType) === 'cadcam') ? ' (CAD+CAM)' : '') + ' อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1';
   return '';
@@ -490,7 +495,7 @@ function seedDemo() {
 }
 
 /* งานประเภทไหน "ส่งเข้าผลิต" เมื่อทำเสร็จ: ตั้งเองได้ในตั้งค่า (ค่าเริ่มต้น: ชื่อมีคำว่า CAM) */
-function toProdType(name, settings) { const t = ((settings || S.settings || {}).taskTypes || []).find(x => x.name === name); return t && t.prod !== undefined ? t.prod === true || t.prod === 'true' : /CAM/i.test(String(name || '')); }
+function toProdType(name, settings) { if (isDs(name)) return !!(dsKindOf(name) || {}).prod; const t = ((settings || S.settings || {}).taskTypes || []).find(x => x.name === name); return t && t.prod !== undefined ? t.prod === true || t.prod === 'true' : /CAM/i.test(String(name || '')); }
 function seedKb() {   // คลังความรู้ตัวอย่าง (โหมดทดลอง)
   const at = n => addDays(today(), -n) + 'T' + pad(9 + n) + ':20:00';
   return [
@@ -701,6 +706,7 @@ const Demo = {
     const d = this.db(), u = this.me(d), job = Object.assign({}, p.job);
     delete job.baseUpdatedAt; delete job.minutes; delete job.createdBy; delete job.createdAt;
     job.code = String(job.code || '').trim();
+    if (!job.code && !job.id && isDs(job.taskType)) { const n = new Date(), pre = 'DS' + String((n.getFullYear() + 543) % 100).padStart(2, '0') + pad(n.getMonth() + 1) + '-', mx = d.jobs.map(x => String(x.code)).filter(c => c.indexOf(pre) === 0).map(c => parseInt(c.slice(pre.length), 10) || 0); job.code = pre + String((mx.length ? Math.max.apply(null, mx) : 0) + 1).padStart(3, '0'); }
     if (!job.code) throw new Error('กรุณาใส่เลข Job');
     const now = nowLocal();
     let cur = job.id ? d.jobs.find(x => x.id === job.id) : null;
@@ -1952,6 +1958,237 @@ function stBadge(j, size) {
 }
 
 /* job detail (view mode inside the side sheet) */
+/* ================= ทีมออกแบบดีไซน์ (ในฝ่ายแบบ) =================
+   หน้าเพิ่มงานแยกจากทีม CAD/CAM: เลือกประเภทงาน 5 แบบ → ช่องกรอกเฉพาะประเภท → ขั้นตอนตามหน้าที่งาน (เป็นเช็กลิสต์)
+   ข้อมูลเฉพาะเก็บในคอลัมน์ ds (JSON) · เลข Job เว้นว่างได้ (ระบบตั้งให้ DSyymm-nnn) และใช้เลขเดียวกับงาน CAD/CAM ได้
+   กำหนดส่ง: มาตรฐานตามประเภท / เลือกวันเอง / ไม่กำหนด */
+const DS_IC = {
+  facade: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V5l7-2 7 2v16"/><path d="M9 8h1M14 8h1M9 12h1M14 12h1M9 16h1M14 16h1"/></svg>',
+  condo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 20v-5h6v5"/></svg>',
+  reno: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
+  jobshop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/></svg>',
+  catalog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H20v16H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M4 20.5A1.5 1.5 0 0 0 5.5 22H20v-3"/><path d="M8 7h8M8 11h6"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+  sofa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11V8a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v3"/><path d="M2 13a2 2 0 0 1 4 0v2h12v-2a2 2 0 0 1 4 0v5H2z"/><path d="M5 18v2M19 18v2"/></svg>'
+};
+const DS_KINDS = [
+  { k: 'facade', name: 'ออกแบบ Façade', label: 'Façade', sub: 'ผนังภายนอกอาคาร', days: 3, col: '#8B5E34',
+    steps: ['รับ Brief จาก Sales', 'สำรวจหน้างาน (ถ้ามี)', 'ออกแบบแนวทาง/รูปแบบ Façade', 'คำนวณพื้นที่และจำนวนวัสดุ', 'ทำ 3D / VR เพื่อการขาย', 'ลูกค้าเปิด PO', 'ทำไฟล์ผลิต / ไฟล์โลโก้ ส่งช่างหรือฝ่ายผลิต', 'ปรับแบบให้เข้ากับหน้างานจริง'] },
+  { k: 'condo', name: 'ออกแบบ คอนโด/บ้าน', label: 'คอนโด / บ้าน', sub: 'งานอสังหาฯ ภายใน', days: 6, col: '#2F6B5E', site: true, furn: true,
+    steps: ['วัดพื้นที่หน้างาน', 'ประชุม Concept และงบประมาณ', 'ออกแบบ (3D/VR · แบบสถาปัตย์ · แบบผลิตชิ้นงาน)', 'จัดหาเฟอร์นิเจอร์ ส่งรายการจัดซื้อ', 'ประสานงานหน้างาน', 'ตรวจงานหน้างาน', 'จัด Prop ตกแต่งห้อง', 'ถ่ายคลิป VDO ปิดงาน'] },
+  { k: 'reno', name: 'ออกแบบ รีโนเวทบ้าน', label: 'รีโนเวทบ้าน', sub: 'เข้าหน้างาน 3 ช่วง', days: 6, col: '#B45309', site: true, furn: true, visits: true,
+    steps: ['ตรวจสอบหน้างานครั้งแรก · วัดพื้นที่', 'ประชุม Concept และงบประมาณ', 'ออกแบบ', 'จัดหาเฟอร์นิเจอร์ ส่งรายการจัดซื้อ', 'เข้าหน้างานช่วงกลางโครงการ', 'ตรวจ Defect ก่อนส่งมอบ', 'จัด Prop ตกแต่ง', 'ถ่ายคลิป VDO ปิดงาน'] },
+  { k: 'jobshop', name: 'ออกแบบ Jobshop', label: 'Jobshop', sub: 'วางลาย Wallterior', days: 2, col: '#4F46E5', prod: true,
+    steps: ['ลูกค้าเลือก Pattern', 'จัดวางรูปแบบลาย Wallterior ให้เหมาะกับหน้างาน', 'ปรับสัดส่วน / ตำแหน่ง / จำนวนชิ้น', 'จัดทำรูปแบบคร่าว ๆ', 'ส่งให้ฝ่ายผลิตดำเนินการต่อ'] },
+  { k: 'catalog', name: 'ออกแบบ Catalog/สินค้าใหม่', label: 'Catalog / สินค้าใหม่', sub: 'Wallix · Wallterior · ตัวโชว์', days: 0, col: '#BE185D',
+    steps: ['รวบรวมข้อมูล/รูปสินค้า', 'ออกแบบ Layout', 'ตรวจทานกับหัวหน้า', 'ส่งไฟล์ / อัปเดตขึ้นระบบ'] }
+];
+const DS_BRANDS = ['Wallix', 'Wallterior', 'Catalog Interior Material', 'EPS Polymer', 'Forms Ceramic', 'ตัวโชว์สินค้าที่โรงงาน'];
+const DS_WORKS = ['Catalog', 'Presentation', 'อัปเดตแบบตัวอย่าง', 'Layout / ตัวโชว์'];
+const DS_FST = { wait: 'รอสั่ง', ordered: 'สั่งแล้ว', got: 'ได้ของแล้ว' };
+const dsKindOf = j => DS_KINDS.find(x => x.name === (typeof j === 'string' ? j : j && j.taskType)) || null;
+const isDs = j => !!dsKindOf(j);
+const dsAuto = code => /^DS\d{4}-\d+/.test(String(code || ''));
+function dsData(j) { if (!j) return {}; if (j.ds && typeof j.ds === 'object') return j.ds; try { return JSON.parse(j.ds || '{}') || {}; } catch (e) { return {}; } }
+const dsDays = (k, from) => addWorkDays(from || today(), k.days, S.settings.skipWeekends !== false);
+const fdtShort = v => v ? fd(String(v).slice(0, 10)) + (String(v).length > 10 ? ' ' + String(v).slice(11, 16) + ' น.' : '') : '';
+/* นัดหน้างานทั้งหมดของงานนี้ (สำรวจ / วัดพื้นที่ / เข้าหน้างาน 3 ช่วง) */
+function dsVisits(j) {
+  const k = dsKindOf(j), d = dsData(j); if (!k) return [];
+  const v = [];
+  if (k.k === 'facade' && d.survey && d.surveyAt) v.push({ t: 'สำรวจหน้างาน', at: d.surveyAt });
+  if ((k.k === 'condo') && d.measureAt) v.push({ t: 'วัดพื้นที่หน้างาน', at: d.measureAt });
+  if (k.k === 'reno') [['v1', 'ตรวจหน้างานครั้งแรก'], ['v2', 'ช่วงกลางโครงการ'], ['v3', 'ก่อนส่งมอบงาน']].forEach(x => { if (d[x[0]]) v.push({ t: x[1], at: d[x[0]] }); });
+  return v.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+}
+function dsNextVisit(j) { const t = today(); return dsVisits(j).find(v => String(v.at).slice(0, 10) >= t) || null; }
+/* ป้ายบนการ์ด: นัดหน้างานวันนี้/พรุ่งนี้ */
+function dsTag(j) {
+  if (!isDs(j) || j.status === 'done') return '';
+  const v = dsNextVisit(j); if (!v) return '';
+  const dd = daysBetween(today(), String(v.at).slice(0, 10)); if (dd > 2) return '';
+  return '<span class="tg ds-visit' + (dd <= 0 ? ' now' : '') + '" title="' + esc(v.t + ' ' + fdtShort(v.at)) + '">' + DS_IC.pin + (dd <= 0 ? 'วันนี้' : dd === 1 ? 'พรุ่งนี้' : 'อีก 2 วัน') + (String(v.at).length > 10 ? ' ' + String(v.at).slice(11, 16) : '') + '</span>';
+}
+
+/* ---------- ฟอร์มเพิ่ม/แก้ไขงานของทีมออกแบบ ---------- */
+function dsTeamSeg(E) {
+  if (!E.isNew) return '';
+  return '<div class="ds-team" role="tablist"><button type="button" role="tab" data-dsteam="cad" aria-selected="' + (E.team !== 'ds') + '">' + STI.doing + '<span><b>ทีม CAD / CAM</b><small>เขียนแบบ · CAM · แบบผลิต</small></span></button>' +
+    '<button type="button" role="tab" data-dsteam="ds" aria-selected="' + (E.team === 'ds') + '">' + DS_IC.facade + '<span><b>ทีมออกแบบดีไซน์</b><small>Façade · คอนโด/บ้าน · Jobshop · Catalog</small></span></button></div>';
+}
+function dsField(key, label, val, opt) {
+  opt = opt || {};
+  const id = 'ds-' + key, ph = opt.ph ? ' placeholder="' + esc(opt.ph) + '"' : '';
+  const inp = opt.type === 'area' ? '<textarea id="' + id + '" data-dsf="' + key + '" rows="2"' + ph + '>' + esc(val || '') + '</textarea>'
+    : opt.type === 'select' ? '<select id="' + id + '" data-dsf="' + key + '">' + '<option value="">' + esc(opt.empty || 'เลือก') + '</option>' + opt.list.map(x => '<option' + (x === val ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select>'
+    : '<input id="' + id + '" data-dsf="' + key + '" type="' + (opt.type || 'text') + '"' + (opt.step ? ' step="' + opt.step + '" inputmode="decimal"' : '') + ' value="' + esc(val || '') + '"' + ph + ' autocomplete="off">';
+  return '<div class="f' + (opt.full ? ' full' : '') + '"><label for="' + id + '">' + label + (opt.unit ? ' <small class="muted">(' + opt.unit + ')</small>' : '') + '</label>' + inp + (opt.hint ? '<span class="hint">' + opt.hint + '</span>' : '') + '</div>';
+}
+const dsTog = (key, label, on, sub) => '<label class="toggle"><input type="checkbox" data-dsf="' + key + '"' + (on ? ' checked' : '') + '><span><b>' + label + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</span></label>';
+function dsKindFields(k, d) {
+  const site = k.site || k.k === 'facade' ? dsField('addr', 'ที่อยู่หน้างาน', d.addr, { ph: 'เช่น คอนโด XX ชั้น 12 ห้อง 1205', full: true }) + dsField('map', 'ลิงก์แผนที่', d.map, { ph: 'วางลิงก์ Google Maps', type: 'url' }) : '';
+  if (k.k === 'facade') return dsField('area', 'ขนาดพื้นที่', d.area, { unit: 'ตร.ม.', type: 'number', step: 'any', ph: 'เช่น 120' }) + dsField('material', 'วัสดุที่ลูกค้าสนใจ', d.material, { ph: 'เช่น อลูมิเนียมเจาะลาย, ACP' }) + site +
+    dsTog('survey', 'ต้องสำรวจหน้างาน', d.survey, 'กรณีพื้นที่ขนาดใหญ่ ออกสำรวจกับ Sales') + (d.survey ? dsField('surveyAt', 'วันนัดสำรวจ', d.surveyAt, { type: 'datetime-local' }) : '') +
+    dsTog('vr', 'ทำ 3D / VR เพื่อการขาย', d.vr !== false && d.vr !== 0 && d.vr !== '0');
+  if (k.k === 'condo' || k.k === 'reno') return dsField('room', 'ประเภทห้อง / แบบห้อง', d.room, { ph: 'เช่น 1 ห้องนอน 35 ตร.ม., ห้องตัวอย่าง' }) + dsField('size', 'ขนาดพื้นที่', d.size, { unit: 'ตร.ม.', type: 'number', step: 'any' }) +
+    dsField('budget', 'งบประมาณ', d.budget, { unit: 'บาท', type: 'number', step: 'any' }) + dsField('style', 'สไตล์ที่ลูกค้าชอบ', d.style, { ph: 'เช่น Modern Luxury, Minimal' }) + site +
+    (k.k === 'condo' ? dsField('measureAt', 'นัดวัดพื้นที่หน้างาน', d.measureAt, { type: 'datetime-local', hint: 'ออกไปวัดพื้นที่ทุกครั้ง' })
+      : '<div class="f full ds-visits"><span class="lbl">นัดเข้าหน้างาน 3 ช่วง <small class="muted">ใส่ภายหลังได้</small></span><div class="ds-vgrid">' +
+        [['v1', '1', 'ตรวจครั้งแรก', 'วัดพื้นที่ · ตรวจสภาพ'], ['v2', '2', 'กลางโครงการ', 'ตรวจความคืบหน้า'], ['v3', '3', 'ก่อนส่งมอบ', 'ตรวจ Defect · ความเรียบร้อย']].map(x => '<label class="ds-v"><i>' + x[1] + '</i><b>' + x[2] + '</b><small>' + x[3] + '</small><input type="datetime-local" data-dsf="' + x[0] + '" value="' + esc(d[x[0]] || '') + '"></label>').join('') + '</div></div>') +
+    dsTog('vdo', 'ถ่าย VDO สำหรับการตลาด', d.vdo, 'กรณีห้องมีแบบแปลนแปลก ๆ');
+  if (k.k === 'jobshop') return dsField('pattern', 'Pattern ที่ลูกค้าเลือก', d.pattern, { ph: 'รหัสลาย Wallterior' }) + dsField('wall', 'ขนาดผนัง', d.wall, { unit: 'กว้าง × สูง ม.', ph: 'เช่น 3.2 × 2.7' }) + dsField('pcs', 'จำนวนชิ้นโดยประมาณ', d.pcs, { type: 'number', step: 'any' }) +
+    '<p class="hint full">ทำเสร็จแล้วงานจะเข้า "รอผลิต" ของฝ่ายผลิตอัตโนมัติ</p>';
+  if (k.k === 'catalog') return dsField('brand', 'แบรนด์ / งาน', d.brand, { type: 'select', list: DS_BRANDS, empty: 'เลือกแบรนด์' }) + dsField('work', 'ชนิดงาน', d.work, { type: 'select', list: DS_WORKS, empty: 'เลือกชนิดงาน' }) +
+    dsTog('repeat', 'งานประจำ', d.repeat, 'เช่น Wallix อัปเดตแบบเดือนละ 1–2 ครั้ง · ปิดงานแล้วกดสร้างรอบถัดไปได้');
+  return '';
+}
+function dsFurnHtml(d, ro) {
+  const f = d.furn || [], tot = f.reduce((s, x) => s + (+x.q || 0) * (+x.p || 0), 0);
+  return '<fieldset class="ds-furn"><legend>' + DS_IC.sofa + 'รายการเฟอร์นิเจอร์ <small>' + f.length + ' รายการ' + (tot ? ' · ' + baht(tot) : '') + '</small></legend>' +
+    (f.length ? '<div class="dsf-head"><span>รายการ</span><span>จำนวน</span><span>ราคา/ชิ้น</span><span>ร้าน / ลิงก์</span><span>สถานะ</span><span></span></div>' : '') +
+    f.map((x, i) => '<div class="dsf-row"><input data-dsfu="' + i + '.n" value="' + esc(x.n || '') + '" placeholder="เช่น โซฟา 3 ที่นั่ง สีเทา" aria-label="รายการ"' + (ro ? ' disabled' : '') + '>' +
+      '<input data-dsfu="' + i + '.q" type="number" step="any" inputmode="decimal" value="' + esc(x.q || '') + '" placeholder="จำนวน" aria-label="จำนวน"' + (ro ? ' disabled' : '') + '>' +
+      '<input data-dsfu="' + i + '.p" type="number" step="any" inputmode="decimal" value="' + esc(x.p || '') + '" placeholder="ราคา/ชิ้น" aria-label="ราคาต่อชิ้น"' + (ro ? ' disabled' : '') + '>' +
+      '<input data-dsfu="' + i + '.s" value="' + esc(x.s || '') + '" placeholder="ร้าน / ลิงก์สินค้า" aria-label="ร้าน"' + (ro ? ' disabled' : '') + '>' +
+      '<select data-dsfu="' + i + '.st" aria-label="สถานะ"' + (ro ? ' disabled' : '') + '>' + Object.keys(DS_FST).map(s => '<option value="' + s + '"' + ((x.st || 'wait') === s ? ' selected' : '') + '>' + DS_FST[s] + '</option>').join('') + '</select>' +
+      (ro ? '<span></span>' : '<button type="button" class="icon-btn sm" data-dsfdel="' + i + '" aria-label="ลบรายการ">✕</button>') + '</div>').join('') +
+    (ro ? '' : '<button type="button" class="btn sm" data-dsfadd="1">' + I.plus + 'เพิ่มเฟอร์นิเจอร์</button>') +
+    '<span class="hint">ยังไม่มีฝ่ายจัดซื้อในระบบ: ใช้ปุ่ม "คัดลอกรายการส่งจัดซื้อ" ในหน้างาน แล้ววางส่งทางแชต/LINE ได้เลย</span></fieldset>';
+}
+function dsDueHtml(E, j, k) {
+  const d = E.dsd, mode = d.due || (k.days ? 'std' : 'none');
+  const std = k.days ? dsDays(k, j.received) : '';
+  const opt = (v, t, sub) => '<button type="button" data-dsdue="' + v + '" aria-pressed="' + (mode === v) + '"><b>' + t + '</b><small>' + sub + '</small></button>';
+  return '<fieldset><legend>กำหนดเวลา</legend>' +
+    '<div class="f"><label for="e-received">วันที่รับ Brief</label><input type="date" id="e-received" data-e="received" value="' + esc(j.received) + '"></div>' +
+    '<div class="f full"><span class="lbl">กำหนดส่ง</span><div class="ds-due">' +
+      (k.days ? opt('std', 'มาตรฐาน ' + k.days + ' วันทำการ', fdY(std)) : '') + opt('custom', 'เลือกวันเอง', mode === 'custom' && j.due ? fdY(j.due) : 'กำหนดวันที่ส่ง') + opt('none', 'ไม่กำหนดเวลา', 'ไม่นับว่าเลยกำหนด') + '</div>' +
+      (mode === 'custom' ? '<input type="date" id="e-due" data-e="due" value="' + esc(j.due) + '" style="margin-top:8px">' : '') + '</div>' +
+    (!E.isNew ? '<div class="f"><label for="e-started">เริ่มทำ</label><input type="datetime-local" id="e-started" data-e="startedAt" value="' + esc(j.startedAt) + '"></div>' +
+      '<div class="f"><label for="e-finished">ปิดงาน</label><input type="datetime-local" id="e-finished" data-e="finishedAt" value="' + esc(j.finishedAt) + '"' + (j.status !== 'done' ? ' disabled' : '') + '></div>' : '') +
+    '<div class="f full"><label for="e-note">หมายเหตุ / Brief จาก Sales</label><textarea id="e-note" data-e="note" autocomplete="off" rows="3" placeholder="ความต้องการลูกค้า ขอบเขตงาน สิ่งที่ต้องระวัง">' + esc(j.note) + '</textarea></div></fieldset>';
+}
+function renderDsEditor(E, j, live, ro, timer, statusSeg) {
+  const k = dsKindOf(j) || DS_KINDS[0], d = E.dsd;
+  if (!dsKindOf(j)) j.taskType = k.name;
+  if ((d.due || (k.days ? 'std' : 'none')) === 'std' && k.days) j.due = dsDays(k, j.received);
+  if (d.due === 'none' || (!d.due && !k.days)) j.due = '';
+  const cards = '<div class="ds-kinds" role="radiogroup" aria-label="ประเภทงานออกแบบ">' + DS_KINDS.map(x => '<button type="button" role="radio" class="ds-kind" style="--dk:' + x.col + '" data-dskind="' + x.k + '" aria-checked="' + (x.k === k.k) + '"' + (ro ? ' disabled' : '') + '>' +
+    '<span class="dk-ic">' + DS_IC[x.k] + '</span><b>' + esc(x.label) + '</b><small>' + esc(x.sub) + '</small><em>' + (x.days ? x.days + ' วันทำการ' : 'กำหนดเอง') + '</em></button>').join('') + '</div>';
+  const preview = E.isNew && !clOf(j).length ? '<div class="ds-flow" style="--dk:' + k.col + '"><b>ขั้นตอนของงานนี้ (ขึ้นเป็นเช็กลิสต์ให้)</b><ol>' + k.steps.map(s => '<li>' + esc(s) + '</li>').join('') + '</ol></div>' : '';
+  $('#sheetBody').innerHTML =
+    (ro ? '<div class="banner"><span><b>ดูอย่างเดียว</b> งานของ ' + esc(j.assignee || 'คนอื่น') + '</span></div>' : '') +
+    dsTeamSeg(E) +
+    (!E.isNew ? '<div class="f"><span class="lbl">สถานะ</span>' + statusSeg + '</div>' + timer : '') +
+    '<fieldset class="ds-fs"><legend>ประเภทงาน</legend>' + cards + preview + '</fieldset>' +
+    '<fieldset><legend>ข้อมูลโครงการ</legend>' +
+      '<div class="f full"><label for="e-title">ลูกค้า / โครงการ</label><input id="e-title" data-e="title" autocomplete="off" value="' + esc(j.title) + '" placeholder="เช่น อาคาร ABC ซ.สุขุมวิท 24"></div>' +
+      '<div class="f"><label for="e-sale">Sale</label><select id="e-sale" data-e="sale">' + opts(S.settings.sales, j.sale, 'เลือก sale') + '</select></div>' +
+      '<div class="f"><label for="e-code">เลข Job <small class="muted">เว้นว่างได้</small></label><input id="e-code" class="mono" data-e="code" value="' + esc(j.code) + '" placeholder="ยังไม่มี PO เว้นว่างไว้" autocomplete="off"><span class="hint">' + (dsAuto(j.code) ? 'เลขชั่วคราว เปลี่ยนเป็นเลข Job จริงได้เมื่อเปิด PO' : 'ถ้าเว้นว่าง ระบบตั้งเลขชั่วคราวให้ (DS…)') + '</span></div>' +
+      '<div class="f"><label for="e-assignee">ผู้รับผิดชอบ</label><select id="e-assignee" data-e="assignee">' + opts(designers().map(x => x.name), j.assignee, 'ยังไม่มอบหมาย') + '</select></div>' +
+      helpersField(j, ro || (!E.isNew && !P.leads(S.user, live || j))) +
+      '<label class="toggle"><input type="checkbox" data-e="priority"' + (j.priority === 'urgent' ? ' checked' : '') + ' style="accent-color:var(--urgent)"><span><b>งานด่วน</b></span></label>' +
+      '<label class="toggle"><input type="checkbox" data-e="revision"' + (j.revision ? ' checked' : '') + ' style="accent-color:var(--review)"><span><b>งานแก้ไข</b></span></label>' +
+    '</fieldset>' +
+    '<fieldset class="ds-fs" style="--dk:' + k.col + '"><legend><span class="dk-ic sm">' + DS_IC[k.k] + '</span>รายละเอียด ' + esc(k.label) + '</legend>' + dsKindFields(k, d) + '</fieldset>' +
+    (k.furn ? dsFurnHtml(d, ro) : '') +
+    dsDueHtml(E, j, k) +
+    editorImgs(E, live, ro) + (E.isNew ? newExtras(E).replace(/<fieldset class="nx"><legend>เช็กลิสต์<\/legend>[\s\S]*?<\/fieldset>/, '') : '') +
+    (!E.isNew ? '<div class="f"><span class="lbl">ประวัติ</span><div class="hist" id="hist">' + (E.hist ? histHtml(E.hist) : '<span>กำลังโหลด…</span>') + '</div></div>' : '') +
+    (!E.isNew && P.del(S.user, live || j) ? (E.confirm ? '<div class="confirm">ลบงาน <b class="mono">' + esc(j.code) + '</b>? ย้อนกลับไม่ได้<button type="button" class="btn sm danger" data-act="delyes">ลบงาน</button><button type="button" class="btn sm" data-act="delno">ยกเลิก</button></div>'
+      : '<div><button type="button" class="btn sm danger" data-act="del">' + I.trash + 'ลบงานนี้</button></div>') : '') +
+    '<div class="err" id="eErr" hidden></div>';
+  $('#sheetFoot').innerHTML = '<button class="btn" data-act="close" type="button">ปิด</button>' + (ro ? '' : '<button class="btn primary" data-act="save" type="button">' + (E.isNew ? 'เพิ่มงานออกแบบ' : 'บันทึก') + '</button>');
+  if (ro) document.querySelectorAll('#sheetBody input, #sheetBody select, #sheetBody textarea, #sheetBody .seg button').forEach(el => { el.disabled = true; });
+  else if (!canAssign()) { const a = $('#e-assignee'); if (a) { a.disabled = true; a.title = 'ไม่มีสิทธิ์มอบหมายงานให้คนอื่น'; } }
+}
+/* อ่านช่องเฉพาะของทีมออกแบบ (เรียกจาก readEditor) */
+function dsRead(E) {
+  if (!E || E.team !== 'ds' || !E.dsd) return;
+  const d = E.dsd;
+  document.querySelectorAll('#sheetBody [data-dsf]').forEach(el => { d[el.dataset.dsf] = el.type === 'checkbox' ? (el.checked ? 1 : 0) : el.value.trim(); });
+  document.querySelectorAll('#sheetBody [data-dsfu]').forEach(el => { const p = el.dataset.dsfu.split('.'), r = (d.furn = d.furn || [])[+p[0]]; if (r) r[p[1]] = el.value.trim(); });
+  E.job.ds = JSON.stringify(d);
+}
+function dsPrepareSave(E, j) {
+  const k = dsKindOf(j); if (!k) return;
+  const d = E.dsd || {};
+  if ((d.due || (k.days ? 'std' : 'none')) === 'std' && k.days) j.due = dsDays(k, j.received);
+  if (d.due === 'none' || (!d.due && !k.days)) j.due = '';
+  ['vr', 'survey', 'vdo', 'repeat'].forEach(x => { if (d[x] === 0) delete d[x]; });
+  d.furn = (d.furn || []).filter(x => x.n || x.q || x.p || x.s);
+  j.ds = JSON.stringify(d);
+  if (E.isNew && !clOf(j).length) j.checklist = JSON.stringify((clTemplate(j.taskType).length ? clTemplate(j.taskType) : k.steps.map(t => ({ t: t, d: 0 }))));
+}
+function dsStartEdit(E, j) {
+  if (E.team) return;
+  E.team = isDs(j) ? 'ds' : E.isNew ? (LS.get('newTeam', 'cad') === 'ds' ? 'ds' : 'cad') : 'cad';
+  E.dsd = Object.assign({}, dsData(j));
+  if (E.team === 'ds' && E.isNew && !isDs(j)) j.taskType = LS.get('dsKind', DS_KINDS[0].name);
+  if (!E.isNew && E.team === 'ds' && !E.dsd.due) E.dsd.due = j.due ? 'custom' : 'none';
+  if (E.isNew && E.team === 'ds' && !dsKindOf(j)) j.taskType = DS_KINDS[0].name;
+}
+
+/* ---------- หน้าดูงาน (โหมดดู) ---------- */
+function dsSec(j, ro) {
+  const k = dsKindOf(j); if (!k) return '';
+  const d = dsData(j), row = (l, v) => v ? '<span>' + l + '</span><b>' + v + '</b>' : '';
+  const vis = dsVisits(j), t = today();
+  const furn = (d.furn || []).filter(x => x.n);
+  const tot = furn.reduce((s, x) => s + (+x.q || 0) * (+x.p || 0), 0);
+  const acts = [];
+  if (k.k === 'facade') acts.push('<button type="button" class="btn sm primary" data-dspo="' + esc(j.id) + '">' + I.plus + 'เปิด PO แล้ว · ส่งทำไฟล์ผลิต (CAD/CAM)</button>');
+  if (k.k === 'catalog' && d.repeat) acts.push('<button type="button" class="btn sm" data-dsnext="' + esc(j.id) + '">' + I.plus + 'สร้างงานรอบถัดไป</button>');
+  if (furn.length) acts.push('<button type="button" class="btn sm" data-dsfcopy="' + esc(j.id) + '">คัดลอกรายการส่งจัดซื้อ</button>');
+  return '<section class="dt-sec ds-sec" style="--dk:' + k.col + '"><div class="dt-h"><b><span class="dk-ic sm">' + DS_IC[k.k] + '</span>งานออกแบบ · ' + esc(k.label) + '</b>' + (dsAuto(j.code) ? '<span class="tag">ยังไม่มีเลข Job จริง</span>' : '') + '</div>' +
+    '<div class="hv-grid dt-grid">' +
+      row('พื้นที่', d.area ? esc(d.area) + ' ตร.ม.' : d.size ? esc(d.size) + ' ตร.ม.' : '') + row('วัสดุที่สนใจ', esc(d.material || '')) + row('ห้อง / แบบห้อง', esc(d.room || '')) +
+      row('งบประมาณ', d.budget ? baht(+d.budget) : '') + row('สไตล์', esc(d.style || '')) + row('Pattern', esc(d.pattern || '')) + row('ขนาดผนัง', d.wall ? esc(d.wall) + ' ม.' : '') + row('จำนวนชิ้น', esc(d.pcs || '')) +
+      row('แบรนด์', esc(d.brand || '')) + row('ชนิดงาน', esc(d.work || '')) +
+      row('ที่อยู่หน้างาน', esc(d.addr || '') + (d.map ? ' <a href="' + esc(/^https?:/i.test(d.map) ? d.map : 'https://www.google.com/maps/search/' + encodeURIComponent(d.map)) + '" target="_blank" rel="noopener" class="ds-map">' + DS_IC.pin + 'แผนที่</a>' : '')) +
+      row('ต้องทำ', [k.k === 'facade' && d.vr !== 0 && d.vr !== '0' && d.vr !== false ? '3D / VR' : '', d.vdo ? 'ถ่าย VDO การตลาด' : '', d.repeat ? 'งานประจำ' : ''].filter(Boolean).join(' · ')) +
+    '</div>' +
+    (vis.length ? '<div class="ds-vlist"><b>นัดหน้างาน</b>' + vis.map(v => { const day = String(v.at).slice(0, 10), past = day < t, dd = daysBetween(t, day);
+      return '<span class="' + (past ? 'past' : dd <= 1 ? 'soon' : '') + '">' + DS_IC.pin + '<em>' + esc(v.t) + '</em><b>' + esc(fdtShort(v.at)) + '</b><small>' + (past ? 'ผ่านแล้ว' : dd === 0 ? 'วันนี้' : dd === 1 ? 'พรุ่งนี้' : 'อีก ' + dd + ' วัน') + '</small></span>'; }).join('') + '</div>' : '') +
+    (furn.length ? '<div class="ds-ftab"><b>เฟอร์นิเจอร์ ' + furn.length + ' รายการ' + (tot ? ' · ' + baht(tot) : '') + '</b>' + furn.map(x => '<span class="st-' + (x.st || 'wait') + '"><em>' + esc(x.n) + '</em><small>' + esc([x.q ? x.q + ' ชิ้น' : '', x.p ? baht(+x.p) : '', x.s || ''].filter(Boolean).join(' · ')) + '</small><i>' + DS_FST[x.st || 'wait'] + '</i></span>').join('') + '</div>' : '') +
+    (acts.length && !ro ? '<div class="ds-acts">' + acts.join('') + '</div>' : '') + '</section>';
+}
+function dsFurnText(j) {
+  const d = dsData(j), f = (d.furn || []).filter(x => x.n), tot = f.reduce((s, x) => s + (+x.q || 0) * (+x.p || 0), 0);
+  return ['รายการเฟอร์นิเจอร์ · ' + (j.title || j.code) + (dsAuto(j.code) ? '' : ' (Job ' + j.code + ')'), 'ผู้ออกแบบ ' + (j.assignee || S.me) + ' · ' + fdY(today()), '']
+    .concat(f.map((x, i) => (i + 1) + '. ' + x.n + (x.q ? ' × ' + x.q : '') + (x.p ? ' @' + baht(+x.p) : '') + (x.s ? ' — ' + x.s : '') + ' [' + DS_FST[x.st || 'wait'] + ']'))
+    .concat(tot ? ['', 'รวมประมาณ ' + baht(tot)] : []).join('\n');
+}
+async function dsAction(d) {
+  if (d.dsfcopy) { const j = jobById(d.dsfcopy); if (!j) return; const txt = dsFurnText(j); try { await navigator.clipboard.writeText(txt); toast('คัดลอกรายการเฟอร์นิเจอร์แล้ว วางส่งได้เลย'); } catch (e) { prompt('คัดลอกข้อความนี้', txt); } return true; }
+  if (d.dspo) {   // Façade เปิด PO → เปิดฟอร์มงาน CAD/CAM เลข Job เดียวกัน ข้อมูลลูกค้า/Sale มาให้
+    const src = jobById(d.dspo); if (!src) return true;
+    closeEditor(); openEditor(null);
+    const E = S.edit; E.team = 'cad'; E.dsd = {};
+    const tt = (S.settings.taskTypes || []).find(t => /ผลิต/.test(t.name)) || (S.settings.taskTypes || []).find(t => t.cat === 'draw') || {};
+    Object.assign(E.job, { code: dsAuto(src.code) ? '' : src.code, title: src.title, sale: src.sale, taskType: tt.name || '', note: 'ไฟล์ผลิต / ไฟล์โลโก้ จากงานออกแบบ Façade ' + src.code + (src.note ? '\n' + src.note : '') });
+    E.mode = 'edit'; renderEditor(); toast(dsAuto(src.code) ? 'ใส่เลข Job จริงจาก PO แล้วกดเพิ่มงาน' : 'ตรวจข้อมูลแล้วกดเพิ่มงาน');
+    setTimeout(() => { const el = $('#e-code'); if (el && !el.value) el.focus(); }, 250);
+    return true;
+  }
+  if (d.dsnext) {   // งานประจำ (Catalog) → สร้างรอบถัดไป
+    const src = jobById(d.dsnext); if (!src) return true;
+    const sd = dsData(src);
+    closeEditor(); openEditor(null);
+    const E = S.edit; E.team = 'ds'; E.dsd = { brand: sd.brand, work: sd.work, repeat: 1, due: sd.due };
+    Object.assign(E.job, { taskType: src.taskType, title: src.title, sale: src.sale, assignee: src.assignee || E.job.assignee });
+    E.mode = 'edit'; renderEditor(); return true;
+  }
+  if (d.dsteam && S.edit) { readEditor(); const E = S.edit; E.team = d.dsteam; LS.set('newTeam', E.team);
+    if (E.team === 'ds' && !isDs(E.job)) { E.job.taskType = LS.get('dsKind', DS_KINDS[0].name); E.dsd = E.dsd || {}; }
+    if (E.team === 'cad' && isDs(E.job)) { E.job.taskType = ''; E.job.due = ''; E.dueTouched = false; }
+    renderEditor(); return true; }
+  if (d.dskind && S.edit) { readEditor(); const k = DS_KINDS.find(x => x.k === d.dskind); if (k) { S.edit.job.taskType = k.name; LS.set('dsKind', k.name); if (S.edit.dsd.due === 'std' && !k.days) S.edit.dsd.due = ''; } renderEditor(); return true; }
+  if (d.dsdue && S.edit) { readEditor(); S.edit.dsd.due = d.dsdue; if (d.dsdue === 'custom' && !S.edit.job.due) { const k = dsKindOf(S.edit.job); S.edit.job.due = k && k.days ? dsDays(k, S.edit.job.received) : addWorkDays(S.edit.job.received || today(), 7, true); } renderEditor(); if (d.dsdue === 'custom') { const el = $('#e-due'); if (el) el.focus(); } return true; }
+  if (d.dsfadd && S.edit) { readEditor(); (S.edit.dsd.furn = S.edit.dsd.furn || []).push({ n: '', q: '1', p: '', s: '', st: 'wait' }); renderEditor(); setTimeout(() => { const ins = document.querySelectorAll('[data-dsfu$=".n"]'); if (ins.length) ins[ins.length - 1].focus(); }, 30); return true; }
+  if (d.dsfdel !== undefined && S.edit) { readEditor(); (S.edit.dsd.furn || []).splice(+d.dsfdel, 1); renderEditor(); return true; }
+  return false;
+}
 function renderDetail(E, j, live, ro, timer) {
   const jj = live || j, imgs = imgsOf(jj.id), di = dueInfo(jj), st = isLate(jj) ? 'late' : jj.status;
   const idx = flowIdxOf(jj), FL = flowOf(jj);
@@ -1966,7 +2203,7 @@ function renderDetail(E, j, live, ro, timer) {
   $('#sheetBody').innerHTML =
     '<div class="dt-hero s-' + st + '">' + stBadge(jj, 'xl') + '<div class="dt-hero-t"><span class="eyebrow">' + esc(isLate(jj) ? 'เลยกำหนด · ' + di.text : (ST[jj.status] || ST.queue).label) + '</span><b>' + esc(jj.title || jj.code) + '</b><small class="hv-chips">' + typeChip(jj.taskType) + groupChip(jj.group) + '</small></div>' +
       (jj.priority === 'urgent' ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '</div>' +
-    steps + clSec(jj, ro) + gallery + filesSec(jj, ro) + timer +
+    steps + dsSec(jj, ro) + clSec(jj, ro) + gallery + filesSec(jj, ro) + timer +
     '<section class="dt-sec"><div class="dt-h"><b>' + DECO.info + 'ข้อมูลงาน</b></div><div class="hv-grid dt-grid">' +
       '<span>เลข Job</span><b class="mono">' + esc(jj.code) + '</b>' +
       '<span>ผู้รับผิดชอบ</span><b class="hv-who">' + av(jj.assignee) + esc(jj.assignee || 'ยังไม่มอบหมาย') + '</b>' +
@@ -5096,10 +5333,12 @@ function renderEditor() {
   if (E.mode === 'view' && live) return renderDetail(E, j, live, ro, timer);
   const statusSeg = '<div class="seg status">' + ['queue', 'doing', 'review', 'fix', 'hold', 'done'].map(st => '<button type="button" class="' + ST[st].cls + '" data-est="' + st + '" aria-pressed="' + (j.status === st) + '">' + ST[st].label + '</button>').join('') + '</div>';
   const levels = (s.levels && s.levels.length ? s.levels : defaultSettings().levels);
+  dsStartEdit(E, j);
+  if (E.team === 'ds') return renderDsEditor(E, j, live, ro, timer, statusSeg);
 
   $('#sheetBody').innerHTML =
     (ro ? '<div class="banner"><span><b>ดูอย่างเดียว</b> งานของ ' + esc(j.assignee || 'คนอื่น') + ' แก้ไขได้เฉพาะผู้รับผิดชอบ คนที่ลงงาน หรือคนที่แอดมินให้สิทธิ์</span></div>' : '') +
-    '<div class="f"><span class="lbl">สถานะ</span>' + statusSeg + '</div>' + timer +
+    dsTeamSeg(E) + '<div class="f"><span class="lbl">สถานะ</span>' + statusSeg + '</div>' + timer +
     '<fieldset><legend>ข้อมูลงาน</legend>' +
       '<div class="f"><label for="e-code">เลข Job</label><input id="e-code" class="mono" data-e="code" value="' + esc(j.code) + '" placeholder="เช่น R69-10012S" autocomplete="off"></div>' +
       '<div class="f"><label for="e-title">ลูกค้า / โครงการ</label><input id="e-title" data-e="title" autocomplete="off" value="' + esc(j.title) + '" placeholder="เช่น ผนังล็อบบี้โรงแรม"></div>' +
@@ -5170,11 +5409,14 @@ function readEditor() {
     else if (k === 'revision') j.revision = el.checked;
     else j[k] = el.value.trim();
   });
+  dsRead(S.edit);
   return j;
 }
 async function saveEditor() {
   const j = readEditor(), err = $('#eErr');
-  if (!j.code) { err.hidden = false; err.textContent = 'ใส่เลข Job ก่อนบันทึก'; $('#e-code').focus(); return; }
+  const dsJob = S.edit.team === 'ds' && isDs(j);
+  if (dsJob) dsPrepareSave(S.edit, j);
+  if (!j.code && !dsJob) { err.hidden = false; err.textContent = 'ใส่เลข Job ก่อนบันทึก'; $('#e-code').focus(); return; }
   if (S.edit.isNew) { const clash = codeClash(j.code, j.taskType, S.jobs); if (clash) { err.hidden = false; err.textContent = clash; return; } if (!clOf(j).length && clTemplate(j.taskType).length) j.checklist = JSON.stringify(clTemplate(j.taskType)); }
   const btn = document.querySelector('#sheetFoot [data-act="save"]'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
   const pre = Object.assign({}, j); delete pre.minutes;
@@ -5197,10 +5439,10 @@ async function saveEditor() {
   if (S.edit.isNew) {
     const files = (S.edit.pending || []).map(p => p.file), docs = (S.edit.pfiles || []).slice(), cmt = (($('#eCmt') || {}).value || '').trim(), draft = clone(j), tmpId = uid('tmp_');
     S.jobs.push(Object.assign({}, pre, { id: tmpId, minutes: 0, pending: true, createdBy: S.me, assignee: canAssign() ? pre.assignee : S.me }));
-    closeEditor(); render(); toast('กำลังเพิ่มงาน ' + j.code + '…');
+    closeEditor(); render(); toast('กำลังเพิ่มงาน ' + (j.code || j.title || '') + '…');
     S.saving = (S.saving || 0) + 1;
     try {
-      const r = await mutate(() => api().saveJob({ job: pre }), 'เพิ่มงาน ' + j.code + ' แล้ว' + (files.length ? ' · กำลังอัปโหลดรูป ' + files.length + ' รูป' : ''));
+      const r = await mutate(() => api().saveJob({ job: pre }), 'เพิ่มงาน ' + (j.code || j.title || '') + ' แล้ว' + (files.length ? ' · กำลังอัปโหลดรูป ' + files.length + ' รูป' : ''));
       S.jobs = S.jobs.filter(x => x.id !== tmpId); upsert(S.jobs, r.job); render();
       if (files.length) uploadImages(r.job.id, files);
       if (docs.length) uploadFiles(r.job.id, docs);
@@ -7379,6 +7621,7 @@ document.addEventListener('click', async e => {
   if (d.pinsave) { const v = ($('#pinSet') || {}).value || ''; if (!/^\d{4}$/.test(v)) { toast('PIN ต้องเป็นตัวเลข 4 หลัก', true); return; } try { const r = await mutate(() => api().resetPin({ userId: d.pinsave, pin: v }), 'ตั้ง PIN ใหม่แล้ว'); S.pinEdit = ''; S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
   if (d.resetpin) { S.pinEdit = ''; try { const r = await mutate(() => api().resetPin({ userId: d.resetpin })); S.pinNote = { userId: r.userId, pin: r.pin }; render(); } catch (x) {} return; }
 
+  if (await dsAction(d)) return;
   // editor-scoped
   if (d.est && S.edit) { readEditor(); S.edit.job.status = isCam(S.edit.job) && d.est === 'review' ? 'done' : d.est; if (S.edit.job.status !== d.est) toast('งาน CAM ไม่ต้องรอตรวจ — ตั้งเป็นเสร็จแล้ว'); if (S.edit.job.status === 'done' && !S.edit.job.finishedAt) S.edit.job.finishedAt = nowLocal(); if (S.edit.job.status !== 'done') S.edit.job.finishedAt = ''; return renderEditor(); }
   if (d.fdel) return deleteFile(d.fdel);
