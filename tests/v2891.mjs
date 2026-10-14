@@ -15,15 +15,17 @@ await pg.evaluate(() => { const ps = S.prods || []; ps.slice(0, 3).forEach(p => 
 const check = async (view) => {
   await pg.evaluate(v => { T.go(v); }, view); await pg.waitForTimeout(700);
   return pg.evaluate(() => { const ls = [...document.querySelectorAll('.rt-line i')]; const g = ls.map(i => getComputedStyle(i).backgroundImage);
-    return { n: ls.length, late: document.querySelectorAll('.rt.late').length, rainbow: g.filter(x => (x.match(/rgb/g) || []).length >= 3).length, lateRainbow: [...document.querySelectorAll('.rt.late .rt-line i')].every(i => (getComputedStyle(i).backgroundImage.match(/rgb/g) || []).length >= 3), lateGlow: [...document.querySelectorAll('.rt.late .rt-line')].every(l => getComputedStyle(l).boxShadow !== 'none') }; });
+    return { n: ls.length, late: document.querySelectorAll('.rt.late').length, rainbow: g.filter(x => (x.match(/rgb/g) || []).length >= 3).length, lateRainbow: [...document.querySelectorAll('.rt.late .rt-line i')].every(i => (getComputedStyle(i).backgroundImage.match(/rgb/g) || []).length >= 3), lateGlow: [...document.querySelectorAll('.rt.late .rt-line')].every(l => getComputedStyle(l).boxShadow === 'none' && getComputedStyle(l).backgroundColor === getComputedStyle(document.querySelector('.rt:not(.late) .rt-line') || l).backgroundColor) }; });
 };
 for (const v of ['flow', 'prod']) {
   const r = await check(v); console.log(v, JSON.stringify(r));
   if (!r.n) continue;
   eq(v + ': every progress line is rainbow', r.rainbow, r.n);
-  eq(v + ': late rows keep rainbow + red glow', [r.lateRainbow, r.lateGlow], [true, true]);
+  eq(v + ': late rows look exactly like normal rows', [r.lateRainbow, r.lateGlow], [true, true]);
   await pg.locator('#view').screenshot({ path: new URL('out/v2891-' + v + '.png', import.meta.url).pathname });
 }
+await pg.evaluate(() => T.go('flow')); await pg.waitForTimeout(700); await pg.evaluate(() => document.querySelectorAll('.ntf,.dl-pop,[class*="toast"]').forEach(e => e.remove()));
+for (const [sel, nm] of [['.rt.late', 'late'], ['.rt:not(.late)', 'normal']]) { const el = pg.locator(sel).first(); await el.scrollIntoViewIfNeeded(); await el.screenshot({ path: new URL('out/v2893-' + nm + '.png', import.meta.url).pathname }); }
 eq('some late rows were checked', await pg.evaluate(() => { T.go('flow'); return true; }), true);
 console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.length ? errs : 'none');
 await b.close(); srv.close(); process.exit(bad || errs.length ? 1 : 0);

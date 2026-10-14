@@ -2724,7 +2724,7 @@ body.pm-open{overflow:hidden}
 .rt-line{position:absolute;left:0;right:0;top:50%;height:6px;margin-top:-3px;border-radius:9px;background:var(--surface-3);overflow:hidden}
 .rt-line i{display:block;height:100%;width:var(--p);border-radius:9px;background:linear-gradient(90deg,var(--doing) 0%,var(--p-mach) 55%,var(--p-ready) 100%);position:relative;overflow:hidden}
 .rt-line i::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-45deg,rgba(255,255,255,.35) 0 6px,transparent 6px 12px);background-size:34px 34px;animation:coStripe 1s linear infinite}
-.rt.late .rt-line{box-shadow:0 0 0 1.5px color-mix(in oklab,var(--late) 60%,transparent),0 0 10px -2px color-mix(in oklab,var(--late) 55%,transparent)}   /* เลยกำหนด/ค้าง: เส้นยังเป็นสีรุ้งตามขั้น แต่มีกรอบแดงเรือง (จุดขั้นปัจจุบันเป็นสีแดงอยู่แล้ว) */
+/* เลยกำหนด/ค้าง: เส้นเหมือนงานปกติทุกอย่าง (บอกด้วยจุดขั้นปัจจุบันสีแดงและขอบการ์ดแทน) */
 .rt-dot{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--surface);border:2px solid var(--line);display:grid;place-items:center;color:#fff;z-index:1;transition:transform .2s}
 .rt-dot svg{width:9px;height:9px}
 .rt-dot.past{background:var(--s);border-color:var(--s)}
