@@ -99,7 +99,7 @@ eq('escape closes pend modal', await pg.locator('#exPend').count(), 0);
 eq('digest preview has pending line', await pg.evaluate(() => /🧾 รอลง Express 1 รายการ/.test(digestCalc().body)), true);
 await pg.evaluate(() => { scrollTo(0, 0); document.querySelectorAll('*').forEach(e => { if (e.scrollTop) e.scrollTop = 0; }); }); await pg.waitForTimeout(200); await pg.screenshot({ path: new URL('out/v287-express.png', import.meta.url).pathname }); await pg.locator('.ex-kpis').screenshot({ path: new URL('out/v287-kpis.png', import.meta.url).pathname });
 await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-n'); await pg.waitForTimeout(300); await pg.click('#exModal [data-xpnew]'); await pg.waitForTimeout(300);
-await pg.fill('[data-xpq="0"]', '1'); await pg.screenshot({ path: new URL('out/v287-pend.png', import.meta.url).pathname });
+await pg.fill('[data-xpq="0"]', '1'); eq('kind buttons fit text', await pg.evaluate(() => [...document.querySelectorAll('.xp-kind button')].every(b => b.scrollWidth <= b.clientWidth + 1)), true); await pg.screenshot({ path: new URL('out/v287-pend.png', import.meta.url).pathname });
 await pg.keyboard.press('Escape'); await pg.keyboard.press('Escape');
 // มือถือ
 await pg.setViewportSize({ width: 390, height: 844 }); await pg.evaluate(() => T.render()); await pg.waitForTimeout(300);

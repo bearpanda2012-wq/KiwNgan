@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.87.0';
+const APP_VERSION = '2.87.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6586,7 +6586,7 @@ function exPendDraw(focus) {
   const out = P0.kind === 'out', deps = Object.entries(EX.tabs.deps || {}).sort((a, b) => a[0].localeCompare(b[0]));
   const jobs = [...new Set((S.jobs || []).filter(j => j.status !== 'done' && j.code).map(j => j.code).concat((S.prods || []).filter(p => p.stage !== 'shipped' && p.code).map(p => p.code)))].slice(0, 300);
   m.innerHTML = '<div class="pm-card ex-card ex-pnew"><div class="pm-h"><div><div class="eyebrow">Express · รอลง Express</div><h3 style="font-family:inherit">บันทึก' + XP_KIND[P0.kind][0] + ' ' + P0.rows.length + ' รายการ</h3><p class="sub">บันทึกในแอปไว้ก่อน ฝ่ายสต็อกคีย์ใน Express แล้วระบบจับคู่เลขเอกสารให้เอง</p></div><button type="button" class="icon-btn" data-xpx="1" aria-label="ปิด">✕</button></div><div class="pm-b">' +
-    '<div class="seg xp-kind"><button type="button" data-xpkind="out" aria-pressed="' + out + '">↑ เบิกออก</button><button type="button" data-xpkind="in" aria-pressed="' + !out + '">↓ รับเข้า / รับคืน</button></div>' +
+    '<div class="seg sk-seg xp-kind"><button type="button" class="sk-out" data-xpkind="out" aria-pressed="' + out + '"><i>↑</i>เบิกออก</button><button type="button" class="sk-in" data-xpkind="in" aria-pressed="' + !out + '"><i>↓</i>รับเข้า / รับคืน</button></div>' +
     '<div class="ex-ct xp-t"><div class="ex-cth"><span>สินค้า</span><span>คงเหลือ</span><span>คลัง</span><span>จำนวน</span><span></span></div>' +
     P0.rows.map((y, i) => { const x = EX.items.get(y.cod) || [y.cod, '', '', '', '', '', 0], ls = exLocsOf(y.cod);
       const opts = ls.map(l => l[1]).concat(y.loc && !ls.some(l => l[1] === y.loc) ? [y.loc] : []);

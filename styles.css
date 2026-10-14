@@ -5518,7 +5518,6 @@ body.auth #bgSndBtn{display:none}
 .ex-pbox small{color:var(--muted);font-size:12px}
 .ex-pl{font-size:12px;font-weight:600}.ex-pl.k-out{color:var(--late,#d4473f)}.ex-pl.k-in{color:var(--done,#2B7F4A)}
 .ex-pnew{width:min(820px,100%)}
-.xp-kind{align-self:flex-start}
 .xp-t.ex-ct .ex-cth,.xp-t.ex-ct .ex-ctr{grid-template-columns:minmax(0,1fr) 90px 150px 100px 30px}
 .xp-f{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .xp-f label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600}
@@ -5535,4 +5534,4 @@ body.auth #bgSndBtn{display:none}
 }
 .ex-pnew input,.xp-doc input{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;color:var(--ink);min-height:38px;box-sizing:border-box}
 .ex-pnew input:focus,.xp-doc input:focus{outline:2px solid color-mix(in oklab,var(--brand) 55%,transparent);outline-offset:0;border-color:var(--brand)}
-.xp-kind{flex-wrap:nowrap}.xp-kind button{white-space:nowrap;flex:0 0 auto;padding:7px 14px}
+.sk-seg.xp-kind{grid-template-columns:repeat(2,minmax(0,1fr))}.xp-kind button{white-space:nowrap;padding:0 12px}
