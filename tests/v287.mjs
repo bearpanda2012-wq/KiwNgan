@@ -132,8 +132,22 @@ await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-n'); await pg.waitForTi
 await pg.fill('[data-xpq="0"]', '1'); eq('kind buttons fit text', await pg.evaluate(() => [...document.querySelectorAll('.xp-kind button')].every(b => b.scrollWidth <= b.clientWidth + 1)), true); await pg.screenshot({ path: new URL('out/v287-pend.png', import.meta.url).pathname });
 await pg.keyboard.press('Escape'); await pg.keyboard.press('Escape');
 // ผู้ใช้ที่ไม่ใช่ฝ่ายสต็อก: ดู/ค้นหาได้อย่างเดียว
+await pg.evaluate(() => { EV.sel.set('RM-SB-02-0104', '3'); });
+eq('non-stock: view only — no checkboxes, no selection bar, selection cleared', await pg.evaluate(() => { const real = S.user.role; S.user.role = 'user'; T.render(); const r = [document.querySelectorAll('.ex-ck').length, !!document.querySelector('.ex-selbar'), EV.sel.size, !!document.querySelector('.ex-list.ro'), getComputedStyle(document.querySelector('.ex-row')).gridTemplateColumns.split(' ').length];
+  const cb = document.querySelector('.ex-row'); S.user.role = real; return r; }), [0, false, 0, true, 4]);
+await pg.evaluate(() => { const real = S.user.role; S.user.role = 'user'; window.__ro = real; });
+await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-n'); await pg.waitForTimeout(400);
+eq('non-stock card: no select / record / min editor', await pg.evaluate(() => [!!document.querySelector('#exModal [data-exsel]'), !!document.querySelector('#exModal [data-xpnew]'), !!document.querySelector('#exMinIn')]), [false, false, false]);
+await pg.keyboard.press('Escape'); await pg.evaluate(() => { S.user.role = window.__ro; T.render(); }); await pg.waitForTimeout(200);
 eq('non-stock: no record buttons', await pg.evaluate(() => { const real = S.user.role; S.user.role = 'user'; T.render(); const r = [document.querySelectorAll('[data-xpnew],[data-xpcancel],[data-xpdoc]').length, /ดูและค้นหาได้อย่างเดียว/.test(document.querySelector('.ex-status').textContent), document.querySelectorAll('#xpPanel .xp-list li').length > 0]; S.user.role = real; T.render(); return r; }), [0, true, true]);
 eq('group chips wrap inside panel', await pg.evaluate(() => { const c = document.querySelector('.ex-chips'); return c.scrollWidth <= c.clientWidth + 1 && [...c.children].every(b => b.getBoundingClientRect().right <= c.getBoundingClientRect().right + 1); }), true);
+// คลังในแอป: ผู้ใช้ทั่วไปเห็นปุ่มอะไรบ้าง (ต้องไม่มีปุ่มแก้ไข)
+const roBtns = await pg.evaluate(async () => { const real = S.user.role; S.user.role = 'user'; SV.src = 'app'; T.render(); await new Promise(r => setTimeout(r, 300));
+  const names = new Set(); document.querySelectorAll('#view button, #view input, #view [role=button]').forEach(b => { Object.keys(b.dataset).forEach(k => names.add(k)); if (b.tagName === 'INPUT') names.add('input:' + (b.id || b.type)); });
+  const card = document.querySelector('[data-skopen],[data-sk],[data-stid],.sk-card'); let cardBtns = [];
+  if (card) { card.click(); await new Promise(r => setTimeout(r, 400)); document.querySelectorAll('.pmodal button, .pmodal input').forEach(b => { Object.keys(b.dataset).forEach(k => cardBtns.push(k)); if (b.tagName === 'INPUT') cardBtns.push('input:' + (b.id || b.type)); }); document.querySelectorAll('.pmodal').forEach(m => m.remove()); document.body.classList.remove('pm-open'); }
+  S.user.role = real; SV.src = 'ex'; T.render(); return [[...names].sort(), [...new Set(cardBtns)].sort()]; });
+console.log('app-stock controls for non-stock user:', JSON.stringify(roBtns));
 // มือถือ
 await pg.setViewportSize({ width: 390, height: 844 }); await pg.evaluate(() => T.render()); await pg.waitForTimeout(300);
 eq('mobile: no horizontal overflow', await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);

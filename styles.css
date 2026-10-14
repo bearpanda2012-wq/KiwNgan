@@ -5564,3 +5564,10 @@ body.auth #bgSndBtn{display:none}
 .xk-d{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .xk-how{margin:0;padding:10px 12px 10px 30px;background:var(--surface-2);border-radius:10px;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
 @media (max-width:720px){.xk-r{grid-template-columns:24px minmax(0,1fr) auto}.xk-l,.xk-d{display:none}}
+/* v2.89.2 ผู้ใช้ที่ไม่ใช่ฝ่ายสต็อก: ไม่มีช่องติ๊กเลือก (ดูอย่างเดียว) */
+.ex-list.ro .ex-head,.ex-list.ro .ex-row{grid-template-columns:minmax(120px,170px) minmax(0,1fr) 110px 110px}
+@media (max-width:720px){
+  .ex-list.ro .ex-row{grid-template-columns:minmax(0,1fr) auto}
+  .ex-list.ro .ex-row .ex-c,.ex-list.ro .ex-row .ex-n{grid-column:1}
+  .ex-list.ro .ex-row .ex-q{grid-column:2;grid-row:1/span 2}
+}

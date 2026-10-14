@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.89.1';
+const APP_VERSION = '2.89.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6472,6 +6472,8 @@ function exTabs() {
 }
 function exLocsOf(cod) { const o = []; EX.locs.forEach(l => { if (l[0] === cod) o.push(l); }); return o.sort((a, b) => Math.abs(b[2]) - Math.abs(a[2])); }
 function viewExpress() {
+  const ro = !canStock();   // ไม่ใช่ฝ่ายสต็อก: ดูและค้นหาได้อย่างเดียว (ไม่มีเลือก/คำนวณ/บันทึก)
+  if (ro && (EV.sel.size || EV.grp === 'sel' || EV.calc)) { EV.sel.clear(); exSelSave(); EV.calc = false; if (EV.grp === 'sel') EV.grp = 'bal'; }
   const st = exAgentState(), all = [...EX.items.values()], q = EV.q.trim();
   const byLoc = EV.loc ? new Set([...EX.locs.values()].filter(l => l[1] === EV.loc).map(l => l[0])) : null;
   const withBal = all.filter(x => Math.abs(+x[6] || 0) > 1e-9);
@@ -6498,11 +6500,11 @@ function viewExpress() {
     '<select class="sel" data-exloc="1" aria-label="คลัง"><option value="">ทุกคลัง</option>' + locOpts + '</select>' +
     '<select class="sel" data-exsort="1" aria-label="เรียง">' + [['cod', 'เรียงตามรหัส'], ['name', 'เรียงตามชื่อ'], ['bal', 'ยอดมากสุด'], ['val', 'มูลค่ามากสุด']].map(o => '<option value="' + o[0] + '"' + (EV.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>';
   const row = x => { const ls = exLocsOf(x[0]), b = +x[6] || 0, sel = EV.sel.has(x[0]), mn = exMin(x[0]), lw = exLowOf(x);
-    return '<button type="button" class="ex-row' + (b < -1e-9 ? ' neg' : Math.abs(b) < 1e-9 ? ' zero' : '') + (sel ? ' sel' : '') + (lw ? ' low' : '') + '" data-excard="' + esc(x[0]) + '"><span class="ex-ck" role="checkbox" aria-checked="' + sel + '" aria-label="เลือก ' + esc(x[0]) + '" data-exsel="' + esc(x[0]) + '"></span><span class="ex-c"><b>' + coHl(x[0], q) + '</b><small>' + esc(exGrpN(x[3])) + '</small>' + (exPendNet(x[0]) ? '<em class="ex-pendtag" title="บันทึกในแอปแล้ว รอคีย์ใน Express">รอลง ' + (exPendNet(x[0]) > 0 ? '+' : '−') + exN(Math.abs(exPendNet(x[0]))) + '</em>' : '') + (lw ? '<em class="ex-lowtag">' + STI.fire + 'ใกล้หมด · สั่งที่ ' + exN(mn) + '</em>' : mn ? '<em class="ex-mintag">สั่งที่ ' + exN(mn) + '</em>' : '') + '</span>' +
+    return '<button type="button" class="ex-row' + (b < -1e-9 ? ' neg' : Math.abs(b) < 1e-9 ? ' zero' : '') + (sel ? ' sel' : '') + (lw ? ' low' : '') + '" data-excard="' + esc(x[0]) + '">' + (ro ? '' : '<span class="ex-ck" role="checkbox" aria-checked="' + sel + '" aria-label="เลือก ' + esc(x[0]) + '" data-exsel="' + esc(x[0]) + '"></span>') + '<span class="ex-c"><b>' + coHl(x[0], q) + '</b><small>' + esc(exGrpN(x[3])) + '</small>' + (exPendNet(x[0]) ? '<em class="ex-pendtag" title="บันทึกในแอปแล้ว รอคีย์ใน Express">รอลง ' + (exPendNet(x[0]) > 0 ? '+' : '−') + exN(Math.abs(exPendNet(x[0]))) + '</em>' : '') + (lw ? '<em class="ex-lowtag">' + STI.fire + 'ใกล้หมด · สั่งที่ ' + exN(mn) + '</em>' : mn ? '<em class="ex-mintag">สั่งที่ ' + exN(mn) + '</em>' : '') + '</span>' +
       '<span class="ex-n">' + coHl(x[1] || '–', q) + (x[2] ? '<small>' + esc(x[2]) + '</small>' : '') + (ls.length ? '<span class="ex-locs">' + ls.slice(0, 4).map(l => '<i title="' + esc(exLocN(l[1])) + '">' + esc(l[1]) + ' <b>' + exN(l[2]) + '</b></i>').join('') + (ls.length > 4 ? '<i>+' + (ls.length - 4) + '</i>' : '') + '</span>' : '') + '</span>' +
       '<span class="ex-q"><b class="tnum">' + exN(b) + '</b><small>' + esc(exUnit(x[5])) + '</small></span><span class="ex-v"><b class="tnum">' + (+x[8] ? baht(+x[8]) : '–') + '</b><small>' + (+x[7] ? 'รวม ' + baht(+x[7]) : 'ต่อหน่วย') + '</small></span></button>'; };
   const body = !EX.loaded ? '<div class="sk-empty"><span class="spin-dot dark"></span><b>กำลังโหลดข้อมูลจาก Express…</b><small>ครั้งแรกใช้เวลาสักครู่ ครั้งต่อไปเปิดได้ทันที</small></div>'
-    : list.length ? '<div class="ex-list"><div class="ex-head"><span class="ex-ck" role="checkbox" aria-checked="' + (list.slice(0, EV.lim).every(x => EV.sel.has(x[0])) ? 'true' : list.slice(0, EV.lim).some(x => EV.sel.has(x[0])) ? 'mixed' : 'false') + '" aria-label="เลือกทั้งหมดที่แสดง" data-exselall="1" title="เลือกทั้งหมดที่แสดง (' + Math.min(list.length, EV.lim) + ')"></span><span>รหัส</span><span>ชื่อสินค้า · ยอดแยกคลัง</span><span>คงเหลือ</span><span>ทุน/หน่วย</span></div>' + list.slice(0, EV.lim).map(row).join('') + '</div>' +
+    : list.length ? '<div class="ex-list' + (ro ? ' ro' : '') + '"><div class="ex-head">' + (ro ? '' : '<span class="ex-ck" role="checkbox" aria-checked="' + (list.slice(0, EV.lim).every(x => EV.sel.has(x[0])) ? 'true' : list.slice(0, EV.lim).some(x => EV.sel.has(x[0])) ? 'mixed' : 'false') + '" aria-label="เลือกทั้งหมดที่แสดง" data-exselall="1" title="เลือกทั้งหมดที่แสดง (' + Math.min(list.length, EV.lim) + ')"></span>') + '<span>รหัส</span><span>ชื่อสินค้า · ยอดแยกคลัง</span><span>คงเหลือ</span><span>ทุน/หน่วย</span></div>' + list.slice(0, EV.lim).map(row).join('') + '</div>' +
       (list.length > EV.lim ? '<div class="col-more">แสดง ' + EV.lim + ' จาก ' + exN(list.length) + ' รายการ <button class="btn ghost sm" data-exmore="1">แสดงเพิ่ม</button></div>' : '')
     : '<div class="sk-empty"><span>' + I.stock + '</span><b>' + (q ? 'ไม่พบ "' + esc(q) + '"' : 'ไม่มีสินค้าในมุมมองนี้') + '</b>' + (q ? '<small>ลองพิมพ์บางส่วนของรหัสหรือชื่อ</small><button type="button" class="btn sm" data-qclear="exQ">ล้างคำค้น</button>' : '') + '</div>';
   const hist = !EX.recent ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : rec.length ? '<ol class="sk-log ex-log">' + rec.slice(0, 40).map(m => { const op = EX_OP[m[3]] || ['รายการ', 1], it = EX.items.get(m[10]);
@@ -6517,7 +6519,7 @@ function viewExpress() {
   const lowAlert = lows.length ? '<button type="button" class="sk-alert ex-lowalert" data-exgrp="low"><span>' + STI.fire + '</span><b>Express: ใกล้หมด ' + lows.length + ' รายการ</b><small>' + esc(lows.slice(0, 4).map(x => (x[1] || x[0]) + ' (' + exN(x[6]) + '/' + exN(exMin(x[0])) + ')').join(' · ')) + (lows.length > 4 ? ' …' : '') + '</small><em>ดูทั้งหมด ›</em></button>'
     : !nMin && canStock() ? '<p class="ex-minhint">' + STI.fire + 'ยังไม่ได้ตั้งจุดสั่งซื้อ · กดที่สินค้าแล้วใส่ "จุดสั่งซื้อ" ระบบจะเตือนเมื่อยอดใน Express ลดถึงจุดนั้น</p>' : '';
   const selItems = [...EV.sel.keys()].map(c => EX.items.get(c)).filter(Boolean);
-  const selBar = EV.sel.size ? '<div class="ex-selbar"><span><b>เลือก ' + exN(EV.sel.size) + ' รายการ</b><small>มูลค่ารวม ' + baht(exCalcRows(selItems).tot) + '</small></span><button type="button" class="btn sm" data-exgrp="sel">ดูเฉพาะที่เลือก</button>' + (canStock() ? '<button type="button" class="btn sm" data-xpnew="">บันทึกเบิก/รับ</button>' : '') + '<button type="button" class="btn sm primary" data-excalc="1">คำนวณราคา</button><button type="button" class="btn sm ghost" data-exselclr="1">ล้าง</button></div>' : '';
+  const selBar = !ro && EV.sel.size ? '<div class="ex-selbar"><span><b>เลือก ' + exN(EV.sel.size) + ' รายการ</b><small>มูลค่ารวม ' + baht(exCalcRows(selItems).tot) + '</small></span><button type="button" class="btn sm" data-exgrp="sel">ดูเฉพาะที่เลือก</button>' + (canStock() ? '<button type="button" class="btn sm" data-xpnew="">บันทึกเบิก/รับ</button>' : '') + '<button type="button" class="btn sm primary" data-excalc="1">คำนวณราคา</button><button type="button" class="btn sm ghost" data-exselclr="1">ล้าง</button></div>' : '';
   return topbar('คลังวัสดุ', 'ยอดคงเหลือจากโปรแกรม Express (บัญชี) อัปเดตอัตโนมัติ') + exTabs() + appTools + banner + lowAlert + kpis + selBar +
     '<div class="sk-wrap"><section class="panel sk-main"><div class="panel-h"><h2>สินค้าใน Express</h2><span class="sub">' + exN(list.length) + ' รายการ</span></div>' + tools +
     (q ? '<div class="co-sres" role="status"><b>' + exN(list.length) + '</b> รายการตรงกับ "' + esc(q) + '"<small>ค้นจากทุกรหัส ไม่สนกลุ่มที่เลือก</small></div>' : chips) + body + '</section>' +
@@ -6765,7 +6767,7 @@ function exCardDraw() {
       (canStock() ? '<input type="number" step="any" min="0" inputmode="decimal" id="exMinIn" value="' + (exMin(c.cod) || '') + '" placeholder="เช่น 10" aria-label="จุดสั่งซื้อ"><button type="button" class="btn sm primary" data-exminsave="' + esc(c.cod) + '"' + (c.saving ? ' disabled' : '') + '>' + (c.saving ? 'กำลังบันทึก…' : 'บันทึก') + '</button>' : '<b class="tnum">' + (exMin(c.cod) ? exN(exMin(c.cod)) + ' ' + esc(u) : '–') + '</b>') + '</div>' +
     (() => { const pw = exPendOf(c.cod), net = exPendNet(c.cod); return '<div class="ex-pbox' + (pw.length ? ' on' : '') + '"><div><b>รอลง Express</b><small>' + (pw.length ? pw.length + ' รายการ · ยอดหลังลงครบ ≈ <b class="tnum">' + exN((+it[6] || 0) + net) + '</b> ' + esc(u) : (canStock() ? 'เบิกหรือรับของชิ้นนี้? บันทึกไว้ก่อน แล้วคีย์ใน Express ภายหลัง' : 'ไม่มีรายการรอ · บันทึกเบิก/รับได้เฉพาะฝ่ายสต็อก')) + '</small>' +
       pw.map(r => '<span class="ex-pl ' + (r.kind === 'in' ? 'k-in' : 'k-out') + '">' + (r.kind === 'in' ? '+' : '−') + exN(r.qty) + ' · ' + esc(r.who + ' ' + xpWhen(r.ts) + (r.job ? ' · Job ' + r.job : '')) + '</span>').join('') + '</div>' + (canStock() ? '<button type="button" class="btn sm primary" data-xpnew="' + esc(c.cod) + '">บันทึกเบิก/รับ</button>' : '') + '</div>'; })() +
-    '<div class="ex-cardsel"><button type="button" class="btn sm' + (EV.sel.has(c.cod) ? ' primary' : '') + '" data-exsel="' + esc(c.cod) + '">' + (EV.sel.has(c.cod) ? '✓ เลือกไว้แล้ว' : '+ เลือกเพื่อคำนวณราคา') + '</button></div>' +
+    (canStock() ? '<div class="ex-cardsel"><button type="button" class="btn sm' + (EV.sel.has(c.cod) ? ' primary' : '') + '" data-exsel="' + esc(c.cod) + '">' + (EV.sel.has(c.cod) ? '✓ เลือกไว้แล้ว' : '+ เลือกเพื่อคำนวณราคา') + '</button></div>' : '') +
     '<div><b class="ex-h">สต็อกการ์ด ' + (rows ? '(' + rows.length + (rows.length >= 300 ? '+' : '') + ' รายการ ปีนี้)' : '') + '</b>' +
     (c.err ? '<p class="ex-err">' + esc(c.err) + '</p>' : !rows ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : !rows.length ? '<div class="sk-empty sm"><b>ยังไม่มีการเคลื่อนไหวปีนี้</b></div>' :
       '<div class="ex-crd"><div class="ex-ch"><span>วันที่ · เอกสาร</span><span>รายการ</span><span>คลัง</span><span>จำนวน</span></div>' + rows.map(r => { const op = EX_OP[r[3]] || ['รายการ', 1];
@@ -6775,6 +6777,7 @@ function exCardDraw() {
 document.addEventListener('click', e => {
   const t = e.target.closest && e.target.closest('[data-exsel],[data-exselall],[data-excalc],[data-excalcx],[data-exselclr],[data-exbasis],[data-exqfill],[data-excopy],[data-exprint],[data-expdf],[data-exunsel],[data-exminsave],[data-exsrc],[data-exgrp],[data-exmore],[data-exsync],[data-excard],[data-excclose]'); if (!t) return;
   const d = t.dataset;
+  if (!canStock() && (d.exsel || d.exselall || d.excalc || d.exqfill || d.exbasis || d.exunsel || d.excopy || d.exprint || d.expdf || d.exselclr || d.exminsave)) { e.preventDefault(); e.stopPropagation(); return toast('ดูได้อย่างเดียว · ฝ่ายสต็อกเป็นผู้แก้ไข', true); }
   const redraw = () => { render(); if (EX.card) exCardDraw(); if (EV.calc) exCalcDraw(); };
   if (d.exsel) { e.preventDefault(); e.stopPropagation(); if (EV.sel.has(d.exsel)) EV.sel.delete(d.exsel); else EV.sel.set(d.exsel, ''); exSelSave(); return redraw(); }
   if (d.exselall) { e.preventDefault(); const vis = [...document.querySelectorAll('.ex-row[data-excard]')].map(r => r.dataset.excard), all = vis.every(c => EV.sel.has(c)); vis.forEach(c => { if (all) EV.sel.delete(c); else if (!EV.sel.has(c)) EV.sel.set(c, ''); }); exSelSave(); return redraw(); }
@@ -6800,7 +6803,7 @@ document.addEventListener('click', e => {
   if (d.exsync) { exSync(true); return render(); }
 });
 document.addEventListener('change', e => { const t = e.target; if (!t || !t.dataset) return; if (t.dataset.exloc) { EV.loc = t.value; EV.lim = 200; render(); } else if (t.dataset.exsort) { EV.sort = t.value; render(); } });
-document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset || !t.dataset.exq) return;   // จำนวนในหน้าคำนวณ: อัปเดตยอดรวมทันที ไม่วาดใหม่ทั้งหน้า
+document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset || !t.dataset.exq || !canStock()) return;   // จำนวนในหน้าคำนวณ: อัปเดตยอดรวมทันที ไม่วาดใหม่ทั้งหน้า
   EV.sel.set(t.dataset.exq, t.value); exSelSave();
   const r = exCalcRows([...EV.sel.keys()].map(c => EX.items.get(c)).filter(Boolean)), y = r.rows.find(z => z.x[0] === t.dataset.exq);
   const sm = document.querySelector('[data-exsum="' + CSS.escape(t.dataset.exq) + '"]'); if (sm && y) sm.textContent = baht(y.sum);
