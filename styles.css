@@ -5222,3 +5222,43 @@ body.auth #bgSndBtn{display:none}
 .board .card .card-foot>.live,.board .card .card-foot>.tg{flex:0 1 auto}
 .board .card .code{white-space:normal;overflow-wrap:anywhere;word-break:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}
 .me-chip .conn{color:#fff!important}
+
+/* v2.81 มือถือ: ป้ายแชตหดเป็นแถบเล็กแนบขอบขวา (กว้าง 24px อยู่ในระยะขอบของการ์ด ไม่บังข้อมูล) · แตะเพื่อกาง */
+.ch-tab{display:none}
+@media (max-width:960px){
+  .chat-heads{right:0;gap:6px;align-items:flex-end;transform-origin:100% 100%}
+  .chat-heads.empty .ch-tab{display:none}
+  .chat-heads:not(.open) .ch-head,.chat-heads:not(.open) .ch-more{display:none}
+  .chat-heads.open .ch-tab{display:none}
+  .ch-tab{pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:24px;min-height:52px;padding:6px 0;border:0;border-radius:13px 0 0 13px;background:var(--grad);color:#fff;box-shadow:-3px 4px 14px -6px rgba(0,0,0,.45);cursor:pointer;font:700 11px/1 var(--f-body);animation:tabIn .45s cubic-bezier(.3,1.4,.5,1) both}
+  .ch-tab svg{width:13px;height:13px}
+  .ch-tab b{font-size:11px;letter-spacing:-.02em}
+  .ch-tab.help{background:linear-gradient(180deg,#F97316,#DC2626);animation:tabIn .45s cubic-bezier(.3,1.4,.5,1) both,tabGlow 1.6s ease-in-out infinite .5s}
+  .ch-tab .ct-sos{display:grid;place-items:center}.ch-tab .ct-sos svg{width:14px;height:14px}
+  .chat-heads.open .ch-head{animation:headSlide .35s cubic-bezier(.3,1.2,.5,1) both;animation-delay:calc(var(--i,0) * 40ms)}
+  .ch-head{padding:3px 10px 3px 3px;border-radius:999px 0 0 999px;gap:8px;box-shadow:-4px 6px 18px -8px rgba(0,0,0,.45),0 0 0 1px var(--line)}
+  .ch-head .av{width:36px;height:36px;font-size:13px}
+  .ch-head:hover{transform:none}
+  .ch-head .hd-n{position:absolute;top:-5px;left:-4px;right:auto;min-width:18px;height:18px;font-size:10px;line-height:18px;padding:0 4px}
+  .ch-head .hd-sos{width:17px;height:17px;left:22px;bottom:-2px}.ch-head .hd-sos svg{width:11px;height:11px}
+}
+@keyframes tabIn{0%{transform:translateX(100%)}100%{transform:none}}
+@keyframes tabGlow{50%{box-shadow:-3px 4px 18px -2px rgba(239,68,68,.75)}}
+@keyframes headSlide{0%{opacity:0;transform:translateX(60%)}100%{opacity:1;transform:none}}
+.th-sync{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 4px}
+.th-sync small{color:var(--muted);font-size:12px}
+
+/* v2.82 ค้นหาในภาพรวมบริษัท: ค้นทุกงาน · ไฮไลต์คำที่ตรง · บอกจำนวนที่เจอ */
+.co-search{position:relative}
+.co-search.on{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in oklab,var(--brand) 18%,transparent)}
+.co-search .cq-x{flex:none;width:28px;height:28px;border-radius:50%;border:0;background:var(--surface-2);color:var(--muted);display:grid;place-items:center;cursor:pointer;font-size:13px;margin-right:-4px}
+.co-search .cq-x:hover{background:var(--surface-3);color:var(--ink)}
+.co-search input[type=search]::-webkit-search-cancel-button{display:none}
+.co-sres{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:2px 2px 10px;font-size:13.5px;color:var(--ink)}
+.co-sres b{font:700 18px var(--f-display);color:var(--brand)}
+.co-sres small{color:var(--muted);font-size:12px;margin-left:4px}
+.co-row mark,.co-none mark{background:color-mix(in oklab,#FACC15 55%,transparent);color:inherit;border-radius:3px;padding:0 1px;box-shadow:0 0 0 1px color-mix(in oklab,#EAB308 40%,transparent)}
+.co-none{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:30px 16px;color:var(--muted)}
+.co-none svg{width:30px;height:30px;opacity:.5}
+.co-none b{color:var(--ink);font-size:15px}
+.co-none small{max-width:420px;line-height:1.5}

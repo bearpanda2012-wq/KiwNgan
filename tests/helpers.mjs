@@ -6,7 +6,7 @@ const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = awa
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.addInitScript(() => { if (!sessionStorage.getItem('kn-init')) { localStorage.clear(); sessionStorage.setItem('kn-init', '1'); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
 await pg.goto('http://127.0.0.1:8781/index.html'); await pg.waitForTimeout(600);
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1200);
 console.log('due notice shown at login', await pg.locator('.ntf.job-due').count());
 await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('board'); }); await pg.waitForTimeout(500);
 console.log('cards with team avatars', await pg.locator('.card .av-team').count());
@@ -24,7 +24,7 @@ const name = h.split(',')[0];
 await pg.evaluate(() => { localStorage.removeItem('kiwngan:demo:token'); });
 await pg.evaluate(() => Object.keys(localStorage).filter(k => /token/.test(k)).forEach(k => localStorage.removeItem(k)));
 await pg.reload(); await pg.waitForTimeout(800);
-await pg.click('.who:has-text("' + name + '")'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+await pg.click('.who:has-text("' + name + '")'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1200);
 console.log('dbg2', await pg.evaluate(id => { const j = S.jobs.find(x => x.id === id); return [S.jobs.length, j && j.helpers, j && j.status, S.f.member, S.f.status, S.view]; }, id));
 console.log('logged in as', await pg.evaluate(() => S.me), '| sees job in list pool', await pg.evaluate(id => { T.go('list'); return !!document.querySelector('.row[data-open="' + id + '"]'); }, id));
 console.log('can edit (helper)', await pg.evaluate(id => { const j = S.jobs.find(x => x.id === id); return !!document.querySelector('.row[data-open="' + id + '"]') && j && (j.helpers || '').includes(S.me); }, id));

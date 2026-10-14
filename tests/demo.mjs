@@ -8,7 +8,7 @@ const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = awa
 const errs = []; pg.on('pageerror', e => errs.push('PAGEERR ' + e.message)); pg.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
 await pg.addInitScript(() => { navigator.serviceWorker && (navigator.serviceWorker.register = () => Promise.resolve()); });
 await pg.goto('http://127.0.0.1:8765/index.html'); await pg.waitForTimeout(800); console.log('EARLY', errs.join(' | ')); await pg.screenshot({path: new URL('out/early.png', import.meta.url).pathname}); console.log(await pg.evaluate(()=>document.body.innerText.slice(0,300)), await pg.evaluate(()=>typeof T));
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter');
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {});   // PIN ครบ 4 หลักแอปเข้าระบบเองแล้ว ช่องอาจหายไปก่อนกด Enter
 await pg.waitForTimeout(1200);
 await pg.evaluate(() => T.go('board')); await pg.waitForTimeout(900);
 await pg.screenshot({ path: new URL('out/board.png', import.meta.url).pathname });
@@ -31,7 +31,7 @@ await pg.screenshot({ path: new URL('out/hover.png', import.meta.url).pathname }
 // move into hovercard and click main image
 const box = await pg.locator('#hovercard .hv-main').boundingBox();
 console.log('hv-main', !!box);
-await pg.mouse.move(box.x + 20, box.y + 20, { steps: 8 }); await pg.waitForTimeout(400);
+await pg.mouse.move(box.x + 20, box.y + 20); await pg.waitForTimeout(400);   // ย้ายเมาส์เข้าการ์ดทีเดียว (แบบหลายช่วงช้าเกินไปเมื่อเครื่องทำงานหนัก)
 console.log('still shown', await pg.evaluate(() => T.$('#hovercard').classList.contains('show')));
 await pg.click('#hovercard .hv-main'); await pg.waitForTimeout(500);
 console.log('lightbox open', await pg.evaluate(() => !!(S.lb && T.$('#lightbox').classList.contains('open'))));

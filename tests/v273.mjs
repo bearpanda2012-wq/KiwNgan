@@ -2,7 +2,7 @@
 const { chromium } = await import(process.env.PW);
 import http from 'http'; import fs from 'fs'; import path from 'path';
 const root = new URL('..', import.meta.url).pathname; fs.mkdirSync(new URL('out', import.meta.url).pathname, { recursive: true });
-const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,api,pModalOpen,stBuyText};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8796);
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,api,pModalOpen,stBuyText};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8905);
 const b = await chromium.launch({ args: ['--no-proxy-server'] }); const ctx = await b.newContext({ viewport: { width: 1300, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] }); const pg = await ctx.newPage();
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.route(/youtube|ytimg|fonts\.g/, r => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
@@ -11,11 +11,11 @@ const shot = n => pg.screenshot({ path: new URL('out/' + n + '.png', import.meta
 let ok = 0, bad = 0; const eq = (l, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + l + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
 const clean = () => pg.evaluate(() => document.querySelectorAll('.ntf,.chat-heads').forEach(e => e.remove()));
 const logout = async () => { await pg.evaluate(() => Object.keys(localStorage).filter(k => /token/.test(k)).forEach(k => localStorage.removeItem(k))); await pg.reload(); await pg.waitForTimeout(700); };
-const loginAs = async n => { await pg.click('.who:has-text("' + n + '")'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter').catch(() => {}); await pg.waitForTimeout(1300); await clean(); };
+const loginAs = async n => { await pg.click('.who:has-text("' + n + '")'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1300); await clean(); };
 const closeAll = () => pg.evaluate(() => { document.querySelectorAll('.pmodal').forEach(e => e.remove()); document.body.classList.remove('pm-open'); });
-await pg.goto('http://127.0.0.1:8796/index.html'); await pg.waitForTimeout(600);
+await pg.goto('http://127.0.0.1:8905/index.html'); await pg.waitForTimeout(600);
 // เตรียมข้อมูลตัวอย่าง: งาน QC ไม่ผ่าน · ของลูกค้าของงานที่ส่งแล้ว
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter').catch(() => {}); await pg.waitForTimeout(1300);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1300);
 const prep = await pg.evaluate(() => { const d = JSON.parse(localStorage.getItem('kiwngan:demo'));
   const m = d.prods.find(p => p.stage === 'machine' && /Router/.test(p.machines || '')) || d.prods.find(p => p.stage === 'machine'); m.qc = JSON.stringify({ fails: 1, last: 'ขอบไม่เรียบ', res: 'fail' });
   const sh = d.prods.find(p => p.stage === 'shipped'); d.stock.items.push({ id: 's_cust1', name: 'แผ่นลูกค้า', unit: 'แผ่น', qty: 3, min: 0, own: 'cust', cust: 'คุณบี', job: sh.code, price: 0 });

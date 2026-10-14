@@ -13,7 +13,7 @@ const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.route('https://script.google.com/**', async route => { const body = route.request().postData() || '{}'; await new Promise(r => setTimeout(r, 1500)); await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: m.ctx.doPost({ postData: { contents: body } }).t }); });
 await pg.addInitScript(() => { if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
 await pg.goto('http://127.0.0.1:8768/index.html'); await pg.waitForTimeout(4000);
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', pin); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(6000);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', pin); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(6000);
 await pg.evaluate(() => T.go('board')); await pg.waitForTimeout(800);
 const ids = await pg.evaluate(() => S.jobs.map(j => j.id));
 let t = Date.now(); await pg.click(`.card[data-id="${ids[0]}"] .tbtn`);

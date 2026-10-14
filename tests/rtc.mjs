@@ -24,7 +24,7 @@ async function open(who, isAdmin, pinv) {
   });
   await pg.goto('http://127.0.0.1:8769/index.html'); await pg.waitForTimeout(2500);
   await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', isAdmin ? 'แอดมิน' : 'ต้น');
-  await pg.fill('#pinIn', pinv); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter');
+  await pg.fill('#pinIn', pinv); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {});   // PIN ครบ 4 หลักแอปเข้าระบบเองแล้ว ช่องอาจหายไปก่อนกด Enter
   await pg.waitForFunction(() => window.S && S.screen === 'app', null, { timeout: 20000 });
   return pg;
 }

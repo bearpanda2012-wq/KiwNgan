@@ -6,7 +6,7 @@ const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = awa
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.addInitScript(() => { localStorage.clear(); if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
 await pg.goto('http://127.0.0.1:8773/index.html'); await pg.waitForTimeout(600);
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1200);
 console.log('due notice shown at login', await pg.locator('.ntf.job-due').count());
 await pg.evaluate(() => T.go('board')); await pg.waitForTimeout(500);
 const id = await pg.evaluate(async () => { const j = S.jobs.find(x => x.status === 'doing' && !/CAM/.test(x.taskType) && !S.jobs.some(y => y !== x && y.code === x.code)); const c = document.createElement('canvas'); c.width = 50; c.height = 50; const blob = await new Promise(r => c.toBlob(r, 'image/png')); await T.uploadImages(j.id, [new File([blob], 'a.png', { type: 'image/png' })]); await T.moveJob(j.id, 'done'); return j.id; });

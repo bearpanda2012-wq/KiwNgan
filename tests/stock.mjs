@@ -9,10 +9,10 @@ await pg.addInitScript(() => { if (!sessionStorage.getItem('kn-init')) { localSt
 const shot = n => pg.screenshot({ path: new URL('out/' + n + '.png', import.meta.url).pathname, fullPage: false });
 let ok = 0, bad = 0; const eq = (l, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + l + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
 const logout = async () => { await pg.evaluate(() => Object.keys(localStorage).filter(k => /token/.test(k)).forEach(k => localStorage.removeItem(k))); await pg.reload(); await pg.waitForTimeout(700); };
-const loginAs = async n => { await pg.click('.who:has-text("' + n + '")'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter').catch(() => {}); await pg.waitForTimeout(1200); await pg.evaluate(() => document.querySelectorAll('.ntf').forEach(e => e.remove())); };
+const loginAs = async n => { await pg.click('.who:has-text("' + n + '")'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1200); await pg.evaluate(() => document.querySelectorAll('.ntf').forEach(e => e.remove())); };
 await pg.goto('http://127.0.0.1:8791/index.html'); await pg.waitForTimeout(600);
 // --- admin: perms UI
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1200);
 await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('settings'); }); await pg.waitForTimeout(500);
 eq('stock role in role options', await pg.locator('#nuRole option[value="stock"]').count(), 1);
 eq('perm summary per user', await pg.locator('.perm-sum').count() >= 4, true);
@@ -76,7 +76,7 @@ eq('page re-render after save does not replay card animation', await pg.locator(
 await pg.click('#sModal [data-scam]'); await pg.waitForTimeout(1500);
 eq('camera window opens', await pg.locator('#camModal video').count(), 1);
 await shot('stock-camera');
-await pg.click('[data-camshot]'); await pg.waitForTimeout(2200);
+await pg.click('[data-camshot]'); await pg.waitForFunction(id => S.images.filter(m => m.jobId === id).length > 0, it.id, { timeout: 15000 }).catch(() => {}); await pg.waitForTimeout(400);
 eq('photo from camera saved on item', await pg.evaluate(id => S.images.filter(m => m.jobId === id).length, it.id), 1);
 eq('cover photo shown in popup', await pg.locator('#sModal .skg-cover img').count(), 1);
 await shot('stock-item');

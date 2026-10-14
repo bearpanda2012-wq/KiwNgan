@@ -40,7 +40,7 @@ for (const dk of Object.keys(DEV)) for (const scheme of ['light', 'dark']) for (
   await check(pg, ctx0 + '/login', dk === 'phone' || dk === 'small');
   try {
     if (!who) { await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); } else await pg.click('.who:has-text("' + who + '")');
-    await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1400);
+    await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1400);
   } catch (e) { add(ctx0, 'LOGIN', e.message.slice(0, 120)); await c.close(); continue; }
   await pg.evaluate(() => document.querySelectorAll('.ntf,.coach,.tip-fly').forEach(e => e.remove()));
   const views = await pg.evaluate(() => T.viewsFor(S.user).map(v => v.id));

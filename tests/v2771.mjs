@@ -2,14 +2,14 @@
 const { chromium } = await import(process.env.PW);
 import http from 'http'; import fs from 'fs'; import path from 'path';
 const root = new URL('..', import.meta.url).pathname;
-const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,api};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8802);
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,api};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8913);
 const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1300, height: 850 } });
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 let ok = 0, bad = 0; const eq = (lbl, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
 await pg.addInitScript(() => { try { if (!sessionStorage.getItem('x')) { localStorage.clear(); sessionStorage.setItem('x', 1); } navigator.serviceWorker.register = () => Promise.resolve(); } catch (e) {} });
-await pg.goto('http://127.0.0.1:8802/index.html'); await pg.waitForTimeout(700);
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
-await pg.goto('http://127.0.0.1:8802/index.html?from=push#digest'); await pg.waitForTimeout(2200);
+await pg.goto('http://127.0.0.1:8913/index.html'); await pg.waitForTimeout(700);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {});   // PIN ครบ 4 หลักแอปเข้าระบบเองแล้ว ช่องอาจหายไปก่อนกด Enter await pg.waitForTimeout(1200);
+await pg.goto('http://127.0.0.1:8913/index.html?from=push#digest'); await pg.waitForTimeout(2200);
 eq('opened from digest notice → full summary shown', await pg.evaluate(() => { const v = document.querySelector('#dgView'); return v ? [/สรุปงานเช้านี้/.test(v.textContent), v.querySelectorAll('.dgv-list li').length >= 4] : null; }), [true, true]);
 await pg.click('[data-dgvx]'); await pg.waitForTimeout(400);
 await pg.evaluate(() => T.go('settings')); await pg.waitForTimeout(900);

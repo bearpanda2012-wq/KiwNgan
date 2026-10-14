@@ -2,7 +2,7 @@
 const { chromium } = await import(process.env.PW);
 import http from 'http'; import fs from 'fs'; import path from 'path';
 const root = new URL('..', import.meta.url).pathname; fs.mkdirSync(new URL('out', import.meta.url).pathname, { recursive: true });
-const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,api,vidParse};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8795);
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,api,vidParse};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8902);
 const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1300, height: 900 } });
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.route(/youtube|ytimg|vimeo|facebook|tiktok|drive\.google/, r => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body style="background:#111"></body></html>' }));
@@ -11,13 +11,13 @@ const shot = n => pg.screenshot({ path: new URL('out/' + n + '.png', import.meta
 let ok = 0, bad = 0; const eq = (l, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + l + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
 const clean = () => pg.evaluate(() => document.querySelectorAll('.ntf,.chat-heads').forEach(e => e.remove()));
 const logout = async () => { await pg.evaluate(() => Object.keys(localStorage).filter(k => /token/.test(k)).forEach(k => localStorage.removeItem(k))); await pg.reload(); await pg.waitForTimeout(700); };
-const loginAs = async n => { await pg.click('.who:has-text("' + n + '")'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter').catch(() => {}); await pg.waitForTimeout(1300); await clean(); };
-await pg.goto('http://127.0.0.1:8795/index.html'); await pg.waitForTimeout(600);
+const loginAs = async n => { await pg.click('.who:has-text("' + n + '")'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1300); await clean(); };
+await pg.goto('http://127.0.0.1:8902/index.html'); await pg.waitForTimeout(600);
 // --- video link parsing
 const vp = await pg.evaluate(() => ['https://youtu.be/M7lc1UVf-VE?t=42', 'https://www.youtube.com/shorts/abcdefghijk', 'https://drive.google.com/file/d/1AbCdEfGhIjKlMn/view', 'https://vimeo.com/123456789', 'https://www.tiktok.com/@a/video/7234567890123', 'https://example.com/v.mp4', 'http://youtu.be/x'].map(u => { const v = T.vidParse(u); return v ? v.kind + (v.vert ? ':v' : '') + (v.embed ? ':' + v.embed.split('?')[0] : '') : null; }));
 eq('video links detected', vp, ['yt:https://www.youtube-nocookie.com/embed/M7lc1UVf-VE', 'yt:v:https://www.youtube-nocookie.com/embed/abcdefghijk', 'gd:https://drive.google.com/file/d/1AbCdEfGhIjKlMn/preview', 'vm:https://player.vimeo.com/video/123456789', 'tt:v:https://www.tiktok.com/embed/v2/7234567890123', 'link', null]);
 // --- admin
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter').catch(() => {}); await pg.waitForTimeout(1400); await clean();
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1400); await clean();
 eq('nav has คลังความรู้', await pg.locator('#nav [data-view="kb"]').count(), 1);
 await pg.click('#nav [data-view="kb"]'); await pg.waitForTimeout(800); await clean();
 eq('demo articles', await pg.locator('.kb-card').count(), 4);
@@ -108,9 +108,9 @@ eq('mobile: no horizontal scroll', await pg.evaluate(() => document.documentElem
 await shot('v272-mobile');
 await pg.setViewportSize({ width: 1300, height: 900 });
 // --- หน้า Sale: อ่านอย่างเดียว
-await logout(); await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter').catch(() => {}); await pg.waitForTimeout(1200);
+await logout(); await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1200);
 const key = await pg.evaluate(async () => (await T.api().saleOpen({ pin: '1234' })).key);
-await pg.goto('http://127.0.0.1:8795/index.html?salek=' + key); await pg.waitForTimeout(1500);
+await pg.goto('http://127.0.0.1:8902/index.html?salek=' + key); await pg.waitForTimeout(1500);
 await pg.click('[data-sfview="kb"]'); await pg.waitForTimeout(600);
 eq('sale: kb tab lists articles', await pg.locator('.kb-sale .kb-card').count(), 6);
 eq('sale: no add button', await pg.locator('[data-kbadd]').count(), 0);

@@ -8,7 +8,7 @@ const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.addInitScript(() => { if (!sessionStorage.getItem('kn-init')) { localStorage.clear(); sessionStorage.setItem('kn-init', '1'); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
 let ok = 0, bad = 0; const eq = (l, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + l + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
 await pg.goto('http://127.0.0.1:8798/index.html'); await pg.waitForTimeout(700);
-await pg.click('.who:has-text("ต้น")'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter').catch(() => {}); await pg.waitForTimeout(1300);
+await pg.click('.who:has-text("ต้น")'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1300);
 await pg.evaluate(() => document.querySelectorAll('.ntf').forEach(e => e.remove()));
 // a design job of someone else + a production job
 const code = await pg.evaluate(() => S.jobs.find(j => j.assignee !== S.me && j.status !== 'done').code);

@@ -34,9 +34,9 @@ let t0 = Date.now();
 await pg.goto('http://127.0.0.1:8767/index.html');
 await pg.waitForSelector('[data-act="adminon"]'); await pg.waitForFunction(() => window.IB && IB.ready, null, { timeout: 15000 }).catch(() => {});
 console.log('first visit: login page usable after', Date.now() - t0, 'ms', '| inbox ready', await pg.evaluate(() => IB.ready));
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', pin); await pg.dispatchEvent('#pinIn', 'input');
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', pin); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); });
 for (const k in counts) delete counts[k];
-t0 = Date.now(); await pg.press('#pinIn', 'Enter');
+t0 = Date.now(); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {});   // PIN ครบ 4 หลักแอปเข้าระบบเองแล้ว ช่องอาจหายไปก่อนกด Enter
 await pg.waitForFunction(() => S.screen === 'app' && S.user, null, { timeout: 30000 }).catch(async () => console.log('FAIL', JSON.stringify(await pg.evaluate(() => ({ sc: S.screen, err: S.login.err, jobs: S.jobs.length, sub: S.login.submitting }))), JSON.stringify(counts)));
 console.log('login → board', Date.now() - t0, 'ms (HTTP stall', STALL, 'ms) calls', JSON.stringify(counts));
 // second visit: cached roster appears instantly, reload while logged in boots fast

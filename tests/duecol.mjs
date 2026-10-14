@@ -6,7 +6,7 @@ const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = awa
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.addInitScript(() => { localStorage.clear(); if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
 await pg.goto('http://127.0.0.1:8783/index.html'); await pg.waitForTimeout(600);
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {});   // PIN ครบ 4 หลักแอปเข้าระบบเองแล้ว ช่องอาจหายไปก่อนกด Enter await pg.waitForTimeout(1200);
 console.log('due notice shown at login', await pg.locator('.ntf.job-due').count());
 await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('board'); }); await pg.waitForTimeout(600);
 const c = await pg.evaluate(() => ['today', 'tomorrow'].map(k => { const e = document.querySelector('.card-foot .due.' + k); return e ? k + ':' + getComputedStyle(e).color + '/' + getComputedStyle(e).backgroundColor : k + ':none'; }));

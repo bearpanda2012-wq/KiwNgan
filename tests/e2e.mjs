@@ -20,7 +20,7 @@ await pg.route('https://script.google.com/**', async route => { const b = route.
 await pg.addInitScript(() => { if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
 await pg.goto('http://127.0.0.1:8766/index.html'); await pg.waitForTimeout(1500);
 console.log(await pg.evaluate(() => document.body.innerText.slice(0, 200).replace(/\n/g, ' ')));
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', pin); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter');
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', pin); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {});   // PIN ครบ 4 หลักแอปเข้าระบบเองแล้ว ช่องอาจหายไปก่อนกด Enter
 await pg.waitForTimeout(2000);
 console.log('logged in', await pg.evaluate(() => S.screen), 'stamp', await pg.evaluate(() => S.dataStamp));
 // external change by another session

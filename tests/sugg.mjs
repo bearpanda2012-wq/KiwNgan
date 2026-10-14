@@ -6,7 +6,7 @@ const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = awa
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.addInitScript(() => { if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
 await pg.goto('http://127.0.0.1:8772/index.html'); await pg.waitForTimeout(600);
-await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1000);
+await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1000);
 const j = await pg.evaluate(() => { const j = S.jobs.find(x => x.title && !/CAM/.test(x.taskType) && !S.jobs.some(y => y !== x && y.code === x.code)); return { code: j.code, title: j.title, group: j.group }; });
 await pg.evaluate(() => T.openEditor()); await pg.waitForTimeout(400);
 await pg.click('#e-title'); await pg.keyboard.type(j.title.slice(0, 1)); await pg.waitForTimeout(200);

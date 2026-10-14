@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.80.1';
+const APP_VERSION = '2.82.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -653,6 +653,9 @@ const Demo = {
     const now = nowLocal() + ':00'; if (!cur) { cur = { id: uid('k_'), createdBy: u.name, createdAt: now }; d.kb.push(cur); } else if (cur.title !== title || String(cur.body || '') !== String(it.body || '')) cur.acks = {};
     Object.assign(cur, { dept: dept, cat: kbCatClean(it.cat), title: title, body: String(it.body || ''), videos: (it.videos || []).filter(x => /^https:\/\//.test(x)).slice(0, 8), pin: it.pin ? 1 : 0, updatedBy: u.name, updatedAt: now });
     this.save(d); return { kb: this.kbList(d, u), id: cur.id }; },
+  async themeGet() { const d = this.db(), u = this.me(d); return { data: (d.themes || {})[u.id] || null }; },
+  async themeSave(p) { const d = this.db(), u = this.me(d), cur = (d.themes || {})[u.id]; if (!p.data || typeof p.data.theme !== 'object') throw new Error('ข้อมูลธีมไม่ถูกต้อง');
+    if (cur && cur.ts > p.data.ts) return { ts: cur.ts, stale: true, data: cur }; d.themes = d.themes || {}; d.themes[u.id] = { ts: p.data.ts, theme: p.data.theme, saves: (p.data.saves || []).slice(0, 24) }; this.save(d); return { ts: p.data.ts }; },
   async kbAck(p) { const d = this.db(), u = this.me(d), k = (d.kb || []).find(x => x.id === p.id); if (!k) throw new Error('ไม่พบเรื่องนี้'); k.acks = k.acks || {}; if (!k.acks[u.name]) k.acks[u.name] = nowLocal() + ':00'; this.save(d); return { kb: this.kbList(d, u) }; },
   async kbDelete(p) { const d = this.db(), u = this.me(d), k = (d.kb || []).find(x => x.id === p.id); if (!k) throw new Error('ไม่พบเรื่องนี้'); if (!kbCanU(u, k.dept)) throw new Error('ลบได้เฉพาะความรู้ของฝ่ายตัวเอง'); d.kb = d.kb.filter(x => x.id !== p.id); d.images = (d.images || []).filter(m => m.jobId !== p.id); this.save(d); return { kb: this.kbList(d, u) }; },
   async stockCount(p) { const d = this.db(), u = this.me(d); this.sedit(u); d.stock = d.stock || seedStock(); const now = nowLocal() + ':' + pad(new Date().getSeconds()); let n = 0;
@@ -827,7 +830,7 @@ const Remote = {
     return data.data;
   }
 };
-['digestTest', 'kbSave', 'kbDelete', 'kbAck', 'stockCount', 'pushTest', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
+['themeGet', 'themeSave', 'digestTest', 'kbSave', 'kbDelete', 'kbAck', 'stockCount', 'pushTest', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -941,7 +944,7 @@ async function load(silent, boot) {
     }
     if (!d) throw new Error('ฐานข้อมูลตอบกลับไม่ครบ กรุณากด "ลองอีกครั้ง"');
     S.settings = normalizeSettings(d.settings);
-    S.users = orderUsers(d.users || []); S.user = d.me; S.me = d.me.name; LS.set('userOrder', Array.isArray(S.settings.userOrder) ? S.settings.userOrder : []);
+    S.users = orderUsers(d.users || []); S.user = d.me; S.me = d.me.name; setTimeout(themePull, 400); LS.set('userOrder', Array.isArray(S.settings.userOrder) ? S.settings.userOrder : []);
     const prevJobs = S.loaded && S.me && S.jobs && S.jobs.length ? S.jobs : null, prevStock = S.loaded && S.me ? S.stock : null, prevKb = S.loaded && S.me ? S.kb : null;
     S.jobs = d.jobs || []; S.logs = d.logs || []; S.images = d.images || []; S.files = d.files || []; S.prods = d.prods || []; S.stock = d.stock || null; S.kb = Array.isArray(d.kb) ? d.kb : null; S.salePinOn = !!d.salePin; S.salePins = d.salePins || []; S.apiV = d.version || '';
     if (!viewsFor(S.user).some(v => v.id === S.view) || (S.screen !== 'app' && isProdRole() && S.view !== 'flow')) S.view = isProdRole() ? 'prod' : 'home';   // ฝ่ายผลิตเข้าระบบแล้วเปิดบอร์ดผลิตเลย
@@ -1271,17 +1274,17 @@ async function themeSave(name) {
   if (A && A.src === 'file') { try { const rec = await bgGet(); if (rec) { await bgPutK('save:' + id, rec); file = true; } } catch (e) { toast('บันทึกไฟล์พื้นหลังไม่ได้ (พื้นที่เครื่องเต็ม?) บันทึกเฉพาะค่าสี', true); } }
   else if (old && old.file) bgPutK('save:' + id, null).catch(() => {});
   const ent = { id: id, name: name, ts: Date.now(), theme: t, file: file, bgk: A ? A.kind + (A.kind === 'fx' ? ':' + A.fx : '') : '' };
-  LS.set('themeSaves', [ent].concat(list.filter(x => x.id !== id)).slice(0, 24));
+  LS.set('themeSaves', [ent].concat(list.filter(x => x.id !== id)).slice(0, 24)); themeTouched();
   TS.name = ''; toast((old ? 'อัปเดตธีม "' : 'บันทึกธีม "') + name + '" แล้ว'); render();
 }
 async function themeLoad(id) {
   const e = themeSaves().find(x => x.id === id); if (!e) return;
   const t = Object.assign({}, THEME_DEFAULT, e.theme);
   if (e.file) { try { const rec = await bgGetK('save:' + id); if (rec) { await bgPut(rec); bgUse(rec); } else toast('ไม่พบไฟล์พื้นหลังของธีมนี้ในเครื่อง ใช้พื้นหลังปัจจุบันแทน', true); } catch (x) {} }
-  LS.set('theme', t); BGT.tab = ''; applyTheme(); toast('ใช้ธีม "' + e.name + '" แล้ว'); render();
+  LS.set('theme', t); BGT.tab = ''; applyTheme(); themeTouched(); toast('ใช้ธีม "' + e.name + '" แล้ว'); render();
 }
 function themeDel(id) {
-  const e = themeSaves().find(x => x.id === id); LS.set('themeSaves', themeSaves().filter(x => x.id !== id));
+  const e = themeSaves().find(x => x.id === id); LS.set('themeSaves', themeSaves().filter(x => x.id !== id)); themeTouched();
   if (e && e.file) bgPutK('save:' + id, null).catch(() => {});
   TS.del = ''; toast('ลบธีม "' + (e ? e.name : '') + '" แล้ว'); render();
 }
@@ -1303,7 +1306,7 @@ async function themeImport(file) {
     let name = String(x.name || 'ธีมนำเข้า').slice(0, 40); while (list.some(y => y.name === name)) name = name.slice(0, 36) + ' (2)';
     list.unshift({ id: 'ts' + (Date.now() + i).toString(36), name: name, ts: Date.now(), theme: th, file: false, bgk: noFile ? '' : String(x.bgk || '').slice(0, 40) }); n++;
   });
-  LS.set('themeSaves', list.slice(0, 24)); toast(n ? 'นำเข้า ' + n + ' ธีมแล้ว' : 'ไม่พบธีมในไฟล์', !n); render();
+  LS.set('themeSaves', list.slice(0, 24)); themeTouched(); toast(n ? 'นำเข้า ' + n + ' ธีมแล้ว' : 'ไม่พบธีมในไฟล์', !n); render();
 }
 function themeSavesHtml() {
   const list = themeSaves(), cur = JSON.stringify(getTheme());
@@ -1440,7 +1443,37 @@ function fontLoad(k) {
 const thNum = (v, d, lo, hi) => { const n = +v; return v === null || v === undefined || v === '' || isNaN(n) ? d : Math.max(lo, Math.min(hi, n)); };
 const isHex = v => /^#[0-9a-f]{6}$/i.test(v || '');
 function getTheme() { return Object.assign({}, THEME_DEFAULT, LS.get('theme', {}) || {}); }
-function setTheme(patch) { const t = Object.assign(getTheme(), patch); LS.set('theme', t); applyTheme(); return t; }
+function setTheme(patch) { const t = Object.assign(getTheme(), patch); LS.set('theme', t); applyTheme(); themeTouched(); return t; }
+/* ธีมผูกกับบัญชี: แก้ที่เครื่องไหนก็ส่งขึ้นบัญชี (รอ 1.5 วิ รวบหลายครั้งเป็นครั้งเดียว) · เข้าแอปแล้วดึงของบัญชีมาใช้ถ้าใหม่กว่า · ปิดได้ทีละเครื่อง */
+const TSY = { t: 0, pulled: '', last: 0, busy: false };
+const themeSyncOn = () => LS.get('themeSync', true) !== false;
+const themeSyncOk = () => S.screen === 'app' && S.user && themeSyncOn() && (mode() !== 'sheet' || apiAtLeast('1.39.0'));
+function themeTouched() { LS.set('themeTs', Date.now()); if (S.user) LS.set('themeOwner', S.user.id); clearTimeout(TSY.t); TSY.t = setTimeout(themePush, 1500); }
+async function themePush() {
+  if (!themeSyncOk()) return;
+  try { const r = await api().themeSave({ data: { ts: LS.get('themeTs', Date.now()), theme: getTheme(), saves: themeSaves() } }); TSY.last = Date.now();
+    if (r && r.stale && r.data) themeApplyRemote(r.data); else themeSyncNote(); } catch (e) {}
+}
+function themeApplyRemote(d) {
+  if (!d || !d.theme) return;
+  LS.set('theme', Object.assign({}, THEME_DEFAULT, d.theme)); LS.set('themeSaves', Array.isArray(d.saves) ? d.saves : []); LS.set('themeTs', d.ts || Date.now()); LS.set('themeOwner', S.user && S.user.id);
+  BGT.tab = ''; TSY.last = Date.now(); applyTheme(); if (S.view === 'settings') render();
+}
+async function themePull() {
+  if (!themeSyncOk() || TSY.pulled === S.user.id || TSY.busy) return; TSY.busy = true;
+  try {
+    const r = await api().themeGet({}), d = r && r.data, mine = LS.get('themeOwner', '') === S.user.id, lt = mine ? +LS.get('themeTs', 0) || 0 : 0;
+    TSY.pulled = S.user.id; TSY.pullAt = Date.now();
+    if (d && d.ts > lt) themeApplyRemote(d);   // บัญชีใหม่กว่า (หรือเครื่องนี้เคยเป็นของคนอื่น) → ใช้ของบัญชี
+    else if (!d && !mine && LS.get('themeOwner', '')) { LS.del('theme'); LS.set('themeSaves', []); LS.del('themeTs'); LS.set('themeOwner', S.user.id); BGT.tab = ''; applyTheme(); if (S.view === 'settings') render(); }   // เครื่องนี้เคยเป็นธีมของคนอื่น และบัญชีนี้ยังไม่มีธีม → เริ่มจากค่าเริ่มต้น
+    else if (mine && lt && (!d || lt > d.ts)) themePush();   // เครื่องนี้ใหม่กว่า → ส่งขึ้น
+    else TSY.last = Date.now();
+  } catch (e) {} TSY.busy = false;
+}
+/* กลับมาที่แอป (สลับแอป/เปิดจอ) → ดึงธีมจากบัญชีอีกครั้ง ไม่เกินนาทีละครั้ง: แก้ที่คอมแล้วมือถือเปลี่ยนตามโดยไม่ต้องปิดแอป */
+document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible' || !S.user || Date.now() - (TSY.pullAt || 0) < 60000) return; TSY.pulled = ''; themePull(); });
+function themeSyncNote() { const el = $('#thSyncNote'); if (el) el.textContent = themeSyncTxt(); }
+const themeSyncTxt = () => !themeSyncOn() ? 'เครื่องนี้ใช้ธีมของตัวเอง' : mode() === 'sheet' && !apiAtLeast('1.39.0') ? 'ต้องอัปเดตหลังบ้านก่อน' : TSY.last ? 'ซิงก์ล่าสุด ' + new Date(TSY.last).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.' : 'รอซิงก์…';
 function applyTheme() {
   // the sign-in page always uses the default look; personal themes apply only inside the app
   const t = S.screen === 'app' ? getTheme() : Object.assign({}, THEME_DEFAULT, { mode: 'light' }), root = document.documentElement, s = S.settings || defaultSettings();
@@ -1492,7 +1525,8 @@ function themeSection() {
   const c1 = t.preset === 'custom' && isHex(t.c1) ? t.c1 : (THEMES.find(x => x.id === t.preset) || {}).c1 || team;
   const c2 = t.preset === 'custom' && isHex(t.c2) ? t.c2 : (THEMES.find(x => x.id === t.preset) || {}).c2 || '#5B3FD6';
   return '<section class="panel sec" id="s-theme"><div class="panel-h"><h2>ธีมและโหมดสี</h2><button class="btn sm ghost" data-act="themereset">คืนค่าเริ่มต้น</button></div>' +
-    '<p class="help">ปรับหน้าตาแอปตามชอบ ใช้เฉพาะเครื่องนี้ ไม่กระทบคนอื่นในทีม</p>' + themeSavesHtml() +
+    '<div class="th-sync"><label class="toggle sm"><input type="checkbox" id="thSync"' + (themeSyncOn() ? ' checked' : '') + '>ใช้ธีมเดียวกันทุกเครื่องที่เข้าบัญชีนี้</label><small id="thSyncNote">' + themeSyncTxt() + '</small></div>' +
+    '<p class="help">' + (themeSyncOn() ? 'แก้ที่เครื่องไหนก็ได้ ทุกเครื่องที่เข้าบัญชีนี้จะเปลี่ยนตาม (รูป/วิดีโอจากเครื่องไม่ซิงก์ ต้องเลือกไฟล์ในแต่ละเครื่อง) · ไม่กระทบคนอื่นในทีม' : 'เครื่องนี้ใช้ธีมแยกของตัวเอง ไม่กระทบเครื่องอื่นและคนอื่นในทีม') + '</p>' + themeSavesHtml() +
     '<div class="sub" style="font-weight:600;color:var(--ink)">เทมเพลตสี</div><div class="theme-grid">' + THEMES.map(sw).join('') +
       '<label class="theme-sw custom' + (t.preset === 'custom' ? ' on' : '') + '" style="--t1:' + esc(c1) + ';--t2:' + esc(c2) + '"><span class="tp-prev"><i class="tp-rail"></i><i class="tp-head"></i><i class="tp-a"></i><i class="tp-b"></i></span><b>กำหนดเอง</b></label></div>' +
     '<div class="theme-opts">' +
@@ -2322,6 +2356,12 @@ function headsData() {
   });
   return Object.values(by).sort((a, b) => (b.help - a.help) || String(b.last.ts).localeCompare(String(a.last.ts)));
 }
+/* มือถือ: ป้ายแชตหดเป็นแถบเล็กแนบขอบขวา (ไม่บังข้อมูล) แตะแถบเพื่อกางรายชื่อ · แตะที่อื่น/เลื่อนหน้า = หุบ · มีคนขอความช่วยเหลือใหม่ = กางให้เห็น 4 วิ */
+const CHM = { t: 0, help: {} };
+const chMobile = () => innerWidth <= 960;
+function chFold(open, ms) { const w = document.getElementById('chatHeads'); if (!w) return; clearTimeout(CHM.t); w.classList.toggle('open', !!open); if (open && ms) CHM.t = setTimeout(() => w.classList.remove('open'), ms); }
+addEventListener('scroll', () => { if (chMobile()) chFold(false); }, { passive: true, capture: true });
+document.addEventListener('click', e => { const w = document.getElementById('chatHeads'); if (!w || !chMobile()) return; if (e.target.closest && e.target.closest('.ch-tab')) { chFold(!w.classList.contains('open'), 8000); return; } if (w.classList.contains('open') && !w.contains(e.target)) chFold(false); }, true);
 function renderChatHeads() {
   let w = $('#chatHeads');
   if (S.screen !== 'app' || !S.user || M.open) { if (w) w.classList.add('hide'); if (S.screen !== 'app' && w) w.remove(); return; }
@@ -2342,6 +2382,13 @@ function renderChatHeads() {
     w.appendChild(el);
   });
   Object.keys(have).forEach(k => { if (!keep[k]) { have[k].classList.add('leave'); setTimeout(() => have[k].remove(), 300); } });
+  // แถบเล็กสำหรับมือถือ: จำนวนข้อความ + สีแดงเมื่อมีคนขอความช่วยเหลือ
+  let tab = w.querySelector('.ch-tab'); const tot = hs.reduce((a, h) => a + (h.n || 0), 0), anyHelp = hs.some(h => h.help);
+  if (!tab) { tab = document.createElement('button'); tab.type = 'button'; tab.className = 'ch-tab'; w.insertBefore(tab, w.firstChild); }
+  tab.classList.toggle('help', anyHelp); tab.setAttribute('aria-label', 'ข้อความ' + (tot ? ' ' + tot + ' ใหม่' : '') + (anyHelp ? ' · มีคนขอความช่วยเหลือ' : '') + ' — แตะเพื่อดู');
+  tab.innerHTML = (anyHelp ? '<i class="ct-sos">' + MSG_IC.sos + '</i>' : '') + (tot ? '<b>' + (tot > 99 ? '99+' : tot) + '</b>' : '') + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.5L9 12l5.5 5.5"/></svg>';
+  w.classList.toggle('empty', !hs.length);
+  { const nowHelp = {}; hs.filter(h => h.help).forEach(h => { nowHelp[h.key + '|' + h.last.id] = 1; }); if (!CHM.since) CHM.since = Date.now(); const fresh = Object.keys(nowHelp).some(k => !CHM.help[k]); if (fresh && chMobile() && Date.now() - CHM.since > 8000) chFold(true, 4000); CHM.help = nowHelp; }   // 8 วิแรกหลังเปิดแอป = ข้อความเดิมที่เพิ่งโหลด ไม่กางเอง
   let more = w.querySelector('.ch-more');
   if (hs.length > 4) { if (!more) { more = document.createElement('button'); more.className = 'ch-more'; more.dataset.act = 'msgopen'; } more.textContent = '+' + (hs.length - 4); w.appendChild(more); } else if (more) more.remove();
 }
@@ -4023,6 +4070,8 @@ function render() {
     if (same) hovEl = same; else hideHover(); }, 0);
   renderShell();
   const v = $('#view');
+  // ช่องที่กำลังพิมพ์อยู่ในหน้า (เช่น ช่องค้นหา): วาดใหม่แล้วต้องโฟกัสและตำแหน่งเคอร์เซอร์เดิม ไม่ให้ตัวที่พิมพ์ต่อหาย
+  const fk = (() => { const ae = document.activeElement; return ae && ae.id && v.contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && !/^(checkbox|radio|file|color|range)$/.test(ae.type) ? { id: ae.id, a: ae.selectionStart, b: ae.selectionEnd, v: ae.value } : null; })();
   let h = banner();
   if (S.view === 'flow') h += viewFlow();
   else if (S.view === 'prod') h += viewProd();
@@ -4035,6 +4084,7 @@ function render() {
   else if (S.view === 'settings') h += viewSettings();
   else h += viewHome();
   v.innerHTML = h;
+  if (fk) { const n = document.getElementById(fk.id); if (n) { if (n.value !== fk.v && !String(n.value || '').trim()) n.value = fk.v; n.focus({ preventScroll: true }); try { if (fk.a != null) n.setSelectionRange(fk.a, fk.b); } catch (e) {} } }
   decorate(v);
   { const gs = v.querySelector('.gscroll'), tl = gs && gs.querySelector('.gtoday'); if (gs && tl && gs.scrollWidth > gs.clientWidth) { const tr = tl.parentNode; gs.scrollLeft = Math.max(0, tr.offsetLeft + tl.offsetLeft - gs.clientWidth * 0.6); } }   // เลื่อนไทม์ไลน์ให้เห็น "วันนี้"
   paintAllThumbs(v);
@@ -4044,8 +4094,16 @@ function render() {
     const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!reduce) { v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); clearTimeout(S.animT); S.animT = setTimeout(() => v.classList.remove('enter'), 1400); countUp(v); }
   }
-  if (S.edit) renderEditor();
-  if (P2.id || P2.add) pModalDraw();
+  // วาดหน้าต่างที่เปิดอยู่ใหม่โดยไม่ทิ้งสิ่งที่พิมพ์ค้างไว้ (เดิมซิงก์เบื้องหลังทำให้ช่องที่กำลังพิมพ์ว่างเปล่า) และคืนเคอร์เซอร์ไว้ที่เดิม
+  if (S.edit || P2.id || P2.add) {
+    const ae = document.activeElement, keep = ae && ae.id && ae.closest && ae.closest('#sheet, #pModal') ? { id: ae.id, a: ae.selectionStart, b: ae.selectionEnd } : null;
+    const snap = {}; document.querySelectorAll('#sheet input[id]:not([type=checkbox]):not([type=radio]):not([type=file]), #sheet textarea[id], #pModal input[id]:not([type=checkbox]):not([type=radio]):not([type=file]), #pModal textarea[id]').forEach(x => { if (String(x.value || '').trim()) snap[x.id] = x.value; });
+    if (S.edit) rerenderEditor();
+    if (P2.add) pAddRead();
+    if (P2.id || P2.add) pModalDraw();
+    Object.keys(snap).forEach(id => { const n = document.getElementById(id); if (n && !String(n.value || '').trim()) n.value = snap[id]; });   // ช่องที่ยังไม่ถูกเก็บลงข้อมูล (เช่น คอมเมนต์) ไม่หาย
+    if (keep) { const n = document.getElementById(keep.id); if (n && n !== document.activeElement) { n.focus({ preventScroll: true }); try { if (keep.a != null) n.setSelectionRange(keep.a, keep.b); } catch (e) {} } }
+  }
 }
 
 function banner() {
@@ -5150,9 +5208,23 @@ async function saveEditor() {
 }
 
 /* ============ navigation ============ */
+/* เปลี่ยนหน้า (รวมถึงแตะแจ้งเตือนให้ไปหน้าอื่น): ปิดหน้าต่างที่เปิดดูอยู่ ไม่ให้ค้างบังหน้าใหม่
+   ไม่ปิดหน้าต่างที่กำลังกรอก/แก้ไขอยู่ (ข้อมูลที่พิมพ์ไว้จะได้ไม่หาย) */
+function closeViewPopups() {
+  try {
+    if (S.edit && S.edit.mode === 'view' && !S.edit.isNew) closeEditor();
+    if (typeof P2 !== 'undefined' && P2.id && !P2.add && !P2.edit && !P2.saving && !(P2.files || []).length) pModalClose();
+    const typed = sel => [...document.querySelectorAll(sel + ' input:not([type=hidden]):not([type=checkbox]):not([type=radio]), ' + sel + ' textarea')].some(x => String(x.value || '').trim() && x.value !== x.defaultValue);   // พิมพ์ค้างไว้ = ไม่ปิด
+    if (typeof SM !== 'undefined' && SM.id && SM.mode === 'view' && !typed('#sModal')) stClose();
+    if (typeof KM !== 'undefined' && KM.id && KM.mode === 'view') kbClose();
+    if (S.lb) closeLightbox();
+    if ($('#sdModal')) saleDetailClose();
+    { const dg = $('#dgView'); if (dg) dg.remove(); }
+  } catch (e) {}
+}
 function go(view, sec) {
   if (S.view === 'settings' && view !== 'settings' && S.draftDirty) { toast('มีการตั้งค่าที่ยังไม่บันทึก กดบันทึกหรือยกเลิกก่อน', true); return; }
-  hideHover();   // การ์ดลอยของงานในหน้าเดิมต้องหายไป (แถวที่ชี้อยู่ถูกลบไปพร้อมหน้าเดิม เลยไม่มีเหตุการณ์เมาส์ออก)
+  hideHover(); closeViewPopups();   // การ์ดลอยของงานในหน้าเดิมต้องหายไป (แถวที่ชี้อยู่ถูกลบไปพร้อมหน้าเดิม เลยไม่มีเหตุการณ์เมาส์ออก)
   S.view = view; LS.set('view', view); S.animIn = true; render();
   if (sec) setTimeout(() => { const el = document.getElementById('s-' + sec); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
   else window.scrollTo(0, 0);
@@ -5440,7 +5512,7 @@ function pipeJump() {
     el.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }, 40);
 }
-function coRows() {
+function coRows(all) {   // all = ค้นหา: รวมงานที่ส่งแล้วนาน ๆ และงานออกแบบที่เสร็จนานแล้ว
   const byCode = {}, pool = S.jobs, cutoff = addDays(today(), -14);   // ภาพรวมบริษัท: ทุกคนเห็นงานทั้งหมด (แก้ได้เฉพาะงานตัวเอง)
   const key = c => String(c || '').trim().toLowerCase();
   pool.forEach(j => { const k = key(j.code); if (!k) return; (byCode[k] = byCode[k] || { code: j.code, jobs: [], prod: null }).jobs.push(j); });
@@ -5454,8 +5526,8 @@ function coRows() {
       const o = open.slice().sort((a, b) => ['doing', 'fix', 'review', 'queue', 'hold'].indexOf(a.status) - ['doing', 'fix', 'review', 'queue', 'hold'].indexOf(b.status))[0];
       step = 'design'; sub = (o.taskType || 'ออกแบบ') + ' · ' + ST[o.status].label + (o.assignee ? ' · ' + o.assignee : ''); since = o.startedAt || o.received || ''; late = open.some(isLate);
     } else if (p && p.stage === 'shipped') { step = 'shipped'; sub = 'ส่งแล้ว ' + fd(p.shippedAt); since = p.shippedAt; }
-    else { const fin = r.jobs.map(finDate).sort().pop() || ''; if (fin < cutoff) return null; step = 'ddone'; sub = 'ออกแบบเสร็จ ' + fd(fin) + ' · ไม่ได้ส่งเข้าผลิต'; since = fin; }
-    if (step === 'shipped' && String(p.shippedAt).slice(0, 10) < addDays(today(), -7)) return null;
+    else { const fin = r.jobs.map(finDate).sort().pop() || ''; if (fin < cutoff && !all) return null; step = 'ddone'; sub = 'ออกแบบเสร็จ ' + fd(fin) + ' · ไม่ได้ส่งเข้าผลิต'; since = fin; }
+    if (!all && step === 'shipped' && String(p.shippedAt).slice(0, 10) < addDays(today(), -7)) return null;
     // วันที่สำหรับป้ายวันที่ (แบบหน้า Sale): ฝ่ายแบบ = กำหนดส่งแบบ, ผลิต = วันเข้าผลิต/พร้อมส่ง, ส่งแล้ว = วันส่ง
     let due = '', dl = '', dd = '';
     if (step === 'design') { due = open.map(j => j.due).filter(Boolean).sort()[0] || ''; dl = 'กำหนดส่งแบบ'; dd = due; }
@@ -5537,6 +5609,26 @@ function coTrack(r) {
   return '<div class="co-trk" aria-label="' + esc(r.step === 'shipped' ? 'ส่งแล้ว' : (CO_STEPS[i] || {}).label || '') + '">' + CO_STEPS.map((s, k) =>
     '<i class="' + (k < i ? 'past' : k === i ? 'now' : '') + (k === i && r.late ? ' late' : '') + (pSkipped(r.prod, s.k) ? ' skip' : '') + ' d-' + s.dept + '" title="' + esc(s.label) + '"></i>').join('') + (i >= n ? '' : '') + '</div>';
 }
+/* ค้นหาในภาพรวมบริษัท */
+const coNorm = t => String(t || '').toLowerCase().replace(/[\s\-_./()#]+/g, '');
+function coHay(r) {
+  const p = r.prod, ms = p ? (Array.isArray(p.machines) ? p.machines : pms(p)).map(m => m && m.m).join(' ') : '';
+  return [r.code, r.title, r.sale, r.group, r.sub, ms, p && p.note, (r.jobs || []).map(j => [j.code, j.title, j.taskType, j.assignee, j.helpers, j.note, j.sale].join(' ')).join(' ')].join(' ').toLowerCase();
+}
+function coScore(r, q, qn) {   // 0 = เลข Job ตรงเป๊ะ · 1 = ขึ้นต้น · 2 = มีในเลข Job · 3 = ชื่องาน · 4 = อื่น ๆ · 9 = ไม่ตรง
+  const c = coNorm(r.code), ql = q.toLowerCase();
+  if (qn && c === qn) return 0; if (qn && c.indexOf(qn) === 0) return 1; if (qn && c.indexOf(qn) >= 0) return 2;
+  if (String(r.title || '').toLowerCase().indexOf(ql) >= 0) return 3;
+  const h = coHay(r); if (h.indexOf(ql) >= 0 || (qn && coNorm(h).indexOf(qn) >= 0)) return 4;
+  return 9;
+}
+/* ไฮไลต์คำที่ตรง (ไม่สนตัวพิมพ์เล็กใหญ่ · เลข Job ข้ามขีดได้) */
+function coHl(text, q) {
+  text = String(text || ''); if (!q) return esc(text);
+  const ql = q.toLowerCase(), low = text.toLowerCase(); let i = low.indexOf(ql), len = ql.length;
+  if (i < 0) { const qn = coNorm(q); if (!qn) return esc(text); const map = []; let n = ''; for (let k = 0; k < text.length; k++) { const ch = coNorm(text[k]); if (ch) { map.push(k); n += ch; } } const j = n.indexOf(qn); if (j < 0) return esc(text); i = map[j]; len = map[j + qn.length - 1] - i + 1; }
+  return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + len)) + '</mark>' + esc(text.slice(i + len));
+}
 function viewFlow() {
   const rows = coRows(), F = S.cf || 'all', q = String(S.cq || '').trim().toLowerCase();
   const n = k => rows.filter(r => k === 'design' ? r.step === 'design' : r.step === k).length;
@@ -5547,23 +5639,32 @@ function viewFlow() {
   const kpis = '<div class="co-kpis"><div class="kpi"><span>งานในสายทั้งหมด</span><b>' + rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length + '</b><small>เลข Job ที่ยังไม่ส่ง</small></div>' +
     '<div class="kpi k-late"><span>ค้างนาน / เลยกำหนด</span><b>' + late + '</b><small>ฝ่ายแบบเลยกำหนด · ผลิตค้าง ≥2–3 วัน</small></div>' +
     '<div class="kpi k-done"><span>ส่งแล้ว 7 วัน</span><b>' + shipped7 + '</b><small>ปิดงานถึงลูกค้า</small></div></div>';
-  let list = rows.filter(r => (F === 'all' ? r.step !== 'shipped' && r.step !== 'ddone' : F === 'late' ? r.late : F === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === F) &&
-    (!q || [r.code, r.title, r.sale, r.group, r.sub].join(' ').toLowerCase().indexOf(q) >= 0));
-  list.sort((a, b) => (b.late - a.late) || (coIdx(b.step) - coIdx(a.step)) || String(a.since).localeCompare(String(b.since)));
+  // ค้นหา: ค้นจากงานทั้งหมด (รวมที่ส่งแล้ว/ออกแบบเสร็จนานแล้ว) ไม่สนตัวกรองด้านบน · ไม่ต้องพิมพ์ขีด/ช่องว่างก็เจอ · ตรงเลข Job ขึ้นก่อน
+  let list;
+  if (q) {
+    const qn = coNorm(q);
+    list = coRows(true).map(r => ({ r: r, s: coScore(r, q, qn) })).filter(x => x.s < 9).sort((a, b) => (a.s - b.s) || ((a.r.step === 'shipped' || a.r.step === 'ddone') - (b.r.step === 'shipped' || b.r.step === 'ddone')) || String(b.r.since).localeCompare(String(a.r.since))).map(x => x.r);
+  } else {
+    list = rows.filter(r => F === 'all' ? r.step !== 'shipped' && r.step !== 'ddone' : F === 'late' ? r.late : F === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === F);
+    list.sort((a, b) => (b.late - a.late) || (coIdx(b.step) - coIdx(a.step)) || String(a.since).localeCompare(String(b.since)));
+  }
   const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง'], ['late', 'ค้างนาน'], ['shipped', 'ส่งแล้ว 7 วัน']].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-cf="' + x[0] + '" aria-pressed="' + (F === x[0]) + '">' + x[1] + '<b>' + (x[0] === 'all' ? rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length : x[0] === 'late' ? late : shipped7) + '</b></button>').join('') +
     (F !== 'all' && F !== 'late' && F !== 'shipped' ? '<button class="qchip" data-cf="all" aria-pressed="true">' + esc(F === 'design' ? 'ฝ่ายแบบ' : PSTG[F] ? PSTG[F].label : F) + ' ✕</button>' : '') + '</div>';
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
   const hovJob = r => { const o = r.jobs.filter(j => j.status !== 'done'); return (o[0] || r.jobs.slice().sort((a, b) => String(finDate(b)).localeCompare(String(finDate(a))))[0] || {}).id || ''; };
   const table = list.length ? '<div class="co-list">' + list.slice(0, 200).map((r, k) => '<button type="button" class="co-row ' + coStg(r) + ' co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + '" style="--i:' + Math.min(k, 24) + '" data-coopen="' + esc(r.code) + '"' + (hovJob(r) ? ' data-hov="' + esc(hovJob(r)) + '"' : r.prod ? ' data-phov="' + esc(r.prod.id) + '"' : '') + '>' +
-      '<span class="co-code"><b>' + esc(r.code) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(r.title || '–') + '</small></span>' + coX(r) +
+      '<span class="co-code"><b>' + coHl(r.code, q) + '</b>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + coHl(r.title || '–', q) + '</small></span>' + coX(r) +
       '<span class="co-mid">' + coRoute(r) + '<small>' + where(r) + ' ' + esc(r.sub) + '</small></span>' +
-      '<span class="co-meta">' + coDate(r) + '<small class="co-age' + (r.late ? ' late' : '') + '">' + (r.since && r.step !== 'shipped' ? (r.late ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(Math.max(0, daysBetween(String(r.since).slice(0, 10), today()))) : '') + '</small></span></button>').join('') + '</div>' +
+      '<span class="co-meta">' + coDate(r) + '<small class="co-age' + (r.late ? ' late' : '') + '">' + (r.since && r.step !== 'shipped' && r.step !== 'ddone' ? (r.late ? STI.fire : STI.clock) + 'อยู่ขั้นนี้ ' + pAgeTxt(Math.max(0, daysBetween(String(r.since).slice(0, 10), today()))) : '') + '</small></span></button>').join('') + '</div>' +
       (list.length > 200 ? '<div class="col-more">แสดง 200 จาก ' + list.length + ' รายการ ใช้ช่องค้นหาเพื่อหางานอื่น</div>' : '')
+    : q ? '<div class="co-none">' + I.search + '<b>ไม่พบ "' + esc(S.cq.trim()) + '"</b><small>ลองพิมพ์บางส่วน เช่น 4–5 ตัวท้ายของเลข Job ชื่อลูกค้า หรือชื่อ Sale · งานที่ย้ายไปเก็บถาวร (เก่ากว่าที่ตั้งไว้) ค้นจากหน้านี้ไม่ได้</small><button type="button" class="btn sm" data-cqclear="1">ล้างคำค้น</button></div>'
     : '<div class="empty" style="padding:28px 0"><b>ไม่มีงานในมุมมองนี้</b>ลองเลือก "ทั้งหมดที่ยังไม่ส่ง"</div>';
-  const search = '<div class="filters"><label class="search">' + I.search + '<input id="cq" type="search" autocomplete="off" placeholder="ค้นหาเลข Job, ชื่องาน, sale…" value="' + esc(S.cq || '') + '" aria-label="ค้นหางาน"></label></div>';
+  const search = '<div class="filters"><label class="search co-search' + (q ? ' on' : '') + '">' + I.search + '<input id="cq" type="search" autocomplete="off" enterkeyhint="search" placeholder="ค้นหาทุกงาน: เลข Job, ลูกค้า, sale, คนทำ, เครื่อง… (รวมงานที่ส่งแล้ว)" value="' + esc(S.cq || '') + '" aria-label="ค้นหางาน">' +
+    (q ? '<button type="button" class="cq-x" data-cqclear="1" aria-label="ล้างคำค้น">✕</button>' : '') + '</label></div>' +
+    (q ? '<div class="co-sres" role="status"><b>' + list.length + '</b> รายการตรงกับ "' + esc(S.cq.trim()) + '"<small>ค้นจากงานทั้งหมด รวมที่ส่งแล้วและออกแบบเสร็จแล้ว</small></div>' : '');
   const legend = '<div class="co-legend"><span><i class="d-d"></i>ฝ่ายแบบ</span><span><i class="d-p"></i>ฝ่ายผลิต</span><span><i class="d-s"></i>ฝ่ายสต็อก</span><span><i class="now"></i>ตอนนี้อยู่ที่</span><span><i class="now late"></i>ค้างนาน</span></div>';
   return topbar('ภาพรวมบริษัท', 'ทุกเลข Job ตั้งแต่ออกแบบจนส่งลูกค้า กดขั้นตอนด้านบนเพื่อกรอง หรือกดงานเพื่อดูรายละเอียด') + depts + kpis +
-    '<section class="panel"><div class="panel-h"><h2>งานตามเลข Job</h2>' + legend + '</div>' + search + chips + table + '</section>';
+    '<section class="panel"><div class="panel-h"><h2>งานตามเลข Job</h2>' + legend + '</div>' + search + (q ? '' : chips) + table + '</section>';
 }
 
 /* ================= คลังความรู้ =================
@@ -6828,6 +6929,7 @@ document.addEventListener('input', e => {
 function prodClick(t, d, e) {   // ไม่ใช้ ที่นี่: ปุ่มอื่นในแอปต้องตอบสนองทันที
   if (d.pclose || (t.id === 'pModal')) { pModalClose(); return true; }
   if (d.pm) { S.pm = d.pm; render(); return true; }
+  if (d.cqclear) { S.cq = ''; render(); const q = $('#cq'); if (q) q.focus(); return true; }
   if (d.cf) { const fromPipe = !!(t.closest && t.closest('.co-pipe')); S.cf = S.cf === d.cf && d.cf !== 'all' ? 'all' : d.cf; S.animIn = true; render(); if (fromPipe) pipeJump(); return true; }
   if (d.coopen) { if (t.closest && t.closest('#msgPanel')) { hideHover(); CHAT_RET = { ch: M.ch, top: ($('#mpBody') || {}).scrollTop || 0 }; closeMsgPanel(); } coOpen(d.coopen); return true; }   // เปิดจากแชท: ปิดแผงข้อความก่อน งานจะได้ไม่ถูกบัง · ปิดงานแล้วกลับมาห้องเดิม
   if (d.pship) { S.pship = !S.pship; render(); return true; }
@@ -7202,7 +7304,7 @@ document.addEventListener('click', async e => {
     case 'bgrand': BGT.tab = 'img'; return bgUseUrl('https://picsum.photos/seed/kn' + Date.now().toString(36) + '/2560/1440', true);
     case 'tssave': return themeSave(($('#tsName') || {}).value);
     case 'tsexport': return themeExport();
-    case 'themereset': LS.del('theme'); applyTheme(); toast('คืนค่าธีมเริ่มต้นแล้ว'); return render();
+    case 'themereset': LS.del('theme'); applyTheme(); themeTouched(); toast('คืนค่าธีมเริ่มต้นแล้ว'); return render();
     case 'print': return printReport();
     case 'connect': return connect();
     case 'disconnect': if (LOCKED()) { LS.del('conn'); S.conn = DEFAULT_CONN(); toast('กลับไปใช้ฐานข้อมูลหลักของทีมแล้ว'); S.loaded = false; return load(false); } S.conn = null; LS.del('conn'); S.loaded = false; S.login.showConn = false; toast('กลับสู่โหมดทดลองแล้ว'); return load(false);
@@ -7249,6 +7351,7 @@ document.addEventListener('input', e => {
   if (t.id === 'adminName') { S.login.adminName = t.value; const w = t.closest('.name-in'); if (w) { w.classList.toggle('has', !!t.value.trim()); w.classList.remove('typing'); void w.offsetWidth; w.classList.add('typing'); } return; }
   if (t.id === 'pinIn') { S.login.pin = t.value.replace(/\D/g, '').slice(0, 4); S.login.err = ''; const dots = document.querySelectorAll('.pin-dots i'); dots.forEach((el, i) => el.classList.toggle('on', i < S.login.pin.length)); const sb = document.querySelector('#pinForm [type=submit]'); if (sb) sb.disabled = S.login.pin.length < 4; if (S.login.pin.length === 4) setTimeout(() => { if (S.login.pin.length === 4 && !S.login.submitting && (!S.login.adminMode || ($('#adminName') && $('#adminName').value.trim()))) doLogin(); }, 160); return; }
   if (t.id === 'sq') { SV.q = t.value; const pos = t.selectionStart; render(); const q = $('#sq'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
+  if ((t.id === 'pq' || t.id === 'cq') && e.isComposing) return;   // กำลังประกอบคำ (คีย์บอร์ดบางแบบ) ยังไม่ค้น
   if (t.id === 'pq' || t.id === 'cq') { S[t.id] = t.value; const pos = t.selectionStart, id = t.id; render(); const q = $('#' + id); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if (t.id === 'q') { S.f.q = t.value; const pos = t.selectionStart; render(); const q = $('#q'); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) {} } return; }
   if (t.dataset && t.dataset.thrange) {   // แถบเลื่อนธีม: เห็นผลทันที ไม่วาดหน้าใหม่
@@ -7313,6 +7416,7 @@ document.addEventListener('change', e => {
   }
   if (t.dataset.rsec) { reportState().sec[t.dataset.rsec] = t.checked; saveReportState(); return render(); }
   if (t.id === 'logoIn' && t.files && t.files[0]) return readLogo(t.files[0]);
+  if (t.id === 'thSync') { LS.set('themeSync', t.checked); TSY.pulled = ''; if (t.checked) { themePull(); toast('เปิดซิงก์ธีมกับบัญชีแล้ว'); } else toast('เครื่องนี้ใช้ธีมของตัวเองแล้ว'); return render(); }
   if (t.id === 'tsImport' && t.files && t.files[0]) { const f = t.files[0]; t.value = ''; return themeImport(f); }
   if ((t.id === 'bgIn' || t.id === 'bgVidIn') && t.files && t.files[0]) {
     const f = t.files[0]; t.value = ''; toast(/^video\//.test(f.type) ? 'กำลังเตรียมวิดีโอ…' : 'กำลังเตรียมรูป…');

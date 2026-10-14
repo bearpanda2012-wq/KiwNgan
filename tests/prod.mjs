@@ -10,7 +10,7 @@ await pg.addInitScript(() => { if (!sessionStorage.getItem('kn-init')) { localSt
 const login = async (name, admin) => {
   await pg.evaluate(() => Object.keys(localStorage).filter(k => /token/.test(k)).forEach(k => localStorage.removeItem(k))); await pg.goto('http://127.0.0.1:8790/index.html'); await pg.waitForTimeout(700);
   if (admin) { await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', name); } else await pg.click('.who:has-text("' + name + '")');
-  await pg.fill('#pinIn', '1234'); await pg.dispatchEvent('#pinIn', 'input'); await pg.press('#pinIn', 'Enter'); await pg.waitForTimeout(1200);
+  await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {});   // PIN ครบ 4 หลักแอปเข้าระบบเองแล้ว ช่องอาจหายไปก่อนกด Enter await pg.waitForTimeout(1200);
   await pg.evaluate(() => document.querySelectorAll('.ntf').forEach(e => e.remove()));
 };
 await pg.goto('http://127.0.0.1:8790/index.html'); await pg.waitForTimeout(800);
