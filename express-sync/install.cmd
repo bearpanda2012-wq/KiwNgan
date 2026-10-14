@@ -1,3 +1,3 @@
 @echo off
-rem Right-click > Run as administrator
+rem Double-click to install (no administrator needed)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1"

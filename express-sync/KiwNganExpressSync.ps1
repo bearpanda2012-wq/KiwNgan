@@ -280,7 +280,7 @@ $a.StateDir = $stateDir; $a.DryRun = [bool]$DryRun
 $a.Log = [Action[string]] { param($m) Write-Log $m }
 
 # กันรันซ้อน 2 ตัว
-$mutex = New-Object System.Threading.Mutex($false, 'Global\KiwNganExpressSync')
+$mutex = New-Object System.Threading.Mutex($false, 'Local\KiwNganExpressSync')
 if (-not $mutex.WaitOne(0)) { Write-Host 'มีตัวซิงก์รันอยู่แล้ว'; exit 0 }
 try {
   Write-Log "เริ่มทำงาน · Express: $root"
