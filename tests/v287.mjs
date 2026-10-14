@@ -81,6 +81,23 @@ if (sg.chips.length > 1) { await pg.click('.ex-sgrps [data-exsgrp="' + sg.chips[
   eq('click category narrows results', await pg.evaluate(g => [...document.querySelectorAll('.ex-row')].every(r => EX.items.get(r.dataset.excard)[3] === g), sg.chips[1]), true); }
 await pg.locator('.ex-sres').scrollIntoViewIfNeeded(); await pg.locator('#exList').screenshot({ path: new URL('out/v2931-search.png', import.meta.url).pathname });
 await pg.fill('#exQ', ''); await pg.waitForTimeout(300);
+// 2.94: แถบที่เลือกลอยที่ขอบล่างจอ เลื่อนตาม · พิมพ์ไม่เปิดหน้าต่างใหม่
+await pg.setViewportSize({ width: 1400, height: 700 });
+await pg.evaluate(() => { EV.sel.clear(); EV.selShown = false; EV.grp = 'all'; T.render(); });
+await pg.click('.ex-row:nth-of-type(2) .ex-ck'); await pg.waitForTimeout(500);
+const fl = async () => pg.evaluate(() => { const b = document.querySelector('.ex-selbar.ex-float'); if (!b) return null; const r = b.getBoundingClientRect(); return { inView: r.top >= 0 && r.bottom <= innerHeight + 1, nearBottom: innerHeight - r.bottom < 40 }; });
+await pg.evaluate(() => document.querySelector('#exList').scrollIntoView({ block: 'start' })); await pg.waitForTimeout(300);
+eq('floating bar visible near bottom while list scrolled to top', await fl(), { inView: true, nearBottom: true });
+await pg.mouse.wheel(0, 1600); await pg.waitForTimeout(400);
+eq('still visible after scrolling down the list', (await fl()).inView, true);
+await pg.locator('.ex-selbar.ex-float').screenshot({ path: new URL('out/v294-selbar.png', import.meta.url).pathname });
+await pg.click('[data-excalc]'); await pg.waitForTimeout(300);
+const pops = []; pg.on('popup', p => pops.push(p));
+await pg.evaluate(() => { window.__pr = 0; }); 
+await pg.click('#exCalc [data-exprint]'); await pg.waitForTimeout(1200);
+eq('print uses hidden frame, no new window', [pops.length, await pg.evaluate(() => { const f = document.querySelector('#knPrint'); return !!f && /รายการสินค้า \(Express\)/.test(f.srcdoc) && /@page\{size:A4;margin:0\}/.test(f.srcdoc) && !/<script>/.test(f.srcdoc); })], [0, true]);
+await pg.keyboard.press('Escape'); await pg.evaluate(() => { EV.calc = false; const m = document.querySelector('#exCalc'); if (m) m.remove(); EV.sel.clear(); EV.grp = 'bal'; T.render(); });
+await pg.setViewportSize({ width: 1400, height: 900 });
 eq('pending empty state', await pg.evaluate(() => /ไม่มีรายการรอลง/.test(document.querySelector('#xpPanel').textContent)), true);
 // เปิดสินค้า → บันทึกเบิก
 await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-n'); await pg.waitForTimeout(400);

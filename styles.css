@@ -5704,3 +5704,16 @@ body.auth #bgSndBtn{display:none}
 .qchip.ex-chip[aria-pressed="true"] b{background:var(--ch);color:#fff}
 .sk-chips .qchip.ex-chip[style][aria-pressed="true"]{background:color-mix(in oklab,var(--ch) 15%,var(--surface));color:var(--ink);border-color:color-mix(in oklab,var(--ch) 55%,transparent)}
 .sk-chips .qchip.ex-chip[style][aria-pressed="true"] b{background:var(--ch);color:#fff}
+/* v2.94 แถบรายการที่เลือก: ลอยติดขอบล่างจอ เลื่อนตามขณะเลือกรายการอื่น */
+.ex-selbar.ex-float{position:sticky;top:auto;bottom:16px;z-index:30;margin:14px 0 0;padding:10px 12px 10px 10px;border-radius:18px;
+  background:color-mix(in oklab,var(--surface) 86%,transparent);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);
+  border:1px solid color-mix(in oklab,var(--brand) 22%,var(--line));box-shadow:0 18px 40px -18px rgba(15,40,60,.45),0 4px 12px -6px rgba(15,40,60,.18)}
+.ex-selbar.ex-float.pop{animation:selUp .45s cubic-bezier(.25,1.4,.5,1) both}
+.ex-selbar.ex-float>span.ex-sbi{position:relative;flex:none;flex-direction:row;margin:0;width:40px;height:40px;border-radius:13px;display:grid;place-items:center;color:#fff;background:linear-gradient(145deg,color-mix(in oklab,var(--brand) 70%,#fff),var(--brand));box-shadow:0 8px 16px -10px var(--brand)}
+.ex-sbi svg{width:20px;height:20px}
+.ex-sbn{position:absolute;top:-6px;right:-7px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#D9822B;color:#fff;font:700 11px/20px var(--f-body);text-align:center;box-shadow:0 0 0 2px var(--surface)}.ex-selbar.pop .ex-sbn{animation:selBump .45s .2s ease both}
+.ex-selbar.ex-float .btn.primary{box-shadow:0 8px 16px -10px var(--brand)}
+@keyframes selUp{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes selBump{0%{transform:scale(.6)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
+@media (max-width:720px){.ex-selbar.ex-float{bottom:calc(76px + env(safe-area-inset-bottom,0px));padding:8px}.ex-selbar.ex-float .btn{flex:1 1 auto}}
+@media (prefers-reduced-motion:reduce){.ex-selbar.ex-float.pop,.ex-sbn{animation:none}}

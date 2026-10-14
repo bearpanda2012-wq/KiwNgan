@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.93.1';
+const APP_VERSION = '2.94.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6579,13 +6579,14 @@ function viewExpress() {
   const lowAlert = lows.length ? '<button type="button" class="sk-alert ex-lowalert" data-exgrp="low"><span>' + STI.fire + '</span><b>Express: ใกล้หมด ' + lows.length + ' รายการ</b><small>' + esc(lows.slice(0, 4).map(x => (x[1] || x[0]) + ' (' + exN(x[6]) + '/' + exN(exMin(x[0])) + ')').join(' · ')) + (lows.length > 4 ? ' …' : '') + '</small><em>ดูทั้งหมด ›</em></button>'
     : !nMin && canStock() ? '<p class="ex-minhint">' + STI.fire + 'ยังไม่ได้ตั้งจุดสั่งซื้อ · กดที่สินค้าแล้วใส่ "จุดสั่งซื้อ" ระบบจะเตือนเมื่อยอดใน Express ลดถึงจุดนั้น</p>' : '';
   const selItems = [...EV.sel.keys()].map(c => EX.items.get(c)).filter(Boolean);
-  const selBar = !ro && EV.sel.size ? '<div class="ex-selbar"><span><b>เลือก ' + exN(EV.sel.size) + ' รายการ</b><small>มูลค่ารวม ' + baht(exCalcRows(selItems).tot) + '</small></span><button type="button" class="btn sm" data-exgrp="sel">ดูเฉพาะที่เลือก</button>' + (canStock() ? '<button type="button" class="btn sm" data-xpnew="">บันทึกเบิก/รับ</button>' : '') + '<button type="button" class="btn sm primary" data-excalc="1">คำนวณราคา</button><button type="button" class="btn sm ghost" data-exselclr="1">ล้าง</button></div>' : '';
-  return topbar('คลังวัสดุ', 'ยอดคงเหลือจากโปรแกรม Express (บัญชี) อัปเดตอัตโนมัติ') + exTabs() + appTools + banner + lowAlert + kpis + selBar +
+  const selIn = !EV.selShown; EV.selShown = !!EV.sel.size;
+  const selBar = !ro && EV.sel.size ? '<div class="ex-selbar ex-float' + (selIn ? ' pop' : '') + '"><span class="ex-sbi">' + PIC.check + '<b class="ex-sbn">' + exN(EV.sel.size) + '</b></span><span><b>เลือก ' + exN(EV.sel.size) + ' รายการ</b><small>มูลค่ารวม ' + baht(exCalcRows(selItems).tot) + '</small></span><button type="button" class="btn sm" data-exgrp="sel">ดูเฉพาะที่เลือก</button>' + (canStock() ? '<button type="button" class="btn sm" data-xpnew="">บันทึกเบิก/รับ</button>' : '') + '<button type="button" class="btn sm primary" data-excalc="1">คำนวณราคา</button><button type="button" class="btn sm ghost" data-exselclr="1">ล้าง</button></div>' : '';
+  return topbar('คลังวัสดุ', 'ยอดคงเหลือจากโปรแกรม Express (บัญชี) อัปเดตอัตโนมัติ') + exTabs() + appTools + banner + lowAlert + kpis +
     '<div class="sk-wrap"><section class="panel sk-main" id="exList"><div class="panel-h"><h2>สินค้าใน Express</h2><span class="sub">' + exN(list.length) + ' รายการ</span></div>' + tools +
     (q ? '<div class="co-sres ex-sres" role="status"><span><b>' + exN(sTot) + '</b> รายการตรงกับ "' + esc(q) + '"' + (Object.keys(sGrp).length ? ' · อยู่ใน <b>' + Object.keys(sGrp).length + '</b> หมวด' : '') + '</span><small>ค้นจากทุกรหัส ไม่สนกลุ่มที่เลือก · กดหมวดเพื่อดูเฉพาะหมวดนั้น</small></div>' +
       (Object.keys(sGrp).length ? '<div class="qchips sk-chips ex-chips ex-sgrps">' + (EV.sgrp ? '<button class="qchip ex-chip fx" style="--ch:#6366B8" data-exsgrp=""><i class="ex-cic">' + ST_IC.sheet + '</i><span>ทุกหมวด</span><b>' + exN(sTot) + '</b></button>' : '') +
         Object.keys(sGrp).sort((a, b) => sGrp[b] - sGrp[a]).map(g => '<button class="qchip ex-chip" style="--ch:' + exGrpCol(g) + '" data-exsgrp="' + esc(g) + '" aria-pressed="' + (EV.sgrp === g) + '" title="หมวด ' + esc(g) + '"><i class="ex-cd"></i><span>' + esc(exGrpN(g)) + '</span><b>' + exN(sGrp[g]) + '</b></button>').join('') + '</div>' : '')
-    : chips) + body + '</section>' +
+    : chips) + body + selBar + '</section>' +
     '<div class="sk-side ex-side">' + exPendPanel() + '<section class="panel" id="exHist"><div class="panel-h"><h2>เคลื่อนไหว 7 วันล่าสุด</h2></div>' + hist + '</section></div></div>';
 }
 /* ---- เลือกหลายรายการ → คำนวณจำนวนและราคา ---- */
@@ -6624,7 +6625,15 @@ function exCalcPrint(pdf) {
     r.rows.map((y, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(y.x[0]) + '</td><td>' + esc(y.x[1] || '') + '</td><td class="n">' + exN(y.q) + '</td><td>' + esc(exUnit(y.x[5])) + '</td><td class="n">' + baht(y.pr) + '</td><td class="n">' + baht(y.sum) + '</td></tr>').join('') +
     '</tbody><tfoot><tr><td colspan="3">รวม ' + r.rows.length + ' รายการ</td><td class="n">' + exN(r.qty) + '</td><td></td><td></td><td class="n">' + baht(r.tot) + '</td></tr></tfoot></table><script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>';
   if (pdf) return exPdf(css, html, 'Express-items-' + today() + '.pdf');
-  const w = window.open('', '_blank'); if (!w) return toast('เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาต pop-up แล้วลองอีกครั้ง', true); w.document.write(html); w.document.close();
+  printHtml(html);
+}
+/* พิมพ์ในหน้าเดิม (ไม่เปิดแท็บ/หน้าต่างใหม่) → ขึ้นหน้าต่างเลือกเครื่องพิมพ์ทันที · ซ่อนหัว/ท้ายกระดาษของเบราว์เซอร์ (about:blank, วันที่) */
+function printHtml(html) {
+  html = html.replace(/<script>[\s\S]*?<\/script>/g, '').replace('</style>', '@page{size:A4;margin:0}body{margin:0!important;padding:14mm 13mm!important}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>');
+  let f = $('#knPrint'); if (f) f.remove();
+  f = document.createElement('iframe'); f.id = 'knPrint'; f.setAttribute('aria-hidden', 'true'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
+  f.onload = () => setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { toast('เบราว์เซอร์นี้สั่งพิมพ์ไม่ได้', true); } try { window.focus(); } catch (e) {} }, 350);
+  f.srcdoc = html; document.body.appendChild(f);
 }
 /* PDF จริง (ดาวน์โหลดไฟล์): วาดหน้าเอกสารเป็นภาพแล้วใส่ใน A4 · ตัดหน้าตรงรอยต่อแถว ไม่ตัดกลางบรรทัด */
 const PDF_LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
@@ -6733,7 +6742,7 @@ function exPendPrint(pdf) {
   const html = '<!doctype html><html><head><meta charset="utf-8"><title>รอลง Express ' + esc(fdY(today())) + '</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600&display=swap"><style>' + css + '</style></head><body><div class="h"><div><h1>รายการรอลง Express</h1><div>' + esc(s0.company || s0.appName || '') + '</div></div><div>วันที่ ' + esc(fdY(today())) + '</div></div>' +
     tb('out', 'เบิกออก') + tb('in', 'รับเข้า / รับคืน') + '<script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>';
   if (pdf) return exPdf(css, html, 'Express-pending-' + today() + '.pdf');
-  const x = window.open('', '_blank'); if (!x) return toast('เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาต pop-up แล้วลองอีกครั้ง', true); x.document.write(html); x.document.close();
+  printHtml(html);
 }
 document.addEventListener('click', e => {
   const t = e.target.closest && e.target.closest('[data-xpnew],[data-xpkind],[data-xprm],[data-xpx],[data-xpsave],[data-xpcancel],[data-xpdoc],[data-xpdocsave],[data-xpreopen],[data-xpcopy],[data-xpprint],[data-xppdf],[data-xpgo],[data-xpfromcalc]'); if (!t) return;
