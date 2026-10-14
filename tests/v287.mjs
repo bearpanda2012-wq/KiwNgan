@@ -98,6 +98,17 @@ await pg.click('#exCalc [data-exprint]'); await pg.waitForTimeout(1200);
 eq('print uses hidden frame, no new window', [pops.length, await pg.evaluate(() => { const f = document.querySelector('#knPrint'); return !!f && /รายการสินค้า \(Express\)/.test(f.srcdoc) && /@page\{size:A4;margin:0\}/.test(f.srcdoc) && !/<script>/.test(f.srcdoc); })], [0, true]);
 await pg.keyboard.press('Escape'); await pg.evaluate(() => { EV.calc = false; const m = document.querySelector('#exCalc'); if (m) m.remove(); EV.sel.clear(); EV.grp = 'bal'; T.render(); });
 await pg.setViewportSize({ width: 1400, height: 900 });
+// 2.94.1: กดแถบซ้ายของแถวตรงไหนก็ได้ = ติ๊ก (ไม่เปิดการ์ด) · กดส่วนอื่น = เปิดการ์ด
+await pg.evaluate(() => { EV.sel.clear(); EV.grp = 'bal'; T.render(); }); await pg.waitForTimeout(200);
+{ const row = pg.locator('.ex-row').nth(1); await row.scrollIntoViewIfNeeded(); await pg.waitForTimeout(200); const bx = await row.boundingBox(), cod = await row.getAttribute('data-excard');
+  await pg.mouse.click(bx.x + 6, bx.y + 4); await pg.waitForTimeout(250);
+  await pg.mouse.click(bx.x + 50, bx.y + bx.height - 4); await pg.waitForTimeout(250);
+  eq('left strip toggles selection, never opens card', [await pg.evaluate(c => EV.sel.has(c), cod), await pg.locator('#exModal').count()], [false, 0]);
+  await pg.mouse.click(bx.x + 30, bx.y + bx.height / 2); await pg.waitForTimeout(250);
+  eq('left strip selects', await pg.evaluate(c => EV.sel.has(c), cod), true);
+  await pg.mouse.click(bx.x + bx.width / 2, bx.y + bx.height / 2); await pg.waitForTimeout(400);
+  eq('middle of row still opens card', await pg.locator('#exModal').count(), 1);
+  await pg.keyboard.press('Escape'); await pg.evaluate(() => { EV.sel.clear(); T.render(); }); }
 eq('pending empty state', await pg.evaluate(() => /ไม่มีรายการรอลง/.test(document.querySelector('#xpPanel').textContent)), true);
 // เปิดสินค้า → บันทึกเบิก
 await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-n'); await pg.waitForTimeout(400);

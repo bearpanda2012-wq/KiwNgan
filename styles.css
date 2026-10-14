@@ -5717,3 +5717,8 @@ body.auth #bgSndBtn{display:none}
 @keyframes selBump{0%{transform:scale(.6)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
 @media (max-width:720px){.ex-selbar.ex-float{bottom:calc(76px + env(safe-area-inset-bottom,0px));padding:8px}.ex-selbar.ex-float .btn{flex:1 1 auto}}
 @media (prefers-reduced-motion:reduce){.ex-selbar.ex-float.pop,.ex-sbn{animation:none}}
+/* v2.94.1 แถบติ๊กเลือกกว้างทั้งความสูงแถว: ชี้แล้วเห็นแถบ · ช่องติ๊กใหญ่ขึ้น */
+.ex-list:not(.ro) .ex-row::after{content:"";position:absolute;left:0;top:0;bottom:0;width:52px;background:transparent;transition:background .15s;pointer-events:none}
+.ex-list:not(.ro) .ex-row:hover::after{background:linear-gradient(90deg,color-mix(in oklab,var(--brand) 8%,transparent),transparent)}
+.ex-row .ex-ck{width:22px;height:22px;border-radius:7px}
+.ex-list:not(.ro) .ex-row{cursor:pointer}

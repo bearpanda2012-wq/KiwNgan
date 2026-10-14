@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.94.0';
+const APP_VERSION = '2.94.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6846,6 +6846,13 @@ function exCardDraw() {
         return '<div class="ex-cr ' + (op[1] > 0 ? 'in' : 'out') + '"><span><b>' + esc(exDate(r[1])) + '</b><small>' + esc(r[0]) + '</small></span><span>' + op[0] + (r[9] && r[9] !== it[1] ? '<small>' + esc(r[9]) + '</small>' : '') + (r[8] ? '<small>' + esc(exDepN(r[8])) + '</small>' : '') + '</span><span>' + esc(r[2] || '–') + '</span><span class="tnum"><b>' + (op[1] > 0 ? '+' : '−') + exN(Math.abs(+r[4] || 0)) + '</b>' + (+r[5] ? '<small>@' + exN(r[5]) + '</small>' : '') + '</span></div>'; }).join('') + '</div>') +
     '</div></div></div>';
 }
+/* ช่องติ๊กกดง่าย: กดตรงไหนก็ได้ในแถบซ้ายของแถว (ทั้งความสูงแถว) = ติ๊กเลือก ไม่เปิดการ์ดสินค้า */
+document.addEventListener('click', e => {
+  const row = e.target.closest && e.target.closest('.ex-row[data-excard]'); if (!row || e.target.closest('[data-exsel]')) return;
+  const ck = row.querySelector('.ex-ck[data-exsel]'); if (!ck) return;
+  const r = row.getBoundingClientRect(), c = ck.getBoundingClientRect();
+  if (e.clientX <= c.right + 14 && e.clientX >= r.left) { e.preventDefault(); e.stopPropagation(); ck.click(); }
+}, true);
 document.addEventListener('click', e => {
   const t = e.target.closest && e.target.closest('[data-exsel],[data-exselall],[data-excalc],[data-excalcx],[data-exselclr],[data-exbasis],[data-exqfill],[data-excopy],[data-exprint],[data-expdf],[data-exunsel],[data-exminsave],[data-exsrc],[data-exgrp],[data-exsgrp],[data-exgo],[data-exmore],[data-exsync],[data-excard],[data-excclose]'); if (!t) return;
   const d = t.dataset;
