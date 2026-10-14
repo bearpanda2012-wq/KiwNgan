@@ -6,25 +6,26 @@ const m = require('./mock.js'); const logs = []; const ol = console.log; console
 const pin = (logs.join('\n').match(/PIN[^0-9]*(\d{4})/) || [])[1]; const A = m.call('login', { name: 'แอดมิน', pin }).data.token;
 let ok = 0, bad = 0; const eq = (l, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + l + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
 const mk = (name, role, p) => { const r = m.call('saveUser', { user: { name, role, pin: p } }, A).data; return m.call('login', { userId: r.user.id, pin: p }).data.token; };
-const U = mk('ช่างเอ', 'prod', '1111'), V = mk('ช่างบี', 'prod', '2222'), S = mk('สต็อก', 'stock', '3333');
+const P = mk('ช่างเอ', 'prod', '1111'), U = mk('สต็อก1', 'stock', '2222'), V = mk('สต็อก2', 'stock', '4444'), S = mk('สต็อก', 'stock', '3333');
 // Supabase จำลอง
 let MOVES = [], calls = [];
 global.UrlFetchApp.fetch = (url, o) => { calls.push(url); if (/ex_find/.test(url)) { const b = JSON.parse(o.payload); return { getResponseCode: () => 200, getContentText: () => JSON.stringify(MOVES.filter(x => b.cods.indexOf(x[7]) >= 0 && x[2] >= b.since)) }; } if (/ex_low/.test(url)) return { getResponseCode: () => 200, getContentText: () => '[]' }; return { getResponseCode: () => 200, getContentText: () => '{}' }; };
 const td = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '');
 // บันทึก
+eq('non-stock user cannot record', /ไม่มีสิทธิ์/.test(m.call('exPendAdd', { kind: 'out', items: [{ cod: 'RM-1', qty: 1 }] }, P).error || ''), true);
 eq('kind required', !!m.call('exPendAdd', { items: [{ cod: 'RM-1', qty: 1 }] }, U).error, true);
 eq('qty > 0', !!m.call('exPendAdd', { kind: 'out', items: [{ cod: 'RM-1', qty: 0 }] }, U).error, true);
 let r = m.call('exPendAdd', { kind: 'out', job: 'R69-100', note: 'หน้างาน A', items: [{ cod: 'RM-1', qty: 2, des: 'แผ่น A', unit: 'แผ่น', loc: 'RM' }, { cod: 'CU-9', qty: 5 }] }, U).data;
-eq('2 waiting rows', r.exPend.map(x => [x.cod, x.qty, x.kind, x.status, x.who, x.job]), [['RM-1', 2, 'out', 'wait', 'ช่างเอ', 'R69-100'], ['CU-9', 5, 'out', 'wait', 'ช่างเอ', 'R69-100']]);
+eq('2 waiting rows', r.exPend.map(x => [x.cod, x.qty, x.kind, x.status, x.who, x.job]), [['RM-1', 2, 'out', 'wait', 'สต็อก1', 'R69-100'], ['CU-9', 5, 'out', 'wait', 'สต็อก1', 'R69-100']]);
 m.call('exPendAdd', { kind: 'in', items: [{ cod: 'RM-1', qty: 10 }] }, V);
 m.call('exPendAdd', { kind: 'out', items: [{ cod: 'BT-1', qty: 3 }] }, V); m.call('exPendAdd', { kind: 'out', items: [{ cod: 'BT-1', qty: 4 }] }, U);
-const boot = m.call('bootstrap', {}, U).data;
-eq('bootstrap carries pend list', boot.ex && boot.ex.pend.length, 5);
+const boot = m.call('bootstrap', {}, P).data;
+eq('non-stock user still sees pend list', boot.ex && boot.ex.pend.length, 5);
 // ยกเลิก: เจ้าของหรือฝ่ายสต็อก
 const idCU = r.exPend.find(x => x.cod === 'CU-9').id;
-eq('other user cannot cancel', !!m.call('exPendSet', { id: idCU, act: 'cancel' }, V).error, true);
-eq('owner cancels', m.call('exPendSet', { id: idCU, act: 'cancel' }, U).data.exPend.find(x => x.id === idCU).status, 'cancel');
-eq('prod user cannot mark done', !!m.call('exPendSet', { id: idCU, act: 'done', doc: 'X' }, U).error, true);
+eq('non-stock user cannot cancel', !!m.call('exPendSet', { id: idCU, act: 'cancel' }, P).error, true);
+eq('stock cancels', m.call('exPendSet', { id: idCU, act: 'cancel' }, V).data.exPend.find(x => x.id === idCU).status, 'cancel');
+eq('prod user cannot mark done', !!m.call('exPendSet', { id: idCU, act: 'done', doc: 'X' }, P).error, true);
 // จับคู่อัตโนมัติ
 MOVES = [
   ['ROY69|PD1|1|RM-1|RM|6', 'PD1', td, 'RM', '6', 1, 'JS01', 'RM-1'],   // จำนวนไม่ตรง

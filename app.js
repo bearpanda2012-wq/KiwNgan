@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.87.1';
+const APP_VERSION = '2.87.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -642,13 +642,13 @@ const Demo = {
     cur.own = own; cur.cust = cust; if (own) { cur.price = 0; cur.job = String(it.job === undefined ? cur.job || '' : it.job).trim(); }
     this.save(d); return this.sview(d, u); },
   /* รอลง Express (โหมดทดลอง) */
-  async exPendAdd(p) { const d = this.db(), u = this.me(d), k = p.kind; if (!{ out: 1, in: 1 }[k]) throw new Error('เลือกประเภท: เบิกออก หรือ รับเข้า');
+  async exPendAdd(p) { const d = this.db(), u = this.me(d), k = p.kind; this.sedit(u); if (!{ out: 1, in: 1 }[k]) throw new Error('เลือกประเภท: เบิกออก หรือ รับเข้า');
     const its = Array.isArray(p.items) ? p.items : []; if (!its.length) throw new Error('ยังไม่มีรายการ'); its.forEach(x => { if (!(+x.qty > 0)) throw new Error('จำนวนของ ' + x.cod + ' ต้องมากกว่า 0'); });
     d.exPend = d.exPend || []; const ts = nowLocal() + ':00';
     its.forEach(x => d.exPend.push({ id: uid('xp'), ts: ts, cod: x.cod, des: x.des || '', unit: x.unit || '', kind: k, qty: +x.qty, loc: x.loc || '', dep: p.dep || '', job: String(p.job || '').trim(), note: String(p.note || '').trim(), who: u.name, status: 'wait' }));
     this.save(d); return { exPend: d.exPend }; },
   async exPendSet(p) { const d = this.db(), u = this.me(d), r = (d.exPend || []).find(x => x.id === p.id); if (!r) throw new Error('ไม่พบรายการ');
-    if (p.act === 'cancel') { if (r.status !== 'wait') throw new Error('รายการนี้ลง Express แล้ว ยกเลิกไม่ได้'); if (r.who !== u.name && !P.can(u, 'stock.edit')) throw new Error('ยกเลิกได้เฉพาะคนที่บันทึก หรือฝ่ายสต็อก'); Object.assign(r, { status: 'cancel', doneAt: nowLocal() + ':00', doneBy: u.name }); }
+    if (p.act === 'cancel') { if (r.status !== 'wait') throw new Error('รายการนี้ลง Express แล้ว ยกเลิกไม่ได้'); this.sedit(u); Object.assign(r, { status: 'cancel', doneAt: nowLocal() + ':00', doneBy: u.name }); }
     else if (p.act === 'done') { this.sedit(u); if (!String(p.doc || '').trim()) throw new Error('ใส่เลขที่เอกสาร Express'); Object.assign(r, { status: 'done', doc: String(p.doc).trim(), docDat: '', doneAt: nowLocal() + ':00', doneBy: u.name }); }
     else if (p.act === 'reopen') { this.sedit(u); Object.assign(r, { status: 'wait', doc: '', docDat: '', doneAt: '', doneBy: '' }); }
     this.save(d); return { exPend: d.exPend }; },
@@ -6508,7 +6508,7 @@ function viewExpress() {
   const hist = !EX.recent ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : rec.length ? '<ol class="sk-log ex-log">' + rec.slice(0, 40).map(m => { const op = EX_OP[m[3]] || ['รายการ', 1], it = EX.items.get(m[10]);
       return '<li class="' + (op[1] > 0 ? 'k-in' : 'k-out') + '" data-excard="' + esc(m[10]) + '"><span class="sk-ph none mini ex-ic"><i>' + (op[1] > 0 ? '↓' : '↑') + '</i></span><div><b>' + esc((it && it[1]) || m[10]) + '</b><small>' + esc(exDate(m[1]) + ' · ' + m[0] + (m[8] ? ' · ' + exDepN(m[8]) : '')) + '</small>' + (m[9] && (!it || m[9] !== it[1]) ? '<small class="sl-note">' + esc(m[9]) + '</small>' : '') + '</div>' +
         '<span class="sl-q"><span class="sl-k">' + op[0] + '</span><b class="tnum">' + (op[1] > 0 ? '+' : '−') + exN(Math.abs(+m[4] || 0)) + '</b><em>' + esc(m[2]) + '</em></span></li>'; }).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ไม่มีการเคลื่อนไหว 7 วันล่าสุด</b></div>';
-  const banner = '<div class="ex-status ' + st.cls + '"><span class="ex-dot ' + st.cls + '"></span><b>' + esc(st.txt) + '</b><small>ยอดตรงกับโปรแกรม Express (แอปไม่แก้ข้อมูลใน Express) · เบิก/รับของ: บันทึก "รอลง Express" ในแอป → ฝ่ายสต็อกคีย์ใน Express → ระบบจับคู่ให้เอง</small>' +
+  const banner = '<div class="ex-status ' + st.cls + '"><span class="ex-dot ' + st.cls + '"></span><b>' + esc(st.txt) + '</b><small>ยอดตรงกับโปรแกรม Express (แอปไม่แก้ข้อมูลใน Express) · ' + (canStock() ? 'เบิก/รับของ: บันทึก "รอลง Express" ในแอป → คีย์ใน Express → ระบบจับคู่ให้เอง' : 'ดูและค้นหาได้อย่างเดียว · ฝ่ายสต็อกเป็นผู้บันทึกเบิก/รับ') + '</small>' +
     (EX.err ? '<em class="ex-err">' + esc(EX.err) + '</em>' : '') + '<button type="button" class="btn ghost sm" data-exsync="1"' + (EX.busy ? ' disabled' : '') + '>' + (EX.busy ? 'กำลังอัปเดต…' : 'อัปเดตเดี๋ยวนี้') + '</button></div>';
   // เครื่องมือของคลังในแอป (ใบขอซื้อ · นับสต็อก · แจ้งต้องสั่ง) ใช้ได้จากแท็บนี้ด้วย ไม่ต้องสลับกลับ
   const appAll = S.stock ? stockItems() : [], appNeed = appAll.filter(x => stReg(x) && (stLow(x) || stZero(x)));
@@ -6517,7 +6517,7 @@ function viewExpress() {
   const lowAlert = lows.length ? '<button type="button" class="sk-alert ex-lowalert" data-exgrp="low"><span>' + STI.fire + '</span><b>Express: ใกล้หมด ' + lows.length + ' รายการ</b><small>' + esc(lows.slice(0, 4).map(x => (x[1] || x[0]) + ' (' + exN(x[6]) + '/' + exN(exMin(x[0])) + ')').join(' · ')) + (lows.length > 4 ? ' …' : '') + '</small><em>ดูทั้งหมด ›</em></button>'
     : !nMin && canStock() ? '<p class="ex-minhint">' + STI.fire + 'ยังไม่ได้ตั้งจุดสั่งซื้อ · กดที่สินค้าแล้วใส่ "จุดสั่งซื้อ" ระบบจะเตือนเมื่อยอดใน Express ลดถึงจุดนั้น</p>' : '';
   const selItems = [...EV.sel.keys()].map(c => EX.items.get(c)).filter(Boolean);
-  const selBar = EV.sel.size ? '<div class="ex-selbar"><span><b>เลือก ' + exN(EV.sel.size) + ' รายการ</b><small>มูลค่ารวม ' + baht(exCalcRows(selItems).tot) + '</small></span><button type="button" class="btn sm" data-exgrp="sel">ดูเฉพาะที่เลือก</button><button type="button" class="btn sm" data-xpnew="">บันทึกเบิก/รับ</button><button type="button" class="btn sm primary" data-excalc="1">คำนวณราคา</button><button type="button" class="btn sm ghost" data-exselclr="1">ล้าง</button></div>' : '';
+  const selBar = EV.sel.size ? '<div class="ex-selbar"><span><b>เลือก ' + exN(EV.sel.size) + ' รายการ</b><small>มูลค่ารวม ' + baht(exCalcRows(selItems).tot) + '</small></span><button type="button" class="btn sm" data-exgrp="sel">ดูเฉพาะที่เลือก</button>' + (canStock() ? '<button type="button" class="btn sm" data-xpnew="">บันทึกเบิก/รับ</button>' : '') + '<button type="button" class="btn sm primary" data-excalc="1">คำนวณราคา</button><button type="button" class="btn sm ghost" data-exselclr="1">ล้าง</button></div>' : '';
   return topbar('คลังวัสดุ', 'ยอดคงเหลือจากโปรแกรม Express (บัญชี) อัปเดตอัตโนมัติ') + exTabs() + appTools + banner + lowAlert + kpis + selBar +
     '<div class="sk-wrap"><section class="panel sk-main"><div class="panel-h"><h2>สินค้าใน Express</h2><span class="sub">' + exN(list.length) + ' รายการ</span></div>' + tools +
     (q ? '<div class="co-sres" role="status"><b>' + exN(list.length) + '</b> รายการตรงกับ "' + esc(q) + '"<small>ค้นจากทุกรหัส ไม่สนกลุ่มที่เลือก</small></div>' : chips) + body + '</section>' +
@@ -6547,7 +6547,7 @@ function exCalcDraw() {
       r.rows.map(y => '<div class="ex-ctr"><span><b>' + esc(y.x[0]) + '</b><small>' + esc(y.x[1] || '') + '</small></span><span class="tnum">' + exN(y.x[6]) + ' <small>' + esc(exUnit(y.x[5])) + '</small></span>' +
         '<span><input type="number" step="any" min="0" inputmode="decimal" data-exq="' + esc(y.x[0]) + '" value="' + esc(String(Math.round(y.q * 1000) / 1000)) + '" aria-label="จำนวน ' + esc(y.x[0]) + '"></span><span class="tnum">' + (y.pr ? baht(y.pr) : '<em class="muted">ไม่มีราคา</em>') + '</span><span class="tnum"><b data-exsum="' + esc(y.x[0]) + '">' + baht(y.sum) + '</b></span><button type="button" class="icon-btn sm" data-exunsel="' + esc(y.x[0]) + '" aria-label="เอาออก">✕</button></div>').join('') +
       '<div class="ex-ctf"><span>รวม ' + r.rows.length + ' รายการ · จำนวน ' + exN(r.qty) + '</span><b class="tnum" id="exCalcTot">' + baht(r.tot) + '</b></div></div>' : '<div class="sk-empty sm"><b>ยังไม่ได้เลือกสินค้า</b></div>') +
-    '</div><div class="pm-f"><button type="button" class="btn ghost" data-exselclr="1">ล้างที่เลือก</button><span style="flex:1"></span><button type="button" class="btn" data-xpfromcalc="1"' + (r.rows.length ? '' : ' disabled') + '>บันทึกเบิก/รับตามจำนวนนี้</button><button type="button" class="btn" data-excopy="1">คัดลอก</button><button type="button" class="btn primary" data-exprint="1">พิมพ์ / PDF</button></div></div>';
+    '</div><div class="pm-f"><button type="button" class="btn ghost" data-exselclr="1">ล้างที่เลือก</button><span style="flex:1"></span>' + (canStock() ? '<button type="button" class="btn" data-xpfromcalc="1"' + (r.rows.length ? '' : ' disabled') + '>บันทึกเบิก/รับตามจำนวนนี้</button>' : '') + '<button type="button" class="btn" data-excopy="1">คัดลอก</button><button type="button" class="btn primary" data-exprint="1">พิมพ์ / PDF</button></div></div>';
   if (keep) { const n = m.querySelector('[data-exq="' + CSS.escape(keep.c) + '"]'); if (n) { n.focus(); try { n.setSelectionRange(keep.a, keep.a); } catch (x) {} } }
 }
 function exCalcPrint() {
@@ -6568,13 +6568,14 @@ const exPendOf = cod => exWait().filter(r => r.cod === cod);
 const exPendNet = cod => exPendOf(cod).reduce((s, r) => s + XP_KIND[r.kind === 'in' ? 'in' : 'out'][1] * (+r.qty || 0), 0);
 const xpOld = r => String(r.ts).slice(0, 10) < addDays(today(), -1);
 const xpWhen = ts => { const d = String(ts).slice(0, 10), t = String(ts).slice(11, 16); return (d === today() ? 'วันนี้' : d === addDays(today(), -1) ? 'เมื่อวาน' : fd(d)) + (t ? ' ' + t : ''); };
-const canXpCancel = r => r.status === 'wait' && (canStock() || (S.user && r.who === S.user.name));
+const canXpCancel = r => r.status === 'wait' && canStock();
 function exPendMatchNow() {
   if (EX.matchBusy || Date.now() - (EX.matchAt || 0) < 20000) return; EX.matchBusy = true; EX.matchAt = Date.now();
   api().exPendMatch({}).then(r => { if (r && r.matched && Array.isArray(r.exPend)) { EX.pend = r.exPend; toast('✓ ลง Express แล้ว ' + r.matched + ' รายการ · ระบบจับคู่เลขเอกสารให้แล้ว'); if (S.view === 'stock' && SV.src === 'ex') { render(); if (EX.card) exCardDraw(); } } })
     .catch(() => {}).finally(() => { EX.matchBusy = false; });
 }
 function exPendOpen(cods, qtys) {
+  if (!canStock()) return toast('บันทึกเบิก/รับได้เฉพาะฝ่ายสต็อก', true);
   const items = cods.map(c => EX.items.get(c)).filter(Boolean); if (!items.length) return toast('ยังไม่ได้เลือกสินค้า', true);
   EV.pnew = { kind: (EV.pnew && EV.pnew.kind) || 'out', job: '', dep: '', note: '', busy: false,
     rows: items.map(x => { const ls = exLocsOf(x[0]); return { cod: x[0], qty: qtys && qtys[x[0]] ? String(qtys[x[0]]) : '', loc: ls[0] ? ls[0][1] : x[3] || '' }; }) };
@@ -6627,7 +6628,7 @@ function exPendPanel() {
         : '<span class="xp-act">' + (xpOld(r) ? '<em class="xp-age">ค้างเกิน 1 วัน</em>' : '<em class="xp-wait">รอคีย์ใน Express</em>') + (ed ? '<button type="button" class="btn sm ghost" data-xpdoc="' + esc(r.id) + '">✓ ลงแล้ว · ใส่เลขเอกสาร</button>' : '') + (canXpCancel(r) ? '<button type="button" class="btn sm ghost" data-xpcancel="' + esc(r.id) + '">ยกเลิก</button>' : '') + '</span>') + '</li>'; };
   return '<section class="panel xp-panel" id="xpPanel"><div class="panel-h"><h2>รอลง Express</h2><span class="sub">' + (w.length ? w.length + ' รายการ' + (old ? ' · ค้าง ' + old : '') : 'ลงครบแล้ว') + '</span>' +
     (w.length ? '<span class="xp-tools"><button type="button" class="btn ghost sm" data-xpcopy="1">คัดลอก</button><button type="button" class="btn ghost sm" data-xpprint="1">พิมพ์</button></span>' : '') + '</div>' +
-    (w.length ? '<ol class="xp-list">' + w.map(item).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ไม่มีรายการรอลง</b><small>เบิกหรือรับของ: กดที่สินค้า → "บันทึกเบิก/รับ"</small></div>') +
+    (w.length ? '<ol class="xp-list">' + w.map(item).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ไม่มีรายการรอลง</b><small>' + (canStock() ? 'เบิกหรือรับของ: กดที่สินค้า → "บันทึกเบิก/รับ"' : 'ฝ่ายสต็อกเป็นผู้บันทึก') + '</small></div>') +
     (done.length ? '<details class="xp-done"><summary>ลงแล้ว / ยกเลิก ล่าสุด (' + done.length + ')</summary><ol class="xp-list">' + done.map(item).join('') + '</ol></details>' : '') + '</section>';
 }
 function exPendPrint() {
@@ -6679,8 +6680,8 @@ function exCardDraw() {
     (it[12] ? '<p class="sf-note">' + esc(it[12]) + '</p>' : '') +
     '<div class="ex-minbox' + (exLowOf(it) ? ' low' : '') + '"><span><b>จุดสั่งซื้อ</b><small>' + (exMin(c.cod) ? (exLowOf(it) ? 'ใกล้หมดแล้ว · ยอด ' + exN(it[6]) + ' ≤ ' + exN(exMin(c.cod)) : 'เตือนเมื่อยอดเหลือ ≤ ' + exN(exMin(c.cod)) + ' ' + esc(u)) : 'ยังไม่ได้ตั้ง · ตั้งแล้วระบบเตือนเมื่อใกล้หมด') + '</small></span>' +
       (canStock() ? '<input type="number" step="any" min="0" inputmode="decimal" id="exMinIn" value="' + (exMin(c.cod) || '') + '" placeholder="เช่น 10" aria-label="จุดสั่งซื้อ"><button type="button" class="btn sm primary" data-exminsave="' + esc(c.cod) + '"' + (c.saving ? ' disabled' : '') + '>' + (c.saving ? 'กำลังบันทึก…' : 'บันทึก') + '</button>' : '<b class="tnum">' + (exMin(c.cod) ? exN(exMin(c.cod)) + ' ' + esc(u) : '–') + '</b>') + '</div>' +
-    (() => { const pw = exPendOf(c.cod), net = exPendNet(c.cod); return '<div class="ex-pbox' + (pw.length ? ' on' : '') + '"><div><b>รอลง Express</b><small>' + (pw.length ? pw.length + ' รายการ · ยอดหลังลงครบ ≈ <b class="tnum">' + exN((+it[6] || 0) + net) + '</b> ' + esc(u) : 'เบิกหรือรับของชิ้นนี้? บันทึกไว้ก่อน ฝ่ายสต็อกคีย์ใน Express ภายหลัง') + '</small>' +
-      pw.map(r => '<span class="ex-pl ' + (r.kind === 'in' ? 'k-in' : 'k-out') + '">' + (r.kind === 'in' ? '+' : '−') + exN(r.qty) + ' · ' + esc(r.who + ' ' + xpWhen(r.ts) + (r.job ? ' · Job ' + r.job : '')) + '</span>').join('') + '</div><button type="button" class="btn sm primary" data-xpnew="' + esc(c.cod) + '">บันทึกเบิก/รับ</button></div>'; })() +
+    (() => { const pw = exPendOf(c.cod), net = exPendNet(c.cod); return '<div class="ex-pbox' + (pw.length ? ' on' : '') + '"><div><b>รอลง Express</b><small>' + (pw.length ? pw.length + ' รายการ · ยอดหลังลงครบ ≈ <b class="tnum">' + exN((+it[6] || 0) + net) + '</b> ' + esc(u) : (canStock() ? 'เบิกหรือรับของชิ้นนี้? บันทึกไว้ก่อน แล้วคีย์ใน Express ภายหลัง' : 'ไม่มีรายการรอ · บันทึกเบิก/รับได้เฉพาะฝ่ายสต็อก')) + '</small>' +
+      pw.map(r => '<span class="ex-pl ' + (r.kind === 'in' ? 'k-in' : 'k-out') + '">' + (r.kind === 'in' ? '+' : '−') + exN(r.qty) + ' · ' + esc(r.who + ' ' + xpWhen(r.ts) + (r.job ? ' · Job ' + r.job : '')) + '</span>').join('') + '</div>' + (canStock() ? '<button type="button" class="btn sm primary" data-xpnew="' + esc(c.cod) + '">บันทึกเบิก/รับ</button>' : '') + '</div>'; })() +
     '<div class="ex-cardsel"><button type="button" class="btn sm' + (EV.sel.has(c.cod) ? ' primary' : '') + '" data-exsel=""' + esc(c.cod) + '">' + (EV.sel.has(c.cod) ? '✓ เลือกไว้แล้ว' : '+ เลือกเพื่อคำนวณราคา') + '</button></div>' +
     '<div><b class="ex-h">สต็อกการ์ด ' + (rows ? '(' + rows.length + (rows.length >= 300 ? '+' : '') + ' รายการ ปีนี้)' : '') + '</b>' +
     (c.err ? '<p class="ex-err">' + esc(c.err) + '</p>' : !rows ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : !rows.length ? '<div class="sk-empty sm"><b>ยังไม่มีการเคลื่อนไหวปีนี้</b></div>' :

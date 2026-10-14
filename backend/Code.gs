@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.44.0';
+const VERSION = '1.44.1';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -170,7 +170,7 @@ const ACTIONS = {
   stockMove: (p, u) => withLock_(() => stockMove_(p, u)),
   stockDelete: (p, u) => withLock_(() => stockDelete_(p.id, u)),
   exMinSet: (p, u) => withLock_(() => exMinSet_(p, u)),
-  exPendAdd: (p, u) => { if (!can_(u, 'stock.view')) throw new Error('ไม่มีสิทธิ์'); return withLock_(() => exPendAdd_(p, u)); },
+  exPendAdd: (p, u) => { stockEdit_(u); return withLock_(() => exPendAdd_(p, u)); },   // บันทึกได้เฉพาะฝ่ายสต็อก (stock.edit) · คนอื่นดู/ค้นหาได้อย่างเดียว
   exPendSet: (p, u) => withLock_(() => exPendSet_(p, u)),
   exPendMatch: (p, u) => { if (!can_(u, 'stock.view')) throw new Error('ไม่มีสิทธิ์'); const r = exPendMatch_(false); return { matched: r.matched, exPend: r.matched ? exPendList_() : undefined }; },
   // คลังความรู้ (ทุกคนอ่านได้ · แก้ได้เฉพาะเรื่องของฝ่ายตัวเอง · แอดมินแก้ได้ทุกฝ่าย)
@@ -1015,6 +1015,7 @@ function exPendList_() {
   return rows.filter(r => r.status === 'wait' || String(r.doneAt || r.ts).slice(0, 10) >= cut).map(r => Object.assign(r, { qty: stockNum_(r.qty) || 0 }));
 }
 function exPendAdd_(p, u) {
+  stockEdit_(u);
   const kind = String(p.kind || ''); if (!EXP_KIND_[kind]) throw new Error('เลือกประเภท: เบิกออก หรือ รับเข้า');
   const list = Array.isArray(p.items) ? p.items : [p];
   if (!list.length || list.length > 100) throw new Error('บันทึกได้ครั้งละ 1–100 รายการ');
@@ -1036,7 +1037,7 @@ function exPendSet_(p, u) {
   const r = readRow_('ExPend', row), act = String(p.act || '');
   if (act === 'cancel') {
     if (r.status !== 'wait') throw new Error('รายการนี้ลง Express แล้ว ยกเลิกไม่ได้');
-    if (r.who !== u.name && !can_(u, 'stock.edit')) throw new Error('ยกเลิกได้เฉพาะคนที่บันทึก หรือฝ่ายสต็อก');
+    stockEdit_(u);
     Object.assign(r, { status: 'cancel', doneAt: nowIso_(), doneBy: u.name });
   } else if (act === 'done') {
     stockEdit_(u); const doc = String(p.doc || '').trim().slice(0, 30); if (!doc) throw new Error('ใส่เลขที่เอกสาร Express');
