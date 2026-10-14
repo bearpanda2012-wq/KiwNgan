@@ -5571,3 +5571,24 @@ body.auth #bgSndBtn{display:none}
   .ex-list.ro .ex-row .ex-c,.ex-list.ro .ex-row .ex-n{grid-column:1}
   .ex-list.ro .ex-row .ex-q{grid-column:2;grid-row:1/span 2}
 }
+/* v2.90 ปลายเส้นเมื่อส่งมอบแล้ว: เหรียญตรา + ประกายดาว */
+.rt-end{position:absolute;top:50%;left:100%;width:36px;height:36px;margin:-18px 0 0 -18px;z-index:3;color:var(--p-ship);display:block;
+  filter:drop-shadow(0 6px 10px color-mix(in oklab,var(--p-ship) 42%,transparent));animation:reIn .8s cubic-bezier(.3,1.6,.5,1) both}
+.re-seal{position:absolute;inset:0;width:100%;height:100%;animation:reSpin 14s linear infinite}
+.re-core{position:absolute;inset:6px;border-radius:50%;display:grid;place-items:center;color:#fff;overflow:hidden;
+  background:linear-gradient(140deg,var(--p-ready) 0%,var(--p-ship) 100%);box-shadow:inset 0 0 0 2px rgba(255,255,255,.6),inset 0 -4px 8px rgba(0,0,0,.12)}
+.re-core svg{width:15px;height:15px;stroke-dasharray:22;stroke-dashoffset:22;animation:reTick .55s .45s ease-out forwards}
+.re-core::after{content:"";position:absolute;top:-30%;bottom:-30%;width:40%;left:-60%;transform:skewX(-20deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.65),transparent);animation:reShine 3.6s 1s ease-in-out infinite}
+.re-sp{position:absolute;width:7px;height:7px;background:#F5B92E;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);opacity:0;animation:reTwinkle 2.8s ease-in-out infinite}
+.re-sp.a{top:-5px;left:-3px}.re-sp.b{top:-7px;right:-4px;width:9px;height:9px;animation-delay:.7s}.re-sp.c{bottom:-4px;right:-6px;width:6px;height:6px;animation-delay:1.4s}.re-sp.d{bottom:-6px;left:-5px;width:5px;height:5px;animation-delay:2.1s;background:#7DD3C0}
+.rt-endlbl{transform:translateX(calc(-100% + 18px));margin-top:7px;color:var(--p-ship)!important;background:linear-gradient(90deg,color-mix(in oklab,var(--p-ready) 14%,var(--surface)),color-mix(in oklab,var(--p-ship) 16%,var(--surface)));box-shadow:0 0 0 1px color-mix(in oklab,var(--p-ship) 35%,transparent)}
+.pcard .pc-rt .rt-end{width:30px;height:30px;margin:-15px 0 0 -15px}
+.pcard .pc-rt .re-core{inset:5px}.pcard .pc-rt .re-core svg{width:12px;height:12px}
+.pcard .pc-rt .rt-endlbl{transform:translateX(calc(-100% + 15px));margin-top:5px}
+.rt.fin .rt-dot.past:last-of-type{animation:none}
+@keyframes reIn{0%{transform:scale(0) rotate(-90deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+@keyframes reSpin{to{transform:rotate(360deg)}}
+@keyframes reTick{to{stroke-dashoffset:0}}
+@keyframes reShine{0%,70%{left:-60%}100%{left:130%}}
+@keyframes reTwinkle{0%,100%{opacity:0;transform:scale(.3) rotate(0)}40%,60%{opacity:1;transform:scale(1) rotate(45deg)}}
+@media (prefers-reduced-motion:reduce){.rt-end,.re-seal,.re-core::after,.re-sp{animation:none!important}.re-core svg{animation:none;stroke-dashoffset:0}.re-sp{opacity:.9}}

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.89.3';
+const APP_VERSION = '2.90.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5617,10 +5617,14 @@ function pRoute(p) {
   const chk = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   return '<div class="rt pc-rt' + (fin ? ' fin' : '') + (pStuck(p) ? ' late' : '') + '" style="--p:' + pct + '%"><span class="rt-line"><i></i></span>' + steps.map((st, k) => {
     const cls = k < i || fin ? 'past' : k === i ? 'now' : '', sk = pSkipped(p, st.k), x = k / n * 100;
+    if (fin && k === n) return rtFinish();
     return '<span class="rt-dot d-p ' + cls + (sk ? ' skip' : '') + ' ' + PSTG[st.k].cls + '" style="left:' + x + '%" title="' + esc(st.label) + (sk ? ' (ข้าม)' : '') + '">' + (cls === 'now' ? PIC[st.ic] : cls === 'past' ? chk : '') + '</span>' +
       (cls === 'now' ? '<span class="rt-lbl' + (k === 0 ? ' lb-s' : k === n ? ' lb-e' : '') + '" style="left:' + x + '%">' + esc(st.label) + '</span>' : '');
   }).join('') + '</div>';
 }
+/* ปลายเส้นเมื่อส่งมอบแล้ว: เหรียญตราสีเขียว-ฟ้า + เครื่องหมายถูก + ประกายดาว */
+const RT_SEAL = 'M20.00 0.20 L21.25 0.89 L22.30 2.55 L23.13 4.26 L23.99 5.12 L25.16 4.81 L26.74 3.74 L28.47 2.82 L29.90 2.85 L30.64 4.07 L30.71 6.04 L30.58 7.94 L30.89 9.11 L32.06 9.42 L33.96 9.29 L35.93 9.36 L37.15 10.10 L37.18 11.53 L36.26 13.26 L35.19 14.84 L34.88 16.01 L35.74 16.87 L37.45 17.70 L39.11 18.75 L39.80 20.00 L39.11 21.25 L37.45 22.30 L35.74 23.13 L34.88 23.99 L35.19 25.16 L36.26 26.74 L37.18 28.47 L37.15 29.90 L35.93 30.64 L33.96 30.71 L32.06 30.58 L30.89 30.89 L30.58 32.06 L30.71 33.96 L30.64 35.93 L29.90 37.15 L28.47 37.18 L26.74 36.26 L25.16 35.19 L23.99 34.88 L23.13 35.74 L22.30 37.45 L21.25 39.11 L20.00 39.80 L18.75 39.11 L17.70 37.45 L16.87 35.74 L16.01 34.88 L14.84 35.19 L13.26 36.26 L11.53 37.18 L10.10 37.15 L9.36 35.93 L9.29 33.96 L9.42 32.06 L9.11 30.89 L7.94 30.58 L6.04 30.71 L4.07 30.64 L2.85 29.90 L2.82 28.47 L3.74 26.74 L4.81 25.16 L5.12 23.99 L4.26 23.13 L2.55 22.30 L0.89 21.25 L0.20 20.00 L0.89 18.75 L2.55 17.70 L4.26 16.87 L5.12 16.01 L4.81 14.84 L3.74 13.26 L2.82 11.53 L2.85 10.10 L4.07 9.36 L6.04 9.29 L7.94 9.42 L9.11 9.11 L9.42 7.94 L9.29 6.04 L9.36 4.07 L10.10 2.85 L11.53 2.82 L13.26 3.74 L14.84 4.81 L16.01 5.12 L16.87 4.26 L17.70 2.55 L18.75 0.89Z';
+const rtFinish = cls => '<span class="rt-end' + (cls || '') + '" title="ส่งมอบแล้ว"><svg class="re-seal" viewBox="0 0 40 40" aria-hidden="true"><path d="' + RT_SEAL + '" fill="currentColor"/></svg><span class="re-core"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 12.5l4.2 4.2L18.5 7.8"/></svg></span><i class="re-sp a"></i><i class="re-sp b"></i><i class="re-sp c"></i><i class="re-sp d"></i></span><span class="rt-lbl lb-e rt-endlbl" style="left:100%">ส่งมอบแล้ว</span>';
 function pPill(st, txt) { return '<span class="pill ' + PSTG[st].cls + '">' + esc(txt || PSTG[st].label) + '</span>'; }
 
 /* ---- เขียนข้อมูล (อัปเดตหน้าจอทันที แล้วค่อยรอหลังบ้าน) ---- */
@@ -5847,6 +5851,7 @@ function coRoute(r) {
   const i = Math.min(coIdx(r.step), CO_STEPS.length - 1), fin = r.step === 'shipped', n = CO_STEPS.length - 1, pct = fin ? 100 : i / n * 100;
   return '<div class="rt' + (fin ? ' fin' : '') + (r.late ? ' late' : '') + '" style="--p:' + pct + '%"><span class="rt-line"><i></i></span>' + CO_STEPS.map((st, k) => {
     const cls = k < i || fin ? 'past' : k === i ? 'now' : '', sk = pSkipped(r.prod, st.k);
+    if (fin && k === n) return rtFinish();
     return '<span class="rt-dot d-' + st.dept + ' ' + cls + (sk ? ' skip' : '') + ' ' + (st.k === 'design' ? 's-doing' : PSTG[st.k].cls) + '" style="left:' + (k / n * 100) + '%" title="' + esc(st.label) + (sk ? ' (ข้าม)' : '') + '">' +
       (cls === 'now' ? PIC[st.ic] : cls === 'past' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : '') + '</span>' +
       (cls === 'now' ? '<span class="rt-lbl" style="left:' + (k / n * 100) + '%">' + esc(st.label) + '</span>' : '');
