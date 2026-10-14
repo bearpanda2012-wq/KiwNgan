@@ -12,6 +12,7 @@ function Fail([string]$m) { Write-Host $m -ForegroundColor Red; Read-Host 'ก�
 if (-not (Test-Path (Join-Path $here 'config.json'))) { Fail 'ไม่พบ config.json ในโฟลเดอร์เดียวกัน' }
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 Copy-Item -Force (Join-Path $here 'KiwNganExpressSync.ps1') $dest
+if (Test-Path (Join-Path $here 'KiwNganExpressKey.ps1')) { Copy-Item -Force (Join-Path $here 'KiwNganExpressKey.ps1') $dest }
 $cfgPath = Join-Path $dest 'config.json'
 $cfg = Get-Content -Raw -Encoding UTF8 (Join-Path $here 'config.json') | ConvertFrom-Json
 
@@ -52,6 +53,16 @@ try {
   $s.TargetPath = 'powershell.exe'; $s.Arguments = $act.Arguments; $s.WorkingDirectory = $dest; $s.WindowStyle = 7; $s.Save()
   Start-Process powershell.exe -ArgumentList $act.Arguments -WindowStyle Hidden -WorkingDirectory $dest
   Write-Host 'ใช้ทางลัดใน Startup แทน Task Scheduler' -ForegroundColor Yellow
+}
+# โปรแกรมช่วยคีย์: ให้ปุ่ม "ส่งไปคีย์" ในแอปเปิดโปรแกรมนี้ได้ (ลิงก์ kiwngan-express: เฉพาะผู้ใช้คนนี้ ไม่ต้องใช้สิทธิ์ผู้ดูแล)
+$keyPs = Join-Path $dest 'KiwNganExpressKey.ps1'
+if (Test-Path $keyPs) {
+  $k = 'HKCU:\Software\Classes\kiwngan-express'
+  New-Item -Path "$k\shell\open\command" -Force | Out-Null
+  Set-ItemProperty -Path $k -Name '(default)' -Value 'URL:KiwNgan Express (โปรแกรมช่วยคีย์)'
+  Set-ItemProperty -Path $k -Name 'URL Protocol' -Value ''
+  Set-ItemProperty -Path "$k\shell\open\command" -Name '(default)' -Value ('powershell.exe -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $keyPs + '" -Url "%1"')
+  Write-Host 'ติดตั้งโปรแกรมช่วยคีย์แล้ว (ปุ่ม "คีย์เข้า Express" ในแอปใช้กับเครื่องนี้ได้)' -ForegroundColor Cyan
 }
 Write-Host ''
 Write-Host 'ติดตั้งเสร็จแล้ว ✓  ตัวซิงก์กำลังทำงานเบื้องหลัง (เริ่มเองทุกครั้งที่ล็อกอินเครื่องนี้)' -ForegroundColor Green

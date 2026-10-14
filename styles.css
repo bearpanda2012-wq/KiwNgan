@@ -5492,7 +5492,7 @@ body.auth #bgSndBtn{display:none}
 .ex-side{display:flex;flex-direction:column;gap:16px;min-width:0}
 .ex-pendtag{font-style:normal;font-size:11px;font-weight:600;color:#6B3FA0;background:color-mix(in oklab,#7A4BB5 12%,var(--surface));border-radius:999px;padding:1px 7px;margin-top:3px;align-self:flex-start;white-space:nowrap}
 .xp-panel .panel-h{flex-wrap:wrap}
-.xp-tools{margin-left:auto;display:flex;gap:4px}
+.xp-tools{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .xp-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .xp-i{border:1px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
 .xp-i.old{border-color:color-mix(in oklab,var(--urgent) 45%,var(--line));background:color-mix(in oklab,var(--urgent) 5%,var(--surface))}
@@ -5541,3 +5541,26 @@ body.auth #bgSndBtn{display:none}
 /* v2.87.4 ปุ่มเลือกราคา (ทุนเฉลี่ย / ราคาซื้อล่าสุด) ไม่ตกขอบ */
 .sk-seg.ex-basis{grid-template-columns:repeat(2,auto)}
 .ex-basis button{white-space:nowrap;padding:0 14px}
+/* v2.88 คีย์เข้า Express: ตรวจสอบก่อนส่งให้โปรแกรมช่วยคีย์ */
+.ex-key{width:min(880px,100%)}
+.xk-sum{display:flex;gap:10px;flex-wrap:wrap}
+.xk-sum span{border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600}
+.xk-sum .ok{background:color-mix(in oklab,var(--done,#2B7F4A) 12%,var(--surface));color:var(--done,#2B7F4A)}
+.xk-sum .bad{background:color-mix(in oklab,var(--late,#d4473f) 12%,var(--surface));color:var(--late,#d4473f)}
+.xk-sum b{font:700 18px var(--f-display);margin-right:3px}
+.xk-warn{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:#9A3412;background:color-mix(in oklab,var(--urgent) 9%,var(--surface));border-radius:10px;padding:9px 11px}
+.xk-warn svg{width:16px;height:16px;flex:none}
+.xk-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;max-height:46vh;overflow-y:auto}
+.xk-r{display:grid;grid-template-columns:26px minmax(0,1fr) 90px 80px 130px;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid var(--line);font-size:13px}
+.xk-r:first-child{border-top:0}
+.xk-r.bad{background:color-mix(in oklab,var(--late,#d4473f) 6%,var(--surface))}
+.xk-i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;color:#fff;background:var(--done,#2B7F4A)}
+.xk-r.bad .xk-i{background:var(--late,#d4473f)}
+.xk-t{display:flex;flex-direction:column;min-width:0}.xk-t b{font-family:var(--f-mono);font-size:12px}
+.xk-t small{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xk-t em{font-style:normal;color:var(--late,#d4473f);font-size:12px;font-weight:600}
+.xk-n{text-align:right;font-weight:700}.xk-n small{font-weight:400;color:var(--muted)}
+.xk-l{display:flex;flex-direction:column;font-weight:600}.xk-l small{color:var(--muted);font-weight:400;font-size:11px}
+.xk-d{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xk-how{margin:0;padding:10px 12px 10px 30px;background:var(--surface-2);border-radius:10px;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+@media (max-width:720px){.xk-r{grid-template-columns:24px minmax(0,1fr) auto}.xk-l,.xk-d{display:none}}

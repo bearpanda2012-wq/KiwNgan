@@ -23,6 +23,9 @@ if [ -n "$GS" ]; then
     if [ "$t" = dup ]; then node gs/dup.js ../backend/Code.gs > "$LOG/gs-$t.log" 2>&1; else node "gs/$t.js" > "$LOG/gs-$t.log" 2>&1; fi
     check "gs/$t" $? "$LOG/gs-$t.log"
   done
+  # โปรแกรมช่วยคีย์ Express (PowerShell) — ข้ามถ้าเครื่องนี้ไม่มี pwsh
+  PWSH="${PWSH:-$(command -v pwsh || ls /opt/pwsh/pwsh 2>/dev/null)}"
+  if [ -n "$PWSH" ]; then PWSH="$PWSH" bash ps/v288.sh > "$LOG/ps-v288.log" 2>&1; check "ps/v288" $? "$LOG/ps-v288.log"; else echo "- ps/v288 (ไม่มี pwsh ข้าม)"; fi
 fi
 echo "== หน้าเว็บ (Playwright) · พร้อมกัน $JOBS ตัว"
 run_ui() { t="$1"; s=$(date +%s); timeout 240 node "$t.mjs" > "$LOG/$t.log" 2>&1; c=$?; r=$(check "$t" $c "$LOG/$t.log"); echo "$r ($(( $(date +%s) - s ))s)"; }

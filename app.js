@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.87.5';
+const APP_VERSION = '2.88.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6656,7 +6656,7 @@ function exPendPanel() {
         : edit ? '<span class="xp-act xp-doc"><input id="xpDoc" placeholder="เลขที่เอกสาร เช่น PD6910036" autocomplete="off"><button type="button" class="btn sm primary" data-xpdocsave="' + esc(r.id) + '">บันทึก</button><button type="button" class="btn sm ghost" data-xpdoc="">ยกเลิก</button></span>'
         : '<span class="xp-act">' + (xpOld(r) ? '<em class="xp-age">ค้างเกิน 1 วัน</em>' : '<em class="xp-wait">รอคีย์ใน Express</em>') + (ed ? '<button type="button" class="btn sm ghost" data-xpdoc="' + esc(r.id) + '">✓ ลงแล้ว · ใส่เลขเอกสาร</button>' : '') + (canXpCancel(r) ? '<button type="button" class="btn sm ghost" data-xpcancel="' + esc(r.id) + '">ยกเลิก</button>' : '') + '</span>') + '</li>'; };
   return '<section class="panel xp-panel" id="xpPanel"><div class="panel-h"><h2>รอลง Express</h2><span class="sub">' + (w.length ? w.length + ' รายการ' + (old ? ' · ค้าง ' + old : '') : 'ลงครบแล้ว') + '</span>' +
-    (w.length ? '<span class="xp-tools"><button type="button" class="btn ghost sm" data-xpcopy="1">คัดลอก</button><button type="button" class="btn ghost sm" data-xpprint="1">พิมพ์</button><button type="button" class="btn ghost sm" data-xppdf="1">PDF</button></span>' : '') + '</div>' +
+    (w.length ? '<span class="xp-tools">' + (canStock() && w.some(r => r.kind !== 'in') ? '<button type="button" class="btn primary sm" data-xkopen="1">คีย์เข้า Express</button>' : '') + '<button type="button" class="btn ghost sm" data-xpcopy="1">คัดลอก</button><button type="button" class="btn ghost sm" data-xpprint="1">พิมพ์</button><button type="button" class="btn ghost sm" data-xppdf="1">PDF</button></span>' : '') + '</div>' +
     (w.length ? '<ol class="xp-list">' + w.map(item).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ไม่มีรายการรอลง</b><small>' + (canStock() ? 'เบิกหรือรับของ: กดที่สินค้า → "บันทึกเบิก/รับ"' : 'ฝ่ายสต็อกเป็นผู้บันทึก') + '</small></div>') +
     (done.length ? '<details class="xp-done"><summary>ลงแล้ว / ยกเลิก ล่าสุด (' + done.length + ')</summary><ol class="xp-list">' + done.map(item).join('') + '</ol></details>' : '') + '</section>';
 }
@@ -6699,6 +6699,58 @@ async function exCardOpen(cod) {
   try { EX.card.rows = await exRpc('ex_card', { cod: cod, lim: 300 }); } catch (e) { if (EX.card) EX.card.err = e.message; }
   if (EX.card && EX.card.cod === cod) exCardDraw();
 }
+/* ---- คีย์เข้า Express ด้วยโปรแกรมช่วยคีย์ (บนเครื่องที่เปิด Express) ----
+   1) แอปตรวจทุกรายการกับยอดใน Express ก่อน · รายการไม่ผ่าน = แจ้งเตือนและไม่ส่ง
+   2) ส่งเฉพาะรายการที่ผ่านให้โปรแกรมช่วยคีย์ (ลิงก์ kiwngan-express:) ซึ่งตรวจซ้ำจากไฟล์ Express จริงอีกรอบ
+   3) โปรแกรมพิมพ์ลงหน้าจอ OU – จ่ายสินค้าใช้ภายใน · คนตรวจหน้าจอแล้วกดบันทึกเอง · แอปจับคู่เลขเอกสารให้เอง */
+const XK_MAX_LINES = 25;
+function exKeyCheck(rows) {
+  const st = exAgentState(), stale = st.cls !== 'on', need = {}, out = [];
+  rows.forEach(r => { const it = EX.items.get(r.cod), loc = String(r.loc || ''), lb = EX.locs.get(r.cod + '|' + loc), bal = lb ? +lb[2] || 0 : 0, q = +r.qty || 0, errs = [];
+    if (r.kind === 'in') errs.push('รับเข้า: ยังคีย์อัตโนมัติไม่ได้ (คีย์เองในหน้ารับสินค้า)');
+    if (!it) errs.push('ไม่มีรหัสนี้ใน Express');
+    if (!(q > 0)) errs.push('จำนวนต้องมากกว่า 0');
+    if (!loc) errs.push('ไม่ได้ระบุคลัง');
+    else if (it && r.kind !== 'in') { const k = r.cod + '|' + loc; need[k] = (need[k] || 0) + q;
+      if (!lb) errs.push('คลัง ' + loc + ' ไม่มีสินค้านี้ (ยอด 0)'); else if (need[k] > bal + 1e-9) errs.push('ยอดในคลัง ' + loc + ' ไม่พอ: มี ' + exN(bal) + ' ต้องการ ' + exN(need[k])); }
+    if (r.dep && EX.tabs.deps && !EX.tabs.deps[r.dep]) errs.push('ไม่มีรหัสแผนก ' + r.dep + ' ใน Express');
+    if (stale) errs.push('ข้อมูล Express ไม่อัปเดต (ตัวซิงก์เงียบ) ตรวจยอดไม่ได้');
+    out.push({ r: r, it: it, bal: bal, ok: !errs.length, errs: errs }); });
+  return out;
+}
+function exKeyDocs(chk) {   // 1 ใบ = แผนกเดียวกัน + Job เดียวกัน (ไม่เกิน XK_MAX_LINES บรรทัด)
+  const g = {}, docs = [];
+  chk.filter(c => c.ok).forEach(c => { const k = (c.r.dep || '') + '|' + (c.r.job || ''); (g[k] = g[k] || []).push(c); });
+  Object.keys(g).forEach(k => { const a = g[k]; for (let i = 0; i < a.length; i += XK_MAX_LINES) { const part = a.slice(i, i + XK_MAX_LINES), r0 = part[0].r;
+    const rem = [r0.job ? 'Job ' + r0.job : '', [...new Set(part.map(c => c.r.note).filter(Boolean))].join(', ')].filter(Boolean).join(' · ').slice(0, 60);
+    docs.push({ dep: r0.dep || '', rem: rem, lines: part.map(c => ({ id: c.r.id, cod: c.r.cod, loc: c.r.loc, qty: +c.r.qty, des: (c.it && c.it[1]) || c.r.des || '' })) }); } });
+  return docs;
+}
+const b64url = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+function exKeyOpen() { if (!canStock()) return toast('คีย์เข้า Express ได้เฉพาะฝ่ายสต็อก', true); EV.xk = { at: Date.now() }; exKeyDraw(); }
+function exKeyDraw() {
+  let m = $('#exKey'); if (!EV.xk) { if (m) m.remove(); return; }
+  if (!m) { m = document.createElement('div'); m.id = 'exKey'; m.className = 'pmodal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); m.addEventListener('click', e => { if (e.target === m) { EV.xk = null; exKeyDraw(); } }); }
+  const chk = exKeyCheck(exWait()), ok = chk.filter(c => c.ok), bad = chk.filter(c => !c.ok), docs = exKeyDocs(chk);
+  EV.xk.docs = docs;
+  const row = c => '<div class="xk-r ' + (c.ok ? 'ok' : 'bad') + '"><span class="xk-i">' + (c.ok ? '✓' : '✕') + '</span><span class="xk-t"><b>' + esc(c.r.cod) + '</b><small>' + esc((c.it && c.it[1]) || c.r.des || '') + '</small>' + (c.ok ? '' : '<em>' + c.errs.map(esc).join(' · ') + '</em>') + '</span>' +
+    '<span class="xk-n tnum">' + (c.r.kind === 'in' ? '+' : '−') + exN(c.r.qty) + ' <small>' + esc(c.r.unit || '') + '</small></span><span class="xk-l">' + esc(c.r.loc || '–') + (c.ok || c.bal ? '<small>มี ' + exN(c.bal) + '</small>' : '') + '</span><span class="xk-d">' + esc([c.r.dep, c.r.job ? 'Job ' + c.r.job : ''].filter(Boolean).join(' · ') || '–') + '</span></div>';
+  m.innerHTML = '<div class="pm-card ex-card ex-key"><div class="pm-h"><div><div class="eyebrow">Express · คีย์อัตโนมัติ</div><h3 style="font-family:inherit">ตรวจสอบก่อนคีย์เข้า Express</h3><p class="sub">ตรวจกับยอดใน Express ล่าสุด · รายการที่ไม่ผ่านจะไม่ถูกส่งไปคีย์</p></div><button type="button" class="icon-btn" data-xkx="1" aria-label="ปิด">✕</button></div><div class="pm-b">' +
+    '<div class="xk-sum"><span class="ok"><b>' + ok.length + '</b> ผ่าน · จะคีย์เป็น ' + docs.length + ' ใบ (OU)</span>' + (bad.length ? '<span class="bad"><b>' + bad.length + '</b> ไม่ผ่าน · ไม่ส่ง</span>' : '') + '</div>' +
+    (bad.length ? '<div class="xk-warn">' + STI.fire + '<span>รายการที่ไม่ผ่านจะ <b>ไม่ถูกคีย์</b> ลง Express · แก้ไขหรือยกเลิกในรายการรอลง แล้วตรวจใหม่</span></div>' : '') +
+    '<div class="xk-list">' + bad.map(row).join('') + ok.map(row).join('') + '</div>' +
+    '<ol class="xk-how"><li>เปิด Express หน้า <b>OU – จ่ายสินค้าใช้ภายใน</b> ทิ้งไว้ (หน้าว่าง)</li><li>กด "ส่งไปคีย์" → โปรแกรมช่วยคีย์ตรวจซ้ำกับไฟล์ Express แล้วพิมพ์ให้ทีละใบ <b>ห้ามแตะเมาส์/คีย์บอร์ดระหว่างพิมพ์</b> (ขยับเมาส์ = หยุดพิมพ์ทันที)</li><li>ตรวจหน้าจอแล้ว <b>กดบันทึกใน Express เอง</b> · แอปจะขึ้น "ลงแล้ว ✓" พร้อมเลขเอกสารภายใน 1 นาที</li></ol>' +
+    '</div><div class="pm-f"><button type="button" class="btn ghost" data-xkx="1">ปิด</button><span style="flex:1"></span><button type="button" class="btn ghost" data-xkagain="1">ตรวจใหม่</button><button type="button" class="btn primary" data-xksend="1"' + (docs.length ? '' : ' disabled') + '>ส่งไปคีย์ ' + ok.length + ' รายการ</button></div></div>';
+}
+function exKeySend() {
+  const docs = (EV.xk && EV.xk.docs) || []; if (!docs.length) return;
+  const url = 'kiwngan-express:' + b64url(JSON.stringify({ v: 1, at: new Date().toISOString(), by: S.user ? S.user.name : '', docs: docs }));
+  EV.xk.sent = Date.now(); EV.xk.url = url; location.href = url;
+  setTimeout(() => toast('ถ้าไม่มีหน้าต่างโปรแกรมช่วยคีย์ขึ้นมา: เครื่องนี้ยังไม่ได้ติดตั้ง (ติดตั้งครั้งเดียวด้วย install.cmd ในชุด KiwNgan Express)'), 2500);
+}
+document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-xkopen],[data-xkx],[data-xkagain],[data-xksend]'); if (!t) return; const d = t.dataset;
+  if (d.xkopen) return exKeyOpen(); if (d.xkx) { EV.xk = null; return exKeyDraw(); } if (d.xkagain) { exSync(true); return setTimeout(exKeyDraw, 1500); } if (d.xksend) return exKeySend(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && EV.xk) { EV.xk = null; exKeyDraw(); e.stopPropagation(); } }, true);
 function exCardClose() { EX.card = null; const m = $('#exModal'); if (m) m.remove(); }
 function exCardDraw() {
   const c = EX.card; let m = $('#exModal'); if (!c) { if (m) m.remove(); return; }
@@ -6713,7 +6765,7 @@ function exCardDraw() {
       (canStock() ? '<input type="number" step="any" min="0" inputmode="decimal" id="exMinIn" value="' + (exMin(c.cod) || '') + '" placeholder="เช่น 10" aria-label="จุดสั่งซื้อ"><button type="button" class="btn sm primary" data-exminsave="' + esc(c.cod) + '"' + (c.saving ? ' disabled' : '') + '>' + (c.saving ? 'กำลังบันทึก…' : 'บันทึก') + '</button>' : '<b class="tnum">' + (exMin(c.cod) ? exN(exMin(c.cod)) + ' ' + esc(u) : '–') + '</b>') + '</div>' +
     (() => { const pw = exPendOf(c.cod), net = exPendNet(c.cod); return '<div class="ex-pbox' + (pw.length ? ' on' : '') + '"><div><b>รอลง Express</b><small>' + (pw.length ? pw.length + ' รายการ · ยอดหลังลงครบ ≈ <b class="tnum">' + exN((+it[6] || 0) + net) + '</b> ' + esc(u) : (canStock() ? 'เบิกหรือรับของชิ้นนี้? บันทึกไว้ก่อน แล้วคีย์ใน Express ภายหลัง' : 'ไม่มีรายการรอ · บันทึกเบิก/รับได้เฉพาะฝ่ายสต็อก')) + '</small>' +
       pw.map(r => '<span class="ex-pl ' + (r.kind === 'in' ? 'k-in' : 'k-out') + '">' + (r.kind === 'in' ? '+' : '−') + exN(r.qty) + ' · ' + esc(r.who + ' ' + xpWhen(r.ts) + (r.job ? ' · Job ' + r.job : '')) + '</span>').join('') + '</div>' + (canStock() ? '<button type="button" class="btn sm primary" data-xpnew="' + esc(c.cod) + '">บันทึกเบิก/รับ</button>' : '') + '</div>'; })() +
-    '<div class="ex-cardsel"><button type="button" class="btn sm' + (EV.sel.has(c.cod) ? ' primary' : '') + '" data-exsel=""' + esc(c.cod) + '">' + (EV.sel.has(c.cod) ? '✓ เลือกไว้แล้ว' : '+ เลือกเพื่อคำนวณราคา') + '</button></div>' +
+    '<div class="ex-cardsel"><button type="button" class="btn sm' + (EV.sel.has(c.cod) ? ' primary' : '') + '" data-exsel="' + esc(c.cod) + '">' + (EV.sel.has(c.cod) ? '✓ เลือกไว้แล้ว' : '+ เลือกเพื่อคำนวณราคา') + '</button></div>' +
     '<div><b class="ex-h">สต็อกการ์ด ' + (rows ? '(' + rows.length + (rows.length >= 300 ? '+' : '') + ' รายการ ปีนี้)' : '') + '</b>' +
     (c.err ? '<p class="ex-err">' + esc(c.err) + '</p>' : !rows ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : !rows.length ? '<div class="sk-empty sm"><b>ยังไม่มีการเคลื่อนไหวปีนี้</b></div>' :
       '<div class="ex-crd"><div class="ex-ch"><span>วันที่ · เอกสาร</span><span>รายการ</span><span>คลัง</span><span>จำนวน</span></div>' + rows.map(r => { const op = EX_OP[r[3]] || ['รายการ', 1];

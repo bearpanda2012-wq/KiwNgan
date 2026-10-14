@@ -111,6 +111,20 @@ await pg.click('[data-xpfromcalc]'); await pg.waitForTimeout(300);
 eq('calc → pend modal with qty prefilled', await pg.evaluate(() => [!!document.querySelector('#exCalc'), document.querySelectorAll('#exPend [data-xpq]').length, document.querySelector('[data-xpq="0"]').value]), [false, 2, '1']);
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
 eq('escape closes pend modal', await pg.locator('#exPend').count(), 0);
+// 2.88: คีย์เข้า Express — ตรวจก่อน · ไม่ผ่านไม่ส่ง
+await pg.evaluate(() => { const t = new Date().toISOString().slice(0, 19); EX.pend.push({ id: 'k1', ts: t, cod: 'RM-SB-02-0104', kind: 'out', qty: 2, loc: 'RM', dep: '', job: 'R69-9', note: 'หน้างาน', who: 'แอดมิน', status: 'wait' }, { id: 'k2', ts: t, cod: 'RM-SB-02-0104', kind: 'out', qty: 4, loc: 'RM', dep: '', job: 'R69-9', note: '', who: 'แอดมิน', status: 'wait' }, { id: 'k3', ts: t, cod: 'GST-CL-FSS8083', kind: 'out', qty: 1, loc: 'GST1', dep: '', job: 'R69-9', note: '', who: 'แอดมิน', status: 'wait' }, { id: 'k4', ts: t, cod: 'ZZ-00001', kind: 'out', qty: 1, loc: 'ZZ', dep: '', job: '', note: '', who: 'แอดมิน', status: 'wait' }); T.render(); });
+await pg.waitForTimeout(200);
+eq('key button for stock', await pg.locator('#xpPanel [data-xkopen]').count(), 1);
+await pg.click('#xpPanel [data-xkopen]'); await pg.waitForTimeout(300);
+eq('check: ok vs blocked', await pg.evaluate(() => [document.querySelectorAll('#exKey .xk-r.ok').length, document.querySelectorAll('#exKey .xk-r.bad').length]), [2, 3]);
+eq('reasons shown', await pg.evaluate(() => { const t = document.querySelector('#exKey .xk-list').textContent; return [/ยอดในคลัง RM ไม่พอ: มี 5 ต้องการ 6/.test(t), /รับเข้า: ยังคีย์อัตโนมัติไม่ได้/.test(t), /คลัง ZZ ไม่มีสินค้านี้/.test(t)]; }), [true, true, true]);
+await pg.evaluate(() => { window.__nav = []; }); 
+await pg.click('#exKey [data-xksend]'); await pg.waitForTimeout(300);
+eq('only passing rows sent, grouped into 1 OU doc', await pg.evaluate(() => { const u = EV.xk.url, b = u.replace('kiwngan-express:', '').replace(/-/g, '+').replace(/_/g, '/'); const j = JSON.parse(decodeURIComponent(escape(atob(b + '==='.slice((b.length + 3) % 4))))); return [j.v, j.docs.length, j.docs[0].rem, j.docs[0].lines.map(l => l.cod + '@' + l.loc + 'x' + l.qty)]; }), [1, 1, 'Job R69-9 · หน้างาน', ['RM-SB-02-0104@RMx2', 'GST-CL-FSS8083@GST1x1']]);
+await pg.locator('#exKey .pm-card').screenshot({ path: new URL('out/v288-key.png', import.meta.url).pathname });
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+eq('key modal closes', await pg.locator('#exKey').count(), 0);
+await pg.evaluate(() => { EX.pend = EX.pend.filter(r => !/^k\d$/.test(r.id)); T.render(); });
 // สรุปเช้า (ตัวอย่างในแอป)
 eq('digest preview has pending line', await pg.evaluate(() => /🧾 รอลง Express 1 รายการ/.test(digestCalc().body)), true);
 await pg.evaluate(() => { scrollTo(0, 0); document.querySelectorAll('*').forEach(e => { if (e.scrollTop) e.scrollTop = 0; }); }); await pg.waitForTimeout(200); await pg.screenshot({ path: new URL('out/v287-express.png', import.meta.url).pathname }); await pg.locator('.ex-kpis').screenshot({ path: new URL('out/v287-kpis.png', import.meta.url).pathname });
