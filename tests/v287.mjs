@@ -93,6 +93,20 @@ eq('pending KPI = 1 left', await pg.evaluate(() => document.querySelector('.sk-k
 await pg.click('[data-excalc]'); await pg.waitForTimeout(300);
 eq('basis buttons fit text', await pg.evaluate(() => [...document.querySelectorAll('.ex-basis button')].every(b => b.scrollWidth <= b.clientWidth + 1)), true);
 await pg.locator('.ex-calcbar').screenshot({ path: new URL('out/v2874-basis.png', import.meta.url).pathname });
+eq('print and PDF are separate buttons', await pg.evaluate(() => [document.querySelector('#exCalc [data-exprint]').textContent, document.querySelector('#exCalc [data-expdf]').textContent]), ['พิมพ์', 'PDF']);
+{ const G = (await import('child_process')).execSync('npm root -g').toString().trim(), libs = { 'html2canvas.min.js': G + '/html2canvas/dist/html2canvas.min.js', 'jspdf.umd.min.js': G + '/jspdf/dist/jspdf.umd.min.js' };
+  if (fs.existsSync(libs['jspdf.umd.min.js'])) {
+    await pg.route('https://cdnjs.cloudflare.com/**', r => { const f = libs[r.request().url().split('/').pop()]; return f ? r.fulfill({ status: 200, contentType: 'text/javascript', body: fs.readFileSync(f) }) : r.abort(); });
+    const [dl] = await Promise.all([pg.waitForEvent('download', { timeout: 20000 }), pg.click('#exCalc [data-expdf]')]);
+    const out = new URL('out/v2875-calc.pdf', import.meta.url).pathname; await dl.saveAs(out);
+    console.log('pdf name', dl.suggestedFilename()); eq('PDF downloaded', [/\.pdf$/i.test(dl.suggestedFilename()), fs.readFileSync(out).slice(0, 4).toString(), fs.statSync(out).size > 5000], [true, '%PDF', true]);
+    const keep = await pg.evaluate(() => { const k = [...EV.sel.entries()]; [...EX.items.keys()].filter(c => c.startsWith('ZZ-')).slice(0, 90).forEach(c => EV.sel.set(c, '')); return k; });
+    const [dl2] = await Promise.all([pg.waitForEvent('download', { timeout: 30000 }), pg.click('#exCalc [data-expdf]')]);
+    const out2 = new URL('out/v2875-long.pdf', import.meta.url).pathname; await dl2.saveAs(out2);
+    eq('long list → several pages', (fs.readFileSync(out2).toString('latin1').match(/\/Type \/Page[^s]/g) || []).length >= 3, true);
+    await pg.evaluate(k => { EV.sel = new Map(k); }, keep); await pg.waitForTimeout(300);
+  } else console.log('skip PDF (no libs)');
+}
 await pg.click('[data-xpfromcalc]'); await pg.waitForTimeout(300);
 eq('calc → pend modal with qty prefilled', await pg.evaluate(() => [!!document.querySelector('#exCalc'), document.querySelectorAll('#exPend [data-xpq]').length, document.querySelector('[data-xpq="0"]').value]), [false, 2, '1']);
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);

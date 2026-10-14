@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.87.4';
+const APP_VERSION = '2.87.5';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6547,10 +6547,10 @@ function exCalcDraw() {
       r.rows.map(y => '<div class="ex-ctr"><span><b>' + esc(y.x[0]) + '</b><small>' + esc(y.x[1] || '') + '</small></span><span class="tnum">' + exN(y.x[6]) + ' <small>' + esc(exUnit(y.x[5])) + '</small></span>' +
         '<span><input type="number" step="any" min="0" inputmode="decimal" data-exq="' + esc(y.x[0]) + '" value="' + esc(String(Math.round(y.q * 1000) / 1000)) + '" aria-label="จำนวน ' + esc(y.x[0]) + '"></span><span class="tnum">' + (y.pr ? baht(y.pr) : '<em class="muted">ไม่มีราคา</em>') + '</span><span class="tnum"><b data-exsum="' + esc(y.x[0]) + '">' + baht(y.sum) + '</b></span><button type="button" class="icon-btn sm" data-exunsel="' + esc(y.x[0]) + '" aria-label="เอาออก">✕</button></div>').join('') +
       '<div class="ex-ctf"><span>รวม ' + r.rows.length + ' รายการ · จำนวน ' + exN(r.qty) + '</span><b class="tnum" id="exCalcTot">' + baht(r.tot) + '</b></div></div>' : '<div class="sk-empty sm"><b>ยังไม่ได้เลือกสินค้า</b></div>') +
-    '</div><div class="pm-f"><button type="button" class="btn ghost" data-exselclr="1">ล้างที่เลือก</button><span style="flex:1"></span>' + (canStock() ? '<button type="button" class="btn" data-xpfromcalc="1"' + (r.rows.length ? '' : ' disabled') + '>บันทึกเบิก/รับตามจำนวนนี้</button>' : '') + '<button type="button" class="btn" data-excopy="1">คัดลอก</button><button type="button" class="btn primary" data-exprint="1">พิมพ์ / PDF</button></div></div>';
+    '</div><div class="pm-f"><button type="button" class="btn ghost" data-exselclr="1">ล้างที่เลือก</button><span style="flex:1"></span>' + (canStock() ? '<button type="button" class="btn" data-xpfromcalc="1"' + (r.rows.length ? '' : ' disabled') + '>บันทึกเบิก/รับตามจำนวนนี้</button>' : '') + '<button type="button" class="btn" data-excopy="1">คัดลอก</button><button type="button" class="btn" data-exprint="1">พิมพ์</button><button type="button" class="btn primary" data-expdf="1">PDF</button></div></div>';
   if (keep) { const n = m.querySelector('[data-exq="' + CSS.escape(keep.c) + '"]'); if (n) { n.focus(); try { n.setSelectionRange(keep.a, keep.a); } catch (x) {} } }
 }
-function exCalcPrint() {
+function exCalcPrint(pdf) {
   const r = exCalcRows([...EV.sel.keys()].map(c => EX.items.get(c)).filter(Boolean)), s0 = S.settings || {};
   const css = 'body{font-family:Anuphan,sans-serif;margin:28px;color:#111}h1{font-size:20px;margin:0}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}th,td{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left}td.n,th.n{text-align:right}tfoot td{font-weight:700;border-top:2px solid #111}.h{display:flex;justify-content:space-between;align-items:flex-end}small{color:#666}';
   const html = '<!doctype html><html><head><meta charset="utf-8"><title>รายการสินค้า ' + esc(fdY(today())) + '</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600&display=swap"><style>' + css + '</style></head><body>' +
@@ -6558,7 +6558,36 @@ function exCalcPrint() {
     '<table><thead><tr><th>#</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="n">จำนวน</th><th>หน่วย</th><th class="n">ราคา/หน่วย</th><th class="n">รวม</th></tr></thead><tbody>' +
     r.rows.map((y, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(y.x[0]) + '</td><td>' + esc(y.x[1] || '') + '</td><td class="n">' + exN(y.q) + '</td><td>' + esc(exUnit(y.x[5])) + '</td><td class="n">' + baht(y.pr) + '</td><td class="n">' + baht(y.sum) + '</td></tr>').join('') +
     '</tbody><tfoot><tr><td colspan="3">รวม ' + r.rows.length + ' รายการ</td><td class="n">' + exN(r.qty) + '</td><td></td><td></td><td class="n">' + baht(r.tot) + '</td></tr></tfoot></table><script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>';
+  if (pdf) return exPdf(css, html, 'Express-items-' + today() + '.pdf');
   const w = window.open('', '_blank'); if (!w) return toast('เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาต pop-up แล้วลองอีกครั้ง', true); w.document.write(html); w.document.close();
+}
+/* PDF จริง (ดาวน์โหลดไฟล์): วาดหน้าเอกสารเป็นภาพแล้วใส่ใน A4 · ตัดหน้าตรงรอยต่อแถว ไม่ตัดกลางบรรทัด */
+const PDF_LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
+const loadJs = src => new Promise((res, rej) => { if (document.querySelector('script[src="' + src + '"]')) return res(); const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error('โหลดตัวสร้าง PDF ไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)')); document.head.appendChild(sc); });
+async function exPdf(css, html, name) {
+  if (exPdf.busy) return; exPdf.busy = true; toast('กำลังสร้าง PDF…');
+  const box = document.createElement('div');
+  try {
+    for (const u of PDF_LIBS) await loadJs(u);
+    const W = 794, H = 1123, M = 36;   // A4 ที่ 96dpi · ขอบ 36px
+    box.className = 'pdf-src'; box.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + W + 'px;background:#fff;color:#111;padding:' + M + 'px;box-sizing:border-box;font-family:Anuphan,var(--f-body,sans-serif)';
+    box.innerHTML = '<style>' + css.replace(/body\{[^}]*\}/, '').replace(/(^|\})\s*([^{}@]+)\{/g, (m0, a, sel) => a + sel.split(',').map(x => '.pdf-src ' + x.trim()).join(',') + '{') + '</style>' + html.split('<body>')[1].split('<script>')[0];
+    document.body.appendChild(box); if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const top0 = box.getBoundingClientRect().top, cuts = [...box.querySelectorAll('tr,h1,h2,.h')].map(e => e.getBoundingClientRect().bottom - top0);
+    const cv = await window.html2canvas(box, { scale: 2, backgroundColor: '#fff', windowWidth: W }), k = cv.width / W;
+    const doc = new window.jspdf.jsPDF({ unit: 'px', format: [W, H], hotfixes: ['px_scaling'] }), tot = box.offsetHeight;
+    let y = 0, page = 0;
+    while (y < tot - 1) {
+      let end = Math.min(tot, y + H - M); if (end < tot) { const c = cuts.filter(b => b > y + 40 && b <= end).pop(); if (c) end = c; }
+      const pc = document.createElement('canvas'); pc.width = cv.width; pc.height = Math.ceil((end - y) * k);
+      const g = pc.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, pc.width, pc.height); g.drawImage(cv, 0, Math.floor(y * k), cv.width, pc.height, 0, 0, cv.width, pc.height);
+      if (page) doc.addPage([W, H]); doc.addImage(pc.toDataURL('image/jpeg', 0.92), 'JPEG', 0, page ? M / 2 : 0, W, end - y);
+      y = end; page++;
+    }
+    const url = URL.createObjectURL(doc.output('blob')), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+    toast('ดาวน์โหลด ' + name + ' แล้ว (' + page + ' หน้า)');
+  } catch (e) { toast(e.message || 'สร้าง PDF ไม่สำเร็จ', true); }
+  finally { box.remove(); exPdf.busy = false; }
 }
 /* ---- รอลง Express: บันทึกเบิก/รับในแอป → ฝ่ายสต็อกคีย์ใน Express → ระบบจับคู่เลขเอกสารให้เอง (แอปไม่เขียนลง Express) ---- */
 const XP_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4.5" width="14" height="16.5" rx="2.5"/><path d="M9 4.5V3.5h6v1M8.5 11l2 2 4-4M8.5 17h7"/></svg>';
@@ -6627,21 +6656,22 @@ function exPendPanel() {
         : edit ? '<span class="xp-act xp-doc"><input id="xpDoc" placeholder="เลขที่เอกสาร เช่น PD6910036" autocomplete="off"><button type="button" class="btn sm primary" data-xpdocsave="' + esc(r.id) + '">บันทึก</button><button type="button" class="btn sm ghost" data-xpdoc="">ยกเลิก</button></span>'
         : '<span class="xp-act">' + (xpOld(r) ? '<em class="xp-age">ค้างเกิน 1 วัน</em>' : '<em class="xp-wait">รอคีย์ใน Express</em>') + (ed ? '<button type="button" class="btn sm ghost" data-xpdoc="' + esc(r.id) + '">✓ ลงแล้ว · ใส่เลขเอกสาร</button>' : '') + (canXpCancel(r) ? '<button type="button" class="btn sm ghost" data-xpcancel="' + esc(r.id) + '">ยกเลิก</button>' : '') + '</span>') + '</li>'; };
   return '<section class="panel xp-panel" id="xpPanel"><div class="panel-h"><h2>รอลง Express</h2><span class="sub">' + (w.length ? w.length + ' รายการ' + (old ? ' · ค้าง ' + old : '') : 'ลงครบแล้ว') + '</span>' +
-    (w.length ? '<span class="xp-tools"><button type="button" class="btn ghost sm" data-xpcopy="1">คัดลอก</button><button type="button" class="btn ghost sm" data-xpprint="1">พิมพ์</button></span>' : '') + '</div>' +
+    (w.length ? '<span class="xp-tools"><button type="button" class="btn ghost sm" data-xpcopy="1">คัดลอก</button><button type="button" class="btn ghost sm" data-xpprint="1">พิมพ์</button><button type="button" class="btn ghost sm" data-xppdf="1">PDF</button></span>' : '') + '</div>' +
     (w.length ? '<ol class="xp-list">' + w.map(item).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ไม่มีรายการรอลง</b><small>' + (canStock() ? 'เบิกหรือรับของ: กดที่สินค้า → "บันทึกเบิก/รับ"' : 'ฝ่ายสต็อกเป็นผู้บันทึก') + '</small></div>') +
     (done.length ? '<details class="xp-done"><summary>ลงแล้ว / ยกเลิก ล่าสุด (' + done.length + ')</summary><ol class="xp-list">' + done.map(item).join('') + '</ol></details>' : '') + '</section>';
 }
-function exPendPrint() {
+function exPendPrint(pdf) {
   const w = exWait(), s0 = S.settings || {};
   const css = 'body{font-family:Anuphan,sans-serif;margin:28px;color:#111}h1{font-size:20px;margin:0}h2{font-size:15px;margin:18px 0 4px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}td.n,th.n{text-align:right}td.ck{width:22px}small{color:#666}.h{display:flex;justify-content:space-between;align-items:flex-end}';
   const tb = (k, lab) => { const a = w.filter(r => (r.kind === 'in') === (k === 'in')); return a.length ? '<h2>' + lab + ' ' + a.length + ' รายการ</h2><table><thead><tr><th></th><th>รหัส</th><th>ชื่อสินค้า</th><th class="n">จำนวน</th><th>หน่วย</th><th>คลัง</th><th>แผนก / Job</th><th>ผู้บันทึก</th></tr></thead><tbody>' +
     a.map(r => '<tr><td class="ck">☐</td><td>' + esc(r.cod) + '</td><td>' + esc(r.des || '') + (r.note ? '<br><small>' + esc(r.note) + '</small>' : '') + '</td><td class="n">' + exN(r.qty) + '</td><td>' + esc(r.unit || '') + '</td><td>' + esc(r.loc || '') + '</td><td>' + esc([r.dep, r.job].filter(Boolean).join(' / ')) + '</td><td>' + esc(r.who) + '<br><small>' + esc(xpWhen(r.ts)) + '</small></td></tr>').join('') + '</tbody></table>' : ''; };
   const html = '<!doctype html><html><head><meta charset="utf-8"><title>รอลง Express ' + esc(fdY(today())) + '</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600&display=swap"><style>' + css + '</style></head><body><div class="h"><div><h1>รายการรอลง Express</h1><div>' + esc(s0.company || s0.appName || '') + '</div></div><div>วันที่ ' + esc(fdY(today())) + '</div></div>' +
     tb('out', 'เบิกออก') + tb('in', 'รับเข้า / รับคืน') + '<script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>';
+  if (pdf) return exPdf(css, html, 'Express-pending-' + today() + '.pdf');
   const x = window.open('', '_blank'); if (!x) return toast('เบราว์เซอร์บล็อกหน้าต่างใหม่ — อนุญาต pop-up แล้วลองอีกครั้ง', true); x.document.write(html); x.document.close();
 }
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-xpnew],[data-xpkind],[data-xprm],[data-xpx],[data-xpsave],[data-xpcancel],[data-xpdoc],[data-xpdocsave],[data-xpreopen],[data-xpcopy],[data-xpprint],[data-xpgo],[data-xpfromcalc]'); if (!t) return;
+  const t = e.target.closest && e.target.closest('[data-xpnew],[data-xpkind],[data-xprm],[data-xpx],[data-xpsave],[data-xpcancel],[data-xpdoc],[data-xpdocsave],[data-xpreopen],[data-xpcopy],[data-xpprint],[data-xppdf],[data-xpgo],[data-xpfromcalc]'); if (!t) return;
   const d = t.dataset, P0 = EV.pnew;
   const keep = () => { if (!P0) return; P0.job = (($('#xpJob') || {}).value || P0.job || ''); P0.dep = (($('#xpDep') || {}).value || P0.dep || ''); P0.note = (($('#xpNote') || {}).value || P0.note || ''); };
   const set = (id, act, extra) => api().exPendSet(Object.assign({ id: id, act: act }, extra || {})).then(r => { EX.pend = (r && r.exPend) || EX.pend; EV.xpEdit = ''; render(); if (EX.card) exCardDraw(); toast(act === 'cancel' ? 'ยกเลิกรายการแล้ว' : act === 'done' ? 'บันทึกว่าลง Express แล้ว' : 'เปิดรายการใหม่แล้ว'); }).catch(er => toast(er.message || 'ไม่สำเร็จ', true));
@@ -6657,6 +6687,7 @@ document.addEventListener('click', e => {
   if (d.xpreopen) return set(d.xpreopen, 'reopen');
   if (d.xpcopy) { const tx = exPendText(); navigator.clipboard.writeText(tx).then(() => toast('คัดลอกรายการรอลงแล้ว · วางใน LINE ได้เลย'), () => prompt('คัดลอกข้อความนี้', tx)); return; }
   if (d.xpprint) return exPendPrint();
+  if (d.xppdf) return exPendPrint(true);
   if (d.xpgo) { const n = $('#xpPanel'); if (n) n.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
 });
 document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset || !EV.pnew) return; if (t.dataset.xpq !== undefined) EV.pnew.rows[+t.dataset.xpq].qty = t.value; });
@@ -6690,7 +6721,7 @@ function exCardDraw() {
     '</div></div></div>';
 }
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-exsel],[data-exselall],[data-excalc],[data-excalcx],[data-exselclr],[data-exbasis],[data-exqfill],[data-excopy],[data-exprint],[data-exunsel],[data-exminsave],[data-exsrc],[data-exgrp],[data-exmore],[data-exsync],[data-excard],[data-excclose]'); if (!t) return;
+  const t = e.target.closest && e.target.closest('[data-exsel],[data-exselall],[data-excalc],[data-excalcx],[data-exselclr],[data-exbasis],[data-exqfill],[data-excopy],[data-exprint],[data-expdf],[data-exunsel],[data-exminsave],[data-exsrc],[data-exgrp],[data-exmore],[data-exsync],[data-excard],[data-excclose]'); if (!t) return;
   const d = t.dataset;
   const redraw = () => { render(); if (EX.card) exCardDraw(); if (EV.calc) exCalcDraw(); };
   if (d.exsel) { e.preventDefault(); e.stopPropagation(); if (EV.sel.has(d.exsel)) EV.sel.delete(d.exsel); else EV.sel.set(d.exsel, ''); exSelSave(); return redraw(); }
@@ -6703,6 +6734,7 @@ document.addEventListener('click', e => {
   if (d.exqfill) { [...EV.sel.keys()].forEach(c => EV.sel.set(c, d.exqfill === 'bal' ? '' : '1')); exSelSave(); return redraw(); }
   if (d.excopy) { const tx = exCalcText(); navigator.clipboard.writeText(tx).then(() => toast('คัดลอกรายการแล้ว'), () => prompt('คัดลอกข้อความนี้', tx)); return; }
   if (d.exprint) return exCalcPrint();
+  if (d.expdf) return exCalcPrint(true);
   if (d.exminsave) { const cod = d.exminsave, v = (($('#exMinIn') || {}).value || '').trim(); if (v !== '' && !(+v >= 0)) return toast('จุดสั่งซื้อต้องเป็นตัวเลข', true);
     EX.card.saving = true; exCardDraw();
     api().exMinSet({ cod: cod, min: v }).then(r => { EX.mins = (r && r.exMins) || EX.mins; EX.lowSet = new Set([...EX.items.values()].filter(exLowOf).map(x => x[0])); toast(+v > 0 ? 'ตั้งจุดสั่งซื้อ ' + cod + ' = ' + v : 'ยกเลิกจุดสั่งซื้อ ' + cod); })
