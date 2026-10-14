@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.92.1';
+const APP_VERSION = '2.93.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6487,9 +6487,16 @@ function exAgentState() {
   const t = new Date(a.at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
   return age > 12 ? { cls: 'off', txt: 'ตัวซิงก์เงียบไปตั้งแต่ ' + (age > 1440 ? exDate(new Date(a.at).toISOString().slice(0, 10).replace(/-/g, '')) + ' ' : '') + t + ' · เช็กเครื่องแม่ข่าย' } : { cls: 'on', txt: 'เชื่อมกับ Express · ตรวจล่าสุด ' + t + (a.dir ? ' · ' + a.dir : '') };
 }
+/* สีประจำกลุ่มสินค้า (โทนกลาง ไม่ฉูดฉาด) · ใช้กับชิป แถว และจุดสี */
+const EX_HUES = ['#5B7FD6', '#1C8C8A', '#C77A2E', '#B65C7A', '#7A62C2', '#3E8E5A', '#A8862A', '#4F86A8', '#9A5BA6', '#6B7A8C', '#C2604A', '#3F9A9A'];
+const EX_FIX = { bal: ['#1C8C8A', 'box'], all: ['#6366B8', 'sheet'], neg: ['#C8505F', 'x'], low: ['#D9822B', 'fire'], sel: ['#3F7BD0', 'ok'] };
+function exGrpCol(g) { if (EX_FIX[g]) return EX_FIX[g][0]; let h = 0; for (const ch of String(g || '')) h = (h * 31 + ch.codePointAt(0)) >>> 0; return EX_HUES[h % EX_HUES.length]; }
 function exTabs() {
   if (!exOn()) return '';
-  return '<div class="ex-tabs" role="tablist"><button type="button" role="tab" data-exsrc="app" aria-selected="' + (SV.src !== 'ex') + '">' + I.stock + 'คลังในแอป</button><button type="button" role="tab" data-exsrc="ex" aria-selected="' + (SV.src === 'ex') + '"><span class="ex-dot ' + exAgentState().cls + '"></span>ยอดจาก Express</button></div>';
+  const st = exAgentState(), nApp = S.stock && typeof stockItems === 'function' ? stockItems().length : 0;
+  return '<div class="ex-tabs" role="tablist" data-on="' + (SV.src === 'ex' ? 'ex' : 'app') + '"><i class="ex-tabi" aria-hidden="true"></i>' +
+    '<button type="button" role="tab" data-exsrc="app" aria-selected="' + (SV.src !== 'ex') + '"><span class="ex-ti">' + I.stock + '</span><span class="ex-tt"><b>คลังในแอป</b><small>' + (nApp ? exN(nApp) + ' รายการ' : 'วัสดุที่จัดการในแอป') + '</small></span></button>' +
+    '<button type="button" role="tab" data-exsrc="ex" aria-selected="' + (SV.src === 'ex') + '"><span class="ex-ti ex-tix">' + ST_IC.sheet + '<span class="ex-dot ' + st.cls + '"></span></span><span class="ex-tt"><b>ยอดจาก Express</b><small>' + (st.cls === 'on' ? (EX.items.size ? exN(EX.items.size) + ' รหัส · เชื่อมต่ออยู่' : 'เชื่อมต่ออยู่') : 'ตัวซิงก์ไม่ตอบ') + '</small></span></button></div>';
 }
 function exLocsOf(cod) { const o = []; EX.locs.forEach(l => { if (l[0] === cod) o.push(l); }); return o.sort((a, b) => Math.abs(b[2]) - Math.abs(a[2])); }
 /* เลื่อนไปที่ส่วนนั้นแบบนุ่ม ๆ แล้วกะพริบกรอบให้เห็นว่ามาถึงแล้ว */
@@ -6541,17 +6548,19 @@ function viewExpress() {
     kpi('k-mv', STI.clock, 'เคลื่อนไหว 7 วัน', exN(rec.length), 'รับเข้า ' + wkIn + ' · ออก ' + wkOut, '', rec.length ? wkIn / rec.length * 100 : 0, 'hist') + '</div>';
   const grps = Object.keys(grpCnt).sort((a, b) => grpCnt[b] - grpCnt[a]).slice(0, 14);
   const chips = '<div class="qchips sk-chips ex-chips">' + [['bal', 'มียอด', withBal.length]].concat(EV.grp === 'all' ? [['all', 'ทั้งหมด', all.length]] : []).concat(lows.length || EV.grp === 'low' ? [['low', 'ใกล้หมด', lows.length]] : []).concat(EV.sel.size || EV.grp === 'sel' ? [['sel', 'ที่เลือกไว้', EV.sel.size]] : []).concat(neg ? [['neg', 'ติดลบ', neg]] : []).concat(grps.map(g => [g, exGrpN(g), grpCnt[g]]))
-    .map(x => '<button class="qchip' + (x[0] === 'neg' || x[0] === 'low' ? ' q-late' : '') + '" data-exgrp="' + esc(x[0]) + '" aria-pressed="' + (EV.grp === x[0]) + '"' + (x[0].length <= 4 && !/^(bal|all|neg|low|sel)$/.test(x[0]) ? ' title="กลุ่ม ' + esc(x[0]) + '"' : '') + '>' + esc(x[1]) + '<b>' + exN(x[2]) + '</b></button>').join('') + '</div>';
+    .map(x => { const fx = EX_FIX[x[0]], ic = fx ? (fx[1] === 'fire' ? STI.fire : fx[1] === 'x' ? (PIC.xmark || '✕') : fx[1] === 'ok' ? PIC.check || '✓' : ST_IC[fx[1]]) : '';
+      return '<button class="qchip ex-chip' + (fx ? ' fx' : '') + '" style="--ch:' + exGrpCol(x[0]) + '" data-exgrp="' + esc(x[0]) + '" aria-pressed="' + (EV.grp === x[0]) + '"' + (x[0].length <= 4 && !fx ? ' title="กลุ่ม ' + esc(x[0]) + '"' : '') + '>' + (fx ? '<i class="ex-cic">' + ic + '</i>' : '<i class="ex-cd"></i>') + '<span>' + esc(x[1]) + '</span><b>' + exN(x[2]) + '</b></button>'; }).join('') + '</div>';
   const locOpts = [...new Set([...EX.locs.values()].map(l => l[1]))].sort().map(c => '<option value="' + esc(c) + '"' + (EV.loc === c ? ' selected' : '') + '>' + esc(c + ' · ' + exLocN(c)) + '</option>').join('');
   const tools = '<div class="sk-tools ex-tools"><label class="search' + qOn(EV.q) + '">' + I.search + '<input id="exQ" type="search" autocomplete="off" enterkeyhint="search" placeholder="ค้นหารหัส ชื่อสินค้า กลุ่ม…" value="' + esc(EV.q) + '" aria-label="ค้นหาสินค้าใน Express">' + qX('exQ', EV.q) + '</label>' +
-    '<select class="sel" data-exloc="1" aria-label="คลัง"><option value="">ทุกคลัง</option>' + locOpts + '</select>' +
-    '<select class="sel" data-exsort="1" aria-label="เรียง">' + [['cod', 'เรียงตามรหัส'], ['name', 'เรียงตามชื่อ'], ['bal', 'ยอดมากสุด'], ['val', 'มูลค่ามากสุด']].map(o => '<option value="' + o[0] + '"' + (EV.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>';
+    '<label class="ex-selw" title="เลือกคลัง">' + ST_IC.box + '<select class="sel" data-exloc="1" aria-label="คลัง"><option value="">ทุกคลัง</option>' + locOpts + '</select></label>' +
+    '<label class="ex-selw" title="เรียงลำดับ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M3.5 16.5L7 20l3.5-3.5M17 20V4M13.5 7.5L17 4l3.5 3.5"/></svg><select class="sel" data-exsort="1" aria-label="เรียง">' + [['cod', 'เรียงตามรหัส'], ['name', 'เรียงตามชื่อ'], ['bal', 'ยอดมากสุด'], ['val', 'มูลค่ามากสุด']].map(o => '<option value="' + o[0] + '"' + (EV.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label></div>';
+  let rowI = 0; const rowAnim = !!EV.rowAnim; EV.rowAnim = false;   // แถวไล่ขึ้นมาเฉพาะตอนเปลี่ยนตัวกรอง/ค้นหา
   const row = x => { const ls = exLocsOf(x[0]), b = +x[6] || 0, sel = EV.sel.has(x[0]), mn = exMin(x[0]), lw = exLowOf(x);
-    return '<button type="button" class="ex-row' + (b < -1e-9 ? ' neg' : Math.abs(b) < 1e-9 ? ' zero' : '') + (sel ? ' sel' : '') + (lw ? ' low' : '') + '" data-excard="' + esc(x[0]) + '">' + (ro ? '' : '<span class="ex-ck" role="checkbox" aria-checked="' + sel + '" aria-label="เลือก ' + esc(x[0]) + '" data-exsel="' + esc(x[0]) + '"></span>') + '<span class="ex-c"><b>' + coHl(x[0], q) + '</b><small>' + esc(exGrpN(x[3])) + '</small>' + (exPendNet(x[0]) ? '<em class="ex-pendtag" title="บันทึกในแอปแล้ว รอคีย์ใน Express">รอลง ' + (exPendNet(x[0]) > 0 ? '+' : '−') + exN(Math.abs(exPendNet(x[0]))) + '</em>' : '') + (lw ? '<em class="ex-lowtag">' + STI.fire + 'ใกล้หมด · สั่งที่ ' + exN(mn) + '</em>' : mn ? '<em class="ex-mintag">สั่งที่ ' + exN(mn) + '</em>' : '') + '</span>' +
+    return '<button type="button" class="ex-row' + (b < -1e-9 ? ' neg' : Math.abs(b) < 1e-9 ? ' zero' : '') + (sel ? ' sel' : '') + (lw ? ' low' : '') + '" style="--g:' + exGrpCol(x[3]) + ';--r:' + (rowI++) + '" data-excard="' + esc(x[0]) + '">' + (ro ? '' : '<span class="ex-ck" role="checkbox" aria-checked="' + sel + '" aria-label="เลือก ' + esc(x[0]) + '" data-exsel="' + esc(x[0]) + '"></span>') + '<span class="ex-c"><b>' + coHl(x[0], q) + '</b><small class="ex-g"><i></i>' + esc(exGrpN(x[3])) + '</small>' + (exPendNet(x[0]) ? '<em class="ex-pendtag" title="บันทึกในแอปแล้ว รอคีย์ใน Express">รอลง ' + (exPendNet(x[0]) > 0 ? '+' : '−') + exN(Math.abs(exPendNet(x[0]))) + '</em>' : '') + (lw ? '<em class="ex-lowtag">' + STI.fire + 'ใกล้หมด · สั่งที่ ' + exN(mn) + '</em>' : mn ? '<em class="ex-mintag">สั่งที่ ' + exN(mn) + '</em>' : '') + '</span>' +
       '<span class="ex-n">' + coHl(x[1] || '–', q) + (x[2] ? '<small>' + esc(x[2]) + '</small>' : '') + (ls.length ? '<span class="ex-locs">' + ls.slice(0, 4).map(l => '<i title="' + esc(exLocN(l[1])) + '">' + esc(l[1]) + ' <b>' + exN(l[2]) + '</b></i>').join('') + (ls.length > 4 ? '<i>+' + (ls.length - 4) + '</i>' : '') + '</span>' : '') + '</span>' +
       '<span class="ex-q"><b class="tnum">' + exN(b) + '</b><small>' + esc(exUnit(x[5])) + '</small></span><span class="ex-v"><b class="tnum">' + (+x[8] ? baht(+x[8]) : '–') + '</b><small>' + (+x[7] ? 'รวม ' + baht(+x[7]) : 'ต่อหน่วย') + '</small></span></button>'; };
   const body = !EX.loaded ? '<div class="sk-empty"><span class="spin-dot dark"></span><b>กำลังโหลดข้อมูลจาก Express…</b><small>ครั้งแรกใช้เวลาสักครู่ ครั้งต่อไปเปิดได้ทันที</small></div>'
-    : list.length ? '<div class="ex-list' + (ro ? ' ro' : '') + '"><div class="ex-head">' + (ro ? '' : '<span class="ex-ck" role="checkbox" aria-checked="' + (list.slice(0, EV.lim).every(x => EV.sel.has(x[0])) ? 'true' : list.slice(0, EV.lim).some(x => EV.sel.has(x[0])) ? 'mixed' : 'false') + '" aria-label="เลือกทั้งหมดที่แสดง" data-exselall="1" title="เลือกทั้งหมดที่แสดง (' + Math.min(list.length, EV.lim) + ')"></span>') + '<span>รหัส</span><span>ชื่อสินค้า · ยอดแยกคลัง</span><span>คงเหลือ</span><span>ทุน/หน่วย</span></div>' + list.slice(0, EV.lim).map(row).join('') + '</div>' +
+    : list.length ? '<div class="ex-list' + (ro ? ' ro' : '') + (rowAnim ? ' in' : '') + '"><div class="ex-head">' + (ro ? '' : '<span class="ex-ck" role="checkbox" aria-checked="' + (list.slice(0, EV.lim).every(x => EV.sel.has(x[0])) ? 'true' : list.slice(0, EV.lim).some(x => EV.sel.has(x[0])) ? 'mixed' : 'false') + '" aria-label="เลือกทั้งหมดที่แสดง" data-exselall="1" title="เลือกทั้งหมดที่แสดง (' + Math.min(list.length, EV.lim) + ')"></span>') + '<span>รหัส</span><span>ชื่อสินค้า · ยอดแยกคลัง</span><span>คงเหลือ</span><span>ทุน/หน่วย</span></div>' + list.slice(0, EV.lim).map(row).join('') + '</div>' +
       (list.length > EV.lim ? '<div class="col-more">แสดง ' + EV.lim + ' จาก ' + exN(list.length) + ' รายการ <button class="btn ghost sm" data-exmore="1">แสดงเพิ่ม</button></div>' : '')
     : '<div class="sk-empty"><span>' + I.stock + '</span><b>' + (q ? 'ไม่พบ "' + esc(q) + '"' : 'ไม่มีสินค้าในมุมมองนี้') + '</b>' + (q ? '<small>ลองพิมพ์บางส่วนของรหัสหรือชื่อ</small><button type="button" class="btn sm" data-qclear="exQ">ล้างคำค้น</button>' : '') + '</div>';
   const hist = !EX.recent ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : rec.length ? '<ol class="sk-log ex-log">' + rec.slice(0, 40).map(m => { const op = EX_OP[m[3]] || ['รายการ', 1], it = EX.items.get(m[10]);
@@ -6845,12 +6854,12 @@ document.addEventListener('click', e => {
   if (d.excclose) return exCardClose();
   if (d.excard) { e.preventDefault(); return exCardOpen(d.excard); }
   if (d.exsrc) { if (d.exthen) { SV.cat = d.exthen; SV.anim = true; } if (d.exsrc === 'ex') EV.kAnim = false; SV.src = d.exsrc; try { LS.set('stockSrc', SV.src); } catch (x) {} render(); if (SV.src === 'ex') exSync(true); return; }
-  if (d.exgrp) { const fromKpi = !!d.exgo; EV.grp = fromKpi ? d.exgrp : EV.grp === d.exgrp && d.exgrp !== 'bal' ? 'bal' : d.exgrp; EV.lim = 200; render(); if (fromKpi) exGo('list'); return; }
+  if (d.exgrp) { EV.rowAnim = true; const fromKpi = !!d.exgo; EV.grp = fromKpi ? d.exgrp : EV.grp === d.exgrp && d.exgrp !== 'bal' ? 'bal' : d.exgrp; EV.lim = 200; render(); if (fromKpi) exGo('list'); return; }
   if (d.exgo) return exGo(d.exgo);
   if (d.exmore) { EV.lim += 300; return render(); }
   if (d.exsync) { exSync(true); return render(); }
 });
-document.addEventListener('change', e => { const t = e.target; if (!t || !t.dataset) return; if (t.dataset.exloc) { EV.loc = t.value; EV.lim = 200; render(); } else if (t.dataset.exsort) { EV.sort = t.value; render(); } });
+document.addEventListener('change', e => { const t = e.target; if (!t || !t.dataset) return; if (t.dataset.exloc) { EV.loc = t.value; EV.lim = 200; EV.rowAnim = true; render(); } else if (t.dataset.exsort) { EV.sort = t.value; EV.rowAnim = true; render(); } });
 document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset || !t.dataset.exq || !canStock()) return;   // จำนวนในหน้าคำนวณ: อัปเดตยอดรวมทันที ไม่วาดใหม่ทั้งหน้า
   EV.sel.set(t.dataset.exq, t.value); exSelSave();
   const r = exCalcRows([...EV.sel.keys()].map(c => EX.items.get(c)).filter(Boolean)), y = r.rows.find(z => z.x[0] === t.dataset.exq);

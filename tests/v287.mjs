@@ -68,6 +68,10 @@ eq('cards have meters', await pg.locator('.ex-kpis .k-bar u').count(), 6);
 eq('soft palette: light card background, colored number (not white-on-color)', await pg.evaluate(() => { const c = document.querySelector('.ex-kpis .sk-kpi.k-low'), b = c.querySelector('.skt b'); const lum = s => { const m = s.match(/[\d.]+/g).map(Number); return (0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2]); }; const bgImg = getComputedStyle(c).backgroundImage; return [getComputedStyle(b).color !== 'rgb(255, 255, 255)', /gradient/.test(bgImg)]; }), [true, true]);
 eq('entrance animation only on first render (no replay on 20s refresh)', await pg.evaluate(() => { const first = document.querySelector('.ex-kpis').classList.contains('in'); T.render(); return [document.querySelector('.ex-kpis').classList.contains('in')]; }), [false]);
 await pg.evaluate(() => scrollTo(0, 0)); await pg.waitForTimeout(1200); await pg.locator('.ex-kpis').screenshot({ path: new URL('out/v292-kpis.png', import.meta.url).pathname });
+await pg.evaluate(() => { EV.grp = 'bal'; EV.rowAnim = true; T.render(); }); await pg.waitForTimeout(900);
+await pg.locator('.ex-tabs').screenshot({ path: new URL('out/v293-tabs.png', import.meta.url).pathname });
+{ const bx = await pg.locator('#exList').boundingBox(); await pg.locator('#exList').scrollIntoViewIfNeeded(); const b2 = await pg.locator('#exList').boundingBox(); await pg.screenshot({ path: new URL('out/v293-list.png', import.meta.url).pathname, clip: { x: b2.x, y: Math.max(0, b2.y), width: b2.width, height: Math.min(560, 900 - Math.max(0, b2.y)) } }); }
+eq('group chips + rows carry group colour', await pg.evaluate(() => [!!document.querySelector('.ex-chip .ex-cd'), getComputedStyle(document.querySelector('.ex-row')).getPropertyValue('--g').trim().startsWith('#'), document.querySelector('.ex-tabs').dataset.on]), [true, true, 'ex']);
 eq('pending empty state', await pg.evaluate(() => /ไม่มีรายการรอลง/.test(document.querySelector('#xpPanel').textContent)), true);
 // เปิดสินค้า → บันทึกเบิก
 await pg.click('.ex-row[data-excard="RM-SB-02-0104"] .ex-n'); await pg.waitForTimeout(400);
