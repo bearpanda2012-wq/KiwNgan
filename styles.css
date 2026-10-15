@@ -5810,3 +5810,6 @@ body.auth #bgSndBtn{display:none}
   .xa-stat{grid-template-columns:1fr}
   .ex-albtns{width:100%}.ex-albtns .btn{flex:1;justify-content:center}
 }
+/* v2.96 หน้า Sale: รูปตัวอย่างเล็กข้างเลข Job (แถวติดตามงาน + ตาราง) */
+.sp-cline{display:flex;align-items:center;gap:8px;min-width:0}
+.sp-t .sp-cline+.tag{margin-top:4px}

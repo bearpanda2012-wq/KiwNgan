@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.95.0';
+const APP_VERSION = '2.96.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2436,7 +2436,7 @@ async function salePage() {
       const stp = String(j.steps || '').split('/'), pct = stp.length === 2 && +stp[1] ? Math.round(+stp[0] / +stp[1] * 100) : -1;
       const team = (j.assignee ? av(j.assignee, 'sm') + '<span class="sp-who"><b>' + esc(j.assignee) + '</b>' + (hs(j).length ? '<small>+ ' + esc(hs(j).join(', ')) + '</small>' : '') + '</span>' : '<span class="sub">ยังไม่มอบหมาย</span>');
       const so = stageOf(j, prodOf(j));
-      return '<tr class="sp-r ' + so.cls + (late ? ' late' : '') + (j.status === 'done' ? ' done' : '') + (firstAnim ? ' in' : '') + '" style="--i:' + Math.min(i, 20) + '" data-shov="' + esc(j.code) + '"><td><b class="mono">' + esc(j.code) + '</b>' + (j.priority === 'urgent' ? ' <span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(j.title || '') + '</small></td>' +
+      return '<tr class="sp-r ' + so.cls + (late ? ' late' : '') + (j.status === 'done' ? ' done' : '') + (firstAnim ? ' in' : '') + '" style="--i:' + Math.min(i, 20) + '" data-shov="' + esc(j.code) + '"><td><span class="sp-cline"><b class="mono">' + esc(j.code) + '</b>' + saleTh({ code: j.code, prod: prodOf(j), jobs: (all || []).filter(x => x.code === j.code) }, 'in') + '</span>' + (j.priority === 'urgent' ? ' <span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + esc(j.title || '') + '</small></td>' +
         '<td><span class="sp-type" style="--tc:' + (typeColorPub(j.taskType)) + '">' + esc(j.taskType || '–') + '</span><small>' + esc(groupShort(j.group || '')) + '</small></td>' +
         '<td class="sp-team">' + team + '</td>' +
         '<td>' + stgHtml(stageOf(j, prodOf(j))) +
@@ -5613,11 +5613,19 @@ const jobTh = (j, cls) => { const im = imgsOf(j.id); return im.length ? miniTh(i
 function codeTh(r, cls) {   // แถวตามเลข Job: รูปของงานผลิตก่อน แล้วค่อยรูปจากงานออกแบบ
   const t = r.prod ? pThumb(r.prod) : null; if (t) return miniTh(t.img, t.job.id, imgsOf(t.job.id).length, cls);
   for (const j of designJobsOf(r.code)) { const im = imgsOf(j.id); if (im.length) return miniTh(im[0], j.id, im.length, cls); }
-  return '';
+  return saleTh(r, cls);   // หน้า Sale: รูปมาเป็นรหัสไฟล์ Drive ในข้อมูลงาน
+}
+/* หน้า Sale: รูปตัวอย่างเล็ก (กดดูรูปเต็มจอแบบแกลเลอรีของงานนั้น) · r = แถวตามเลข Job { code, prod, jobs } */
+function saleTh(r, cls) {
+  if (!r || !r.code || !((r.prod && (r.prod.imgs || []).length) || (r.jobs || []).some(j => (j.imgs || []).length))) return '';
+  const im = saleGal(r); if (!im.length) return '';
+  const x = im[0], fb = /^data:/.test(x) ? '' : 'https://lh3.googleusercontent.com/d/' + x + '=w200';
+  return '<span class="card-th mth' + (cls ? ' ' + cls : '') + '" role="button" tabindex="0" data-gal="s:' + esc(r.code) + '" data-gi="0" title="ดูรูป' + (im.length > 1 ? ' (' + im.length + ' รูป)' : '') + '" aria-label="ดูรูปงาน">' +
+    '<img class="th ok" alt="" loading="lazy" referrerpolicy="no-referrer" src="' + esc(saleImgSrc(x, 200)) + '"' + (fb ? ' onerror="if(!this.dataset.r){this.dataset.r=1;this.src=\'' + fb + '\'}"' : '') + '>' + (im.length > 1 ? '<b>' + im.length + '</b>' : '') + '</span>';
 }
 const mthOpen = (e, t) => { e.preventDefault(); e.stopPropagation(); openLightbox(t.dataset.lbjob, t.dataset.lbopen); };
 document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('.mth[data-lbopen]'); if (t) mthOpen(e, t); }, true);
-document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('mth')) mthOpen(e, e.target); }, true);
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('mth')) { if (e.target.dataset.gal) { e.preventDefault(); e.stopPropagation(); if (GALS[e.target.dataset.gal]) galOpen(GALS[e.target.dataset.gal], 0); } else mthOpen(e, e.target); } }, true);
 function pThumb(p) { const own = imgsOf(p.id); if (own.length) return { img: own[0], job: { id: p.id } }; for (const j of designJobsOf(p.code)) { const im = imgsOf(j.id); if (im.length) return { img: im[0], job: j }; } return null; }
 const stIdx = st => PCOLS.indexOf(st === 'shipped' ? 'ready' : st);
 function pTrack(p) {   // แถบความคืบหน้าแบบเดียวกับฝ่ายแบบ: รอผลิต → เครื่อง → สี → แพ็ค → พร้อมส่ง
@@ -5887,7 +5895,6 @@ function coX(r, o) {
     h += m.map(x => '<span class="co-mc' + (x.d ? ' on' : '') + '">' + (x.d ? '✓ ' : PIC.machine) + esc(x.m) + '</span>').join('');
     if (r.prod.paint === 'no') h += '<span class="co-sk">ไม่ทำสี</span>';
     if (r.prod.assy === 'no') h += '<span class="co-sk">ไม่ประกอบ</span>';
-    { const ni = Array.isArray(r.prod.imgs) ? r.prod.imgs.length : 0; if (ni) h += '<span class="co-sk co-ph">' + STI.camera + ni + '</span>'; }
     if (r.prod.note) h += '<span class="co-pnote" title="' + esc(r.prod.note) + '">' + STI.note + esc(String(r.prod.note).slice(0, 60)) + '</span>';
     if (cur && !m.length) h += tc(cur.taskType);
   } else if (cur) {
