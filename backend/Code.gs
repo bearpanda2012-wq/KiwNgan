@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.46.0';
+const VERSION = '1.47.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -50,7 +50,7 @@ const SHEETS = {
   ExMin: ['id', 'min', 'updatedAt', 'updatedBy'],
   ExPend: ['id', 'ts', 'cod', 'des', 'unit', 'kind', 'qty', 'loc', 'dep', 'job', 'note', 'who', 'status', 'doc', 'docDat', 'docKey', 'doneAt', 'doneBy'],   // รอลง Express: บันทึกในแอป → คีย์ใน Express → จับคู่เลขเอกสารเอง   // จุดสั่งซื้อของสินค้าใน Express (id = รหัสสินค้า Express) ตั้งในแอป · Express ไม่ถูกแก้
   // คลังความรู้: 1 แถว = 1 เรื่อง · dept = d ฝ่ายแบบ / p ฝ่ายผลิต / s ฝ่ายสต็อก / g ทั่วไป (แอดมิน) · cat = tip/limit/warn/step · videos = ลิงก์วิดีโอ (JSON) ไม่เก็บไฟล์
-  Kb: ['id', 'dept', 'cat', 'title', 'body', 'videos', 'pin', 'createdBy', 'createdAt', 'updatedBy', 'updatedAt', 'acks']   // acks = ใครกดรับทราบแล้ว {ชื่อ: เวลา} (แก้เนื้อหาแล้วล้าง ต้องรับทราบใหม่)   // price = ราคาต่อหน่วยตอนเบิก · cond = สภาพของที่รับคืน ok/ng/scrap · from = ผู้ส่งคืน
+  Kb: ['id', 'dept', 'cat', 'title', 'body', 'videos', 'pin', 'createdBy', 'createdAt', 'updatedBy', 'updatedAt', 'acks', 'views']   // acks = ใครกดรับทราบแล้ว {ชื่อ: เวลา} (แก้เนื้อหาแล้วล้าง ต้องรับทราบใหม่)   // price = ราคาต่อหน่วยตอนเบิก · cond = สภาพของที่รับคืน ok/ng/scrap · from = ผู้ส่งคืน
 };
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
@@ -118,6 +118,8 @@ const PUBLIC = {
   saleView: p => saleView_(p.k, p.sale),
   // ปุ่ม Sale ที่หน้าเข้าสู่ระบบ: ใส่ PIN ของ Sale (แอดมินตั้งไว้) แล้วได้กุญแจเปิดหน้าสถานะงาน
   saleOpen: p => saleOpen_(p.pin),
+  // หน้า Sale เปิดอ่านเรื่องในคลังความรู้ → นับคนดู (ลิงก์รายคน = ชื่อ Sale · ลิงก์รวม = รหัสเครื่อง)
+  saleKbView: p => saleKbView_(p.k, p.id, p.dev),
   // service worker ถามว่า push ล่าสุดของ "เครื่องนี้" คือเรื่องอะไร (ใช้ endpoint ของเครื่องเป็นกุญแจ ไม่ต้องใช้ token ที่อาจหมดอายุ/เป็นของบัญชีอื่น)
   pushInfoEp: p => ({ info: pushInfoEp_(p.ep) })
 };
@@ -177,6 +179,7 @@ const ACTIONS = {
   kbSave: (p, u) => withLock_(() => kbSave_(p.item, u)),
   kbDelete: (p, u) => withLock_(() => kbDelete_(p.id, u)),
   kbAck: (p, u) => withLock_(() => kbAck_(p.id, u)),
+  kbView: (p, u) => withLock_(() => kbView_(p.id, u.name)),
   stockCount: (p, u) => withLock_(() => stockCount_(p, u)),
   image: (p, u) => imageFull_(p.id),
   // admin
@@ -1221,10 +1224,32 @@ function kbList_(u, metas) {
   return readAll_('Kb').map(k => ({ id: k.id, dept: k.dept, cat: k.cat, title: k.title, body: k.body, videos: kbVideos_(k.videos), pin: k.pin === '1' ? 1 : 0,
     createdBy: maskName_(k.createdBy, u), createdAt: k.createdAt, updatedBy: maskName_(k.updatedBy, u), updatedAt: k.updatedAt,
     acks: metas ? undefined : kbAcks_(k.acks, u),
+    views: kbViewN_(k.views), viewers: metas ? undefined : kbViewers_(k.views, u),
     imgs: metas ? (im[k.id] || []).map(m => m.fileId).filter(Boolean).slice(0, 12) : undefined }))
     .sort((a, b) => (b.pin - a.pin) || String(b.updatedAt).localeCompare(String(a.updatedAt)));
 }
 function kbAcks_(raw, u) { let o = {}; try { o = JSON.parse(raw || '{}') || {}; } catch (e) { o = {}; } const out = {}; Object.keys(o).forEach(n => { out[maskName_(n, u)] = o[n]; }); return out; }
+/* คนดูเรื่องในคลังความรู้: views = {ชื่อ|Sale·ชื่อ|Sale#เครื่อง: เวลาที่เปิดครั้งแรก} · นับคนละ 1 ครั้ง */
+function kbViewMap_(raw) { try { const o = JSON.parse(raw || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+const kbViewN_ = raw => Object.keys(kbViewMap_(raw)).length;
+function kbViewers_(raw, u) {
+  const o = kbViewMap_(raw);
+  return Object.keys(o).map(n => ({ n: /^Sale·/.test(n) ? 'Sale ' + n.slice(5) : /^Sale#/.test(n) ? 'Sale' : maskName_(n, u), at: o[n] })).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+function kbView_(id, who) {
+  const row = rowOf_('Kb', String(id || '')); if (row < 0 || !who) return { views: 0 };
+  const k = readRow_('Kb', row), o = kbViewMap_(k.views);
+  if (!o[who]) { o[who] = nowIso_(); k.views = JSON.stringify(o); writeRow_('Kb', k, row); bump_('data'); }
+  return { views: Object.keys(o).length };
+}
+function saleKbView_(k, id, dev) {
+  const key = PropertiesService.getScriptProperties().getProperty('SALE_KEY'), keys = jsonProp_('SALE_KEYS');
+  const own = k ? Object.keys(keys).find(n => keys[n] === String(k)) : '';
+  if (!k || (String(k) !== key && !own)) throw new Error('ลิงก์นี้ใช้ไม่ได้แล้ว');
+  const d = String(dev || '').replace(/[^\w-]/g, '').slice(0, 16);
+  if (!own && d.length < 6) return { views: 0 };
+  return withLock_(() => kbView_(id, own ? 'Sale·' + own : 'Sale#' + d));
+}
 /** กด "รับทราบ" เรื่องในคลังความรู้ (ใช้กับเรื่องที่ปักหมุด) */
 function kbAck_(id, u) {
   const row = rowOf_('Kb', id);
@@ -1615,9 +1640,15 @@ function msgVisible_(m, u) {
   if (m.to === 'team' || m.from === u.name || m.to === u.name) return true;
   return m.to === 'admin' && isAdmin_(u);
 }
+/* คนที่อ่านข้อความแล้ว (ไม่นับคนส่ง) · ชื่อคนอ่านส่งให้เฉพาะคนส่งและแอดมิน */
+const msgReaders_ = m => String(m.readBy || '').split(',').filter(n => n && n !== m.from);
+function msgRead_(m, u) {
+  const r = msgReaders_(m); if (!r.length) return null;
+  return m.from === u.name || isAdmin_(u) ? [r.length, r.map(n => maskName_(n, u))] : [r.length];
+}
 function maskMsg_(m, u) {
-  const read = (',' + m.readBy + ',').indexOf(',' + u.name + ',') >= 0 || m.from === u.name;
-  const o = { id: m.id, ts: m.ts, from: m.from, fromAdmin: m.fromRole === 'admin', to: m.to, kind: m.kind, text: m.text, jobId: m.jobId, status: m.status, helper: m.helper, read: read, img: m.img || '' };
+  const read = (',' + m.readBy + ',').indexOf(',' + u.name + ',') >= 0 || m.from === u.name, rd = msgRead_(m, u);
+  const o = { id: m.id, ts: m.ts, from: m.from, fromAdmin: m.fromRole === 'admin', to: m.to, kind: m.kind, text: m.text, jobId: m.jobId, status: m.status, helper: m.helper, read: read, img: m.img || '', rc: rd ? rd[0] : 0, rn: rd && rd[1] ? rd[1] : undefined };
   if (!isAdmin_(u)) { o.from = maskName_(o.from, u); o.helper = maskName_(o.helper, u); if (adminNames_().indexOf(o.to) >= 0) o.to = 'admin'; }
   return o;
 }
@@ -1628,7 +1659,8 @@ function messages_(u, since, stamp) {
   const s = String(since || '');
   const vis = readAll_('Messages').filter(m => msgVisible_(m, u) && m.ts >= cutoff);
   const list = vis.filter(m => !s || m.ts > s || (m.kind === 'help' && m.status !== 'done'));
-  return { messages: list.slice(-400).map(m => maskMsg_(m, u)), ids: vis.map(m => m.id), serverTime: nowIso_(), stamp: st };
+  const rd = {}; vis.forEach(m => { const r = msgRead_(m, u); if (r) rd[m.id] = r; });   // ยอดคนอ่านของทุกข้อความ (ข้อความเก่าก็อัปเดต)
+  return { messages: list.slice(-400).map(m => maskMsg_(m, u)), ids: vis.map(m => m.id), rd: rd, serverTime: nowIso_(), stamp: st };
 }
 function sendMessage_(p, u) {
   const text = String(p.text || '').trim().slice(0, 1000);

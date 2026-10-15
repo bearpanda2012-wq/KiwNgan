@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.96.2';
+const APP_VERSION = '2.97.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -540,8 +540,9 @@ const Demo = {
   pub(u) { return { id: u.id, name: u.name, full: u.full, role: u.role, color: u.color, active: u.active, photo: u.photo || '', perms: u.perms || '' }; },
   async messages(p) { const d = this.db(), u = this.me(d); d.messages = d.messages || seedMsgs(d); this.save(d);
     const vis = m => m.to === 'team' || m.from === u.name || m.to === u.name || (m.to === 'admin' && P.admin(u));
-    return { ids: d.messages.filter(vis).map(m => m.id), messages: d.messages.filter(m => vis(m) && (!p.since || m.ts > p.since || (m.kind === 'help' && m.status !== 'done'))).map(m => this.mmsg(d, u, m)), serverTime: nowLocal() + ':' + pad(new Date().getSeconds()) }; },
-  mmsg(d, u, m) { const admins = d.users.filter(x => x.role === 'admin').map(x => x.name); const o = Object.assign({}, m, { fromAdmin: admins.indexOf(m.from) >= 0, read: (m.readBy || []).indexOf(u.name) >= 0 || m.from === u.name }); delete o.readBy;
+    return { ids: d.messages.filter(vis).map(m => m.id), messages: d.messages.filter(m => vis(m) && (!p.since || m.ts > p.since || (m.kind === 'help' && m.status !== 'done'))).map(m => this.mmsg(d, u, m)), rd: d.messages.filter(vis).reduce((o, m) => { const r = this.mread(d, u, m); if (r.rc) o[m.id] = r.rn ? [r.rc, r.rn] : [r.rc]; return o; }, {}), serverTime: nowLocal() + ':' + pad(new Date().getSeconds()) }; },
+  mread(d, u, m) { const r = (m.readBy || []).filter(n => n && n !== m.from); const adm = d.users.filter(x => x.role === 'admin').map(x => x.name); return { rc: r.length, rn: r.length && (m.from === u.name || P.admin(u)) ? r.map(n => !P.admin(u) && adm.indexOf(n) >= 0 ? ADMIN_LABEL : n) : undefined }; },
+  mmsg(d, u, m) { const admins = d.users.filter(x => x.role === 'admin').map(x => x.name); const o = Object.assign({}, m, { fromAdmin: admins.indexOf(m.from) >= 0, read: (m.readBy || []).indexOf(u.name) >= 0 || m.from === u.name }, this.mread(d, u, m)); delete o.readBy;
     if (!P.admin(u)) { if (o.fromAdmin) o.from = ADMIN_LABEL; if (admins.indexOf(o.helper) >= 0) o.helper = ADMIN_LABEL; if (admins.indexOf(o.to) >= 0) o.to = 'admin'; } return o; },
   async sendMessage(p) { const d = this.db(), u = this.me(d); d.messages = d.messages || []; const text = String(p.text || '').trim(), img = /^data:image\//.test(p.img || '') ? String(p.img) : ''; if (!text && !img) throw new Error('พิมพ์ข้อความก่อนส่ง');
     let to = p.to || 'team'; const tu = d.users.find(x => x.name === to); if (tu && tu.role === 'admin' && !P.admin(u)) to = 'admin';
@@ -674,7 +675,7 @@ const Demo = {
     const now = nowLocal() + ':' + pad(new Date().getSeconds()), logId = uid('sl_'); it.qty = bal; it.updatedAt = now; it.updatedBy = u.name;
     d.stock.logs.push({ id: logId, ts: now, itemId: it.id, kind: k, qty: k === 'adj' ? Math.round((bal - have) * 100) / 100 : n, bal: bal, job: job, who: u.name, note: String(p.note || ''), price: k === 'ret' ? +base.price || 0 : +it.price || 0, cond: cond, from: from });
     this.save(d); return Object.assign(this.sview(d, u), { logId: logId, itemId: it.id }); },
-  kbList(d, u, sale) { const ims = id => (d.images || []).filter(m => m.jobId === id); return (d.kb || []).map(k => Object.assign(this.mask(d, u, clone(k), ['createdBy', 'updatedBy']), sale ? { imgs: ims(k.id).map(m => m.thumb).filter(Boolean), acks: undefined } : { acks: k.acks || {} })).sort((a, b) => (b.pin - a.pin) || String(b.updatedAt).localeCompare(String(a.updatedAt))); },
+  kbList(d, u, sale) { const ims = id => (d.images || []).filter(m => m.jobId === id); return (d.kb || []).map(k => Object.assign(this.mask(d, u, clone(k), ['createdBy', 'updatedBy']), Object.assign({ views: Object.keys(k.views || {}).length }, sale ? { imgs: ims(k.id).map(m => m.thumb).filter(Boolean), acks: undefined, viewers: undefined } : { acks: k.acks || {}, viewers: Object.keys(k.views || {}).map(n => ({ n: /^Sale·/.test(n) ? 'Sale ' + n.slice(5) : /^Sale#/.test(n) ? 'Sale' : !P.admin(u) && d.users.some(x => x.role === 'admin' && x.name === n) ? ADMIN_LABEL : n, at: k.views[n] })).sort((a, b) => String(b.at).localeCompare(String(a.at))) }))).sort((a, b) => (b.pin - a.pin) || String(b.updatedAt).localeCompare(String(a.updatedAt))); },
   async kbSave(p) { const d = this.db(), u = this.me(d), it = p.item || {}; d.kb = d.kb || [];
     const title = String(it.title || '').trim(); if (!title) throw new Error('ใส่หัวข้อ');
     let cur = it.id ? d.kb.find(x => x.id === it.id) : null; if (it.id && !cur) throw new Error('ไม่พบเรื่องนี้ อาจถูกลบไปแล้ว');
@@ -686,6 +687,9 @@ const Demo = {
   async themeGet() { const d = this.db(), u = this.me(d); return { data: (d.themes || {})[u.id] || null }; },
   async themeSave(p) { const d = this.db(), u = this.me(d), cur = (d.themes || {})[u.id]; if (!p.data || typeof p.data.theme !== 'object') throw new Error('ข้อมูลธีมไม่ถูกต้อง');
     if (cur && cur.ts > p.data.ts) return { ts: cur.ts, stale: true, data: cur }; d.themes = d.themes || {}; d.themes[u.id] = { ts: p.data.ts, theme: p.data.theme, saves: (p.data.saves || []).slice(0, 24) }; this.save(d); return { ts: p.data.ts }; },
+  kbViewAdd(d, id, who) { const k = (d.kb || []).find(x => x.id === id); if (!k || !who) return 0; k.views = k.views || {}; if (!k.views[who]) { k.views[who] = nowLocal(); this.save(d); } return Object.keys(k.views).length; },
+  async kbView(p) { const d = this.db(), u = this.me(d); return { views: this.kbViewAdd(d, p.id, u.name) }; },
+  async saleKbView(p) { const d = this.db(), keys = d.saleKeys || {}, own = Object.keys(keys).find(n => keys[n] === p.k) || ''; if (!own && (!d.saleKey || p.k !== d.saleKey)) throw new Error('ลิงก์นี้ใช้ไม่ได้แล้ว'); return { views: this.kbViewAdd(d, p.id, own ? 'Sale·' + own : 'Sale#' + String(p.dev || '').slice(0, 16)) }; },
   async kbAck(p) { const d = this.db(), u = this.me(d), k = (d.kb || []).find(x => x.id === p.id); if (!k) throw new Error('ไม่พบเรื่องนี้'); k.acks = k.acks || {}; if (!k.acks[u.name]) k.acks[u.name] = nowLocal() + ':00'; this.save(d); return { kb: this.kbList(d, u) }; },
   async kbDelete(p) { const d = this.db(), u = this.me(d), k = (d.kb || []).find(x => x.id === p.id); if (!k) throw new Error('ไม่พบเรื่องนี้'); if (!kbCanU(u, k.dept)) throw new Error('ลบได้เฉพาะความรู้ของฝ่ายตัวเอง'); d.kb = d.kb.filter(x => x.id !== p.id); d.images = (d.images || []).filter(m => m.jobId !== p.id); this.save(d); return { kb: this.kbList(d, u) }; },
   async stockCount(p) { const d = this.db(), u = this.me(d); this.sedit(u); d.stock = d.stock || seedStock(); const now = nowLocal() + ':' + pad(new Date().getSeconds()); let n = 0;
@@ -861,7 +865,7 @@ const Remote = {
     return data.data;
   }
 };
-['exMinSet', 'exPendAdd', 'exPendSet', 'exPendMatch', 'themeGet', 'themeSave', 'digestTest', 'kbSave', 'kbDelete', 'kbAck', 'stockCount', 'pushTest', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
+['exMinSet', 'exPendAdd', 'exPendSet', 'exPendMatch', 'themeGet', 'themeSave', 'digestTest', 'kbSave', 'kbDelete', 'kbAck', 'kbView', 'saleKbView', 'stockCount', 'pushTest', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -2554,11 +2558,12 @@ async function pollMessages(first) {
       if (i >= 0) M.list[i] = Object.assign(M.list[i], m); else { M.list.push(m); if (M.loaded && !m.read && !M.seen[m.id]) fresh.push(m); }
       M.seen[m.id] = 1;
     });
+    if (r.rd) M.list.forEach(m => { const x = r.rd[m.id]; m.rc = x ? x[0] : 0; m.rn = x && x[1] ? x[1] : undefined; });
     if (Array.isArray(r.ids)) { const keep = {}; r.ids.forEach(id => { keep[id] = 1; }); M.list = M.list.filter(m => keep[m.id] || m.pending); }
     M.list.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
     if (r.serverTime) M.since = r.serverTime;
     M.loaded = true;
-    const sig = M.list.map(m => m.id + (m.read ? 1 : 0) + m.status).join('|');
+    const sig = M.list.map(m => m.id + (m.read ? 1 : 0) + m.status + ':' + (m.rc || 0)).join('|');
     fresh.forEach(notifyMsg);
     if (M.open) { renderMsgPanel(); markChanRead(M.ch); }
     if (sig !== M.sig) { M.sig = sig; if (!first && !S.edit && !S.lb) render(); else { renderMsgFab(); if (S.screen === 'app') { $('#nav').innerHTML = navHtml(true); $('#tabbar').innerHTML = tabsHtml(); } } } else renderMsgFab();
@@ -2577,6 +2582,16 @@ function startMsgPolling() {
 function stopMsgPolling() { roomLeave(true); rtcStop(); clearInterval(M.timer); M.timer = null; M.list = []; M.open = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); renderMsgFab(); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && M.timer) pollMessages(); });
 
+/* อ่านแล้วกี่คน: ข้อความของเรา = "อ่านแล้ว N" (แชตส่วนตัว = "อ่านแล้ว") · ข้อความคนอื่นในห้องทีม = ไอคอนตา + จำนวน · ชี้/แตะดูชื่อ (เฉพาะคนส่งและแอดมิน) */
+function msgReadTag(m, mine) {
+  const n = +m.rc || 0; if (m.pending) return '';
+  if (!n) return mine ? '<span class="bub-rd none">ยังไม่มีคนอ่าน</span>' : '';
+  const who = Array.isArray(m.rn) && m.rn.length ? m.rn.join(', ') : '';
+  const dm = M.ch !== 'team' && M.ch !== 'admin';
+  return '<span class="bub-rd' + (mine ? ' me' : '') + (who ? ' has' : '') + '"' + (who ? ' title="อ่านแล้ว: ' + esc(who) + '" tabindex="0" data-rdwho="' + esc(who) + '"' : '') + '>' + (mine ? (dm ? '✓ อ่านแล้ว' : '✓ อ่านแล้ว ' + n) : MSG_EYE + n) + '</span>';
+}
+const MSG_EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-rdwho]'); if (t) { e.stopPropagation(); toast('อ่านแล้ว ' + t.dataset.rdwho.split(', ').length + ' คน: ' + t.dataset.rdwho); } });
 async function markChanRead(ch) {
   const ids = M.list.filter(m => !m.read && chanOf(m) === ch).map(m => m.id);
   if (!ids.length) return;
@@ -2685,7 +2700,7 @@ function helpCard(m) {
   const st = m.status || 'open';
   const lab = st === 'open' ? 'รอคนช่วย' : st === 'taken' ? (m.helper ? m.helper + ' กำลังช่วย' : 'มีคนรับช่วยแล้ว') : 'เรียบร้อยแล้ว';
   const canTake = st === 'open' && !mine, canClose = st !== 'done' && (mine || isAdmin() || m.helper === S.me);
-  return '<div class="help-card hc-' + st + '" data-mid="' + esc(m.id) + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบคำขอนี้">' + I.trash + '</button>' : '') + '<div class="hc-top"><span class="hc-ic">' + MSG_IC.sos + '</span><div><b>' + (mine ? 'คุณขอความช่วยเหลือ' : esc(m.from) + ' ขอความช่วยเหลือ') + '</b><small>' + (m.to === 'team' ? 'ถึงทั้งทีม' : m.to === 'admin' ? 'ถึง' + ADMIN_LABEL : 'ถึง ' + esc(m.to)) + ' · ' + msgTime(m.ts) + '</small></div><span class="hc-st">' + lab + '</span></div>' +
+  return '<div class="help-card hc-' + st + '" data-mid="' + esc(m.id) + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบคำขอนี้">' + I.trash + '</button>' : '') + '<div class="hc-top"><span class="hc-ic">' + MSG_IC.sos + '</span><div><b>' + (mine ? 'คุณขอความช่วยเหลือ' : esc(m.from) + ' ขอความช่วยเหลือ') + '</b><small>' + (m.to === 'team' ? 'ถึงทั้งทีม' : m.to === 'admin' ? 'ถึง' + ADMIN_LABEL : 'ถึง ' + esc(m.to)) + ' · ' + msgTime(m.ts) + msgReadTag(m, m.from === S.me) + '</small></div><span class="hc-st">' + lab + '</span></div>' +
     '<p>' + msgRich(m.text) + '</p>' + (!j ? (cs => cs.length ? '<div class="bub-jobs">' + cs.slice(0, 2).map(jobMini).join('') + '</div>' : '')(jobsInText(m.text)) : '') + (j ? '<button class="hc-job" data-open="' + esc(j.id) + '">' + stBadge(j) + '<b class="mono">' + esc(j.code) + '</b><small>' + esc(j.title || '') + '</small></button>' : '') +
     (canTake || canClose ? '<div class="hc-act">' + (canTake ? '<button class="btn sm primary" data-helptake="' + esc(m.id) + '">' + MSG_IC.hand + 'ฉันช่วยได้</button>' : '') + (canClose ? '<button class="btn sm" data-helpdone="' + esc(m.id) + '">' + STI.done + 'ปิดคำขอ</button>' : '') + '</div>' : '') + '</div>';
 }
@@ -2733,7 +2748,7 @@ function renderMsgPanel() {
     if (m.kind === 'help') return sep + helpCard(m);
     const mine = (m.from === S.me && !m.fromAdmin) || (isAdmin() && m.from === S.me);
     return sep + '<div class="bub' + (mine ? ' me' : '') + (m.pending ? ' pending' : '') + '" data-mid="' + esc(m.id) + '">' + (isAdmin() ? '<button class="bub-del" data-msgdel="' + esc(m.id) + '" title="ลบข้อความนี้">' + I.trash + '</button>' : '') + (mine ? '' : (m.fromAdmin && !isAdmin() ? '<span class="av bub-av adm">' + MSG_IC.shield + '</span>' : av(m.from, 'bub-av'))) +
-      '<div class="bub-b">' + (mine || M.ch !== 'team' ? '' : '<small class="bub-n">' + esc(m.from) + '</small>') + msgImg(m) + (m.text ? '<p>' + msgRich(m.text) + '</p>' : '') + (m.jobId && jobById(m.jobId) ? '<button class="bub-job" data-open="' + esc(m.jobId) + '">' + esc(jobById(m.jobId).code) + '</button>' : (cs => cs.length ? '<div class="bub-jobs">' + cs.slice(0, 2).map(jobMini).join('') + '</div>' : '')(jobsInText(m.text))) + '<time>' + msgTime(m.ts) + '</time></div></div>';
+      '<div class="bub-b">' + (mine || M.ch !== 'team' ? '' : '<small class="bub-n">' + esc(m.from) + '</small>') + msgImg(m) + (m.text ? '<p>' + msgRich(m.text) + '</p>' : '') + (m.jobId && jobById(m.jobId) ? '<button class="bub-job" data-open="' + esc(m.jobId) + '">' + esc(jobById(m.jobId).code) + '</button>' : (cs => cs.length ? '<div class="bub-jobs">' + cs.slice(0, 2).map(jobMini).join('') + '</div>' : '')(jobsInText(m.text))) + '<time>' + msgTime(m.ts) + msgReadTag(m, mine) + '</time></div></div>';
   }).join('') : '<div class="mp-empty"><span class="e-ic">' + MSG_IC.chat + '</span><b>ยังไม่มีข้อความ</b><small>' + (M.ch === 'team' ? 'ส่งข้อความถึงทุกคนในทีมได้ที่นี่' : 'เริ่มคุยกับ ' + esc(cur.name)) + '</small></div>';
   const helpForm = M.help ? '<div class="mp-help"><div class="mp-help-h"><span class="hc-ic">' + MSG_IC.sos + '</span><b>ขอความช่วยเหลือ</b><button class="icon-btn sm" data-act="helpoff" aria-label="ยกเลิก">✕</button></div>' +
       '<div class="seg"><button data-helpto="team" aria-pressed="' + (M.helpTo === 'team') + '">' + MSG_IC.team + 'ทั้งทีม</button>' + (!isAdmin() ? '<button data-helpto="admin" aria-pressed="' + (M.helpTo === 'admin') + '">' + MSG_IC.shield + ADMIN_LABEL + '</button>' : '') + '</div>' +
@@ -6075,7 +6090,7 @@ function kbCard(a, k) {
     kbCover(a) + (a.pin ? '<span class="kb-pin" title="ปักหมุด">' + KB_IC.pin + '</span>' : '') + (kbNeedAck(a) ? '<span class="kb-needack">ยังไม่รับทราบ</span>' : '') +
     '<div class="kb-cb"><div class="kb-tags">' + kbDeptChip(a.dept) + kbChip(a.cat) + '</div><b class="kb-t">' + esc(a.title) + '</b>' + (a.body ? '<p class="kb-ex">' + esc(kbExcerpt(a.body)) + '</p>' : '') +
     '<div class="kb-foot">' + (KM.ctx === 'app' && a.updatedBy ? av(a.updatedBy, 'sm') : '') + '<small>' + esc((a.updatedBy ? a.updatedBy + ' · ' : '') + fdt(String(a.updatedAt || a.createdAt || '').slice(0, 16))) + '</small><span class="kb-cnt">' +
-      (ni ? '<em>' + PICK_IC + ni + '</em>' : '') + (nv ? '<em class="v">' + KB_IC.video + nv + '</em>' : '') + '</span></div></div></article>';
+      (+a.views ? '<em class="vw" title="ดูแล้ว ' + a.views + ' คน">' + MSG_EYE + a.views + '</em>' : '') + (ni ? '<em>' + PICK_IC + ni + '</em>' : '') + (nv ? '<em class="v">' + KB_IC.video + nv + '</em>' : '') + '</span></div></div></article>';
 }
 /* หน้ารวม (ในแอปและหน้า Sale ใช้ร่วมกัน) */
 function kbListHtml(an) {
@@ -6104,7 +6119,25 @@ function viewKb() {
 }
 
 /* ---- หน้าต่างอ่าน / เขียน ---- */
-function kbOpen(id) { KM.id = id; KM.mode = 'view'; KM.del = false; KM.f = null; kbDraw(); }
+function kbOpen(id) { KM.id = id; KM.mode = 'view'; KM.del = false; KM.f = null; kbDraw(); kbSeen(id); }
+/* นับคนดู: ส่งครั้งเดียวต่อเครื่องต่อเรื่อง · หน้า Sale ใช้รหัสเครื่องแทนชื่อ */
+const KB_SEEN = {};
+function kbSeen(id) {
+  const a = kbAll().find(x => x.id === id); if (!a || KB_SEEN[id]) return;
+  const me = KM.ctx === 'sale' ? '' : S.me; if (KM.ctx === 'app' && (!S.user || (a.viewers || []).some(v => v.n === me))) { KB_SEEN[id] = 1; return; }
+  const mark = LS.get('kbSeen', {}) || {}; if (KM.ctx === 'sale' && mark[id]) { KB_SEEN[id] = 1; return; }
+  KB_SEEN[id] = 1;
+  const done = r => { if (r && +r.views) { a.views = +r.views; if (KM.ctx === 'app' && !(a.viewers || []).some(v => v.n === me)) a.viewers = [{ n: me, at: nowLocal() }].concat(a.viewers || []); kbPaintViews(a); } };
+  if (KM.ctx === 'sale') { let dev = LS.get('kbDev', ''); if (!dev) { dev = Math.random().toString(36).slice(2, 12); LS.set('kbDev', dev); }
+    api().saleKbView({ k: SALE_Q.k, id: id, dev: dev }).then(r => { mark[id] = 1; LS.set('kbSeen', mark); done(r); }).catch(() => { KB_SEEN[id] = 0; }); }
+  else api().kbView({ id: id }).then(done).catch(() => { KB_SEEN[id] = 0; });
+}
+function kbPaintViews(a) { const el = document.querySelector('.kb-views[data-kbv="' + a.id + '"]'); if (el) el.outerHTML = kbViewsHtml(a); }
+function kbViewsHtml(a) {
+  const n = +a.views || 0, vs = a.viewers || [];
+  return '<div class="kb-views" data-kbv="' + esc(a.id) + '">' + MSG_EYE + '<b>' + (n ? 'ดูแล้ว ' + n + ' คน' : 'ยังไม่มีคนเปิดดู') + '</b>' +
+    (KM.ctx === 'app' && vs.length ? '<details><summary>ดูรายชื่อ</summary><ul>' + vs.map(v => '<li>' + av(v.n, 'sm') + '<span class="kv-n">' + esc(v.n) + '</span><small>' + esc(fdt(String(v.at || '').slice(0, 16))) + '</small></li>').join('') + '</ul></details>' : '') + '</div>';
+}
 function kbAddOpen(pre) {
   const mine = kbMyDepts(); if (!mine.length) return;
   kbPendClear(); KM.id = ''; KM.mode = 'form'; KM.del = false; KM.catNew = false;
@@ -6142,7 +6175,7 @@ function kbReadHtml(a) {
   const d = KB_DEPT[a.dept] || KB_DEPT.g, can = kbCan(a.dept), vids = (a.videos || []);
   return '<header class="kb-rh"><i class="kb-rh-ic">' + kbCatOf(a.cat).ic + '</i><div class="kb-tags">' + kbDeptChip(a.dept) + kbChip(a.cat) + (a.pin ? '<span class="kb-pinchip">' + KB_IC.pin + 'ปักหมุด</span>' : '') + '</div>' +
       '<h2>' + esc(a.title) + '</h2><small>' + esc([a.createdBy ? 'เขียนโดย ' + a.createdBy : '', a.updatedAt ? 'อัปเดต ' + fdt(String(a.updatedAt).slice(0, 16)) + (a.updatedBy && a.updatedBy !== a.createdBy ? ' โดย ' + a.updatedBy : '') : ''].filter(Boolean).join(' · ')) + '</small>' + KB_X + '</header>' +
-    '<div class="pm-b kb-rb">' + kbAckHtml(a) + (a.body ? '<div class="kb-body">' + kbBody(a.body) + '</div>' : '') + kbGallery(a) +
+    '<div class="pm-b kb-rb">' + kbViewsHtml(a) + kbAckHtml(a) + (a.body ? '<div class="kb-body">' + kbBody(a.body) + '</div>' : '') + kbGallery(a) +
       (vids.length ? '<div class="kb-vids"><span class="lbl">' + KB_IC.video + 'วิดีโอ ' + vids.length + ' รายการ</span>' + vids.map(vidHtml).join('') + '</div>' : '') +
       (!a.body && !kbImgs(a).length && !vids.length ? '<p class="sub">ยังไม่มีรายละเอียด</p>' : '') + '</div>' +
     '<div class="pm-f">' + (can ? (KM.del ? '<span class="pm-del">ลบ "' + esc(a.title) + '"? (ลบรูปด้วย)</span><button type="button" class="btn sm" data-kbdel="no">ไม่</button><button type="button" class="btn sm danger" data-kbdel="yes"' + (KM.busy ? ' disabled' : '') + '>ลบ</button>'

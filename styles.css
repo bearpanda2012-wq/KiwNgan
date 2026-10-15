@@ -5813,3 +5813,22 @@ body.auth #bgSndBtn{display:none}
 /* v2.96 หน้า Sale: รูปตัวอย่างเล็กข้างเลข Job (แถวติดตามงาน + ตาราง) */
 .sp-cline{display:flex;align-items:center;gap:8px;min-width:0}
 .sp-t .sp-cline+.tag{margin-top:4px}
+/* v2.97 อ่านแล้วกี่คน (แชต) */
+.bub-rd{display:inline-flex;align-items:center;gap:3px;margin-left:6px;font-weight:600;opacity:1}
+.bub-rd svg{width:12px;height:12px}
+.bub-rd.me{color:#0E7C66}.bub.me .bub-rd.me{color:inherit;opacity:.95}
+.bub-rd.none{font-weight:500;opacity:.75}
+.bub-rd.has{cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
+/* v2.97 คลังความรู้: ดูแล้วกี่คน */
+.kb-cnt em.vw{color:#0E7C66}
+.kb-views{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 12px;padding:8px 12px;border-radius:12px;background:color-mix(in oklab,#0E7C66 8%,var(--surface));color:#0E7C66;font-size:13px}
+.kb-views>svg{width:16px;height:16px}
+.kb-views details{margin-left:auto;color:var(--text)}
+.kb-views summary{cursor:pointer;font-size:12.5px;color:#0E7C66;font-weight:600}
+.kb-views ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px;max-height:220px;overflow:auto;min-width:220px}
+.kb-views li{display:flex;align-items:center;gap:8px;font-size:13px}
+.kb-views li small{margin-left:auto;color:var(--muted)}
+.kb-views details[open]{flex-basis:100%;margin-left:0}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .kb-views,:root:not([data-theme="light"]) .kb-views summary,:root:not([data-theme="light"]) .kb-cnt em.vw,:root:not([data-theme="light"]) .bub-rd.me{color:#5FD3B8}}
+:root[data-theme="dark"] .kb-views,:root[data-theme="dark"] .kb-views summary,:root[data-theme="dark"] .kb-cnt em.vw,:root[data-theme="dark"] .bub-rd.me{color:#5FD3B8}
+.kb-views ul{color:var(--text)}

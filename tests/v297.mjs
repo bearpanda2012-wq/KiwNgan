@@ -1,0 +1,61 @@
+// v2.97: คลังความรู้บอกจำนวนคนดู (ในแอป + หน้า Sale) · แชตบอกว่าอ่านแล้วกี่คน
+const { chromium } = await import(process.env.PW);
+import http from 'http'; import fs from 'fs'; import path from 'path';
+const root = new URL('..', import.meta.url).pathname; fs.mkdirSync(new URL('out', import.meta.url).pathname, { recursive: true });
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,api,vidParse};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(8854);
+const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1300, height: 900 } });
+const errs = []; pg.on('pageerror', e => errs.push(e.message));
+await pg.route(/youtube|ytimg|vimeo|facebook|tiktok|drive\.google/, r => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body style="background:#111"></body></html>' }));
+await pg.addInitScript(() => { if (!sessionStorage.getItem('kn-init')) { localStorage.clear(); sessionStorage.setItem('kn-init', '1'); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
+const shot = n => pg.screenshot({ path: new URL('out/' + n + '.png', import.meta.url).pathname });
+let ok = 0, bad = 0; const eq = (l, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + l + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
+const clean = () => pg.evaluate(() => document.querySelectorAll('.ntf,.chat-heads').forEach(e => e.remove()));
+const logout = async () => { await pg.evaluate(() => Object.keys(localStorage).filter(k => /token/.test(k)).forEach(k => localStorage.removeItem(k))); await pg.reload(); await pg.waitForTimeout(700); };
+const loginAs = async n => { await pg.click('.who:has-text("' + n + '")'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1300); await clean(); };
+// --- admin
+const adminIn = async () => { await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(900); await clean(); };
+await pg.goto('http://127.0.0.1:8854/index.html'); await pg.waitForTimeout(600);
+await adminIn();
+// ---- คลังความรู้ ----
+await pg.evaluate(() => T.go('kb')); await pg.waitForTimeout(600); await clean();
+eq('card: no eye before anyone views', await pg.locator('.kb-card[data-kbopen="k_demo1"] .kb-cnt em.vw').count(), 0);
+await pg.click('.kb-card[data-kbopen="k_demo1"]'); await pg.waitForTimeout(500);
+eq('reader shows ดูแล้ว 1 คน', (await pg.locator('.kb-views b').textContent()).trim(), 'ดูแล้ว 1 คน');
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+await logout(); await loginAs('ต้น'); await pg.evaluate(() => T.go('kb')); await pg.waitForTimeout(600); await clean();
+eq('card shows eye count 1', (await pg.locator('.kb-card[data-kbopen="k_demo1"] .kb-cnt em.vw').textContent()).trim(), '1');
+await pg.click('.kb-card[data-kbopen="k_demo1"]'); await pg.waitForTimeout(500);
+eq('second person → 2 คน', (await pg.locator('.kb-views b').textContent()).trim(), 'ดูแล้ว 2 คน');
+await pg.click('.kb-views summary'); await pg.waitForTimeout(150);
+const names = await pg.locator('.kb-views li .kv-n').allTextContents();
+eq('viewer names (admin hidden)', [names.length, names.includes('ต้น'), names.includes('แอดมิน')], [2, true, false]);
+await pg.locator('#kbModal .pm-card, .kb-modal .pm-card, [class*="kb-m"] .pm-card').first().screenshot({ path: new URL('out/v297-kb.png', import.meta.url).pathname }).catch(() => {});
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+await pg.click('.kb-card[data-kbopen="k_demo1"]'); await pg.waitForTimeout(400);
+eq('reopen does not count again', (await pg.locator('.kb-views b').textContent()).trim(), 'ดูแล้ว 2 คน');
+await pg.keyboard.press('Escape');
+// ---- แชต: ต้นส่งถึงทีม → บอสเปิดอ่าน → ต้นเห็น "อ่านแล้ว 1" ----
+await pg.click('[data-act="msgopen"]'); await pg.waitForTimeout(500);
+await pg.click('.mp-ch[data-ch="team"]').catch(() => {});
+await pg.fill('#msgText', 'ทดสอบอ่านแล้ว'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(900);
+const myBub = () => pg.locator('.bub.me', { hasText: 'ทดสอบอ่านแล้ว' }).last();
+eq('own new message: ยังไม่มีคนอ่าน', (await myBub().locator('.bub-rd').textContent()).trim(), 'ยังไม่มีคนอ่าน');
+await logout(); await loginAs('บอส'); await pg.click('[data-act="msgopen"]'); await pg.waitForTimeout(800); await pg.click('.mp-ch[data-ch="team"]').catch(() => {}); await pg.waitForTimeout(600);
+await logout(); await loginAs('ต้น'); await pg.click('[data-act="msgopen"]'); await pg.waitForTimeout(800); await pg.click('.mp-ch[data-ch="team"]').catch(() => {}); await pg.waitForTimeout(600);
+eq('sender sees ✓ อ่านแล้ว 1', (await myBub().locator('.bub-rd').textContent()).trim(), '✓ อ่านแล้ว 1');
+eq('names in tooltip', await myBub().locator('.bub-rd').getAttribute('title'), 'อ่านแล้ว: บอส');
+await myBub().locator('.bub-rd').click(); await pg.waitForTimeout(300);
+eq('tap shows names toast', /อ่านแล้ว 1 คน: บอส/.test(await pg.evaluate(() => [...document.querySelectorAll('.toast,.ntf,[role=status]')].map(e => e.textContent).join('|'))), true);
+await pg.locator('#msgPanel').screenshot({ path: new URL('out/v297-chat.png', import.meta.url).pathname });
+// ---- หน้า Sale: คลังความรู้นับคนดูด้วย ----
+const key = await pg.evaluate(async () => (await T.api().saleOpen({ pin: '1234' })).key);
+await pg.goto('http://127.0.0.1:8854/index.html?salek=' + key); await pg.waitForTimeout(1500);
+await pg.click('[data-sfview="kb"]'); await pg.waitForTimeout(600);
+eq('sale card shows count 2', (await pg.locator('.kb-card[data-kbopen="k_demo1"] .kb-cnt em.vw').textContent()).trim(), '2');
+await pg.click('.kb-card[data-kbopen="k_demo1"]'); await pg.waitForTimeout(600);
+eq('sale viewer counted → 3, no names list', [(await pg.locator('.kb-views b').textContent()).trim(), await pg.locator('.kb-views details').count()], ['ดูแล้ว 3 คน', 0]);
+await pg.keyboard.press('Escape'); await pg.reload(); await pg.waitForTimeout(1500); await pg.click('[data-sfview="kb"]').catch(() => {}); await pg.waitForTimeout(500);
+await pg.click('.kb-card[data-kbopen="k_demo1"]'); await pg.waitForTimeout(500);
+eq('same sale device not counted twice', (await pg.locator('.kb-views b').textContent()).trim(), 'ดูแล้ว 3 คน');
+eq('no page errors', errs, []);
+console.log(ok + ' ok, ' + bad + ' failed'); await b.close(); srv.close(); process.exit(bad ? 1 : 0);
