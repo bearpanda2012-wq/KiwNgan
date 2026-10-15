@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.96.1';
+const APP_VERSION = '2.96.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5626,6 +5626,7 @@ function saleTh(r, cls) {
 const mthOpen = (e, t) => { e.preventDefault(); e.stopPropagation(); openLightbox(t.dataset.lbjob, t.dataset.lbopen); };
 document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('.mth[data-lbopen]'); if (t) mthOpen(e, t); }, true);
 document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('mth')) { if (e.target.dataset.gal) { e.preventDefault(); e.stopPropagation(); if (GALS[e.target.dataset.gal]) galOpen(GALS[e.target.dataset.gal], 0); } else mthOpen(e, e.target); } }, true);
+const SHIP_KEEP = 20;   // งานที่ส่งแล้วค้างในภาพรวมบริษัท/บอร์ดผลิตกี่วัน (นับจากวันที่ส่งของแต่ละงาน)
 function pThumb(p) { const own = imgsOf(p.id); if (own.length) return { img: own[0], job: { id: p.id } }; for (const j of designJobsOf(p.code)) { const im = imgsOf(j.id); if (im.length) return { img: im[0], job: j }; } return null; }
 const stIdx = st => PCOLS.indexOf(st === 'shipped' ? 'ready' : st);
 function pTrack(p) {   // แถบความคืบหน้าแบบเดียวกับฝ่ายแบบ: รอผลิต → เครื่อง → สี → แพ็ค → พร้อมส่ง
@@ -5756,8 +5757,8 @@ function viewProd() {
     if (st === 'machine') extra = '<div class="pm-sum">' + machinesList().map(m => { const n = open.filter(p => inMachine(p, m)).length; return '<span class="' + (n ? 'on' : '') + '">' + esc(m) + ' <b>' + n + '</b></span>'; }).join('') + '</div>';
     let more = '';
     if (st === 'ready') {
-      const since = addDays(today(), -7), sh = pool.filter(p => p.stage === 'shipped' && String(p.shippedAt).slice(0, 10) >= since).sort((a, b) => String(b.shippedAt).localeCompare(String(a.shippedAt)));
-      if (sh.length) more = '<div class="col-more"><button class="btn ghost sm" data-pship="1" aria-expanded="' + !!S.pship + '">' + PIC.shipped + 'ส่งแล้ว 7 วันล่าสุด (' + sh.length + ')</button></div>' +
+      const since = addDays(today(), -SHIP_KEEP), sh = pool.filter(p => p.stage === 'shipped' && String(p.shippedAt).slice(0, 10) >= since).sort((a, b) => String(b.shippedAt).localeCompare(String(a.shippedAt)));
+      if (sh.length) more = '<div class="col-more"><button class="btn ghost sm" data-pship="1" aria-expanded="' + !!S.pship + '">' + PIC.shipped + 'ส่งแล้ว ' + SHIP_KEEP + ' วันล่าสุด (' + sh.length + ')</button></div>' +
         (S.pship ? '<div class="pship">' + sh.map(p => '<button type="button" class="pship-row" data-popen="' + esc(p.id) + '"><b>' + esc(p.code) + '</b><span>' + esc(p.title || '') + '</span><small>' + esc(fd(p.shippedAt)) + '</small></button>').join('') + '</div>' : '');
     }
     return '<section class="col ' + PSTG[st].cls + '" data-pcol="' + st + '"><div class="col-h"><span class="col-ic ic-' + st + '">' + PIC[st] + '</span><div class="col-t"><b>' + PSTG[st].label + '</b><small>' + PSTG[st].sub + '</small></div><span class="n">' + js.length + '</span></div>' + extra +
@@ -5840,7 +5841,7 @@ function coRows(all) {   // all = ค้นหา: รวมงานที่�
       step = 'design'; sub = (o.taskType || 'ออกแบบ') + ' · ' + ST[o.status].label + (o.assignee ? ' · ' + o.assignee : ''); since = o.startedAt || o.received || ''; late = open.some(isLate);
     } else if (p && p.stage === 'shipped') { step = 'shipped'; sub = 'ส่งแล้ว ' + fd(p.shippedAt); since = p.shippedAt; }
     else { const fin = r.jobs.map(finDate).sort().pop() || ''; if (fin < cutoff && !all) return null; step = 'ddone'; sub = 'ออกแบบเสร็จ ' + fd(fin) + ' · ไม่ได้ส่งเข้าผลิต'; since = fin; }
-    if (!all && step === 'shipped' && String(p.shippedAt).slice(0, 10) < addDays(today(), -7)) return null;
+    if (!all && step === 'shipped' && String(p.shippedAt).slice(0, 10) < addDays(today(), -SHIP_KEEP)) return null;
     // วันที่สำหรับป้ายวันที่ (แบบหน้า Sale): ฝ่ายแบบ = กำหนดส่งแบบ, ผลิต = วันเข้าผลิต/พร้อมส่ง, ส่งแล้ว = วันส่ง
     let due = '', dl = '', dd = '';
     if (step === 'design') { due = open.map(j => j.due).filter(Boolean).sort()[0] || ''; dl = 'กำหนดส่งแบบ'; dd = due; }
@@ -5945,12 +5946,12 @@ function viewFlow() {
   const rows = coRows(), F = S.cf || 'all', q = String(S.cq || '').trim().toLowerCase();
   const n = k => rows.filter(r => k === 'design' ? r.step === 'design' : r.step === k).length;
   const shipToday = rows.filter(r => r.step === 'shipped' && r.prod && String(r.prod.shippedAt).slice(0, 10) === today()).length;
-  const stepTile = (s, i) => cjTile(s, i, n(s.k), 'data-cf="' + s.k + '"', F === s.k, s.k === 'shipped' ? (shipToday ? 'วันนี้ ' + shipToday + ' · 7 วัน' : '7 วันล่าสุด') : s.sub, rows.filter(r => r.step === s.k && r.late).length);
+  const stepTile = (s, i) => cjTile(s, i, n(s.k), 'data-cf="' + s.k + '"', F === s.k, s.k === 'shipped' ? (shipToday ? 'วันนี้ ' + shipToday + ' · ' + SHIP_KEEP + ' วัน' : SHIP_KEEP + ' วันล่าสุด') : s.sub, rows.filter(r => r.step === s.k && r.late).length);
   const depts = pipeHtml(stepTile, S.animIn);
   const shipped7 = rows.filter(r => r.step === 'shipped').length, late = rows.filter(r => r.late).length;
   const kpis = '<div class="co-kpis"><div class="kpi"><span>งานในสายทั้งหมด</span><b>' + rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length + '</b><small>เลข Job ที่ยังไม่ส่ง</small></div>' +
     '<div class="kpi k-late"><span>ค้างนาน / เลยกำหนด</span><b>' + late + '</b><small>ฝ่ายแบบเลยกำหนด · ผลิตค้าง ≥2–3 วัน</small></div>' +
-    '<div class="kpi k-done"><span>ส่งแล้ว 7 วัน</span><b>' + shipped7 + '</b><small>ปิดงานถึงลูกค้า</small></div></div>';
+    '<div class="kpi k-done"><span>ส่งแล้ว ' + SHIP_KEEP + ' วัน</span><b>' + shipped7 + '</b><small>ปิดงานถึงลูกค้า</small></div></div>';
   // ค้นหา: ค้นจากงานทั้งหมด (รวมที่ส่งแล้ว/ออกแบบเสร็จนานแล้ว) ไม่สนตัวกรองด้านบน · ไม่ต้องพิมพ์ขีด/ช่องว่างก็เจอ · ตรงเลข Job ขึ้นก่อน
   let list;
   if (q) {
@@ -5960,7 +5961,7 @@ function viewFlow() {
     list = rows.filter(r => F === 'all' ? r.step !== 'shipped' && r.step !== 'ddone' : F === 'late' ? r.late : F === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === F);
     list.sort((a, b) => (b.late - a.late) || (coIdx(b.step) - coIdx(a.step)) || String(a.since).localeCompare(String(b.since)));
   }
-  const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง'], ['late', 'ค้างนาน'], ['shipped', 'ส่งแล้ว 7 วัน']].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-cf="' + x[0] + '" aria-pressed="' + (F === x[0]) + '">' + x[1] + '<b>' + (x[0] === 'all' ? rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length : x[0] === 'late' ? late : shipped7) + '</b></button>').join('') +
+  const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง'], ['late', 'ค้างนาน'], ['shipped', 'ส่งแล้ว ' + SHIP_KEEP + ' วัน']].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-cf="' + x[0] + '" aria-pressed="' + (F === x[0]) + '">' + x[1] + '<b>' + (x[0] === 'all' ? rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length : x[0] === 'late' ? late : shipped7) + '</b></button>').join('') +
     (F !== 'all' && F !== 'late' && F !== 'shipped' ? '<button class="qchip" data-cf="all" aria-pressed="true">' + esc(F === 'design' ? 'ฝ่ายแบบ' : PSTG[F] ? PSTG[F].label : F) + ' ✕</button>' : '') + '</div>';
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
   const hovJob = r => { const o = r.jobs.filter(j => j.status !== 'done'); return (o[0] || r.jobs.slice().sort((a, b) => String(finDate(b)).localeCompare(String(finDate(a))))[0] || {}).id || ''; };
