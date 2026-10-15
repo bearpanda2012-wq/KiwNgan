@@ -28,6 +28,11 @@ await pg.locator('.co-row[data-shov="' + code + '"] .mth').click(); await pg.wai
 eq('flow: click preview → photo viewer, row not expanded', await pg.evaluate(c => [!!document.querySelector('#imgView.open'), !!document.querySelector('.sf-item.open')], code), [true, false]);
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
 await pg.locator('.co-row[data-shov="' + code + '"]').screenshot({ path: out + 'v296-flow.png' });
+// การ์ดเลยกำหนด: ไม่ระบุว่าเป็นฝ่ายแบบอย่างเดียว · บอกแยกฝ่ายตามจริง
+const lk = await pg.evaluate(() => { const k = document.querySelector('.kpi.k-late'); return [k.querySelector('span').textContent, k.querySelector('small').textContent, +k.querySelector('b').textContent]; });
+console.log('late kpi', JSON.stringify(lk));
+eq('late KPI title has no (ฝ่ายแบบ)', lk[0], 'เลยกำหนด');
+eq('late KPI breakdown sums to total', ((lk[1].match(/ฝ่ายแบบ (\d+)/) || [0, 0])[1] * 1) + ((lk[1].match(/ฝ่ายผลิต (\d+)/) || [0, 0])[1] * 1), lk[2]);
 // ตาราง
 await pg.click('[data-sfview="table"]'); await pg.waitForTimeout(900);
 eq('table: preview next to job code', await pg.locator('tr.sp-r[data-shov="' + code + '"] .mth[data-gal] img').count(), 1);

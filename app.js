@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.96.0';
+const APP_VERSION = '2.96.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -8012,7 +8012,7 @@ function saleFlowHtml(d, sel) {
   const tile = (s, i) => cjTile(s, i, n(s.k), 'data-sfstep="' + s.k + '"', SF.step === s.k, s.k === 'shipped' ? '60 วันล่าสุด' : s.sub, 0);
   const pipe = pipeHtml(tile, SF.anim);
   const kpis = '<div class="co-kpis"><button type="button" class="kpi" data-sfstep="all"><span>งานที่ยังไม่ส่ง</span><b>' + live.length + '</b><small>เลข Job ที่อยู่ระหว่างทำ</small></button>' +
-    '<button type="button" class="kpi k-late" data-sfstep="late"><span>เลยกำหนด (ฝ่ายแบบ)</span><b>' + late + '</b><small>ควรติดตามกับทีม</small></button>' +
+    '<button type="button" class="kpi k-late" data-sfstep="late"><span>เลยกำหนด</span><b>' + late + '</b><small>' + (late ? ((ld, lp) => [ld ? 'ฝ่ายแบบ ' + ld : '', lp ? 'ฝ่ายผลิต ' + lp : ''].filter(Boolean).join(' · '))(all.filter(r => r.late && r.step === 'design').length, all.filter(r => r.late && r.step !== 'design').length) + ' · ควรติดตามกับทีม' : 'ฝ่ายแบบ + ฝ่ายผลิต · ยังไม่มีงานเลยกำหนด') + '</small></button>' +
     '<button type="button" class="kpi k-done" data-sfstep="shipped"><span>ส่งแล้ว</span><b>' + n('shipped') + '</b><small>ปิดงานถึงลูกค้า (60 วันล่าสุด)</small></button></div>';
   let list;
   if (qq) {   // ค้นหา: ค้นทุกงาน (รวมที่ส่งแล้ว/ออกแบบเสร็จนานแล้ว) ไม่สนขั้นที่เลือก · เลข Job ตรงขึ้นก่อน
