@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.99.1';
+const APP_VERSION = '2.100';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6525,7 +6525,7 @@ const exOn = () => !!(EX.cfg && EX.cfg.tok);
 const exUnit = c => ((EX.tabs.units || {})[c]) || c || '';
 const exLocN = c => ((EX.tabs.locs || {})[c]) || c || '–';
 const exGrpN = c => ((EX.tabs.groups || {})[c]) || c || '–';
-const exDepN = c => ((EX.tabs.deps || {})[c]) || c || '';
+const exDepN = c => !c ? '' : c + (typeof exDepLbl === 'function' && exDepLbl(c) ? ' · ' + exDepLbl(c) : '');
 const exDate = d => d && d.length === 8 ? fd(d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8)) : '';
 const exN = v => { v = +v || 0; return Math.abs(v - Math.round(v)) < 1e-9 ? Math.round(v).toLocaleString('th-TH') : v.toLocaleString('th-TH', { maximumFractionDigits: 2 }); };
 async function exRpc(fn, body) {
@@ -6626,6 +6626,10 @@ function exCountUp() {
     b.textContent = txt(from); requestAnimationFrame(step);
   });
 }
+function exDepStrip(q) {   // ค้นหาแล้วตรงกับรหัสแผนก (เช่น C20) → ปุ่มดูทั้งหมดของแผนกนั้น
+  const ks = exDepFind(q, 3); if (!ks.length) return '';
+  return '<div class="ex-depstrip">' + ks.map(k => '<button type="button" class="ex-depit sm" data-exdep="' + esc(k) + '"><i>' + esc(k) + '</i><span><b>แผนก ' + esc(k) + '</b><small>' + esc(exDepLbl(k) || 'รหัสแผนกใน Express') + '</small></span><em>ดูรับเข้า · เบิกออก · คงเหลือ ›</em></button>').join('') + '</div>';
+}
 function viewExpress() {
   const ro = !canStock();   // ไม่ใช่ฝ่ายสต็อก: ดูและค้นหาได้อย่างเดียว (ไม่มีเลือก/คำนวณ/บันทึก)
   if (ro && (EV.sel.size || EV.grp === 'sel' || EV.calc)) { EV.sel.clear(); exSelSave(); EV.calc = false; if (EV.grp === 'sel') EV.grp = 'bal'; }
@@ -6662,6 +6666,7 @@ function viewExpress() {
       return '<button class="qchip ex-chip' + (fx ? ' fx' : '') + '" style="--ch:' + exGrpCol(x[0]) + '" data-exgrp="' + esc(x[0]) + '" aria-pressed="' + (EV.grp === x[0]) + '"' + (x[0].length <= 4 && !fx ? ' title="กลุ่ม ' + esc(x[0]) + '"' : '') + '>' + (fx ? '<i class="ex-cic">' + ic + '</i>' : '<i class="ex-cd"></i>') + '<span>' + esc(x[1]) + '</span><b>' + exN(x[2]) + '</b></button>'; }).join('') + '</div>';
   const locOpts = [...new Set([...EX.locs.values()].map(l => l[1]))].sort().map(c => '<option value="' + esc(c) + '"' + (EV.loc === c ? ' selected' : '') + '>' + esc(c + ' · ' + exLocN(c)) + '</option>').join('');
   const tools = '<div class="sk-tools ex-tools"><label class="search' + qOn(EV.q) + '">' + I.search + '<input id="exQ" type="search" autocomplete="off" enterkeyhint="search" placeholder="ค้นหารหัส ชื่อสินค้า กลุ่ม…" value="' + esc(EV.q) + '" aria-label="ค้นหาสินค้าใน Express">' + qX('exQ', EV.q) + '</label>' +
+    '<button type="button" class="btn ex-depbtn" data-exdep="" title="ดูรับเข้า เบิกออก คงเหลือ ของรหัสแผนก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01"/></svg><span>ดูตามแผนก</span></button>' +
     '<label class="ex-selw" title="เลือกคลัง">' + ST_IC.box + '<select class="sel" data-exloc="1" aria-label="คลัง"><option value="">ทุกคลัง</option>' + locOpts + '</select></label>' +
     '<label class="ex-selw" title="เรียงลำดับ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M3.5 16.5L7 20l3.5-3.5M17 20V4M13.5 7.5L17 4l3.5 3.5"/></svg><select class="sel" data-exsort="1" aria-label="เรียง">' + [['cod', 'เรียงตามรหัส'], ['name', 'เรียงตามชื่อ'], ['bal', 'ยอดมากสุด'], ['val', 'มูลค่ามากสุด']].map(o => '<option value="' + o[0] + '"' + (EV.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label></div>';
   let rowI = 0; const rowAnim = !!EV.rowAnim; EV.rowAnim = false;   // แถวไล่ขึ้นมาเฉพาะตอนเปลี่ยนตัวกรอง/ค้นหา
@@ -6689,7 +6694,7 @@ function viewExpress() {
   const selBar = !ro && EV.sel.size ? '<div class="ex-selbar ex-float' + (selIn ? ' pop' : '') + '"><span class="ex-sbi">' + PIC.check + '<b class="ex-sbn">' + exN(EV.sel.size) + '</b></span><span><b>เลือก ' + exN(EV.sel.size) + ' รายการ</b><small>มูลค่ารวม ' + baht(exCalcRows(selItems).tot) + '</small></span><button type="button" class="btn sm" data-exgrp="sel">ดูเฉพาะที่เลือก</button>' + (canStock() ? '<button type="button" class="btn sm" data-xpnew="">บันทึกเบิก/รับ</button>' : '') + '<button type="button" class="btn sm primary" data-excalc="1">คำนวณราคา</button><button type="button" class="btn sm ghost" data-exselclr="1">ล้าง</button></div>' : '';
   return topbar('คลังวัสดุ', 'ยอดคงเหลือจากโปรแกรม Express (บัญชี) อัปเดตอัตโนมัติ') + exTabs() + appTools + banner + lowAlert + kpis +
     '<div class="sk-wrap"><section class="panel sk-main" id="exList"><div class="panel-h"><h2>สินค้าใน Express</h2><span class="sub">' + exN(list.length) + ' รายการ</span></div>' + tools +
-    (q ? '<div class="co-sres ex-sres" role="status"><span><b>' + exN(sTot) + '</b> รายการตรงกับ "' + esc(q) + '"' + (Object.keys(sGrp).length ? ' · อยู่ใน <b>' + Object.keys(sGrp).length + '</b> หมวด' : '') + '</span><small>ค้นจากทุกรหัส ไม่สนกลุ่มที่เลือก · กดหมวดเพื่อดูเฉพาะหมวดนั้น</small></div>' +
+    (q ? exDepStrip(q) : '') + (q ? '<div class="co-sres ex-sres" role="status"><span><b>' + exN(sTot) + '</b> รายการตรงกับ "' + esc(q) + '"' + (Object.keys(sGrp).length ? ' · อยู่ใน <b>' + Object.keys(sGrp).length + '</b> หมวด' : '') + '</span><small>ค้นจากทุกรหัส ไม่สนกลุ่มที่เลือก · กดหมวดเพื่อดูเฉพาะหมวดนั้น</small></div>' +
       (Object.keys(sGrp).length ? '<div class="qchips sk-chips ex-chips ex-sgrps">' + (EV.sgrp ? '<button class="qchip ex-chip fx" style="--ch:#6366B8" data-exsgrp=""><i class="ex-cic">' + ST_IC.sheet + '</i><span>ทุกหมวด</span><b>' + exN(sTot) + '</b></button>' : '') +
         Object.keys(sGrp).sort((a, b) => sGrp[b] - sGrp[a]).map(g => '<button class="qchip ex-chip" style="--ch:' + exGrpCol(g) + '" data-exsgrp="' + esc(g) + '" aria-pressed="' + (EV.sgrp === g) + '" title="หมวด ' + esc(g) + '"><i class="ex-cd"></i><span>' + esc(exGrpN(g)) + '</span><b>' + exN(sGrp[g]) + '</b></button>').join('') + '</div>' : '')
     : chips) + body + selBar + '</section>' +
@@ -6972,6 +6977,113 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset || !EV.pnew) return; if (t.dataset.xpq !== undefined) EV.pnew.rows[+t.dataset.xpq].qty = t.value; });
 document.addEventListener('change', e => { const t = e.target; if (!t || !t.dataset || !EV.pnew) return; if (t.dataset.xploc !== undefined) EV.pnew.rows[+t.dataset.xploc].loc = t.value; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && EV.pnew) { EV.pnew = null; exPendDraw(); e.stopPropagation(); } else if (e.key === 'Enter' && e.target && e.target.id === 'xpDoc') { const b = document.querySelector('[data-xpdocsave]'); if (b) b.click(); } }, true);
+/* ---- ดูตามแผนก (รหัสแผนกใน Express เช่น C20) : รับเข้า · เบิกออก · คงเหลือ ----
+   ดึงสต็อกการ์ดปีนี้ของแผนกนั้นจาก Supabase (ex_dep) · อ่านอย่างเดียว ไม่แตะ Express
+   คงเหลือของแผนก = รับเข้า − ออก (ต่อรหัสสินค้า) · แสดงยอดคลังรวมตอนนี้ไว้เทียบด้วย */
+const exDepParts = c => { const v = String(((EX.tabs.deps || {})[c]) || ''), i = v.indexOf(','); return i < 0 ? [v.trim(), ''] : [v.slice(0, i).trim(), v.slice(i + 1).trim()]; };
+const exDepLbl = c => exDepParts(c).filter(Boolean).join(' · ') || '';
+const exDepKey = s => { s = String(s || '').trim().toUpperCase(); if (!s) return ''; const ks = Object.keys(EX.tabs.deps || {}); return ks.find(k => k.toUpperCase() === s) || (EX.deps || []).map(d => d[0]).find(k => String(k).toUpperCase() === s) || ''; };
+/* แผนกที่ตรงกับคำค้น: รหัสตรงกันก่อน แล้วค่อยชื่อลูกค้า/งาน */
+function exDepFind(q, max) {
+  q = String(q || '').trim(); if (!q) return [];
+  const ks = new Set(Object.keys(EX.tabs.deps || {}).concat((EX.deps || []).map(d => d[0]))), up = q.toUpperCase(), out = [];
+  ks.forEach(k => { const K = String(k).toUpperCase(); if (K === up) out.push([k, 0]); else if (K.startsWith(up) && up.length >= 2) out.push([k, 1]); else if (q.length >= 3 && qHit([exDepLbl(k)], q)) out.push([k, 2]); });
+  return out.sort((a, b) => a[1] - b[1] || String(a[0]).localeCompare(String(b[0]))).slice(0, max || 6).map(x => x[0]);
+}
+function exDepSplit(rows) {
+  const ins = [], outs = [], by = new Map();
+  (rows || []).forEach(r => { const op = EX_OP[r[3]] || ['รายการ', 1], q = Math.abs(+r[4] || 0), v = Math.abs(+r[6] || 0), sg = op[1] * ((+r[4] || 0) < 0 ? -1 : 1);
+    (sg > 0 ? ins : outs).push(r);
+    const g = by.get(r[10]) || { cod: r[10], des: r[9], in: 0, out: 0, vin: 0, vout: 0, n: 0, last: '' };
+    if (sg > 0) { g.in += q; g.vin += v; } else { g.out += q; g.vout += v; } g.n++; if (r[1] > g.last) g.last = r[1]; by.set(r[10], g); });
+  const sum = [...by.values()].sort((a, b) => String(a.cod).localeCompare(String(b.cod)));
+  return { ins, outs, sum, vin: ins.reduce((s, r) => s + Math.abs(+r[6] || 0), 0), vout: outs.reduce((s, r) => s + Math.abs(+r[6] || 0), 0) };
+}
+async function exDepOpen(code) {
+  const prev = EV.dep || {};
+  EV.dep = { code: code || '', rows: null, err: '', tab: prev.tab || 'sum', q: '', pick: !code };
+  exDepDraw();
+  if (!EX.deps) exRpc('ex_deps', {}).then(r => { EX.deps = Array.isArray(r) ? r : []; if (EV.dep) exDepDraw(); }).catch(() => { EX.deps = []; });
+  if (!code) return setTimeout(() => { const n = $('#exDepQ'); if (n) n.focus(); }, 30);
+  try { const r = await exRpc('ex_dep', { dep: code, lim: 5000 }); if (EV.dep && EV.dep.code === code) EV.dep.rows = Array.isArray(r) ? r : []; }
+  catch (e) { if (EV.dep && EV.dep.code === code) EV.dep.err = e.message || String(e); }
+  if (EV.dep && EV.dep.code === code) exDepDraw();
+}
+function exDepClose() { EV.dep = null; const m = $('#exDep'); if (m) m.remove(); }
+function exDepPicker(d) {
+  const q = d.pq || '', cnt = new Map((EX.deps || []).map(x => [x[0], x])), hits = q ? exDepFind(q, 40) : (EX.deps || []).slice(0, 30).map(x => x[0]);
+  return '<label class="search ex-depq' + qOn(q) + '">' + I.search + '<input id="exDepQ" type="search" autocomplete="off" enterkeyhint="search" placeholder="พิมพ์รหัสแผนก เช่น C20 หรือชื่อลูกค้า/งาน" value="' + esc(q) + '" aria-label="ค้นหารหัสแผนก"></label>' +
+    '<p class="ex-deph">' + (q ? 'พบ ' + hits.length + ' แผนก' : 'แผนกที่มีความเคลื่อนไหวล่าสุด') + ' · กด Enter = เปิดรายการแรก</p>' +
+    (hits.length ? '<div class="ex-deplist">' + hits.map(k => { const c = cnt.get(k), p = exDepParts(k);
+      return '<button type="button" class="ex-depit" data-exdep="' + esc(k) + '"><i>' + esc(k) + '</i><span><b>' + esc(p[1] || p[0] || 'ไม่มีชื่อ') + '</b>' + (p[1] && p[0] ? '<small>' + esc(p[0]) + '</small>' : '') + '</span><em>' + (c ? exN(c[1]) + ' รายการ<small>ล่าสุด ' + esc(exDate(c[2])) + '</small>' : 'ไม่มีความเคลื่อนไหวปีนี้') + '</em></button>'; }).join('') + '</div>'
+      : '<div class="sk-empty sm"><b>' + (q ? 'ไม่พบแผนก "' + esc(q) + '"' : (EX.deps ? 'ยังไม่มีข้อมูลแผนก' : 'กำลังโหลด…')) + '</b></div>');
+}
+function exDepDraw() {
+  const d = EV.dep; let m = $('#exDep'); if (!d) { if (m) m.remove(); return; }
+  const keep = document.activeElement && document.activeElement.id === 'exDepQ' ? document.activeElement.selectionStart : null;
+  if (!m) { m = document.createElement('div'); m.id = 'exDep'; m.className = 'pmodal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); m.addEventListener('click', e => { if (e.target === m) exDepClose(); }); }
+  const x = '<button type="button" class="icon-btn" data-exdepx="1" aria-label="ปิด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+  if (d.pick || !d.code) {
+    m.innerHTML = '<div class="pm-card ex-card ex-depc"><div class="pm-h"><div><div class="eyebrow">Express · ดูตามแผนก</div><h3 style="font-family:inherit">เลือกรหัสแผนก</h3><p class="sub">ดูรายการรับเข้า · เบิกออก · คงเหลือ ทั้งหมดของแผนกนั้น (ปีนี้)</p></div>' + x + '</div><div class="pm-b">' + exDepPicker(d) + '</div></div>';
+  } else {
+    const p = exDepParts(d.code), rows = d.rows, sp = rows ? exDepSplit(rows) : null, q = d.q.trim();
+    const hit = r => !q || qHit([r[10], r[9], (EX.items.get(r[10]) || [])[1], r[0]], q);
+    const tabs = sp ? [['sum', 'คงเหลือ', sp.sum.length], ['in', 'รับเข้า', sp.ins.length], ['out', 'เบิกออก', sp.outs.length]] : [];
+    const nm = c => { const it = EX.items.get(c); return (it && it[1]) || ''; }, un = c => { const it = EX.items.get(c); return it ? exUnit(it[5]) : ''; };
+    const moveRows = list => '<div class="ex-crd ex-depm"><div class="ex-ch"><span>วันที่ · เอกสาร</span><span>สินค้า</span><span>คลัง</span><span>จำนวน</span></div>' + list.filter(hit).map(r => { const op = EX_OP[r[3]] || ['รายการ', 1], sg = op[1] * ((+r[4] || 0) < 0 ? -1 : 1);
+      return '<button type="button" class="ex-cr ' + (sg > 0 ? 'in' : 'out') + '" data-excard="' + esc(r[10]) + '"><span><b>' + esc(exDate(r[1])) + '</b><small>' + esc(r[0]) + '</small></span><span><b class="ex-dc">' + coHl(r[10], q) + '</b><small>' + coHl(nm(r[10]) || r[9] || '', q) + '</small><small class="ex-dop">' + op[0] + (r[7] ? ' · ' + esc(r[7]) : '') + '</small></span><span>' + esc(r[2] || '–') + '</span><span class="tnum"><b>' + (sg > 0 ? '+' : '−') + exN(Math.abs(+r[4] || 0)) + '</b><small>' + esc(un(r[10])) + (+r[6] ? ' · ' + baht(Math.abs(+r[6])) : '') + '</small></span></button>'; }).join('') + '</div>';
+    const sumRows = () => { const l = sp.sum.filter(g => !q || qHit([g.cod, g.des, nm(g.cod)], q));
+      return '<div class="ex-crd ex-deps"><div class="ex-ch"><span>สินค้า</span><span>รับเข้า</span><span>เบิกออก</span><span>คงเหลือ</span></div>' + l.map(g => { const net = g.in - g.out, it = EX.items.get(g.cod);
+        return '<button type="button" class="ex-cr ' + (net < -1e-9 ? 'neg' : Math.abs(net) < 1e-9 ? 'zero' : 'pos') + '" data-excard="' + esc(g.cod) + '"><span><b class="ex-dc">' + coHl(g.cod, q) + '</b><small>' + coHl(nm(g.cod) || g.des || '', q) + '</small>' + (it ? '<small class="ex-dop">ยอดคลังรวมตอนนี้ ' + exN(it[6]) + ' ' + esc(exUnit(it[5])) + '</small>' : '') + '</span><span class="tnum k-in">' + (g.in ? '+' + exN(g.in) : '–') + '</span><span class="tnum k-out">' + (g.out ? '−' + exN(g.out) : '–') + '</span><span class="tnum"><b>' + exN(net) + '</b><small>' + esc(un(g.cod)) + '</small></span></button>'; }).join('') +
+        (l.length ? '' : '<div class="sk-empty sm"><b>ไม่พบ "' + esc(q) + '"</b></div>') + '</div>'; };
+    const body = d.err ? '<p class="ex-err">' + esc(d.err) + '</p>' : !rows ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลดรายการของแผนก ' + esc(d.code) + '…</b></div>'
+      : !rows.length ? '<div class="sk-empty sm"><b>แผนก ' + esc(d.code) + ' ยังไม่มีการรับเข้า/เบิกออกปีนี้</b><small>ข้อมูลจากสต็อกการ์ดใน Express (ปีปัจจุบัน)</small></div>'
+      : '<div class="ex-sum ex-depk"><button type="button" class="k-in" data-exdeptab="in" aria-pressed="' + (d.tab === 'in') + '"><small>รับเข้า</small><b class="tnum">' + exN(sp.ins.length) + '</b><em>รายการ · ' + baht(sp.vin) + '</em></button><button type="button" class="k-out" data-exdeptab="out" aria-pressed="' + (d.tab === 'out') + '"><small>เบิกออก</small><b class="tnum">' + exN(sp.outs.length) + '</b><em>รายการ · ' + baht(sp.vout) + '</em></button><button type="button" class="k-bal" data-exdeptab="sum" aria-pressed="' + (d.tab === 'sum') + '"><small>คงเหลือ</small><b class="tnum">' + exN(sp.sum.filter(g => Math.abs(g.in - g.out) > 1e-9).length) + '</b><em>จาก ' + exN(sp.sum.length) + ' รหัส · ' + baht(sp.vin - sp.vout) + '</em></button></div>' +
+        '<div class="ex-deptools"><div class="seg ex-depseg" role="tablist">' + tabs.map(t => '<button type="button" role="tab" data-exdeptab="' + t[0] + '" aria-selected="' + (d.tab === t[0]) + '">' + t[1] + ' <b>' + exN(t[2]) + '</b></button>').join('') + '</div>' +
+        '<label class="search' + qOn(d.q) + '">' + I.search + '<input id="exDepF" type="search" autocomplete="off" placeholder="กรองรหัส/ชื่อสินค้า/เลขเอกสาร" value="' + esc(d.q) + '" aria-label="กรองรายการในแผนก"></label></div>' +
+        (d.tab === 'in' ? moveRows(sp.ins) : d.tab === 'out' ? moveRows(sp.outs) : sumRows()) +
+        '<p class="ex-deph">คงเหลือ = รับเข้า − เบิกออก ของแผนกนี้ (ปีนี้) · กดแถวเพื่อดูสต็อกการ์ดของสินค้า' + (rows.length >= 5000 ? ' · แสดง 5,000 รายการล่าสุด' : '') + '</p>';
+    m.innerHTML = '<div class="pm-card ex-card ex-depc"><div class="pm-h"><div><div class="eyebrow">Express · แผนก <button type="button" class="ex-depchg" data-exdeppick="1">เปลี่ยนแผนก</button></div><h3>' + esc(d.code) + '</h3><p class="sub">' + esc(p.filter(Boolean).join(' · ') || 'ไม่มีชื่อแผนกใน Express') + '</p></div>' + x + '</div><div class="pm-b">' + body + '</div>' +
+      (rows && rows.length ? '<div class="pm-f"><button type="button" class="btn ghost" data-exdepcopy="1">คัดลอก</button><button type="button" class="btn ghost" data-exdepprint="1">พิมพ์</button><button type="button" class="btn ghost" data-exdeppdf="1">PDF</button><span style="flex:1"></span><button type="button" class="btn" data-exdepx="1">ปิด</button></div>' : '') + '</div>';
+  }
+  if (keep != null) { const n = $('#exDepQ'); if (n) { n.focus(); try { n.setSelectionRange(keep, keep); } catch (e) {} } }
+}
+function exDepDoc() {
+  const d = EV.dep, sp = exDepSplit(d.rows), p = exDepParts(d.code), nm = c => ((EX.items.get(c) || [])[1]) || '', un = c => { const it = EX.items.get(c); return it ? exUnit(it[5]) : ''; };
+  return { d, sp, title: 'แผนก ' + d.code + (p.filter(Boolean).length ? ' · ' + p.filter(Boolean).join(' · ') : ''), nm, un };
+}
+function exDepText() {
+  const o = exDepDoc(), mv = r => '  ' + exDate(r[1]) + ' ' + r[0] + ' · ' + r[10] + ' ' + (o.nm(r[10]) || r[9] || '') + ' · ' + exN(Math.abs(+r[4] || 0)) + ' ' + o.un(r[10]);
+  return [o.title + ' · ' + fdY(today()), '', 'คงเหลือตามสินค้า (รับเข้า − เบิกออก)'].concat(o.sp.sum.map(g => '  ' + g.cod + ' ' + (o.nm(g.cod) || g.des || '') + ' · เข้า ' + exN(g.in) + ' ออก ' + exN(g.out) + ' = ' + exN(g.in - g.out) + ' ' + o.un(g.cod)),
+    ['', 'รับเข้า ' + o.sp.ins.length + ' รายการ'], o.sp.ins.map(mv), ['', 'เบิกออก ' + o.sp.outs.length + ' รายการ'], o.sp.outs.map(mv)).join('\n');
+}
+function exDepPrint(pdf) {
+  const o = exDepDoc(), s0 = S.settings || {};
+  const css = 'body{font-family:Anuphan,sans-serif;margin:28px;color:#111}h1{font-size:20px;margin:0}h2{font-size:15px;margin:18px 0 0}table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px}th,td{border-bottom:1px solid #ddd;padding:5px 7px;text-align:left}td.n,th.n{text-align:right}.h{display:flex;justify-content:space-between;align-items:flex-end}small{color:#666}';
+  const mv = list => '<table><thead><tr><th>วันที่</th><th>เอกสาร</th><th>รหัส</th><th>ชื่อสินค้า</th><th>รายการ</th><th>คลัง</th><th class="n">จำนวน</th><th class="n">มูลค่า</th></tr></thead><tbody>' + list.map(r => '<tr><td>' + esc(exDate(r[1])) + '</td><td>' + esc(r[0]) + '</td><td>' + esc(r[10]) + '</td><td>' + esc(o.nm(r[10]) || r[9] || '') + '</td><td>' + esc((EX_OP[r[3]] || ['รายการ'])[0]) + '</td><td>' + esc(r[2] || '') + '</td><td class="n">' + exN(Math.abs(+r[4] || 0)) + ' ' + esc(o.un(r[10])) + '</td><td class="n">' + baht(Math.abs(+r[6] || 0)) + '</td></tr>').join('') + '</tbody></table>';
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(o.title) + '</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600&display=swap"><style>' + css + '</style></head><body>' +
+    '<div class="h"><div><h1>' + esc(o.title) + '</h1><div>' + esc(s0.company || s0.appName || '') + '</div></div><div>วันที่ ' + esc(fdY(today())) + '<br><small>ข้อมูลจาก Express ปีนี้</small></div></div>' +
+    '<h2>คงเหลือตามสินค้า</h2><table><thead><tr><th>#</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="n">รับเข้า</th><th class="n">เบิกออก</th><th class="n">คงเหลือ</th><th>หน่วย</th></tr></thead><tbody>' +
+    o.sp.sum.map((g, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(g.cod) + '</td><td>' + esc(o.nm(g.cod) || g.des || '') + '</td><td class="n">' + exN(g.in) + '</td><td class="n">' + exN(g.out) + '</td><td class="n"><b>' + exN(g.in - g.out) + '</b></td><td>' + esc(o.un(g.cod)) + '</td></tr>').join('') + '</tbody></table>' +
+    '<h2>รับเข้า ' + o.sp.ins.length + ' รายการ · ' + baht(o.sp.vin) + '</h2>' + mv(o.sp.ins) + '<h2>เบิกออก ' + o.sp.outs.length + ' รายการ · ' + baht(o.sp.vout) + '</h2>' + mv(o.sp.outs) + '<script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>';
+  if (pdf) return exPdf(css, html, 'Express-dep-' + o.d.code + '-' + today() + '.pdf');
+  printHtml(html);
+}
+document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-exdep],[data-exdepx],[data-exdeptab],[data-exdeppick],[data-exdepcopy],[data-exdepprint],[data-exdeppdf]'); if (!t) return; const d = t.dataset;
+  if (d.exdepx) return exDepClose();
+  if (d.exdep !== undefined) { e.preventDefault(); e.stopPropagation(); if (EX.card) exCardClose(); return exDepOpen(d.exdep); }
+  if (d.exdeppick) { EV.dep.pick = true; EV.dep.pq = ''; exDepDraw(); return setTimeout(() => { const n = $('#exDepQ'); if (n) n.focus(); }, 30); }
+  if (d.exdeptab) { EV.dep.tab = d.exdeptab; return exDepDraw(); }
+  if (d.exdepcopy) { const tx = exDepText(); navigator.clipboard.writeText(tx).then(() => toast('คัดลอกรายการแผนก ' + EV.dep.code + ' แล้ว'), () => prompt('คัดลอกข้อความนี้', tx)); return; }
+  if (d.exdepprint) return exDepPrint();
+  if (d.exdeppdf) return exDepPrint(true);
+});
+document.addEventListener('input', e => { const t = e.target; if (!t || !EV.dep || e.isComposing) return;
+  if (t.id === 'exDepQ') { EV.dep.pq = t.value; exDepDraw(); }
+  else if (t.id === 'exDepF') { EV.dep.q = t.value; const pos = t.selectionStart; exDepDraw(); const n = $('#exDepF'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) {} } } });
+window.addEventListener('keydown', e => { if (!EV.dep || EV.pnew || EV.calc) return;
+  if (e.key === 'Escape' && !EX.card) { if (EV.dep.pick && EV.dep.code) { EV.dep.pick = false; exDepDraw(); } else exDepClose(); e.stopPropagation(); return; }
+  if (e.key === 'Enter' && e.target && e.target.id === 'exDepQ') { const k = exDepKey(e.target.value) || exDepFind(e.target.value, 1)[0]; if (k) exDepOpen(k); else toast('ไม่พบรหัสแผนก "' + e.target.value + '"', true); } }, true);
 /* สต็อกการ์ดของรหัสเดียว */
 async function exCardOpen(cod) {
   EX.card = { cod: cod, rows: null, err: '' }; exCardDraw();
@@ -7048,7 +7160,7 @@ function exCardDraw() {
     '<div><b class="ex-h">สต็อกการ์ด ' + (rows ? '(' + rows.length + (rows.length >= 300 ? '+' : '') + ' รายการ ปีนี้)' : '') + '</b>' +
     (c.err ? '<p class="ex-err">' + esc(c.err) + '</p>' : !rows ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : !rows.length ? '<div class="sk-empty sm"><b>ยังไม่มีการเคลื่อนไหวปีนี้</b></div>' :
       '<div class="ex-crd"><div class="ex-ch"><span>วันที่ · เอกสาร</span><span>รายการ</span><span>คลัง</span><span>จำนวน</span></div>' + rows.map(r => { const op = EX_OP[r[3]] || ['รายการ', 1];
-        return '<div class="ex-cr ' + (op[1] > 0 ? 'in' : 'out') + '"><span><b>' + esc(exDate(r[1])) + '</b><small>' + esc(r[0]) + '</small></span><span>' + op[0] + (r[9] && r[9] !== it[1] ? '<small>' + esc(r[9]) + '</small>' : '') + (r[8] ? '<small>' + esc(exDepN(r[8])) + '</small>' : '') + '</span><span>' + esc(r[2] || '–') + '</span><span class="tnum"><b>' + (op[1] > 0 ? '+' : '−') + exN(Math.abs(+r[4] || 0)) + '</b>' + (+r[5] ? '<small>@' + exN(r[5]) + '</small>' : '') + '</span></div>'; }).join('') + '</div>') +
+        return '<div class="ex-cr ' + (op[1] > 0 ? 'in' : 'out') + '"><span><b>' + esc(exDate(r[1])) + '</b><small>' + esc(r[0]) + '</small></span><span>' + op[0] + (r[9] && r[9] !== it[1] ? '<small>' + esc(r[9]) + '</small>' : '') + (r[8] ? '<small><button type="button" class="ex-deplink" data-exdep="' + esc(r[8]) + '" title="ดูทั้งหมดของแผนกนี้">' + esc(exDepN(r[8])) + ' ›</button></small>' : '') + '</span><span>' + esc(r[2] || '–') + '</span><span class="tnum"><b>' + (op[1] > 0 ? '+' : '−') + exN(Math.abs(+r[4] || 0)) + '</b>' + (+r[5] ? '<small>@' + exN(r[5]) + '</small>' : '') + '</span></div>'; }).join('') + '</div>') +
     '</div></div></div>';
 }
 /* ช่องติ๊กกดง่าย: กดตรงไหนก็ได้ในแถบซ้ายของแถว (ทั้งความสูงแถว) = ติ๊กเลือก ไม่เปิดการ์ดสินค้า */
