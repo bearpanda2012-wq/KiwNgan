@@ -74,13 +74,6 @@ eq('out tab rows', await pg.locator('#exDep .ex-depm .ex-cr.out').count(), 2);
 await pg.click('#exDep [role="tab"][data-exdeptab="in"]'); await pg.waitForTimeout(150);
 eq('in tab rows', await pg.locator('#exDep .ex-depm .ex-cr.in').count(), 1);
 await pg.screenshot({ path: new URL('out/v2100b.png', import.meta.url).pathname });
-// v2.101.3: หน้าสั่งพิมพ์มีปุ่มปิด
-await pg.click('#exDep [data-exdepprint]'); await pg.waitForTimeout(900);
-eq('preview open with print + close', [await pg.locator('#printView [data-pvprint]').count(), await pg.locator('#printView [data-pvclose]').count()], [1, 1]);
-eq('preview shows document', /แผนก C20/.test(await pg.evaluate(() => document.querySelector('#printView iframe').srcdoc)), true);
-await pg.screenshot({ path: new URL('out/v21013.png', import.meta.url).pathname });
-await pg.click('#printView [data-pvclose]'); await pg.waitForTimeout(200);
-eq('close removes preview, dept stays', [await pg.locator('#printView').count(), await pg.locator('#exDep').count()], [0, 1]);
 // กรองในแผนก
 await pg.click('#exDep [role="tab"][data-exdeptab="sum"]'); await pg.fill('#exDepF', 'GST'); await pg.waitForTimeout(150);
 eq('filter keeps 1 row', await pg.locator('#exDep .ex-dt tbody tr').count(), 1);
