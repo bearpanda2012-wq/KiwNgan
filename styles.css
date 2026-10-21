@@ -5962,7 +5962,6 @@ body.auth #bgSndBtn{display:none}
   .ex-depk{grid-template-columns:repeat(3,minmax(0,1fr))}.ex-depk>button{padding:8px}.ex-depk>button b{font-size:16px}
   .ex-depseg button{padding:6px 8px}
   .ex-depit{grid-template-columns:auto minmax(0,1fr)}.ex-depit em{grid-column:1/-1;text-align:left;flex-direction:row;gap:6px}
-  .ex-depbtn span{display:none}
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ex-depit>i{background:#24324F;color:#A9C2F2}:root:not([data-theme="light"]) .ex-depstrip .ex-depit{background:transparent;border-color:#34466B}:root:not([data-theme="light"]) .ex-depstrip .ex-depit em,:root:not([data-theme="light"]) .ex-depk .k-bal,:root:not([data-theme="light"]) .ex-depk .k-bal b,:root:not([data-theme="light"]) .ex-deplink{color:#A9C2F2}}
 :root[data-theme="dark"] .ex-depit>i{background:#24324F;color:#A9C2F2}:root[data-theme="dark"] .ex-depstrip .ex-depit{background:transparent;border-color:#34466B}:root[data-theme="dark"] .ex-depstrip .ex-depit em,:root[data-theme="dark"] .ex-depk .k-bal,:root[data-theme="dark"] .ex-depk .k-bal b,:root[data-theme="dark"] .ex-deplink{color:#A9C2F2}
@@ -5989,3 +5988,10 @@ body.auth #bgSndBtn{display:none}
 :root[data-theme="dark"] .ex-dt td.pos b{color:#A9C2F2}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ex-dt td.pos b{color:#A9C2F2}}
 .ex-depseg button{white-space:nowrap}
+/* v2.100.2: ช่องค้นหาแผนกไม่ยืดสูงในมือถือ · ปุ่มดูตามแผนกเด่นขึ้น */
+.pm-b>.search.ex-depq{flex:0 0 auto;min-height:46px}
+.ex-depbtn{min-height:42px;padding:0 14px;border-radius:14px;border:1px solid color-mix(in oklab,var(--brand) 35%,var(--line));background:color-mix(in oklab,var(--brand) 10%,var(--surface));color:color-mix(in oklab,var(--brand) 85%,var(--ink));font-weight:600}
+.ex-depbtn:hover{background:color-mix(in oklab,var(--brand) 18%,var(--surface))}
+.ex-depbtn svg{width:18px;height:18px}
+.ex-depbtn b{display:none;font-weight:600}
+@media (max-width:720px){.ex-depbtn span{display:none}.ex-depbtn b{display:inline}.ex-depbtn{padding:0 12px}}

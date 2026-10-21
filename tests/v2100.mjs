@@ -89,5 +89,13 @@ await pg.fill('#exDepQ', 'c20'); await pg.keyboard.press('Enter'); await pg.wait
 eq('lowercase c20 opens C20', (await pg.locator('#exDep h3').textContent()).trim(), 'C20');
 await pg.setViewportSize({ width: 390, height: 800 }); await pg.waitForTimeout(200);
 await pg.screenshot({ path: new URL('out/v2100m.png', import.meta.url).pathname });
+// v2.100.2: มือถือ — ช่องค้นหาแผนกไม่ยืดสูง · ปุ่มแผนกมีคำว่า "แผนก"
+await pg.emulateMedia({ colorScheme: 'dark' });
+await pg.click('[data-exdeppick]'); await pg.waitForTimeout(300);
+eq('picker search height normal', (await pg.locator('#exDep .ex-depq').boundingBox()).height < 60, true);
+await pg.screenshot({ path: new URL('out/v2100p.png', import.meta.url).pathname });
+await pg.keyboard.press('Escape'); await pg.keyboard.press('Escape'); await pg.waitForTimeout(200);
+eq('dept button shows label on mobile', (await pg.locator('.ex-depbtn b').isVisible()), true);
+await pg.evaluate(() => { document.querySelector('.ex-tools').scrollIntoView({ block: 'center' }); }); await pg.waitForTimeout(300); await pg.locator('.ex-tools').screenshot({ path: new URL('out/v2100t.png', import.meta.url).pathname });
 eq('no page errors', errs, []);
 console.log(ok + ' passed, ' + bad + ' failed'); await b.close(); srv.close(); process.exit(bad ? 1 : 0);

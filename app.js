@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.100.1';
+const APP_VERSION = '2.100.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6666,7 +6666,7 @@ function viewExpress() {
       return '<button class="qchip ex-chip' + (fx ? ' fx' : '') + '" style="--ch:' + exGrpCol(x[0]) + '" data-exgrp="' + esc(x[0]) + '" aria-pressed="' + (EV.grp === x[0]) + '"' + (x[0].length <= 4 && !fx ? ' title="กลุ่ม ' + esc(x[0]) + '"' : '') + '>' + (fx ? '<i class="ex-cic">' + ic + '</i>' : '<i class="ex-cd"></i>') + '<span>' + esc(x[1]) + '</span><b>' + exN(x[2]) + '</b></button>'; }).join('') + '</div>';
   const locOpts = [...new Set([...EX.locs.values()].map(l => l[1]))].sort().map(c => '<option value="' + esc(c) + '"' + (EV.loc === c ? ' selected' : '') + '>' + esc(c + ' · ' + exLocN(c)) + '</option>').join('');
   const tools = '<div class="sk-tools ex-tools"><label class="search' + qOn(EV.q) + '">' + I.search + '<input id="exQ" type="search" autocomplete="off" enterkeyhint="search" placeholder="ค้นหารหัส ชื่อสินค้า กลุ่ม…" value="' + esc(EV.q) + '" aria-label="ค้นหาสินค้าใน Express">' + qX('exQ', EV.q) + '</label>' +
-    '<button type="button" class="btn ex-depbtn" data-exdep="" title="ดูรับเข้า เบิกออก คงเหลือ ของรหัสแผนก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01"/></svg><span>ดูตามแผนก</span></button>' +
+    '<button type="button" class="btn ex-depbtn" data-exdep="" title="ดูรับเข้า เบิกออก คงเหลือ ของรหัสแผนก"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01"/></svg><span>ดูตามแผนก</span><b>แผนก</b></button>' +
     '<label class="ex-selw" title="เลือกคลัง">' + ST_IC.box + '<select class="sel" data-exloc="1" aria-label="คลัง"><option value="">ทุกคลัง</option>' + locOpts + '</select></label>' +
     '<label class="ex-selw" title="เรียงลำดับ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M3.5 16.5L7 20l3.5-3.5M17 20V4M13.5 7.5L17 4l3.5 3.5"/></svg><select class="sel" data-exsort="1" aria-label="เรียง">' + [['cod', 'เรียงตามรหัส'], ['name', 'เรียงตามชื่อ'], ['bal', 'ยอดมากสุด'], ['val', 'มูลค่ามากสุด']].map(o => '<option value="' + o[0] + '"' + (EV.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label></div>';
   let rowI = 0; const rowAnim = !!EV.rowAnim; EV.rowAnim = false;   // แถวไล่ขึ้นมาเฉพาะตอนเปลี่ยนตัวกรอง/ค้นหา
