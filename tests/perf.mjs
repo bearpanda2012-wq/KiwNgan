@@ -16,6 +16,8 @@ await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, 
 await pg.evaluate(() => document.querySelectorAll('.ntf,.chat-heads').forEach(e => e.remove()));
 if (process.env.EXP) { const css = fs.readFileSync(process.env.EXP, 'utf8'); await pg.addStyleTag({ content: css }); await pg.evaluate(() => document.documentElement.setAttribute('data-perf', 'mid')); }
 if (process.env.ROOTSCROLL) await pg.addStyleTag({ content: 'html,body{overflow-x:visible!important}body{overflow-x:hidden!important}' });
+if (process.env.STEP) console.log('step', JSON.stringify(await pg.evaluate(fs.readFileSync(new URL('perf-step.js', import.meta.url), 'utf8') + ';window.__stepLoops(' + process.env.STEP + ',' + (process.env.STEPALL ? 'true' : 'false') + ')')));
+if (process.env.NOCALM) await pg.addStyleTag({ content: '[data-calm] body *,[data-calm] body *::before,[data-calm] body *::after{animation-iteration-count:infinite!important}' }).then(() => pg.evaluate(() => { const o = new MutationObserver(() => document.documentElement.removeAttribute('data-calm')); o.observe(document.documentElement, { attributes: true }); document.documentElement.removeAttribute('data-calm'); }));
 const cdp = await ctx.newCDPSession(pg); await cdp.send('Emulation.setCPUThrottlingRate', { rate: THR }); await cdp.send('Performance.enable');
 const metrics = async () => { const m = (await cdp.send('Performance.getMetrics')).metrics; const g = n => (m.find(x => x.name === n) || {}).value || 0; return { layout: g('LayoutDuration'), style: g('RecalcStyleDuration'), script: g('ScriptDuration'), task: g('TaskDuration') }; };
 const out = { thr: THR, w: W, views: {} };
