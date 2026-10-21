@@ -51,10 +51,11 @@ await pg.waitForFunction(() => document.querySelectorAll('.ex-row').length > 0, 
 await pg.fill('#exQ', 'C20'); await pg.waitForTimeout(300);
 eq('dept strip shows C20', await pg.locator('.ex-depstrip [data-exdep="C20"]').count(), 1);
 await pg.click('.ex-depstrip [data-exdep="C20"]');
-await pg.waitForFunction(() => document.querySelectorAll('#exDep .ex-deps .ex-cr').length > 0, null, { timeout: 5000 }).catch(() => {});
+await pg.waitForFunction(() => document.querySelectorAll('#exDep .ex-dt tbody tr').length > 0, null, { timeout: 5000 }).catch(() => {});
 eq('modal title C20', (await pg.locator('#exDep h3').textContent()).trim(), 'C20');
-eq('summary rows = 2 items', await pg.locator('#exDep .ex-deps .ex-cr').count(), 2);
-const net = await pg.locator('#exDep .ex-deps .ex-cr[data-excard="RM-SB-02-0104"] span:last-child b').textContent();
+eq('summary rows = 2 items', await pg.locator('#exDep .ex-dt tbody tr').count(), 2);
+const net = await pg.locator('#exDep .ex-dt tr[data-excard="RM-SB-02-0104"] td.b b').textContent();
+eq('express-style columns', await pg.$$eval('#exDep .ex-dt thead th', a => a.map(x => x.textContent.trim())), ['สินค้า', 'ขาย', 'รับเข้า', 'จ่ายออก', 'คงเหลือ']);
 eq('balance = in 10 − out 3 = 7', net.trim(), '7');
 eq('kpi in count', (await pg.locator('#exDep .ex-depk .k-in b').textContent()).trim(), '1');
 eq('kpi out count', (await pg.locator('#exDep .ex-depk .k-out b').textContent()).trim(), '2');
@@ -66,10 +67,10 @@ eq('in tab rows', await pg.locator('#exDep .ex-depm .ex-cr.in').count(), 1);
 await pg.screenshot({ path: new URL('out/v2100b.png', import.meta.url).pathname });
 // กรองในแผนก
 await pg.click('#exDep [role="tab"][data-exdeptab="sum"]'); await pg.fill('#exDepF', 'GST'); await pg.waitForTimeout(150);
-eq('filter keeps 1 row', await pg.locator('#exDep .ex-deps .ex-cr').count(), 1);
-eq('copy text has balance line', (await pg.evaluate(() => exDepText())).includes('เข้า 10 ออก 3 = 7'), true);
+eq('filter keeps 1 row', await pg.locator('#exDep .ex-dt tbody tr').count(), 1);
+eq('copy text has balance line', (await pg.evaluate(() => exDepText())).includes('รับเข้า 10 จ่ายออก 3 · เข้า 10 ออก 3 = 7'), true);
 // กดแถว → การ์ดสินค้าเปิดบนหน้าแผนก · Esc ปิดการ์ดก่อน แผนกยังอยู่
-await pg.click('#exDep .ex-deps .ex-cr'); await pg.waitForTimeout(400);
+await pg.click('#exDep .ex-dt tbody tr'); await pg.waitForTimeout(400);
 eq('item card opened', await pg.locator('#exModal').count(), 1);
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 eq('card closed, dept stays', [await pg.locator('#exModal').count(), await pg.locator('#exDep').count()], [0, 1]);

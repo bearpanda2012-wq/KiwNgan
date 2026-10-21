@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.100';
+const APP_VERSION = '2.100.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6990,14 +6990,17 @@ function exDepFind(q, max) {
   ks.forEach(k => { const K = String(k).toUpperCase(); if (K === up) out.push([k, 0]); else if (K.startsWith(up) && up.length >= 2) out.push([k, 1]); else if (q.length >= 3 && qHit([exDepLbl(k)], q)) out.push([k, 2]); });
   return out.sort((a, b) => a[1] - b[1] || String(a[0]).localeCompare(String(b[0]))).slice(0, max || 6).map(x => x[0]);
 }
+/* คอลัมน์เรียงแบบรายงาน Express "สรุปยอดเคลื่อนไหวสินค้า (สรุปตามแผนก)" · แสดงเฉพาะคอลัมน์ที่มีตัวเลข */
+const EX_DEP_COLS = [['0', 'ซื้อ', 1], ['7', 'ส่งคืน', -1], ['9', 'ขาย', -1], ['2', 'รับคืน', 1], ['1', 'รับเข้า', 1], ['6', 'จ่ายออก', -1], ['3', 'โอนเข้า', 1], ['4', 'โอนออก', -1], ['8', 'ปรับยอด', 1]];
 function exDepSplit(rows) {
   const ins = [], outs = [], by = new Map();
   (rows || []).forEach(r => { const op = EX_OP[r[3]] || ['รายการ', 1], q = Math.abs(+r[4] || 0), v = Math.abs(+r[6] || 0), sg = op[1] * ((+r[4] || 0) < 0 ? -1 : 1);
     (sg > 0 ? ins : outs).push(r);
     const g = by.get(r[10]) || { cod: r[10], des: r[9], in: 0, out: 0, vin: 0, vout: 0, n: 0, last: '' };
-    if (sg > 0) { g.in += q; g.vin += v; } else { g.out += q; g.vout += v; } g.n++; if (r[1] > g.last) g.last = r[1]; by.set(r[10], g); });
+    if (sg > 0) { g.in += q; g.vin += v; } else { g.out += q; g.vout += v; } g.n++; g.ops = g.ops || {}; g.ops[r[3]] = (g.ops[r[3]] || 0) + sg * q; if (r[1] > g.last) g.last = r[1]; by.set(r[10], g); });
   const sum = [...by.values()].sort((a, b) => String(a.cod).localeCompare(String(b.cod)));
-  return { ins, outs, sum, vin: ins.reduce((s, r) => s + Math.abs(+r[6] || 0), 0), vout: outs.reduce((s, r) => s + Math.abs(+r[6] || 0), 0) };
+  const used = EX_DEP_COLS.filter(c => sum.some(g => g.ops && Math.abs(g.ops[c[0]] || 0) > 1e-9));
+  return { used, ins, outs, sum, vin: ins.reduce((s, r) => s + Math.abs(+r[6] || 0), 0), vout: outs.reduce((s, r) => s + Math.abs(+r[6] || 0), 0) };
 }
 async function exDepOpen(code) {
   const prev = EV.dep || {};
@@ -7032,10 +7035,15 @@ function exDepDraw() {
     const nm = c => { const it = EX.items.get(c); return (it && it[1]) || ''; }, un = c => { const it = EX.items.get(c); return it ? exUnit(it[5]) : ''; };
     const moveRows = list => '<div class="ex-crd ex-depm"><div class="ex-ch"><span>วันที่ · เอกสาร</span><span>สินค้า</span><span>คลัง</span><span>จำนวน</span></div>' + list.filter(hit).map(r => { const op = EX_OP[r[3]] || ['รายการ', 1], sg = op[1] * ((+r[4] || 0) < 0 ? -1 : 1);
       return '<button type="button" class="ex-cr ' + (sg > 0 ? 'in' : 'out') + '" data-excard="' + esc(r[10]) + '"><span><b>' + esc(exDate(r[1])) + '</b><small>' + esc(r[0]) + '</small></span><span><b class="ex-dc">' + coHl(r[10], q) + '</b><small>' + coHl(nm(r[10]) || r[9] || '', q) + '</small><small class="ex-dop">' + op[0] + (r[7] ? ' · ' + esc(r[7]) : '') + '</small></span><span>' + esc(r[2] || '–') + '</span><span class="tnum"><b>' + (sg > 0 ? '+' : '−') + exN(Math.abs(+r[4] || 0)) + '</b><small>' + esc(un(r[10])) + (+r[6] ? ' · ' + baht(Math.abs(+r[6])) : '') + '</small></span></button>'; }).join('') + '</div>';
-    const sumRows = () => { const l = sp.sum.filter(g => !q || qHit([g.cod, g.des, nm(g.cod)], q));
-      return '<div class="ex-crd ex-deps"><div class="ex-ch"><span>สินค้า</span><span>รับเข้า</span><span>เบิกออก</span><span>คงเหลือ</span></div>' + l.map(g => { const net = g.in - g.out, it = EX.items.get(g.cod);
-        return '<button type="button" class="ex-cr ' + (net < -1e-9 ? 'neg' : Math.abs(net) < 1e-9 ? 'zero' : 'pos') + '" data-excard="' + esc(g.cod) + '"><span><b class="ex-dc">' + coHl(g.cod, q) + '</b><small>' + coHl(nm(g.cod) || g.des || '', q) + '</small>' + (it ? '<small class="ex-dop">ยอดคลังรวมตอนนี้ ' + exN(it[6]) + ' ' + esc(exUnit(it[5])) + '</small>' : '') + '</span><span class="tnum k-in">' + (g.in ? '+' + exN(g.in) : '–') + '</span><span class="tnum k-out">' + (g.out ? '−' + exN(g.out) : '–') + '</span><span class="tnum"><b>' + exN(net) + '</b><small>' + esc(un(g.cod)) + '</small></span></button>'; }).join('') +
-        (l.length ? '' : '<div class="sk-empty sm"><b>ไม่พบ "' + esc(q) + '"</b></div>') + '</div>'; };
+    const sumRows = () => { const l = sp.sum.filter(g => !q || qHit([g.cod, g.des, nm(g.cod)], q)), cols = sp.used, tot = {};
+      l.forEach(g => cols.forEach(c => { tot[c[0]] = (tot[c[0]] || 0) + (g.ops[c[0]] || 0); }));
+      const cell = (v, c) => Math.abs(v || 0) < 1e-9 ? '<td class="n z">–</td>' : '<td class="n ' + (v > 0 ? 'k-in' : 'k-out') + '">' + (v > 0 ? '+' : '−') + exN(Math.abs(v)) + '</td>';
+      if (!l.length) return '<div class="sk-empty sm"><b>ไม่พบ "' + esc(q) + '"</b></div>';
+      return '<div class="ex-dtw"><table class="ex-dt"><thead><tr><th class="c">สินค้า</th>' + cols.map(c => '<th class="n ' + (c[2] > 0 ? 'k-in' : 'k-out') + '">' + c[1] + '</th>').join('') + '<th class="n b">คงเหลือ</th></tr></thead><tbody>' +
+        l.map(g => { const net = g.in - g.out, it = EX.items.get(g.cod);
+          return '<tr data-excard="' + esc(g.cod) + '" tabindex="0"><td class="c"><b class="ex-dc">' + coHl(g.cod, q) + '</b><small>' + coHl(nm(g.cod) || g.des || '', q) + '</small>' + (it ? '<small class="ex-dop">คลังรวมตอนนี้ ' + exN(it[6]) + ' ' + esc(exUnit(it[5])) + '</small>' : '') + '</td>' + cols.map(c => cell(g.ops[c[0]], c)).join('') +
+            '<td class="n b ' + (net < -1e-9 ? 'neg' : Math.abs(net) < 1e-9 ? 'zero' : 'pos') + '"><b>' + exN(net) + '</b><small>' + esc(un(g.cod)) + '</small></td></tr>'; }).join('') +
+        '</tbody><tfoot><tr><td class="c">รวม ' + exN(l.length) + ' รหัส</td>' + cols.map(c => cell(tot[c[0]], c)).join('') + '<td class="n b"><b>' + exN(l.filter(g => Math.abs(g.in - g.out) > 1e-9).length) + '</b><small>รหัสที่ยังเหลือ</small></td></tr></tfoot></table></div>'; };
     const body = d.err ? '<p class="ex-err">' + esc(d.err) + '</p>' : !rows ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลดรายการของแผนก ' + esc(d.code) + '…</b></div>'
       : !rows.length ? '<div class="sk-empty sm"><b>แผนก ' + esc(d.code) + ' ยังไม่มีการรับเข้า/เบิกออกปีนี้</b><small>ข้อมูลจากสต็อกการ์ดใน Express (ปีปัจจุบัน)</small></div>'
       : '<div class="ex-sum ex-depk"><button type="button" class="k-in" data-exdeptab="in" aria-pressed="' + (d.tab === 'in') + '"><small>รับเข้า</small><b class="tnum">' + exN(sp.ins.length) + '</b><em>รายการ · ' + baht(sp.vin) + '</em></button><button type="button" class="k-out" data-exdeptab="out" aria-pressed="' + (d.tab === 'out') + '"><small>เบิกออก</small><b class="tnum">' + exN(sp.outs.length) + '</b><em>รายการ · ' + baht(sp.vout) + '</em></button><button type="button" class="k-bal" data-exdeptab="sum" aria-pressed="' + (d.tab === 'sum') + '"><small>คงเหลือ</small><b class="tnum">' + exN(sp.sum.filter(g => Math.abs(g.in - g.out) > 1e-9).length) + '</b><em>จาก ' + exN(sp.sum.length) + ' รหัส · ' + baht(sp.vin - sp.vout) + '</em></button></div>' +
@@ -7054,7 +7062,7 @@ function exDepDoc() {
 }
 function exDepText() {
   const o = exDepDoc(), mv = r => '  ' + exDate(r[1]) + ' ' + r[0] + ' · ' + r[10] + ' ' + (o.nm(r[10]) || r[9] || '') + ' · ' + exN(Math.abs(+r[4] || 0)) + ' ' + o.un(r[10]);
-  return [o.title + ' · ' + fdY(today()), '', 'คงเหลือตามสินค้า (รับเข้า − เบิกออก)'].concat(o.sp.sum.map(g => '  ' + g.cod + ' ' + (o.nm(g.cod) || g.des || '') + ' · เข้า ' + exN(g.in) + ' ออก ' + exN(g.out) + ' = ' + exN(g.in - g.out) + ' ' + o.un(g.cod)),
+  return [o.title + ' · ' + fdY(today()), '', 'คงเหลือตามสินค้า (รับเข้า − เบิกออก)'].concat(o.sp.sum.map(g => '  ' + g.cod + ' ' + (o.nm(g.cod) || g.des || '') + ' · ' + o.sp.used.filter(c => Math.abs(g.ops[c[0]] || 0) > 1e-9).map(c => c[1] + ' ' + exN(Math.abs(g.ops[c[0]]))).join(' ') + ' · เข้า ' + exN(g.in) + ' ออก ' + exN(g.out) + ' = ' + exN(g.in - g.out) + ' ' + o.un(g.cod)),
     ['', 'รับเข้า ' + o.sp.ins.length + ' รายการ'], o.sp.ins.map(mv), ['', 'เบิกออก ' + o.sp.outs.length + ' รายการ'], o.sp.outs.map(mv)).join('\n');
 }
 function exDepPrint(pdf) {
@@ -7063,8 +7071,8 @@ function exDepPrint(pdf) {
   const mv = list => '<table><thead><tr><th>วันที่</th><th>เอกสาร</th><th>รหัส</th><th>ชื่อสินค้า</th><th>รายการ</th><th>คลัง</th><th class="n">จำนวน</th><th class="n">มูลค่า</th></tr></thead><tbody>' + list.map(r => '<tr><td>' + esc(exDate(r[1])) + '</td><td>' + esc(r[0]) + '</td><td>' + esc(r[10]) + '</td><td>' + esc(o.nm(r[10]) || r[9] || '') + '</td><td>' + esc((EX_OP[r[3]] || ['รายการ'])[0]) + '</td><td>' + esc(r[2] || '') + '</td><td class="n">' + exN(Math.abs(+r[4] || 0)) + ' ' + esc(o.un(r[10])) + '</td><td class="n">' + baht(Math.abs(+r[6] || 0)) + '</td></tr>').join('') + '</tbody></table>';
   const html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(o.title) + '</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600&display=swap"><style>' + css + '</style></head><body>' +
     '<div class="h"><div><h1>' + esc(o.title) + '</h1><div>' + esc(s0.company || s0.appName || '') + '</div></div><div>วันที่ ' + esc(fdY(today())) + '<br><small>ข้อมูลจาก Express ปีนี้</small></div></div>' +
-    '<h2>คงเหลือตามสินค้า</h2><table><thead><tr><th>#</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="n">รับเข้า</th><th class="n">เบิกออก</th><th class="n">คงเหลือ</th><th>หน่วย</th></tr></thead><tbody>' +
-    o.sp.sum.map((g, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(g.cod) + '</td><td>' + esc(o.nm(g.cod) || g.des || '') + '</td><td class="n">' + exN(g.in) + '</td><td class="n">' + exN(g.out) + '</td><td class="n"><b>' + exN(g.in - g.out) + '</b></td><td>' + esc(o.un(g.cod)) + '</td></tr>').join('') + '</tbody></table>' +
+    '<h2>คงเหลือตามสินค้า</h2><table><thead><tr><th>#</th><th>รหัส</th><th>ชื่อสินค้า</th>' + o.sp.used.map(c => '<th class="n">' + c[1] + '</th>').join('') + '<th class="n">คงเหลือ</th><th>หน่วย</th></tr></thead><tbody>' +
+    o.sp.sum.map((g, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(g.cod) + '</td><td>' + esc(o.nm(g.cod) || g.des || '') + '</td>' + o.sp.used.map(c => '<td class="n">' + (Math.abs(g.ops[c[0]] || 0) > 1e-9 ? exN(Math.abs(g.ops[c[0]])) : '') + '</td>').join('') + '<td class="n"><b>' + exN(g.in - g.out) + '</b></td><td>' + esc(o.un(g.cod)) + '</td></tr>').join('') + '</tbody></table>' +
     '<h2>รับเข้า ' + o.sp.ins.length + ' รายการ · ' + baht(o.sp.vin) + '</h2>' + mv(o.sp.ins) + '<h2>เบิกออก ' + o.sp.outs.length + ' รายการ · ' + baht(o.sp.vout) + '</h2>' + mv(o.sp.outs) + '<script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>';
   if (pdf) return exPdf(css, html, 'Express-dep-' + o.d.code + '-' + today() + '.pdf');
   printHtml(html);

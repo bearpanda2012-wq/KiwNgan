@@ -5966,3 +5966,26 @@ body.auth #bgSndBtn{display:none}
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ex-depit>i{background:#24324F;color:#A9C2F2}:root:not([data-theme="light"]) .ex-depstrip .ex-depit{background:transparent;border-color:#34466B}:root:not([data-theme="light"]) .ex-depstrip .ex-depit em,:root:not([data-theme="light"]) .ex-depk .k-bal,:root:not([data-theme="light"]) .ex-depk .k-bal b,:root:not([data-theme="light"]) .ex-deplink{color:#A9C2F2}}
 :root[data-theme="dark"] .ex-depit>i{background:#24324F;color:#A9C2F2}:root[data-theme="dark"] .ex-depstrip .ex-depit{background:transparent;border-color:#34466B}:root[data-theme="dark"] .ex-depstrip .ex-depit em,:root[data-theme="dark"] .ex-depk .k-bal,:root[data-theme="dark"] .ex-depk .k-bal b,:root[data-theme="dark"] .ex-deplink{color:#A9C2F2}
+/* v2.100.1: ตารางคงเหลือตามแผนก แยกคอลัมน์แบบรายงาน Express */
+.ex-dtw{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:min(52vh,560px)}
+.ex-dt{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+.ex-dt th,.ex-dt td{padding:7px 10px;border-top:1px solid var(--line);vertical-align:top;white-space:nowrap}
+.ex-dt thead th{position:sticky;top:0;z-index:2;background:var(--surface-2);color:var(--muted);font-size:11px;font-weight:600;border-top:0}
+.ex-dt tfoot td{position:sticky;bottom:0;background:var(--surface-2);font-weight:600;border-top:2px solid var(--line)}
+.ex-dt .c{position:sticky;left:0;z-index:1;background:var(--surface);text-align:left;white-space:normal;min-width:190px;max-width:300px}
+.ex-dt thead .c{z-index:3;background:var(--surface-2)}.ex-dt tfoot .c{z-index:3;background:var(--surface-2)}
+.ex-dt .c small{display:block;color:var(--muted);font-size:11px}
+.ex-dt .n{text-align:right;font-variant-numeric:tabular-nums}
+.ex-dt .z{color:var(--muted);opacity:.5}
+.ex-dt td.k-in{color:#15803D}.ex-dt td.k-out{color:#C2410C}
+.ex-dt th.k-in{box-shadow:inset 0 -2px #15803D55}.ex-dt th.k-out{box-shadow:inset 0 -2px #C2410C55}
+.ex-dt .b{border-left:1px solid var(--line);min-width:74px}
+.ex-dt td.b b{font:700 14px var(--f-display);display:block}.ex-dt td.b small{display:block;color:var(--muted);font-size:11px}
+.ex-dt td.pos b{color:#2F57A8}.ex-dt td.neg b{color:#B91C1C}.ex-dt td.zero b{color:var(--muted)}
+.ex-dt tbody tr{cursor:pointer}
+.ex-dt tbody tr:hover td{background:var(--surface-2)}
+.ex-dt tbody tr:focus-visible td{outline:2px solid #5B7FD6;outline-offset:-2px}
+@media (max-width:720px){.ex-dt .c{min-width:140px;max-width:170px}.ex-dt th,.ex-dt td{padding:7px 8px}}
+:root[data-theme="dark"] .ex-dt td.pos b{color:#A9C2F2}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ex-dt td.pos b{color:#A9C2F2}}
+.ex-depseg button{white-space:nowrap}
