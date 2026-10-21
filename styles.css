@@ -6056,3 +6056,24 @@ body.auth #bgSndBtn{display:none}
 .qchip.q-urg{--q:#E8590C;margin-left:6px}
 .qchip.q-urg .qi svg{animation:flicker 1.4s ease-in-out infinite}
 @media (max-width:560px){.qchip.q-urg{margin-left:0}}
+/* v2.103: สีประจำเครื่อง (Router แดงเลือดหมู · Laser เขียวมะกอก · Punching น้ำตาล · WaterJet น้ำเงินเทา) */
+.mrow[style*="--mc"]{border-color:color-mix(in oklab,var(--mc) 40%,var(--line));background:color-mix(in oklab,var(--mc) 7%,var(--surface));box-shadow:inset 4px 0 0 var(--mc)}
+.mrow[style*="--mc"] .mr-box{border-color:var(--mc)}
+.mrow[style*="--mc"] b{color:var(--mc)}
+.mrow[style*="--mc"]:not(.done) small::before{background:var(--mc)}
+.mrow[style*="--mc"]:not(:disabled):hover{border-color:var(--mc)}
+.mrow[style*="--mc"].hi{outline-color:var(--mc)}
+.mrow[style*="--mc"].done{box-shadow:inset 4px 0 0 color-mix(in oklab,var(--mc) 45%,transparent)}
+.mrow[style*="--mc"].done b{color:var(--muted)}
+.mchip[style*="--mc"]{border-color:color-mix(in oklab,var(--mc) 35%,var(--line))}
+.mchip[style*="--mc"]::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--mc);flex:none}
+.mchip[style*="--mc"]:hover{border-color:var(--mc)}
+.mchip[style*="--mc"].on{background:color-mix(in oklab,var(--mc) 15%,var(--surface));border-color:var(--mc);color:var(--mc)}
+.mchip[style*="--mc"].on::before{display:none}
+.pm-sum span[style*="--mc"].on{color:var(--mc);background:color-mix(in oklab,var(--mc) 13%,var(--surface))}
+:root[data-theme="dark"] .mrow[style*="--mc"] b,:root[data-theme="dark"] .mchip[style*="--mc"].on,:root[data-theme="dark"] .pm-sum span[style*="--mc"].on{color:color-mix(in oklab,var(--mc) 55%,#fff)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mrow[style*="--mc"] b,:root:not([data-theme="light"]) .mchip[style*="--mc"].on,:root:not([data-theme="light"]) .pm-sum span[style*="--mc"].on{color:color-mix(in oklab,var(--mc) 55%,#fff)}}
+.co-mc[style*="--mc"]{color:var(--mc);background:color-mix(in oklab,var(--mc) 11%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--mc) 30%,transparent)}
+.co-mc[style*="--mc"].on{color:color-mix(in oklab,var(--mc) 70%,var(--muted));background:var(--surface);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--mc) 25%,transparent)}
+:root[data-theme="dark"] .co-mc[style*="--mc"]{color:color-mix(in oklab,var(--mc) 55%,#fff)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .co-mc[style*="--mc"]{color:color-mix(in oklab,var(--mc) 55%,#fff)}}

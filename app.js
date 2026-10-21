@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.102.4';
+const APP_VERSION = '2.103';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5666,6 +5666,10 @@ function qcItemsFor(p) {
 const canProd = () => P.can(S.user, 'prod.edit');   // บอร์ดผลิต: สิทธิ์ "อัปเดตบอร์ดผลิต" (ค่าเริ่มต้น ฝ่ายผลิต) และแอดมิน
 const canShip = () => P.can(S.user, 'prod.ship');   // ขั้นสุดท้าย "ส่งแล้ว": ฝ่ายสต็อก (และแอดมิน)
 const isProdRole = () => !!S.user && (S.user.role === 'prod' || S.user.role === 'stock');   // ไม่ใช่ฝ่ายแบบ
+/* สีประจำเครื่อง (ใช้ทุกที่: การ์ดบอร์ดผลิต · หน้างาน · คิวเครื่อง · หน้า Sale) · โทนไม่ซ้ำสีขั้นตอน */
+const MQ_COL = { router: '#A61E4D', laser: '#5B7A1A', punching: '#8B5A2B', waterjet: '#3F5873' }, MQ_HUE = ['#3730A3', '#6B6F80', '#7A5C99', '#2F6B5E'];
+function mCol(m) { const k = String(m || '').toLowerCase().replace(/[^a-z0-9]/g, ''); if (MQ_COL[k]) return MQ_COL[k]; let h = 0; for (const ch of String(m || '')) h = (h * 31 + ch.codePointAt(0)) >>> 0; return MQ_HUE[h % MQ_HUE.length]; }
+const mSty = m => ' style="--mc:' + mCol(m) + '"';
 const machinesList = () => { const m = (S.settings && S.settings.machines || []).map(x => String(x || '').trim()).filter(Boolean); return m.length ? m : DEF_MACHINES; };
 function pms(p) { try { const a = JSON.parse((p && p.machines) || '[]'); return Array.isArray(a) ? a.filter(x => x && x.m) : []; } catch (e) { return []; } }
 function phist(p) { try { const a = JSON.parse((p && p.history) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
@@ -5800,11 +5804,11 @@ function pcard(p) {
   if (p.stage === 'wait') {
     const sel = (S.psel && S.psel[p.id]) || ms.map(m => m.m);
     body = ro ? '<div class="pc-note">' + (canProd() ? '' : 'รอฝ่ายผลิตเลือกเครื่อง') + '</div>'
-      : '<div class="pc-pick" role="group" aria-label="เลือกเครื่อง">' + machinesList().map(m => '<button type="button" class="mchip' + (sel.indexOf(m) >= 0 ? ' on' : '') + '" data-pmt="' + esc(m) + '" data-pid="' + esc(p.id) + '" aria-pressed="' + (sel.indexOf(m) >= 0) + '">' + (sel.indexOf(m) >= 0 ? PIC.check : '') + esc(m) + '</button>').join('') + '</div>' +
+      : '<div class="pc-pick" role="group" aria-label="เลือกเครื่อง">' + machinesList().map(m => '<button type="button" class="mchip' + (sel.indexOf(m) >= 0 ? ' on' : '') + '"' + mSty(m) + ' data-pmt="' + esc(m) + '" data-pid="' + esc(p.id) + '" aria-pressed="' + (sel.indexOf(m) >= 0) + '">' + (sel.indexOf(m) >= 0 ? PIC.check : '') + esc(m) + '</button>').join('') + '</div>' +
         '<div class="pc-row"><span class="pc-skips">' + pSkipTogs(p, false) + '</span>' +
         '<button type="button" class="btn primary sm pc-go" data-pstart="' + esc(p.id) + '"' + (sel.length ? '' : ' disabled') + '>' + PIC.machine + 'เริ่มลงเครื่อง' + (sel.length > 1 ? ' (' + sel.length + ')' : '') + '</button></div>';
   } else if (p.stage === 'machine') {
-    body = '<div class="pc-ms">' + ms.map(m => '<button type="button" class="mrow' + (m.d ? ' done' : '') + (F !== 'all' && F === m.m ? ' hi' : '') + '"' + (ro ? ' disabled' : '') + ' data-pmd="' + esc(m.m) + '" data-pid="' + esc(p.id) + '" title="' + (m.d ? 'เสร็จ ' + esc(fdt(m.d)) + ' · กดอีกครั้งเพื่อยกเลิก' : 'กดเมื่อเครื่องนี้ทำเสร็จ') + '">' +
+    body = '<div class="pc-ms">' + ms.map(m => '<button type="button" class="mrow' + (m.d ? ' done' : '') + (F !== 'all' && F === m.m ? ' hi' : '') + '"' + mSty(m.m) + (ro ? ' disabled' : '') + ' data-pmd="' + esc(m.m) + '" data-pid="' + esc(p.id) + '" title="' + (m.d ? 'เสร็จ ' + esc(fdt(m.d)) + ' · กดอีกครั้งเพื่อยกเลิก' : 'กดเมื่อเครื่องนี้ทำเสร็จ') + '">' +
       '<span class="mr-box">' + (m.d ? PIC.check : '') + '</span><b>' + esc(m.m) + '</b><small>' + (m.d ? 'เสร็จ ' + esc(fdt(m.d).replace(/^.* /, '')) : 'กำลังทำ') + '</small></button>').join('') + '</div>';
   } else if (p.stage === 'qc') {
     const it = qcItemsFor(p), n = it.filter(x => x.d).length, q = pqc(p);
@@ -5841,7 +5845,7 @@ function viewProd() {
     if (st === 'machine' && F !== 'all') js = js.filter(p => inMachine(p, F));
     js.sort((a, b) => (pUrgent(b) - pUrgent(a)) || String(pStageSince(a)).localeCompare(String(pStageSince(b))));   // งานด่วนขึ้นก่อน
     let extra = '';
-    if (st === 'machine') extra = '<div class="pm-sum">' + machinesList().map(m => { const n = open.filter(p => inMachine(p, m)).length; return '<span class="' + (n ? 'on' : '') + '">' + esc(m) + ' <b>' + n + '</b></span>'; }).join('') + '</div>';
+    if (st === 'machine') extra = '<div class="pm-sum">' + machinesList().map(m => { const n = open.filter(p => inMachine(p, m)).length; return '<span class="' + (n ? 'on' : '') + '"' + mSty(m) + '>' + esc(m) + ' <b>' + n + '</b></span>'; }).join('') + '</div>';
     let more = '';
     if (st === 'ready') {
       const since = addDays(today(), -SHIP_KEEP), sh = pool.filter(p => p.stage === 'shipped' && String(p.shippedAt).slice(0, 10) >= since).sort((a, b) => String(b.shippedAt).localeCompare(String(a.shippedAt)));
@@ -5859,8 +5863,7 @@ function viewProd() {
     const old = run.reduce((mx, p) => Math.max(mx, daysBetween(String(pStageSince(p) || today()).slice(0, 10), today()) || 0), 0);
     return { m: m, run: run.length, wait: wt.length, urg: all.filter(pUrgent).length, old: old, tot: all.length }; });
   const mx = Math.max(1, ...mq.map(x => x.tot)), allRun = open.filter(p => p.stage === 'machine').length;
-  const MQ_COL = { router: '#A61E4D', laser: '#5B7A1A', punching: '#8B5A2B', waterjet: '#3F5873' }, MQ_HUE = ['#3730A3', '#6B6F80', '#7A5C99', '#2F6B5E'];   // โทนที่ไม่ซ้ำสีขั้นตอน (ฟ้า ส้ม ชมพู ม่วง เขียวน้ำทะเล เหลือง เขียว)
-  const mqCol = (m, i) => MQ_COL[String(m).toLowerCase().replace(/[^a-z]/g, '')] || MQ_HUE[i % MQ_HUE.length];   // แต่ละเครื่องมีสีของตัวเอง
+  const mqCol = m => mCol(m);
   const chips = '<div class="mq' + (S.animIn ? ' in' : '') + '"><div class="mq-h"><b>' + PIC.machine + 'คิวงานแต่ละเครื่อง</b><small>กดที่เครื่องเพื่อดูเฉพาะงานของเครื่องนั้น</small></div><div class="mq-grid">' +
     '<button type="button" class="mq-c all" data-pm="all" aria-pressed="' + (F === 'all') + '" style="--i:0"><span class="mq-ic">' + STI.all + '</span><span class="mq-t"><b>ทุกเครื่อง</b><small>ลงเครื่องอยู่ ' + allRun + ' งาน</small></span></button>' +
     mq.map((x, i) => '<button type="button" class="mq-c' + (x.tot ? '' : ' idle') + (x.urg ? ' urg' : '') + '" data-pm="' + esc(x.m) + '" aria-pressed="' + (F === x.m) + '" style="--i:' + (i + 1) + ';--mc:' + mqCol(x.m, i) + '"><span class="mq-ic">' + PIC.machine + '</span><span class="mq-t"><b>' + esc(x.m) + '</b><small>' +
@@ -5980,7 +5983,7 @@ function coX(r, o) {
   let h = '';
   if (r.prod && r.step !== 'design' && r.step !== 'ddone') {
     const m = ms(r.prod);
-    h += m.map(x => '<span class="co-mc' + (x.d ? ' on' : '') + '">' + (x.d ? '✓ ' : PIC.machine) + esc(x.m) + '</span>').join('');
+    h += m.map(x => '<span class="co-mc' + (x.d ? ' on' : '') + '"' + mSty(x.m) + '>' + (x.d ? '✓ ' : PIC.machine) + esc(x.m) + '</span>').join('');
     if (r.prod.paint === 'no') h += '<span class="co-sk">ไม่ทำสี</span>';
     if (r.prod.assy === 'no') h += '<span class="co-sk">ไม่ประกอบ</span>';
     if (r.prod.note) h += '<span class="co-pnote" title="' + esc(r.prod.note) + '">' + STI.note + esc(String(r.prod.note).slice(0, 60)) + '</span>';
@@ -7794,7 +7797,7 @@ function pModalDraw0() {
         P2.files.map((im, k) => '<span class="pa-im"><img alt="" src="' + im.url + '"><button type="button" data-padimgdel="' + k + '" aria-label="เอารูปออก">✕</button></span>').join('') +
         (P2.files.length < IMG_MAX ? '<label class="pa-add">' + STI.camera + '<span>เพิ่มรูป</span><small>ถ่ายหรือเลือกจากเครื่อง</small><input type="file" id="pAddImg" accept="image/*" multiple hidden></label>' : '') + '</div></section>' +
       '<section class="pa-sec"><div class="pa-h"><span class="pa-n">3</span><b>เครื่องและขั้นตอน</b><small>เลือกทีหลังได้</small></div>' +
-      '<div class="pc-pick">' + machinesList().map(mm => '<button type="button" class="mchip' + (P2.ms.indexOf(mm) >= 0 ? ' on' : '') + '" data-paddm="' + esc(mm) + '" aria-pressed="' + (P2.ms.indexOf(mm) >= 0) + '">' + (P2.ms.indexOf(mm) >= 0 ? PIC.check : '') + esc(mm) + '</button>').join('') + '</div>' +
+      '<div class="pc-pick">' + machinesList().map(mm => '<button type="button" class="mchip' + (P2.ms.indexOf(mm) >= 0 ? ' on' : '') + '"' + mSty(mm) + ' data-paddm="' + esc(mm) + '" aria-pressed="' + (P2.ms.indexOf(mm) >= 0) + '">' + (P2.ms.indexOf(mm) >= 0 ? PIC.check : '') + esc(mm) + '</button>').join('') + '</div>' +
       '<div class="pc-skips"><button type="button" class="ptog' + (P2.paint === 'no' ? ' on' : '') + '" data-paddpaint="1" aria-pressed="' + (P2.paint === 'no') + '">' + (P2.paint === 'no' ? PIC.check : '') + 'ไม่ต้องทำสี</button>' +
       '<button type="button" class="ptog' + (P2.assy === 'no' ? ' on' : '') + '" data-paddassy="1" aria-pressed="' + (P2.assy === 'no') + '">' + (P2.assy === 'no' ? PIC.check : '') + 'ไม่ต้องประกอบ</button></div></section>' +
       '</div><div class="pm-f"><button type="button" class="btn" data-pclose="1">ยกเลิก</button><button type="button" class="btn primary" data-paddsave="1"' + (P2.saving ? ' disabled' : '') + '>' + I.plus + (P2.saving ? 'กำลังบันทึก…' : P2.ms.length ? 'เพิ่มและเริ่มลงเครื่อง' : 'เพิ่มเข้ารอผลิต') + '</button></div></div>';
@@ -7810,12 +7813,12 @@ function pModalDraw0() {
     '<div class="pm-steps"><div class="pm-rail"><i></i></div>' + (ci > 0 ? '<div class="pm-run"><i></i></div>' : '') + order.map((st, i) => { const sk = pSkipped(p, st) && i !== ci;
       return '<button type="button" style="--i:' + i + '" class="pm-step ' + PSTG[st].cls + (i < ci ? ' past' : i === ci ? ' now' : '') + (sk ? ' skip' : '') + '"' + (i === ci || !pCanSet(p, st) ? ' disabled' : '') + ' data-pset="' + st + '" title="' + (!pCanSet(p, st) ? PSTG[st].label + (st === 'shipped' ? ' · ฝ่ายสต็อกเป็นคนกด' : '') : 'ย้ายไปขั้น ' + PSTG[st].label) + '"><span>' + (sk ? '<i>ข้าม</i>' : i < ci ? PIC.check : PIC[st]) + (i === ci ? '<b class="pm-spk"></b>' : '') + '</span><small>' + PSTG[st].label + '</small></button>'; }).join('') + '</div></div>';
   const mPick = '<div class="pc-pick">' + machinesList().concat(ms.map(x => x.m).filter(n => machinesList().indexOf(n) < 0)).map(n => { const cur = ms.find(x => x.m === n);
-    return '<button type="button" class="mchip' + (cur ? ' on' : '') + (cur && cur.d ? ' done' : '') + '"' + (ro ? ' disabled' : '') + ' data-pmset="' + esc(n) + '" aria-pressed="' + !!cur + '">' + (cur ? PIC.check : '') + esc(n) + (cur && cur.d ? ' · เสร็จ ' + esc(fdt(cur.d).replace(/^.* /, '')) : '') + '</button>'; }).join('') + '</div>';
+    return '<button type="button" class="mchip' + (cur ? ' on' : '') + (cur && cur.d ? ' done' : '') + '"' + mSty(n) + (ro ? ' disabled' : '') + ' data-pmset="' + esc(n) + '" aria-pressed="' + !!cur + '">' + (cur ? PIC.check : '') + esc(n) + (cur && cur.d ? ' · เสร็จ ' + esc(fdt(cur.d).replace(/^.* /, '')) : '') + '</button>'; }).join('') + '</div>';
   m.innerHTML = '<div class="pm-card ' + PSTG[p.stage].cls + '"><div class="pm-h"><div><span class="eyebrow">' + pPill(p.stage) + ' · อยู่ขั้นนี้ ' + pAgeTxt(pAge(p)) + '</span><h3>' + esc(p.code) + (pUrgent(p) ? ' ' + URG_TAG : '') + '</h3>' + (p.title ? '<p class="sub">' + esc(p.title) + '</p>' : '') + '</div>' + x + '</div><div class="pm-b">' +
     (canProd() ? (fromD => '<button type="button" class="pm-urg' + (pUrgent(p) ? ' on' : '') + '" data-purg="' + esc(p.id) + '" aria-pressed="' + pUrgent(p) + '"' + (fromD ? ' disabled' : '') + '>' + STI.fire + '<span><b>งานด่วน</b><small>' + (fromD ? 'ติดด่วนจากงานฝ่ายแบบ · ติดไปจนส่งมอบ' : 'ติดธงด่วนไปทุกขั้นจนส่งมอบ · งานด่วนขึ้นก่อนในทุกช่อง') + '</small></span><i class="sw"></i></button>')(p.priority !== 'urgent' && pUrgent(p)) : '') +
     stepper + pShipHtml(p) + pQcHtml(p, ro) +
     pInfoHtml(p, ro) + pImgsHtml(p, ro) +
-    (p.stage === 'machine' ? '<div class="f pm-mdone"><label>ติ๊กเครื่องที่ทำเสร็จ</label><div class="pc-ms">' + ms.map(mm => '<button type="button" class="mrow' + (mm.d ? ' done' : '') + '"' + (ro ? ' disabled' : '') + ' data-pmd="' + esc(mm.m) + '" data-pid="' + esc(p.id) + '"><span class="mr-box">' + (mm.d ? PIC.check : '') + '</span><span class="mr-t"><b>' + esc(mm.m) + '</b><small>' + (mm.d ? 'เสร็จ ' + esc(fdt(mm.d).replace(/^.* /, '')) : 'กำลังทำ') + '</small></span>' + (ro ? '' : '<em class="mr-act">' + (mm.d ? 'ยกเลิก' : 'กดเมื่อเสร็จ') + '</em>') + '</button>').join('') + '</div></div>' : '') +
+    (p.stage === 'machine' ? '<div class="f pm-mdone"><label>ติ๊กเครื่องที่ทำเสร็จ</label><div class="pc-ms">' + ms.map(mm => '<button type="button" class="mrow' + (mm.d ? ' done' : '') + '"' + mSty(mm.m) + (ro ? ' disabled' : '') + ' data-pmd="' + esc(mm.m) + '" data-pid="' + esc(p.id) + '"><span class="mr-box">' + (mm.d ? PIC.check : '') + '</span><span class="mr-t"><b>' + esc(mm.m) + '</b><small>' + (mm.d ? 'เสร็จ ' + esc(fdt(mm.d).replace(/^.* /, '')) : 'กำลังทำ') + '</small></span>' + (ro ? '' : '<em class="mr-act">' + (mm.d ? 'ยกเลิก' : 'กดเมื่อเสร็จ') + '</em>') + '</button>').join('') + '</div></div>' : '') +
     '<div class="f"><label>เครื่องที่ใช้</label>' + mPick + (p.stage === 'machine' && !ro ? '<div class="hint">ติ๊กเครื่องที่ทำเสร็จได้ที่การ์ดบนบอร์ด ครบทุกเครื่องแล้วงานไปขั้นต่อเอง</div>' : '') + '</div>' +
     '<div class="pc-skips">' + pSkipTogs(p, ro) + '</div>' +
     '<div class="f"><label for="pNote">โน้ตฝ่ายผลิต</label><textarea id="pNote" rows="2" placeholder="เช่น สีตามตัวอย่าง, ระวังขอบบาง"' + (ro ? ' readonly' : '') + '>' + esc(p.note || '') + '</textarea>' + (ro ? '' : '<div class="top-actions"><button type="button" class="btn sm" data-pnote="1">บันทึกโน้ต</button></div>') + '</div>' +
