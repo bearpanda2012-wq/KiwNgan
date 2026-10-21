@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.100.3';
+const APP_VERSION = '2.101';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2506,7 +2506,7 @@ async function salePage() {
     const cards = [['all', 'ทั้งหมด', '', I.list || STI.queue], ['act', 'กำลังดำเนินการ', 'doing', STI.doing], ['late', 'เลยกำหนด', 'bad', STI.fire], ['done', 'เสร็จใน 45 วัน', 'ok', STI.done]];
     root.innerHTML = '<div class="sale-page"><header class="sp-h"><div class="sp-logo">' + (b.logo ? '<img src="' + esc(b.logo) + '" alt="">' : esc(initial(b.company || 'K'))) + '</div><div class="sp-ht"><b>' + esc(b.appName || 'คิวงาน') + ' · สถานะงาน</b><small>' + esc(b.company || '') + (sel ? ' · Sale ' + esc(sel) : ' · ทุก Sale') + '</small></div>' +
       (LS.get('saleKey', '') === SALE_Q.k ? '<a class="btn sm ghost sp-back" href="' + esc(location.pathname) + '">‹ หน้าเข้าสู่ระบบ</a>' : '') +
-      '<span class="sp-live" title="อัปเดตเองทุก 1 นาที"><i></i>สด</span><button class="btn sm sp-ref' + (busy ? ' spin' : '') + '" data-sale-refresh="1">' + I.refresh + '<span>รีเฟรช</span></button></header>' +
+      '<button type="button" class="btn sm sp-scan" data-spscan="1" title="สแกน QR ฉลากงาน · เปิดรายละเอียดงานนั้น">' + SCAN_IC + '<span>สแกน QR</span></button>' + '<span class="sp-live" title="อัปเดตเองทุก 1 นาที"><i></i>สด</span><button class="btn sm sp-ref' + (busy ? ' spin' : '') + '" data-sale-refresh="1">' + I.refresh + '<span>รีเฟรช</span></button></header>' +
       (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="sp-skel">' + '<i></i>'.repeat(6) + '</div>' : saleTabs() + (SF.v === 'kb' ? saleKbHtml(d, () => draw(last, lastErr)) : SF.v === 'flow' ? '<div class="sf-wrap">' + saleFlowHtml(d, sel) + '</div><p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · กดที่งานเพื่อดูรายละเอียด · หน้านี้ดูได้อย่างเดียว</p>' :
         '<div class="sp-sum">' + cards.map(c => '<button type="button" data-spst="' + c[0] + '" class="sp-card c-' + c[0] + (F.st === c[0] ? ' on' : '') + '"><span class="sp-ci">' + c[3] + '</span><b class="' + c[2] + '" data-n="' + N[c[0]] + '" data-k="' + c[0] + '">' + (prevN[c[0]] !== undefined ? prevN[c[0]] : 0) + '</b><span>' + c[1] + '</span>' +
           (c[0] === 'done' && N.done ? '<small>ตรงเวลา ' + Math.round(okB / N.done * 100) + '%</small>' : c[0] === 'late' && N.act ? '<small>' + Math.round(N.late / N.act * 100) + '% ของงานค้าง</small>' : '') + '</button>').join('') + '</div>' + pstrip +
@@ -2548,11 +2548,12 @@ async function salePage() {
   const cached = LS.get(ck, null);
   draw(cached && cached.jobs ? cached : null); go(); setInterval(go, 60000);
   document.addEventListener('click', e => {
-    const c = e.target.closest && e.target.closest('[data-sale-refresh],[data-spst],[data-spclear],[data-spprod],[data-sfview],[data-sfstep],[data-sfopen]'); if (!c) return;
+    const c = e.target.closest && e.target.closest('[data-spscan],[data-sale-refresh],[data-spst],[data-spclear],[data-spprod],[data-sfview],[data-sfstep],[data-sfopen]'); if (!c) return;
     if (c.dataset.sfview) { SF.lastOn = (document.querySelector('.sf-tabs') || { dataset: {} }).dataset.on || ''; SF.v = c.dataset.sfview; SF.anim = true; LS.set('saleView', SF.v); return draw(last, lastErr); }
     if (c.dataset.sfstep) { const fromPipe = !!c.closest('.co-pipe, .co-kpis'); SF.step = SF.step === c.dataset.sfstep && c.dataset.sfstep !== 'all' ? 'all' : c.dataset.sfstep; SF.anim = true; draw(last, lastErr); if (fromPipe) pipeJump(); return; }
     if (c.dataset.sfopen) { const k = c.dataset.sfopen, was = !!SF.open[k]; SF.open = {}; if (!was) SF.open[k] = true; draw(last, lastErr); if (!was) setTimeout(() => { const el = document.querySelector('[data-sfopen="' + CSS.escape(k) + '"]'); if (el && el.getBoundingClientRect().top < 70) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 30); return; }
     if (c.dataset.spprod) { F.prod = F.prod === c.dataset.spprod ? '' : c.dataset.spprod; return draw(last, lastErr); }
+    if (c.dataset.spscan) { if (!last) return toast('รอโหลดข้อมูลงานสักครู่', true); return scanOpen(); }
     if (c.dataset.saleRefresh) return go();
     if (c.dataset.spst) { F.st = F.st === c.dataset.spst ? 'all' : c.dataset.spst; return draw(last, lastErr); }
     if (c.dataset.spclear) { Object.assign(F, { st: 'all', status: '', sale: '', group: '', type: '', range: '', rf: '', rt: '', who: '', prod: '' }); q = ''; return draw(last, lastErr); }
@@ -8008,12 +8009,19 @@ function scanLoop() {
     scanLoop();
   }, 160);
 }
+/* หน้า Sale (ลิงก์ดูอย่างเดียว ไม่ต้องเข้าสู่ระบบ): สแกนฉลากงาน → เปิดรายละเอียดงานนั้นในหน้า Sale */
+function saleScanKey(text) {
+  const t = String(text || '').trim(); let c = '';
+  try { const u = new URL(t); c = u.searchParams.get('job') || ''; } catch (e) {}
+  const by = SF.by || {}, want = (c || t).toLowerCase();
+  return Object.keys(by).find(k => k.toLowerCase() === want) || (c ? c : '');
+}
 function scanHit(text) {
-  const code = scanCode(text);
+  const code = SALE_Q ? saleScanKey(text) : scanCode(text);
   if (!code) { const h = $('#scanModal .scan-hint'); if (h) { h.textContent = 'QR นี้ไม่ใช่ฉลากงานของระบบ'; h.classList.add('bad'); } return false; }
   try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) {}
   const fr = $('#scanModal .scan-frame'); if (fr) fr.classList.add('hit');
-  setTimeout(() => { scanClose(); if (prodOfCode(code) || designJobsOf(code).length) coOpen(code); else toast('ไม่พบเลข Job ' + code + ' ในระบบ', true); }, 220);
+  setTimeout(() => { scanClose(); if (SALE_Q) { if (SF.by && SF.by[code]) saleDetail(code); else toast('ไม่พบงาน ' + code + ' ในรายการของหน้านี้', true); return; } if (prodOfCode(code) || designJobsOf(code).length) coOpen(code); else toast('ไม่พบเลข Job ' + code + ' ในระบบ', true); }, 220);
   return true;
 }
 function scanStop() { clearTimeout(SCAN.raf); if (SCAN.stream) { SCAN.stream.getTracks().forEach(t => t.stop()); SCAN.stream = null; } }

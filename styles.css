@@ -5996,3 +5996,6 @@ body.auth #bgSndBtn{display:none}
 .ex-depbtn b{display:none;font-weight:600}
 @media (max-width:720px){.ex-depbtn span{display:none}.ex-depbtn b{display:inline}.ex-depbtn{padding:0 12px}}
 .pm-redraw .pm-card{animation:none}
+/* v2.101: หน้า Sale — ปุ่มสแกน QR */
+.sp-scan{position:relative;z-index:1;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.95)!important;color:var(--brand)!important;border:0!important;font-weight:700}
+.sp-scan svg{width:17px;height:17px}
