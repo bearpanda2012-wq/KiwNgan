@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.102.3';
+const APP_VERSION = '2.102.4';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -8308,8 +8308,11 @@ function saleFlowHtml(d, sel) {
         (op ? detail(r) : '') + '</div>'; }).join('') + '</div>'
     : qq ? '<div class="sp-empty"><span>🔍</span><b>ไม่พบ "' + esc(SF.q.trim()) + '"</b><small>ลองพิมพ์บางส่วน เช่น 4–5 ตัวท้ายของเลข Job หรือชื่อลูกค้า' + (SF.sale ? ' · หรือเลือก "ทุก Sale"' : '') + '</small><button class="btn sm" data-qclear="sfQ">ล้างคำค้น</button></div>'
     : '<div class="sp-empty"><span>🔍</span><b>ไม่มีงานในมุมมองนี้</b><button class="btn sm" data-sfstep="all">ดูทั้งหมด</button></div>';
+  const stepOk = r => SF.step === 'all' ? r.step !== 'shipped' && !r.old : SF.step === 'late' ? r.late : SF.step === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === SF.step;
+  const urgN = base0.filter(r => sfPass(r, SF.f, 'urg') && r.urgent && stepOk(r)).length;
+  const urgChip = '<button type="button" class="qchip q-urg' + (SF.f.urg ? ' on' : '') + '" data-sffurg="1" aria-pressed="' + !!SF.f.urg + '" title="แสดงเฉพาะงานด่วน (ใช้ร่วมกับปุ่มอื่นได้)"><span class="qi">' + STI.fire + '</span>งานด่วน<b>' + urgN + '</b></button>';
   const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง', live.length], ['late', 'เลยกำหนด', late], ['shipped', 'ส่งแล้ว', n('shipped')]].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-sfstep="' + x[0] + '" aria-pressed="' + (SF.step === x[0]) + '">' + x[1] + '<b>' + x[2] + '</b></button>').join('') +
-    (['all', 'late', 'shipped'].indexOf(SF.step) < 0 ? '<button class="qchip" data-sfstep="all" aria-pressed="true">' + esc(SF.step === 'design' ? 'ฝ่ายแบบ' : PSTG[SF.step].label) + ' ✕</button>' : '') + '</div>';
+    (['all', 'late', 'shipped'].indexOf(SF.step) < 0 ? '<button class="qchip" data-sfstep="all" aria-pressed="true">' + esc(SF.step === 'design' ? 'ฝ่ายแบบ' : PSTG[SF.step].label) + ' ✕</button>' : '') + urgChip + '</div>';
   const tools = '<div class="sp-tools"><label class="sp-search' + qOn(SF.q) + '">' + I.search + '<input id="sfQ" type="search" enterkeyhint="search" placeholder="ค้นหาทุกงาน: เลข Job, ลูกค้า, Sale, เครื่อง… (รวมที่ส่งแล้ว)" value="' + esc(SF.q) + '" autocomplete="off" aria-label="ค้นหางาน">' + qX('sfQ', SF.q) + '</label>' +
     '<div class="sp-filters">' + (() => {
       const F = SF.f, cnt = (k, pred) => base0.filter(r => sfPass(r, F, k) && pred(r)).length;
@@ -8320,13 +8323,11 @@ function saleFlowHtml(d, sel) {
       const machs = [...new Set(machinesList().concat(uniqJ(sfMach)))];
       const anyF = SFK.some(k => F[k]);
       return (sel ? '' : '<label class="spf' + (SF.sale ? ' on' : '') + '"><span class="spf-ic">' + STI.user + '</span><select data-sfsale="1" aria-label="Sale"><option value="">ทุก Sale</option>' + sales.map(x => '<option' + (SF.sale === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select></label>') +
-        fs('stage', STI.doing, 'ขั้นงาน: ทั้งหมด', stages.map(x => opt('stage', x[0], x[1], cnt('stage', r => x[0] === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === x[0]))).join('')) +
         fs('mach', PIC.machine, 'ลงเครื่อง: ทุกเครื่อง', machs.map(m => opt('mach', m, m, cnt('mach', r => sfMach(r).indexOf(m) >= 0))).join('')) +
         fs('who', '👤', 'ผู้รับผิดชอบ: ทุกคน', uniqJ(sfWho).map(w => opt('who', w, w, cnt('who', r => sfWho(r).indexOf(w) >= 0))).join('') + opt('who', '__none', 'ยังไม่มอบหมาย', cnt('who', r => r.jobs.length && !r.jobs.some(j => j.assignee)))) +
         fs('group', STI.layers || '▦', 'ทุกกลุ่มงาน', uniqJ(r => [r.group].concat(r.jobs.map(j => j.group))).map(g => opt('group', g, groupShort(g), cnt('group', r => r.group === g || r.jobs.some(j => j.group === g)))).join('')) +
         fs('type', '✎', 'ทุกรายละเอียดงาน', uniqJ(r => r.jobs.map(j => j.taskType)).map(x => opt('type', x, x, cnt('type', r => r.jobs.some(j => j.taskType === x)))).join('')) +
         fs('due', STI.calendar, 'กำหนดส่ง: ทั้งหมด', [['late', 'เลยกำหนด', r => r.late], ['today', 'ครบกำหนดวันนี้', r => r.due === t], ['week', 'ภายใน 7 วัน', r => !!r.due && r.due >= t && r.due <= addDays(t, 7)], ['none', 'ยังไม่มีกำหนดส่ง', r => !r.due && r.step !== 'shipped']].map(x => opt('due', x[0], x[1], cnt('due', x[2]))).join('')) +
-        '<button type="button" class="spf sp-urg' + (F.urg ? ' on' : '') + '" data-sffurg="1" aria-pressed="' + !!F.urg + '"><span class="spf-ic">' + STI.fire + '</span><span>งานด่วน</span><b>' + cnt('urg', r => r.urgent) + '</b></button>' +
         (anyF || SF.sale ? '<button type="button" class="btn sm sp-clear" data-sffclear="1">✕ ล้างตัวกรอง</button>' : '');
     })() + '</div>' + (SFK.some(k => SF.f[k]) ? '<div class="sp-count">ตัวกรองใช้กับตัวเลขด้านบนและรายการด้านล่าง · ตรงเงื่อนไข <b>' + all.length + '</b> จาก ' + base0.length + ' เลข Job</div>' : '') + '</div>';
   const legend = '<div class="co-legend"><span><i class="d-d"></i>ฝ่ายแบบ</span><span><i class="d-p"></i>ฝ่ายผลิต</span><span><i class="d-s"></i>ฝ่ายสต็อก</span><span><i class="now"></i>ตอนนี้อยู่ที่</span><span><i class="now late"></i>เลยกำหนด</span></div>';

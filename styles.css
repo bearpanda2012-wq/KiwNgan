@@ -6052,3 +6052,7 @@ body.auth #bgSndBtn{display:none}
   .sale-page .sp-h .sp-glass{width:38px;padding:0!important}.sale-page .sp-h .sp-out.ask{width:auto;padding:0 12px!important}
   .sale-page .sp-h .sp-scan{flex:1}
 }
+/* v2.102.4: ปุ่มงานด่วนอยู่แถวเดียวกับ ทั้งหมด/เลยกำหนด/ส่งแล้ว */
+.qchip.q-urg{--q:#E8590C;margin-left:6px}
+.qchip.q-urg .qi svg{animation:flicker 1.4s ease-in-out infinite}
+@media (max-width:560px){.qchip.q-urg{margin-left:0}}

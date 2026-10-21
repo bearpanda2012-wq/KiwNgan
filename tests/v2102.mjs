@@ -14,8 +14,9 @@ await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอด�
 const key = await pg.evaluate(async () => (await T.api().saleOpen({ pin: '1234' })).key);
 await pg.goto('http://127.0.0.1:8875/index.html?salek=' + key); await pg.waitForTimeout(1500);
 await pg.evaluate(() => { const b = document.querySelector('[data-sfview="flow"]'); if (b) b.click(); }); await pg.waitForTimeout(500);
-eq('filters present', await pg.$$eval('.sp-filters select', a => a.map(x => x.dataset.sff || 'sale')), ['sale', 'stage', 'mach', 'who', 'group', 'type', 'due']);
-eq('urgent toggle', await pg.locator('.sp-filters [data-sffurg]').count(), 1);
+eq('filters present', await pg.$$eval('.sp-filters select', a => a.map(x => x.dataset.sff || 'sale')), ['sale', 'mach', 'who', 'group', 'type', 'due']);
+eq('urgent chip in step chips row', await pg.locator('.qchips [data-sffurg]').count(), 1);
+eq('no urgent in filters', await pg.locator('.sp-filters [data-sffurg]').count(), 0);
 // v2.102.2: ตัวเลขเครื่อง = งานที่กำลังลงเครื่อง ตรงกับช่องลงเครื่องด้านบน
 const tileMach = +(await pg.evaluate(() => { const t = document.querySelector('[data-sfstep="machine"] b'); return t ? t.textContent : '0'; }));
 const machOpts = await pg.$$eval('[data-sff="mach"] option', a => a.filter(o => o.value).map(o => +((o.textContent.match(/\((\d+)\)/) || [])[1] || 0)));
@@ -29,18 +30,20 @@ if (machOpts.some(n => n > 0)) {
 console.log('tile', tileMach, 'opts', machOpts);
 const n0 = await pg.locator('.sf-list .co-row').count();
 const stageOpts = await pg.$$eval('[data-sff="stage"] option:not([disabled])', a => a.map(o => o.value).filter(Boolean));
-await pg.selectOption('[data-sff="stage"]', 'design'); await pg.waitForTimeout(400);
+await pg.click('[data-sfstep="design"]'); await pg.waitForTimeout(400);
 const rows = await pg.$$eval('.sf-list .co-row', a => a.map(r => r.className));
-eq('stage filter: only design rows', rows.length > 0 && rows.every(c => /co-design/.test(c)), true);
-eq('count line shows', await pg.locator('.sp-count').count() > 0, true);
+eq('design tile: only design rows', rows.length > 0 && rows.every(c => /co-design/.test(c)), true);
 const whoOpt = await pg.$$eval('[data-sff="who"] option:not([disabled])', a => a.map(o => o.value).filter(v => v && v !== '__none')[0]);
 await pg.selectOption('[data-sff="who"]', whoOpt); await pg.waitForTimeout(400);
 const n2 = await pg.locator('.sf-list .co-row').count();
 eq('who narrows further', n2 > 0 && n2 <= rows.length, true);
 await pg.locator('.sp-tools').scrollIntoViewIfNeeded(); await pg.waitForTimeout(300); await pg.locator('.sp-tools').screenshot({ path: new URL('out/v2102a.png', import.meta.url).pathname });
-await pg.click('[data-sffclear]'); await pg.waitForTimeout(400);
+await pg.click('[data-sffclear]'); await pg.click('.qchips [data-sfstep="all"]'); await pg.waitForTimeout(400);
 eq('clear restores', await pg.locator('.sf-list .co-row').count(), n0);
+const urgN = +(await pg.locator('.qchips [data-sffurg] b').textContent());
 await pg.click('[data-sffurg]'); await pg.waitForTimeout(400);
+eq('urgent chip count = rows shown', await pg.locator('.sf-list .co-row').count(), urgN);
+await pg.locator('.qchips').screenshot({ path: new URL('out/v21024.png', import.meta.url).pathname });
 const urgRows = await pg.$$eval('.sf-list .co-row', a => a.map(r => !!r.querySelector('.tag.urgent')));
 eq('urgent toggle shows only urgent', urgRows.every(Boolean), true);
 await pg.click('[data-sffurg]'); await pg.waitForTimeout(300);
