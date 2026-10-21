@@ -6027,3 +6027,28 @@ body.auth #bgSndBtn{display:none}
 .sp-out:hover{background:rgba(255,255,255,.26)!important}
 .sp-out.ask{background:#fff!important;color:#B91C1C!important;border-color:#fff!important}
 @media (max-width:760px){.sp-out span{display:none}.sp-out.ask span{display:inline}}
+/* v2.102.3: หัวหน้า Sale — ปุ่มเรียงเป็นระเบียบ สูงเท่ากัน 2 กลุ่ม (ทำงาน | บัญชี) · ป้าย "สด" อยู่ข้างชื่อ */
+.sale-page .sp-h{gap:14px}
+.sale-page .sp-ht b{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sale-page .sp-ht .sp-live{font:700 11px var(--f-body);padding:3px 9px}
+.sp-acts{display:flex;align-items:center;gap:10px;position:relative;z-index:1;flex:none}
+.sp-ag{display:flex;align-items:center;gap:8px}
+.sp-sep{width:1px;height:26px;background:rgba(255,255,255,.35);display:block}
+.sale-page .sp-h .sp-hb{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;min-height:38px;padding:0 14px!important;border-radius:11px!important;font:700 13px var(--f-body)!important;white-space:nowrap;text-decoration:none;box-shadow:none;transition:background .15s,transform .15s,color .15s}
+.sale-page .sp-h .sp-hb svg{width:17px;height:17px;flex:none}
+.sale-page .sp-h .sp-hb:hover{transform:translateY(-1px)}
+.sale-page .sp-h .sp-scan,.sale-page .sp-h .sp-ref{background:#fff!important;color:var(--brand)!important;border:0!important;box-shadow:0 4px 12px -6px rgba(0,0,0,.35)}
+.sale-page .sp-h .sp-glass{background:rgba(255,255,255,.12)!important;color:#fff!important;border:1px solid rgba(255,255,255,.4)!important}
+.sale-page .sp-h .sp-glass:hover{background:rgba(255,255,255,.24)!important}
+.sale-page .sp-h .sp-out.ask{background:#fff!important;color:#B91C1C!important;border-color:#fff!important}
+.sale-page .sp-back{order:0!important;font-size:13px!important}
+@media (max-width:760px){
+  .sale-page .sp-h{flex-wrap:wrap}
+  .sp-acts{flex:1 1 100%;justify-content:space-between}
+  .sp-sep{display:none}
+  .sp-ag{flex:1}.sp-ag+.sp-ag{justify-content:flex-end;flex:none}
+  .sale-page .sp-h .sp-hb{padding:0 12px!important}
+  .sale-page .sp-h .sp-ref span,.sale-page .sp-h .sp-glass:not(.ask) span{display:none}
+  .sale-page .sp-h .sp-glass{width:38px;padding:0!important}.sale-page .sp-h .sp-out.ask{width:auto;padding:0 12px!important}
+  .sale-page .sp-h .sp-scan{flex:1}
+}

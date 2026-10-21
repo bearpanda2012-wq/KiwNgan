@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.102.2';
+const APP_VERSION = '2.102.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2452,6 +2452,7 @@ const FIXED_HOL = [['01-01', 'วันขึ้นปีใหม่'], ['04-06
 /* ----- หน้า Sale (อ่านอย่างเดียว ไม่ต้องเข้าสู่ระบบ) ----- */
 const SALE_Q = (() => { try { const u = new URL(location.href); return u.searchParams.get('salek') ? { k: u.searchParams.get('salek'), sale: u.searchParams.get('sale') || '' } : null; } catch (e) { return null; } })();
 function typeColorPub(name) { const c = (S.settings && S.settings.taskTypes) ? typeColor(name) : ''; if (c) return c; let h = 0; String(name || '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) % 360; }); return /CAM/.test(name || '') ? '#E8590C' : /CAD/.test(name || '') ? '#2D5FC4' : 'hsl(' + h + ' 55% 45%)'; }
+const SP_HOME_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/></svg>';
 const SP_OUT_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H15M10 8l-4 4 4 4M6 12h10"/></svg>';
 /* ออกจากระบบหน้า Sale (ทั้งลิงก์ส่วนตัวและรวม): ลบ PIN ที่จำไว้และข้อมูลที่เก็บในเครื่อง แล้วกลับหน้าเข้าสู่ระบบ */
 function saleLogout() {
@@ -2510,9 +2511,10 @@ async function salePage() {
     const pall = Object.values(PM).filter(x => !sel || x.sale === sel), pn = st => pall.filter(x => x.stage === st).length;
     const pstrip = pall.length ? '<div class="sp-pflow"><span class="sp-pf-h">' + PIC.machine + 'ฝ่ายผลิต</span>' + PCOLS.concat('shipped').map(st => '<button type="button" class="sp-pf ' + PSTG[st].cls + (F.prod === st ? ' on' : '') + '" data-spprod="' + st + '">' + PIC[st] + '<b>' + pn(st) + '</b><span>' + PSTG[st].label + (st === 'shipped' ? ' (60 วัน)' : '') + '</span></button>').join('') + '</div>' : '';
     const cards = [['all', 'ทั้งหมด', '', I.list || STI.queue], ['act', 'กำลังดำเนินการ', 'doing', STI.doing], ['late', 'เลยกำหนด', 'bad', STI.fire], ['done', 'เสร็จใน 45 วัน', 'ok', STI.done]];
-    root.innerHTML = '<div class="sale-page"><header class="sp-h"><div class="sp-logo">' + (b.logo ? '<img src="' + esc(b.logo) + '" alt="">' : esc(initial(b.company || 'K'))) + '</div><div class="sp-ht"><b>' + esc(b.appName || 'คิวงาน') + ' · สถานะงาน</b><small>' + esc(b.company || '') + (sel ? ' · Sale ' + esc(sel) : ' · ทุก Sale') + '</small></div>' +
-      (LS.get('saleKey', '') === SALE_Q.k ? '<a class="btn sm ghost sp-back" href="' + esc(location.pathname) + '">‹ หน้าเข้าสู่ระบบ</a>' : '') +
-      '<button type="button" class="btn sm sp-scan" data-spscan="1" title="สแกน QR ฉลากงาน · เปิดรายละเอียดงานนั้น">' + SCAN_IC + '<span>สแกน QR</span></button>' + '<span class="sp-live" title="อัปเดตเองทุก 1 นาที"><i></i>สด</span><button class="btn sm sp-ref' + (busy ? ' spin' : '') + '" data-sale-refresh="1">' + I.refresh + '<span>รีเฟรช</span></button><button type="button" class="btn sm sp-out" data-saleout="1" title="ออกจากระบบหน้านี้ · ต้องใส่ PIN ใหม่ครั้งหน้า">' + SP_OUT_IC + '<span>ออกจากระบบ</span></button></header>' +
+    root.innerHTML = '<div class="sale-page"><header class="sp-h"><div class="sp-logo">' + (b.logo ? '<img src="' + esc(b.logo) + '" alt="">' : esc(initial(b.company || 'K'))) + '</div><div class="sp-ht"><b>' + esc(b.appName || 'คิวงาน') + ' · สถานะงาน<span class="sp-live" title="อัปเดตเองทุก 1 นาที"><i></i>สด</span></b><small>' + esc(b.company || '') + (sel ? ' · Sale ' + esc(sel) : ' · ทุก Sale') + '</small></div>' +
+      '<div class="sp-acts"><div class="sp-ag"><button type="button" class="btn sm sp-hb sp-scan" data-spscan="1" title="สแกน QR ฉลากงาน · เปิดรายละเอียดงานนั้น">' + SCAN_IC + '<span>สแกน QR</span></button><button type="button" class="btn sm sp-hb sp-ref' + (busy ? ' spin' : '') + '" data-sale-refresh="1" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button></div>' +
+      '<i class="sp-sep" aria-hidden="true"></i><div class="sp-ag">' + (LS.get('saleKey', '') === SALE_Q.k ? '<a class="btn sm sp-hb sp-glass sp-back" href="' + esc(location.pathname) + '" title="กลับไปหน้าเข้าสู่ระบบ (ยังจำ PIN ไว้)">' + SP_HOME_IC + '<span>หน้าเข้าสู่ระบบ</span></a>' : '') +
+      '<button type="button" class="btn sm sp-hb sp-glass sp-out" data-saleout="1" title="ออกจากระบบหน้านี้ · ต้องใส่ PIN ใหม่ครั้งหน้า">' + SP_OUT_IC + '<span>ออกจากระบบ</span></button></div></div></header>' +
       (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="sp-skel">' + '<i></i>'.repeat(6) + '</div>' : saleTabs() + (SF.v === 'kb' ? saleKbHtml(d, () => draw(last, lastErr)) : SF.v === 'flow' ? '<div class="sf-wrap">' + saleFlowHtml(d, sel) + '</div><p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · กดที่งานเพื่อดูรายละเอียด · หน้านี้ดูได้อย่างเดียว</p>' :
         '<div class="sp-sum">' + cards.map(c => '<button type="button" data-spst="' + c[0] + '" class="sp-card c-' + c[0] + (F.st === c[0] ? ' on' : '') + '"><span class="sp-ci">' + c[3] + '</span><b class="' + c[2] + '" data-n="' + N[c[0]] + '" data-k="' + c[0] + '">' + (prevN[c[0]] !== undefined ? prevN[c[0]] : 0) + '</b><span>' + c[1] + '</span>' +
           (c[0] === 'done' && N.done ? '<small>ตรงเวลา ' + Math.round(okB / N.done * 100) + '%</small>' : c[0] === 'late' && N.act ? '<small>' + Math.round(N.late / N.act * 100) + '% ของงานค้าง</small>' : '') + '</button>').join('') + '</div>' + pstrip +

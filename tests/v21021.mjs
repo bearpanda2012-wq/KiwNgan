@@ -19,6 +19,12 @@ await pg.goto('http://127.0.0.1:8876/index.html?salek=' + key); await pg.waitFor
 eq('back-to-login link shows (key remembered)', await pg.locator('.sp-h .sp-back').count(), 1);
 eq('logout button on header', await pg.locator('.sp-h [data-saleout]').count(), 1);
 await pg.locator('.sp-h').screenshot({ path: new URL('out/v21021.png', import.meta.url).pathname });
+eq('buttons same height', await pg.$$eval('.sp-h .sp-hb', a => new Set(a.map(b => Math.round(b.getBoundingClientRect().height))).size), 1);
+eq('buttons on one line', await pg.$$eval('.sp-h .sp-hb', a => new Set(a.map(b => Math.round(b.getBoundingClientRect().top))).size), 1);
+await pg.setViewportSize({ width: 390, height: 800 }); await pg.waitForTimeout(300);
+await pg.locator('.sp-h').screenshot({ path: new URL('out/v21023m.png', import.meta.url).pathname });
+eq('mobile: buttons on one line', await pg.$$eval('.sp-h .sp-hb', a => new Set(a.map(b => Math.round(b.getBoundingClientRect().top))).size), 1);
+await pg.setViewportSize({ width: 1300, height: 800 }); await pg.waitForTimeout(300);
 await pg.click('.sp-h [data-saleout]'); await pg.waitForTimeout(200);
 eq('first click asks to confirm', (await pg.locator('.sp-h [data-saleout] span').textContent()).includes('กดอีกครั้ง'), true);
 await pg.locator('.sp-h').screenshot({ path: new URL('out/v21021b.png', import.meta.url).pathname });
