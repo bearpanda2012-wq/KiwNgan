@@ -5855,7 +5855,7 @@ body.auth #bgSndBtn{display:none}
 @keyframes gRing{0%{transform:scale(1);opacity:var(--go,.85)}100%{transform:scale(var(--gr,1.8));opacity:0}}
 @keyframes gBeat{0%,100%{transform:scale(1)}30%{transform:scale(var(--gb,1.12))}}
 @keyframes gSlide{from{transform:translateX(0)}to{transform:translateX(var(--gs,34px))}}
-@keyframes icShieldG{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
+@keyframes icShield{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}   /* ชื่อเดิม เขียนทับของเก่า (ตัดเงาเรืองที่ต้องวาดใหม่ทุกเฟรม) */
 @keyframes arrowDotG{0%,100%{opacity:.3;transform:scale(1)}40%{opacity:1;transform:scale(1.35)}}
 /* ชั้นแสงทั่วไป */
 .co-row.late::after,.sp-r.late td:first-child::after,.sf-date.k-late::after,.sf-date.k-today::after,.tag.urgent::after,.stg.s-late .stg-pill::after,.ch-tab.help::after,
@@ -5905,9 +5905,6 @@ body.auth #bgSndBtn{display:none}
 .s-low .sk-st::after,.s-zero .sk-st::after{box-shadow:0 0 0 4px color-mix(in oklab,var(--urgent) 25%,transparent);opacity:0;animation:gGlow 2s ease-in-out infinite}
 /* วงต่อระหว่างขั้น (หัวภาพรวม): เต้นเบา ๆ */
 .cpx-step:not(:last-child)::before{animation:gBeat 2.4s ease-in-out infinite;--gb:1.12}
-/* ไอคอน QC / ส่งแล้ว: ขยายเต้น (ตัดเงาเรืองออก) */
-.flow-ic.ic-qc svg,.col-ic.ic-qc svg{animation-name:icShieldG}
-.flow-ic.ic-shipped svg,.col-ic.ic-shipped svg{animation-name:icShieldG}
 /* จุดลูกศรบนบอร์ด */
 .flow-arrow i{background:var(--brand);animation:arrowDotG 1.4s ease-in-out infinite}
 /* แถบวิ่งบนเส้นความคืบหน้า: เลื่อนด้วย transform (แถบกว้างกว่าเส้น 1 ช่วงลาย) */

@@ -252,7 +252,8 @@ const PERF = (() => {
   // แถวนอกจอหยุดแอนิเมชัน (ใช้เฉพาะโหมด "เต็ม" เพราะโหมดอื่นหยุดวนอยู่แล้ว)
   const seen = new WeakSet(); let io = null, scanQ = false;
   const scan = () => { scanQ = false; if (!io) return; document.querySelectorAll(SEL).forEach(el => { if (!seen.has(el)) { seen.add(el); io.observe(el); } }); };
-  const queue = () => { if (io && !scanQ) { scanQ = true; requestAnimationFrame(scan); } };
+  // รอให้แอนิเมชันตอนเข้าหน้าเล่นจบก่อน (≈1.6 วิ รวมจังหวะเหลื่อมของแต่ละแถว) แล้วค่อยหยุดตัวที่อยู่นอกจอ — ไม่งั้นแถวล่าง ๆ ค้างท่าเริ่ม (จุดเล็ก/จาง)
+  const queue = () => { if (io && !scanQ) { scanQ = true; setTimeout(() => requestAnimationFrame(scan), 1600); } };
   if ('MutationObserver' in window) new MutationObserver(queue).observe(document.documentElement, { childList: true, subtree: true });
   const ioOn = on => { if (on && !io && 'IntersectionObserver' in window) { io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.removeAttribute('data-off'); else e.target.setAttribute('data-off', ''); }), { rootMargin: '160px 0px' }); queue(); }
     if (!on && io) { io.disconnect(); io = null; document.querySelectorAll('[data-off]').forEach(el => el.removeAttribute('data-off')); } };

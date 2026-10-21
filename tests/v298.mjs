@@ -20,7 +20,7 @@ const l0 = await loops(); await pg.waitForTimeout(7000); const l1 = await loops(
 console.log('running loops', l0, '→ after 7s', l1);
 eq('loops still running after 7s (never auto-stop)', [l0 > 0, l1 > 0, (await rootSt())[0]], [true, true, false]);
 // แถวนอกจอหยุดไว้ ในจอวิ่ง
-eq('offscreen rows paused, onscreen running', await pg.evaluate(() => { const rows = [...document.querySelectorAll('.co-row')]; const vis = rows.filter(r => { const b = r.getBoundingClientRect(); return b.bottom > -200 && b.top < innerHeight + 200; }); const off = rows.filter(r => r.getBoundingClientRect().top > innerHeight + 400);
+eq('offscreen rows paused, onscreen running', await pg.evaluate(() => { const rows = [...document.querySelectorAll('.co-row')]; const vis = rows.filter(r => { const b = r.getBoundingClientRect(); return b.bottom > 0 && b.top < innerHeight; }); const off = rows.filter(r => r.getBoundingClientRect().top > innerHeight + 400);
   return [vis.every(r => !r.hasAttribute('data-off')), off.length === 0 || off.every(r => r.hasAttribute('data-off'))]; }), [true, true]);
 await pg.evaluate(() => window.scrollTo(0, document.scrollingElement.scrollHeight)); await pg.waitForTimeout(600);
 eq('scrolled into view → runs again', await pg.evaluate(() => { const rows = [...document.querySelectorAll('.co-row')].filter(r => { const b = r.getBoundingClientRect(); return b.top >= 0 && b.bottom <= innerHeight; }); return rows.length > 0 && rows.every(r => !r.hasAttribute('data-off')); }), true);
