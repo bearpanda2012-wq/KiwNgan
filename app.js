@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.99.0';
+const APP_VERSION = '2.99.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4725,7 +4725,7 @@ function aItem(j) {
   return '<button class="aitem" data-open="' + esc(j.id) + '">' + stBadge(j) + '<span style="min-width:0"><span class="code">' + esc(j.code) + '</span> ' + jobTh(j, 'in') + ' ' +
     (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span> ' : '') + (run ? '<span class="tag late">● จับเวลา</span>' : '') +
     '<small>' + esc([j.title, groupShort(j.group), j.taskType].filter(Boolean).join(' · ')) + '</small></span>' +
-    '<span style="text-align:right">' + stgHtml(stageOf(j, j.status === 'done' && typeof prodOfCode === 'function' && S.prods ? prodOfCode(j.code) : null), 'sm') + '<small class="' + (di.cls === 'late' ? 'tag late' : /soon/.test(di.cls) ? 'tag ' + di.cls : '') + '">' + esc(di.text) + '</small></span></button>';
+    '<span class="ai-r">' + stgHtml(stageOf(j, j.status === 'done' && typeof prodOfCode === 'function' && S.prods ? prodOfCode(j.code) : null), 'sm') + '<small class="' + (di.cls === 'late' ? 'tag late' : /soon/.test(di.cls) ? 'tag ' + di.cls : '') + '">' + esc(di.text) + '</small></span></button>';
 }
 
 /* ============ render: board ============ */

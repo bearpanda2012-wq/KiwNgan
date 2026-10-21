@@ -5909,3 +5909,8 @@ body.auth #bgSndBtn{display:none}
 .flow-arrow i{background:var(--brand);animation:arrowDotG 1.4s ease-in-out infinite}
 /* แถบวิ่งบนเส้นความคืบหน้า: เลื่อนด้วย transform (แถบกว้างกว่าเส้น 1 ช่วงลาย) */
 .rt-line i::after{left:-34px;--gs:34px;animation:gSlide 1s linear infinite}
+/* v2.99.1 หน้าแรก: สถานะ + กำหนดส่งด้านขวา ชิดขวาและกว้างพอดีข้อความ (เดิมป้ายกำหนดส่งยืดเต็มช่อง แถบสียาวล้ำไปทางซ้าย) */
+.aitem .ai-r{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right;min-width:0}
+.aitem .ai-r>small{display:inline-flex;align-items:center;width:auto;max-width:100%;margin:0;white-space:nowrap}
+.aitem .ai-r>small.tag{padding:1px 8px;border-radius:6px}
+.aitem .ai-r .stg{max-width:150px}
