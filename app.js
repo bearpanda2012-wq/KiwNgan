@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.103';
+const APP_VERSION = '2.104';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -285,7 +285,7 @@ function qHit(hay, q) {
   const qn = coNorm(ql), hn = coNorm(h); if (qn && hn.indexOf(qn) >= 0) return true;
   const ws = ql.split(/\s+/).filter(Boolean); return ws.length > 1 && ws.every(w => h.indexOf(w) >= 0 || (coNorm(w) && hn.indexOf(coNorm(w)) >= 0));
 }
-const SEARCH_IDS = ['q', 'pq', 'cq', 'sq', 'kbQ', 'cntQ', 'spQ', 'sfQ', 'exQ'];
+const SEARCH_IDS = ['q', 'pq', 'cq', 'sq', 'kbQ', 'cntQ', 'spQ', 'sfQ', 'exQ', 'sxQ'];
 const qX = (id, v) => String(v || '').trim() ? '<button type="button" class="cq-x" data-qclear="' + id + '" aria-label="ล้างคำค้น">✕</button>' : '';   // ปุ่มล้างคำค้น (มือถือ/Safari ไม่มีปุ่ม ✕ ในตัว)
 const qOn = v => String(v || '').trim() ? ' on' : '';
 const pad = n => ('0' + n).slice(-2);
@@ -2473,6 +2473,7 @@ async function salePage() {
   const drawIn = (d, err) => {
     last = d; lastErr = err || '';
     if (d && Array.isArray(d.people)) S.users = d.people.map(p => Object.assign({ active: true }, p));
+    SX.redraw = () => draw(last, lastErr); if (d) { SX.cfg = d.ex && d.ex.tok ? d.ex : null; if (SF.v === 'ex' && !SX.cfg) SF.v = 'flow'; if (SF.v === 'ex') sxLoad(); }
     const sel = SALE_Q.sale || (d && d.own ? d.sale : ''), t = today(), qq = q.trim().toLowerCase();   // PIN รายคน: เห็นเฉพาะงานของตัวเอง
     const all = (d && d.jobs) || [], uniq = k => [...new Set(all.map(j => j[k]).filter(Boolean))].sort();
     const PM = {}; ((d && d.prods) || []).forEach(x => { const k = String(x.code).toLowerCase(); if (!PM[k] || (PM[k].stage === 'shipped' && x.stage !== 'shipped')) PM[k] = x; });
@@ -2515,7 +2516,7 @@ async function salePage() {
       '<div class="sp-acts"><div class="sp-ag"><button type="button" class="btn sm sp-hb sp-scan" data-spscan="1" title="สแกน QR ฉลากงาน · เปิดรายละเอียดงานนั้น">' + SCAN_IC + '<span>สแกน QR</span></button><button type="button" class="btn sm sp-hb sp-ref' + (busy ? ' spin' : '') + '" data-sale-refresh="1" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button></div>' +
       '<i class="sp-sep" aria-hidden="true"></i><div class="sp-ag">' + (LS.get('saleKey', '') === SALE_Q.k ? '<a class="btn sm sp-hb sp-glass sp-back" href="' + esc(location.pathname) + '" title="กลับไปหน้าเข้าสู่ระบบ (ยังจำ PIN ไว้)">' + SP_HOME_IC + '<span>หน้าเข้าสู่ระบบ</span></a>' : '') +
       '<button type="button" class="btn sm sp-hb sp-glass sp-out" data-saleout="1" title="ออกจากระบบหน้านี้ · ต้องใส่ PIN ใหม่ครั้งหน้า">' + SP_OUT_IC + '<span>ออกจากระบบ</span></button></div></div></header>' +
-      (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="sp-skel">' + '<i></i>'.repeat(6) + '</div>' : saleTabs() + (SF.v === 'kb' ? saleKbHtml(d, () => draw(last, lastErr)) : SF.v === 'flow' ? '<div class="sf-wrap">' + saleFlowHtml(d, sel) + '</div><p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · กดที่งานเพื่อดูรายละเอียด · หน้านี้ดูได้อย่างเดียว</p>' :
+      (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="sp-skel">' + '<i></i>'.repeat(6) + '</div>' : saleTabs() + (SF.v === 'ex' && SX.cfg ? saleExHtml() : SF.v === 'kb' ? saleKbHtml(d, () => draw(last, lastErr)) : SF.v === 'flow' ? '<div class="sf-wrap">' + saleFlowHtml(d, sel) + '</div><p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · กดที่งานเพื่อดูรายละเอียด · หน้านี้ดูได้อย่างเดียว</p>' :
         '<div class="sp-sum">' + cards.map(c => '<button type="button" data-spst="' + c[0] + '" class="sp-card c-' + c[0] + (F.st === c[0] ? ' on' : '') + '"><span class="sp-ci">' + c[3] + '</span><b class="' + c[2] + '" data-n="' + N[c[0]] + '" data-k="' + c[0] + '">' + (prevN[c[0]] !== undefined ? prevN[c[0]] : 0) + '</b><span>' + c[1] + '</span>' +
           (c[0] === 'done' && N.done ? '<small>ตรงเวลา ' + Math.round(okB / N.done * 100) + '%</small>' : c[0] === 'late' && N.act ? '<small>' + Math.round(N.late / N.act * 100) + '% ของงานค้าง</small>' : '') + '</button>').join('') + '</div>' + pstrip +
         '<div class="sp-tools"><label class="sp-search' + qOn(q) + '">' + I.search + '<input id="spQ" type="search" enterkeyhint="search" placeholder="ค้นหาเลข Job, ลูกค้า, คนทำ, หมายเหตุ…" value="' + esc(q) + '" autocomplete="off" aria-label="ค้นหางาน">' + qX('spQ', q) + '</label>' +
@@ -2558,7 +2559,7 @@ async function salePage() {
   document.addEventListener('click', e => {
     if (e.target.closest && e.target.closest('[data-saleout]')) { const b = e.target.closest('[data-saleout]'); if (b.dataset.ask) return saleLogout(); b.dataset.ask = '1'; b.classList.add('ask'); b.querySelector('span').textContent = 'กดอีกครั้งเพื่อออก'; setTimeout(() => { if (b.isConnected) { delete b.dataset.ask; b.classList.remove('ask'); b.querySelector('span').textContent = 'ออกจากระบบ'; } }, 3500); return; }
     const c = e.target.closest && e.target.closest('[data-spscan],[data-sale-refresh],[data-spst],[data-spclear],[data-spprod],[data-sfview],[data-sfstep],[data-sfopen]'); if (!c) return;
-    if (c.dataset.sfview) { SF.lastOn = (document.querySelector('.sf-tabs') || { dataset: {} }).dataset.on || ''; SF.v = c.dataset.sfview; SF.anim = true; LS.set('saleView', SF.v); return draw(last, lastErr); }
+    if (c.dataset.sfview) { SF.lastOn = (document.querySelector('.sf-tabs') || { dataset: {} }).dataset.on || ''; SF.v = c.dataset.sfview; if (SF.v === 'ex') sxLoad(); SF.anim = true; LS.set('saleView', SF.v); return draw(last, lastErr); }
     if (c.dataset.sfstep) { const fromPipe = !!c.closest('.co-pipe, .co-kpis'); SF.step = SF.step === c.dataset.sfstep && c.dataset.sfstep !== 'all' ? 'all' : c.dataset.sfstep; SF.anim = true; draw(last, lastErr); if (fromPipe) pipeJump(); return; }
     if (c.dataset.sfopen) { const k = c.dataset.sfopen, was = !!SF.open[k]; SF.open = {}; if (!was) SF.open[k] = true; draw(last, lastErr); if (!was) setTimeout(() => { const el = document.querySelector('[data-sfopen="' + CSS.escape(k) + '"]'); if (el && el.getBoundingClientRect().top < 70) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 30); return; }
     if (c.dataset.spprod) { F.prod = F.prod === c.dataset.spprod ? '' : c.dataset.spprod; return draw(last, lastErr); }
@@ -8344,7 +8345,51 @@ function sfGlide() {
   requestAnimationFrame(() => { t.classList.add('ready'); t.style.setProperty('--gx', x + 'px'); t.style.setProperty('--gw', w + 'px'); t.dataset.on = on.dataset.sfview; });
 }
 addEventListener('resize', () => { if (document.querySelector('.sf-tabs')) sfGlide(); });
-const saleTabs = () => (setTimeout(sfGlide, 0), '<div class="sf-tabs' + (SF.gw ? ' ready' : '') + '" role="tablist" style="--gx:' + (SF.gx || 0) + 'px;--gw:' + (SF.gw || 0) + 'px" data-on="' + (SF.gw ? esc(SF.lastOn || '') : '') + '"><i class="sf-glide" aria-hidden="true"></i><button type="button" role="tab" data-sfview="flow" aria-selected="' + (SF.v === 'flow') + '">' + I.flow + 'ภาพรวมสถานะ</button><button type="button" role="tab" data-sfview="table" aria-selected="' + (SF.v !== 'flow' && SF.v !== 'kb') + '">' + I.list + 'ตารางงานฝ่ายแบบ</button><button type="button" role="tab" data-sfview="kb" aria-selected="' + (SF.v === 'kb') + '">' + I.kb + 'คลังความรู้</button></div>');
+/* ---- หน้า Sale: แท็บคลังวัสดุ (ยอดจาก Express) — ค้นหาสินค้า ดูยอดคงเหลือแยกคลัง · ไม่มีราคาทุน · ดูอย่างเดียว ---- */
+const SX = { cfg: null, items: [], locs: {}, tabs: {}, at: 0, agent: null, busy: false, err: '', q: '', grp: '', lim: 150, found: null, fq: '', ft: 0, redraw: null };
+async function sxRpc(fn, body) {
+  const c = SX.cfg, r = await fetch(c.url.replace(/\/$/, '') + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: c.key, Authorization: 'Bearer ' + c.key, 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ tok: c.tok }, body || {})) });
+  if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'ยังไม่ได้เปิดสิทธิ์ดูคลังสำหรับหน้า Sale' : 'โหลดข้อมูลคลังไม่สำเร็จ (' + r.status + ')');
+  return r.json();
+}
+async function sxLoad(force) {
+  if (!SX.cfg || SX.busy || (!force && SX.at && Date.now() - SX.at < 180000)) return;
+  SX.busy = true;
+  try { const r = await sxRpc('ex_sale_stock'); SX.items = r.items || []; SX.locs = {}; (r.locs || []).forEach(l => { (SX.locs[l[0]] = SX.locs[l[0]] || []).push(l); }); SX.tabs = r.tabs || {}; SX.agent = r.agent || null; SX.err = ''; SX.at = Date.now(); }
+  catch (e) { SX.err = e.message || String(e); SX.at = SX.at || 1; }
+  SX.busy = false; if (SF.v === 'ex' && SX.redraw) SX.redraw();
+}
+function sxFind() {   // ค้นหาทุกรหัสบนเซิร์ฟเวอร์ (รวมที่ของหมด) หลังหยุดพิมพ์
+  clearTimeout(SX.ft); const q = SX.q.trim(); if (q.length < 2) { SX.found = null; SX.fq = ''; return; }
+  SX.ft = setTimeout(async () => { try { const r = await sxRpc('ex_sale_find', { q: q, lim: 80 }); if (SX.q.trim() === q) { SX.found = r || []; SX.fq = q; if (SX.redraw) SX.redraw(); } } catch (e) {} }, 350);
+}
+const sxU = c => ((SX.tabs.units || {})[c]) || c || '', sxL = c => ((SX.tabs.locs || {})[c]) || c || '', sxG = c => ((SX.tabs.groups || {})[c]) || c || 'ไม่ระบุกลุ่ม';
+function saleExHtml() {
+  if (!SX.at) { sxLoad(); return '<div class="skx-wrap"><div class="sp-empty"><span class="spin-dot dark"></span><b>กำลังโหลดคลังวัสดุ…</b><small>ยอดคงเหลือจากโปรแกรม Express</small></div></div>'; }
+  const q = SX.q.trim(), have = new Set(SX.items.map(x => x[0]));
+  const list = SX.items.filter(x => (!SX.grp || x[3] === SX.grp) && (!q || qHit([x[0], x[1], x[2], sxG(x[3])], q)));
+  const out = q && SX.found && SX.fq === q ? SX.found.filter(x => !have.has(x[0]) && (!SX.grp || x[3] === SX.grp)) : [];
+  const gc = {}; SX.items.forEach(x => { gc[x[3]] = (gc[x[3]] || 0) + 1; });
+  const grps = Object.keys(gc).sort((a, b) => gc[b] - gc[a]).slice(0, 12);
+  const ag = SX.agent && SX.agent.at ? new Date(SX.agent.at) : null, stale = !ag || Date.now() - ag > 12 * 60000;
+  const row = (x, zero) => { const ls = (SX.locs[x[0]] || []).slice().sort((a, b) => Math.abs(b[2]) - Math.abs(a[2])), b = +x[5] || 0, z = zero || Math.abs(b) < 1e-9;
+    return '<div class="skx-row' + (z ? ' zero' : b < 0 ? ' neg' : '') + '"><span class="skx-c"><b>' + coHl(x[0], q) + '</b><small>' + esc(sxG(x[3])) + '</small></span>' +
+      '<span class="skx-n"><b>' + coHl(x[1] || '–', q) + '</b>' + (x[2] ? '<small>' + coHl(x[2], q) + '</small>' : '') + (ls.length ? '<span class="skx-locs">' + ls.slice(0, 5).map(l => '<i title="' + esc(sxL(l[1])) + '">' + esc(sxL(l[1])) + ' <b>' + exN(l[2]) + '</b></i>').join('') + '</span>' : '') + '</span>' +
+      '<span class="skx-q">' + (z ? '<em class="skx-out">ของหมด</em>' : '<b class="tnum">' + exN(b) + '</b><small>' + esc(sxU(x[4])) + '</small>') + '</span></div>'; };
+  return '<div class="skx-wrap"><div class="skx-h"><div><h2>คลังวัสดุ</h2><small>ยอดคงเหลือจากโปรแกรม Express · ' + (ag ? (stale ? '<span class="skx-stale">ข้อมูลล่าสุด ' : 'อัปเดต ') + esc(ag.toLocaleString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })) + ' น.' + (stale ? '</span>' : '') : 'ยังไม่มีข้อมูล') + '</small></div>' +
+      '<span class="skx-kpi"><b>' + exN(SX.items.length) + '</b><small>รายการที่มีของ</small></span></div>' +
+    (SX.err ? '<div class="err">' + esc(SX.err) + '</div>' : '') +
+    '<label class="sp-search skx-search' + qOn(SX.q) + '">' + I.search + '<input id="sxQ" type="search" enterkeyhint="search" autocomplete="off" placeholder="ค้นหาสินค้า: รหัส ชื่อ ขนาด สี… (รวมรายการที่ของหมด)" value="' + esc(SX.q) + '" aria-label="ค้นหาสินค้าในคลัง">' + qX('sxQ', SX.q) + '</label>' +
+    '<div class="qchips skx-chips"><button type="button" class="qchip" data-sxgrp="" aria-pressed="' + !SX.grp + '">ทุกกลุ่ม<b>' + exN(SX.items.length) + '</b></button>' + grps.map(g => '<button type="button" class="qchip" data-sxgrp="' + esc(g) + '" aria-pressed="' + (SX.grp === g) + '">' + esc(sxG(g)) + '<b>' + exN(gc[g]) + '</b></button>').join('') + '</div>' +
+    (q ? '<div class="sp-count">พบ <b>' + exN(list.length) + '</b> รายการที่มีของ' + (out.length ? ' · ของหมด <b>' + out.length + '</b> รายการ' : '') + ' สำหรับ "' + esc(q) + '"</div>' : '') +
+    (list.length || out.length ? '<div class="skx-list"><div class="skx-head"><span>รหัส</span><span>ชื่อสินค้า · คลัง</span><span>คงเหลือ</span></div>' + list.slice(0, SX.lim).map(x => row(x)).join('') + (list.length > SX.lim ? '<div class="col-more">แสดง ' + SX.lim + ' จาก ' + exN(list.length) + ' <button type="button" class="btn sm ghost" data-sxmore="1">แสดงเพิ่ม</button></div>' : '') +
+      (out.length ? '<div class="skx-sep">ของหมด · มีรหัสใน Express แต่ไม่มียอดคงเหลือ</div>' + out.slice(0, 40).map(x => row(x, true)).join('') : '') + '</div>'
+      : '<div class="sp-empty"><span>🔍</span><b>' + (q ? 'ไม่พบ "' + esc(q) + '"' : 'ไม่มีสินค้าในกลุ่มนี้') + '</b>' + (q ? '<small>ลองพิมพ์บางส่วนของรหัสหรือชื่อ' + (SX.found === null || SX.fq !== q ? ' · กำลังค้นในรายการที่ของหมด…' : '') + '</small>' : '') + '</div>') +
+    '<p class="sub sp-foot">ดูได้อย่างเดียว · ไม่แสดงราคาทุน · ยอดตรงกับโปรแกรม Express ของฝ่ายสต็อก</p></div>';
+}
+document.addEventListener('input', e => { if (!e.target || e.target.id !== 'sxQ' || e.isComposing) return; SX.q = e.target.value; SX.lim = 150; sxFind(); if (SX.redraw) SX.redraw(); });
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-sxgrp],[data-sxmore]'); if (!b || !SALE_Q) return; if (b.dataset.sxmore) SX.lim += 300; else { SX.grp = SX.grp === b.dataset.sxgrp ? '' : b.dataset.sxgrp; SX.lim = 150; } if (SX.redraw) SX.redraw(); });
+const saleTabs = () => (setTimeout(sfGlide, 0), '<div class="sf-tabs' + (SF.gw ? ' ready' : '') + '" role="tablist" style="--gx:' + (SF.gx || 0) + 'px;--gw:' + (SF.gw || 0) + 'px" data-on="' + (SF.gw ? esc(SF.lastOn || '') : '') + '"><i class="sf-glide" aria-hidden="true"></i><button type="button" role="tab" data-sfview="flow" aria-selected="' + (SF.v === 'flow') + '">' + I.flow + 'ภาพรวมสถานะ</button><button type="button" role="tab" data-sfview="table" aria-selected="' + (SF.v !== 'flow' && SF.v !== 'kb' && SF.v !== 'ex') + '">' + I.list + 'ตารางงานฝ่ายแบบ</button><button type="button" role="tab" data-sfview="kb" aria-selected="' + (SF.v === 'kb') + '">' + I.kb + 'คลังความรู้</button>' + (SX.cfg ? '<button type="button" role="tab" data-sfview="ex" aria-selected="' + (SF.v === 'ex') + '">' + I.stock + 'คลังวัสดุ</button>' : '') + '</div>');
 
 /* ============ events ============ */
 document.addEventListener('click', async e => {

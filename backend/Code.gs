@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.47.0';
+const VERSION = '1.48.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -555,6 +555,13 @@ function saleKey_(reset) {
   if (!k || reset) { k = Utilities.getUuid().replace(/-/g, '').slice(0, 24); props.setProperty('SALE_KEY', k); }
   return k;
 }
+/** โทเค็นอ่านคลัง Express สำหรับหน้า Sale (ไม่มีราคาทุน): sha256hex(sha256hex(EX_TOK) + '|sale') · Supabase รับเฉพาะ ex_sale_stock / ex_sale_find */
+function exSaleTok_() {
+  if (!RT_URL || !RT_KEY || !EX_TOK) return '';
+  const hx = b => b.map(x => ('0' + ((x + 256) % 256).toString(16)).slice(-2)).join('');
+  const h1 = hx(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, EX_TOK, Utilities.Charset.UTF_8));
+  return hx(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, h1 + '|sale', Utilities.Charset.UTF_8));
+}
 function saleView_(k, sale) {
   const key = PropertiesService.getScriptProperties().getProperty('SALE_KEY'), keys = jsonProp_('SALE_KEYS');
   const own = k ? Object.keys(keys).find(n => keys[n] === String(k)) : '';   // กุญแจรายคน → เห็นเฉพาะงานของ Sale คนนั้น
@@ -575,7 +582,8 @@ function saleView_(k, sale) {
   const people = usersLite_().filter(x => x.active && x.role !== 'admin').map(x => ({ name: x.name, color: x.color }));
   const pv = prods.map(x => ({ code: x.code, priority: x.priority === 'urgent' ? 'urgent' : '', title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6), qc: (q => ({ res: q.res, at: q.at, fails: q.fails, ok: q.ok, ng: q.ng }))(prodQc_(x.qc)), ship: x.stage === 'shipped' ? saleShip_(x, metas) : null }));
   let kb = []; try { kb = kbList_({ role: 'user' }, metas); } catch (e) { kb = []; }
-  const out = { brand: publicBrand_(), sales: own ? [own] : s.sales || [], sale: sale || '', own: own ? 1 : 0, jobs: jobs, prods: pv, kb: kb, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
+  const exT = exSaleTok_();
+  const out = { ex: exT ? { url: RT_URL, key: RT_KEY, tok: exT } : null, brand: publicBrand_(), sales: own ? [own] : s.sales || [], sale: sale || '', own: own ? 1 : 0, jobs: jobs, prods: pv, kb: kb, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(ck, t, 600); } catch (e) {}
   return out;
 }

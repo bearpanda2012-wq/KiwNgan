@@ -6077,3 +6077,32 @@ body.auth #bgSndBtn{display:none}
 .co-mc[style*="--mc"].on{color:color-mix(in oklab,var(--mc) 70%,var(--muted));background:var(--surface);box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--mc) 25%,transparent)}
 :root[data-theme="dark"] .co-mc[style*="--mc"]{color:color-mix(in oklab,var(--mc) 55%,#fff)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .co-mc[style*="--mc"]{color:color-mix(in oklab,var(--mc) 55%,#fff)}}
+/* v2.104: หน้า Sale — แท็บคลังวัสดุ (ยอดจาก Express ไม่มีราคา) */
+.skx-wrap{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px}
+.skx-h{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.skx-h h2{margin:0;font:700 18px var(--f-display)}.skx-h small{color:var(--muted);font-size:12.5px}
+.skx-stale{color:#B91C1C;font-weight:600}
+.skx-kpi{display:flex;flex-direction:column;align-items:flex-end;padding:6px 14px;border-radius:12px;background:color-mix(in oklab,var(--brand) 9%,var(--surface))}
+.skx-kpi b{font:700 22px var(--f-display);color:var(--brand)}.skx-kpi small{font-size:11.5px;color:var(--muted)}
+.skx-search{margin:0}
+.skx-chips{flex-wrap:wrap;overflow:visible}
+.skx-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.skx-head,.skx-row{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr) 110px;gap:12px;padding:9px 12px;align-items:start}
+.skx-head{background:var(--surface-2);color:var(--muted);font-size:11.5px;font-weight:600}
+.skx-head span:last-child,.skx-q{text-align:right}
+.skx-row{border-top:1px solid var(--line);font-size:13px}
+.skx-row:hover{background:var(--surface-2)}
+.skx-c b{display:block;font-family:var(--f-mono);font-size:12.5px;word-break:break-all}
+.skx-c small,.skx-n small{display:block;color:var(--muted);font-size:11.5px}
+.skx-n b{font-weight:600}
+.skx-locs{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.skx-locs i{font-style:normal;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.skx-locs i b{color:var(--ink)}
+.skx-q b{display:block;font:700 16px var(--f-display);color:var(--brand)}.skx-q small{font-size:11.5px;color:var(--muted)}
+.skx-row.neg .skx-q b{color:#B91C1C}
+.skx-row.zero{opacity:.75}
+.skx-out{font-style:normal;font-size:12px;font-weight:700;color:#B45309;background:#FEF3C7;padding:2px 9px;border-radius:999px;display:inline-block}
+.skx-sep{padding:8px 12px;background:#FFFBEB;color:#92400E;font-size:12px;font-weight:600;border-top:1px solid var(--line)}
+:root[data-theme="dark"] .skx-sep{background:#3A2E12;color:#FCD34D}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .skx-sep{background:#3A2E12;color:#FCD34D}}
+@media (max-width:640px){.skx-wrap{padding:12px}.skx-head{display:none}.skx-row{grid-template-columns:minmax(0,1fr) auto;row-gap:2px}.skx-c{grid-column:1}.skx-n{grid-column:1/-1;grid-row:2}.skx-q{grid-column:2;grid-row:1}}
