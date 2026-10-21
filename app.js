@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.102';
+const APP_VERSION = '2.102.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2452,6 +2452,12 @@ const FIXED_HOL = [['01-01', 'วันขึ้นปีใหม่'], ['04-06
 /* ----- หน้า Sale (อ่านอย่างเดียว ไม่ต้องเข้าสู่ระบบ) ----- */
 const SALE_Q = (() => { try { const u = new URL(location.href); return u.searchParams.get('salek') ? { k: u.searchParams.get('salek'), sale: u.searchParams.get('sale') || '' } : null; } catch (e) { return null; } })();
 function typeColorPub(name) { const c = (S.settings && S.settings.taskTypes) ? typeColor(name) : ''; if (c) return c; let h = 0; String(name || '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) % 360; }); return /CAM/.test(name || '') ? '#E8590C' : /CAD/.test(name || '') ? '#2D5FC4' : 'hsl(' + h + ' 55% 45%)'; }
+const SP_OUT_IC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H15M10 8l-4 4 4 4M6 12h10"/></svg>';
+/* ออกจากระบบหน้า Sale (ทั้งลิงก์ส่วนตัวและรวม): ลบ PIN ที่จำไว้และข้อมูลที่เก็บในเครื่อง แล้วกลับหน้าเข้าสู่ระบบ */
+function saleLogout() {
+  try { LS.del('saleKey'); Object.keys(localStorage).filter(k => k.indexOf(NS + 'saleCache:') === 0).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+  location.replace(location.pathname);
+}
 async function salePage() {
   document.body.classList.add('auth', 'sale-mode'); applyTheme();
   const root = $('#view') || document.body;
@@ -2506,7 +2512,7 @@ async function salePage() {
     const cards = [['all', 'ทั้งหมด', '', I.list || STI.queue], ['act', 'กำลังดำเนินการ', 'doing', STI.doing], ['late', 'เลยกำหนด', 'bad', STI.fire], ['done', 'เสร็จใน 45 วัน', 'ok', STI.done]];
     root.innerHTML = '<div class="sale-page"><header class="sp-h"><div class="sp-logo">' + (b.logo ? '<img src="' + esc(b.logo) + '" alt="">' : esc(initial(b.company || 'K'))) + '</div><div class="sp-ht"><b>' + esc(b.appName || 'คิวงาน') + ' · สถานะงาน</b><small>' + esc(b.company || '') + (sel ? ' · Sale ' + esc(sel) : ' · ทุก Sale') + '</small></div>' +
       (LS.get('saleKey', '') === SALE_Q.k ? '<a class="btn sm ghost sp-back" href="' + esc(location.pathname) + '">‹ หน้าเข้าสู่ระบบ</a>' : '') +
-      '<button type="button" class="btn sm sp-scan" data-spscan="1" title="สแกน QR ฉลากงาน · เปิดรายละเอียดงานนั้น">' + SCAN_IC + '<span>สแกน QR</span></button>' + '<span class="sp-live" title="อัปเดตเองทุก 1 นาที"><i></i>สด</span><button class="btn sm sp-ref' + (busy ? ' spin' : '') + '" data-sale-refresh="1">' + I.refresh + '<span>รีเฟรช</span></button></header>' +
+      '<button type="button" class="btn sm sp-scan" data-spscan="1" title="สแกน QR ฉลากงาน · เปิดรายละเอียดงานนั้น">' + SCAN_IC + '<span>สแกน QR</span></button>' + '<span class="sp-live" title="อัปเดตเองทุก 1 นาที"><i></i>สด</span><button class="btn sm sp-ref' + (busy ? ' spin' : '') + '" data-sale-refresh="1">' + I.refresh + '<span>รีเฟรช</span></button><button type="button" class="btn sm sp-out" data-saleout="1" title="ออกจากระบบหน้านี้ · ต้องใส่ PIN ใหม่ครั้งหน้า">' + SP_OUT_IC + '<span>ออกจากระบบ</span></button></header>' +
       (err ? '<div class="err">' + esc(err) + '</div>' : !d ? '<div class="sp-skel">' + '<i></i>'.repeat(6) + '</div>' : saleTabs() + (SF.v === 'kb' ? saleKbHtml(d, () => draw(last, lastErr)) : SF.v === 'flow' ? '<div class="sf-wrap">' + saleFlowHtml(d, sel) + '</div><p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · กดที่งานเพื่อดูรายละเอียด · หน้านี้ดูได้อย่างเดียว</p>' :
         '<div class="sp-sum">' + cards.map(c => '<button type="button" data-spst="' + c[0] + '" class="sp-card c-' + c[0] + (F.st === c[0] ? ' on' : '') + '"><span class="sp-ci">' + c[3] + '</span><b class="' + c[2] + '" data-n="' + N[c[0]] + '" data-k="' + c[0] + '">' + (prevN[c[0]] !== undefined ? prevN[c[0]] : 0) + '</b><span>' + c[1] + '</span>' +
           (c[0] === 'done' && N.done ? '<small>ตรงเวลา ' + Math.round(okB / N.done * 100) + '%</small>' : c[0] === 'late' && N.act ? '<small>' + Math.round(N.late / N.act * 100) + '% ของงานค้าง</small>' : '') + '</button>').join('') + '</div>' + pstrip +
@@ -2548,6 +2554,7 @@ async function salePage() {
   const cached = LS.get(ck, null);
   draw(cached && cached.jobs ? cached : null); go(); setInterval(go, 60000);
   document.addEventListener('click', e => {
+    if (e.target.closest && e.target.closest('[data-saleout]')) { const b = e.target.closest('[data-saleout]'); if (b.dataset.ask) return saleLogout(); b.dataset.ask = '1'; b.classList.add('ask'); b.querySelector('span').textContent = 'กดอีกครั้งเพื่อออก'; setTimeout(() => { if (b.isConnected) { delete b.dataset.ask; b.classList.remove('ask'); b.querySelector('span').textContent = 'ออกจากระบบ'; } }, 3500); return; }
     const c = e.target.closest && e.target.closest('[data-spscan],[data-sale-refresh],[data-spst],[data-spclear],[data-spprod],[data-sfview],[data-sfstep],[data-sfopen]'); if (!c) return;
     if (c.dataset.sfview) { SF.lastOn = (document.querySelector('.sf-tabs') || { dataset: {} }).dataset.on || ''; SF.v = c.dataset.sfview; SF.anim = true; LS.set('saleView', SF.v); return draw(last, lastErr); }
     if (c.dataset.sfstep) { const fromPipe = !!c.closest('.co-pipe, .co-kpis'); SF.step = SF.step === c.dataset.sfstep && c.dataset.sfstep !== 'all' ? 'all' : c.dataset.sfstep; SF.anim = true; draw(last, lastErr); if (fromPipe) pipeJump(); return; }

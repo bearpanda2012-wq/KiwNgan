@@ -6021,3 +6021,9 @@ body.auth #bgSndBtn{display:none}
 .spf.sp-urg .spf-ic svg{width:15px;height:15px;color:#E8590C}
 .spf select option:disabled{color:#aaa}
 @media (max-width:640px){.sf-wrap .sp-filters .spf{flex:1 1 calc(50% - 8px);min-width:0}.sf-wrap .sp-filters .spf select{flex:1;min-width:0;width:100%;text-overflow:ellipsis}.sf-wrap .sp-filters .sp-clear{flex:1 1 100%}}
+/* v2.102.1: หน้า Sale — ปุ่มออกจากระบบ */
+.sp-out{position:relative;z-index:1;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16)!important;color:#fff!important;border:1px solid rgba(255,255,255,.45)!important;font-weight:700}
+.sp-out svg{width:16px;height:16px}
+.sp-out:hover{background:rgba(255,255,255,.26)!important}
+.sp-out.ask{background:#fff!important;color:#B91C1C!important;border-color:#fff!important}
+@media (max-width:760px){.sp-out span{display:none}.sp-out.ask span{display:inline}}
