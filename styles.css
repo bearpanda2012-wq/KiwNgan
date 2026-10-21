@@ -6014,3 +6014,10 @@ body.auth #bgSndBtn{display:none}
 .ex-fresh{font-size:11.5px;white-space:nowrap}
 .ex-fresh.on{color:#15803D}.ex-fresh.off{color:#B91C1C;font-weight:600}
 .ex-log li.ex-day.fut{flex-direction:column;align-items:flex-start;gap:1px}
+/* v2.102: ตัวกรองหน้าภาพรวม (Sale) */
+.spf.sp-urg{cursor:pointer;font:inherit;font-size:13px;color:var(--ink);padding:0 6px 0 10px}
+.spf.sp-urg b{font-size:11.5px;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.spf.sp-urg.on{border-color:#F3A38C;background:#FFF1EC;color:#C2410C}.spf.sp-urg.on b{background:#E8590C;color:#fff}
+.spf.sp-urg .spf-ic svg{width:15px;height:15px;color:#E8590C}
+.spf select option:disabled{color:#aaa}
+@media (max-width:640px){.sf-wrap .sp-filters .spf{flex:1 1 calc(50% - 8px);min-width:0}.sf-wrap .sp-filters .spf select{flex:1;min-width:0;width:100%;text-overflow:ellipsis}.sf-wrap .sp-filters .sp-clear{flex:1 1 100%}}

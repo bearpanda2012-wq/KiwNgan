@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.101.4';
+const APP_VERSION = '2.102';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2558,6 +2558,8 @@ async function salePage() {
     if (c.dataset.spst) { F.st = F.st === c.dataset.spst ? 'all' : c.dataset.spst; return draw(last, lastErr); }
     if (c.dataset.spclear) { Object.assign(F, { st: 'all', status: '', sale: '', group: '', type: '', range: '', rf: '', rt: '', who: '', prod: '' }); q = ''; return draw(last, lastErr); }
   });
+  document.addEventListener('change', e => { const ff = e.target && e.target.dataset && e.target.dataset.sff; if (ff) { SF.f[ff] = e.target.value; SF.anim = true; return draw(last, lastErr); } });
+  document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-sffurg],[data-sffclear]'); if (!b) return; if (b.dataset.sffurg) SF.f.urg = !SF.f.urg; else { SF.f = {}; SF.sale = ''; } SF.anim = true; draw(last, lastErr); });
   document.addEventListener('change', e => { if (e.target && e.target.dataset && e.target.dataset.sfsale) { SF.sale = e.target.value; SF.anim = true; return draw(last, lastErr); } const k = e.target && e.target.dataset && e.target.dataset.spf; if (k) { F[k] = e.target.value; draw(last, lastErr); } });
   document.addEventListener('input', e => { if (e.target && e.target.id === 'sfQ' && !e.isComposing) { SF.q = e.target.value; const pos = e.target.selectionStart; draw(last, lastErr); const el = $('#sfQ'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } } });
   document.addEventListener('input', e => { if (e.target && e.target.id === 'spQ' && !e.isComposing) { q = e.target.value; const pos = e.target.selectionStart; draw(last, lastErr); const el = $('#spQ'); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (x) {} } } });
@@ -8223,7 +8225,21 @@ document.addEventListener('input', e => {
 });
 
 /* ===== หน้า Sale: มุมมอง "ภาพรวมสถานะ" แบบเดียวกับหน้าภาพรวมบริษัท (1 เลข Job = 1 แถว เดินตั้งแต่ฝ่ายแบบจนส่งลูกค้า) ===== */
-const SF = { v: LS.get('saleView', 'flow'), step: 'all', q: '', sale: '', open: {}, anim: true };
+const SF = { v: LS.get('saleView', 'flow'), step: 'all', q: '', sale: '', open: {}, anim: true, f: {} };
+/* ตัวกรองหน้าภาพรวม (ระดับเลข Job): ขั้นงาน · เครื่อง · ผู้รับผิดชอบ · กลุ่มงาน · รายละเอียดงาน · กำหนดส่ง · ด่วน */
+const SFK = ['stage', 'mach', 'who', 'group', 'type', 'due', 'urg'];
+const sfMach = r => (r.prod && r.prod.machines || []).map(m => m && m.m).filter(Boolean);
+const sfWho = r => [...new Set(r.jobs.flatMap(j => [j.assignee].concat(String(j.helpers || '').split(',').map(x => x.trim()))).filter(Boolean))];
+function sfPass(r, f, skip) {
+  const t = today();
+  return (skip === 'stage' || !f.stage || (f.stage === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === f.stage)) &&
+    (skip === 'mach' || !f.mach || sfMach(r).indexOf(f.mach) >= 0) &&
+    (skip === 'who' || !f.who || (f.who === '__none' ? !r.jobs.some(j => j.assignee) : sfWho(r).indexOf(f.who) >= 0)) &&
+    (skip === 'group' || !f.group || r.group === f.group || r.jobs.some(j => j.group === f.group)) &&
+    (skip === 'type' || !f.type || r.jobs.some(j => j.taskType === f.type)) &&
+    (skip === 'due' || !f.due || (f.due === 'late' ? r.late : f.due === 'today' ? r.due === t : f.due === 'week' ? !!r.due && r.due >= t && r.due <= addDays(t, 7) : f.due === 'none' ? !r.due && r.step !== 'shipped' : true)) &&
+    (skip === 'urg' || !f.urg || r.urgent);
+}
 function saleRows(d) {
   const t = today(), by = {}, key = c => String(c || '').trim().toLowerCase();
   (d.jobs || []).forEach(j => { const k = key(j.code); if (k) (by[k] = by[k] || { code: j.code, jobs: [], prod: null }).jobs.push(j); });
@@ -8247,7 +8263,7 @@ function saleRows(d) {
   });
 }
 function saleFlowHtml(d, sel) {
-  const t = today(), all = saleRows(d).filter(r => !SF.sale || r.sale === SF.sale), qq = SF.q.trim().toLowerCase();
+  const t = today(), base0 = saleRows(d).filter(r => !SF.sale || r.sale === SF.sale), all = base0.filter(r => sfPass(r, SF.f)), qq = SF.q.trim().toLowerCase();
   const n = k => all.filter(r => k === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === k).length;
   const live = all.filter(r => r.step !== 'shipped' && !r.old), late = all.filter(r => r.late).length;
   const tile = (s, i) => cjTile(s, i, n(s.k), 'data-sfstep="' + s.k + '"', SF.step === s.k, s.k === 'shipped' ? '60 วันล่าสุด' : s.sub, 0);
@@ -8285,7 +8301,24 @@ function saleFlowHtml(d, sel) {
   const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง', live.length], ['late', 'เลยกำหนด', late], ['shipped', 'ส่งแล้ว', n('shipped')]].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-sfstep="' + x[0] + '" aria-pressed="' + (SF.step === x[0]) + '">' + x[1] + '<b>' + x[2] + '</b></button>').join('') +
     (['all', 'late', 'shipped'].indexOf(SF.step) < 0 ? '<button class="qchip" data-sfstep="all" aria-pressed="true">' + esc(SF.step === 'design' ? 'ฝ่ายแบบ' : PSTG[SF.step].label) + ' ✕</button>' : '') + '</div>';
   const tools = '<div class="sp-tools"><label class="sp-search' + qOn(SF.q) + '">' + I.search + '<input id="sfQ" type="search" enterkeyhint="search" placeholder="ค้นหาทุกงาน: เลข Job, ลูกค้า, Sale, เครื่อง… (รวมที่ส่งแล้ว)" value="' + esc(SF.q) + '" autocomplete="off" aria-label="ค้นหางาน">' + qX('sfQ', SF.q) + '</label>' +
-    (sel ? '' : '<div class="sp-filters"><label class="spf' + (SF.sale ? ' on' : '') + '"><span class="spf-ic">' + STI.user + '</span><select data-sfsale="1"><option value="">ทุก Sale</option>' + sales.map(x => '<option' + (SF.sale === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select></label></div>') + '</div>';
+    '<div class="sp-filters">' + (() => {
+      const F = SF.f, cnt = (k, pred) => base0.filter(r => sfPass(r, F, k) && pred(r)).length;
+      const opt = (k, v, label, n) => '<option value="' + esc(v) + '"' + (F[k] === v ? ' selected' : '') + (n === 0 && F[k] !== v ? ' disabled' : '') + '>' + esc(label) + (n != null ? ' (' + n + ')' : '') + '</option>';
+      const fs = (k, ic, first, opts) => '<label class="spf' + (F[k] ? ' on' : '') + '"><span class="spf-ic">' + ic + '</span><select data-sff="' + k + '" aria-label="' + esc(first) + '"><option value="">' + esc(first) + '</option>' + opts + '</select></label>';
+      const uniqJ = fn => [...new Set(base0.flatMap(fn).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'th'));
+      const stages = [['design', 'ฝ่ายแบบ']].concat(PCOLS.concat('shipped').map(st => [st, PSTG[st].label]));
+      const machs = [...new Set(machinesList().concat(uniqJ(sfMach)))];
+      const anyF = SFK.some(k => F[k]);
+      return (sel ? '' : '<label class="spf' + (SF.sale ? ' on' : '') + '"><span class="spf-ic">' + STI.user + '</span><select data-sfsale="1" aria-label="Sale"><option value="">ทุก Sale</option>' + sales.map(x => '<option' + (SF.sale === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select></label>') +
+        fs('stage', STI.doing, 'ขั้นงาน: ทั้งหมด', stages.map(x => opt('stage', x[0], x[1], cnt('stage', r => x[0] === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === x[0]))).join('')) +
+        fs('mach', PIC.machine, 'เครื่อง: ทั้งหมด', machs.map(m => opt('mach', m, m, cnt('mach', r => sfMach(r).indexOf(m) >= 0))).join('')) +
+        fs('who', '👤', 'ผู้รับผิดชอบ: ทุกคน', uniqJ(sfWho).map(w => opt('who', w, w, cnt('who', r => sfWho(r).indexOf(w) >= 0))).join('') + opt('who', '__none', 'ยังไม่มอบหมาย', cnt('who', r => r.jobs.length && !r.jobs.some(j => j.assignee)))) +
+        fs('group', STI.layers || '▦', 'ทุกกลุ่มงาน', uniqJ(r => [r.group].concat(r.jobs.map(j => j.group))).map(g => opt('group', g, groupShort(g), cnt('group', r => r.group === g || r.jobs.some(j => j.group === g)))).join('')) +
+        fs('type', '✎', 'ทุกรายละเอียดงาน', uniqJ(r => r.jobs.map(j => j.taskType)).map(x => opt('type', x, x, cnt('type', r => r.jobs.some(j => j.taskType === x)))).join('')) +
+        fs('due', STI.calendar, 'กำหนดส่ง: ทั้งหมด', [['late', 'เลยกำหนด', r => r.late], ['today', 'ครบกำหนดวันนี้', r => r.due === t], ['week', 'ภายใน 7 วัน', r => !!r.due && r.due >= t && r.due <= addDays(t, 7)], ['none', 'ยังไม่มีกำหนดส่ง', r => !r.due && r.step !== 'shipped']].map(x => opt('due', x[0], x[1], cnt('due', x[2]))).join('')) +
+        '<button type="button" class="spf sp-urg' + (F.urg ? ' on' : '') + '" data-sffurg="1" aria-pressed="' + !!F.urg + '"><span class="spf-ic">' + STI.fire + '</span><span>งานด่วน</span><b>' + cnt('urg', r => r.urgent) + '</b></button>' +
+        (anyF || SF.sale ? '<button type="button" class="btn sm sp-clear" data-sffclear="1">✕ ล้างตัวกรอง</button>' : '');
+    })() + '</div>' + (SFK.some(k => SF.f[k]) ? '<div class="sp-count">ตัวกรองใช้กับตัวเลขด้านบนและรายการด้านล่าง · ตรงเงื่อนไข <b>' + all.length + '</b> จาก ' + base0.length + ' เลข Job</div>' : '') + '</div>';
   const legend = '<div class="co-legend"><span><i class="d-d"></i>ฝ่ายแบบ</span><span><i class="d-p"></i>ฝ่ายผลิต</span><span><i class="d-s"></i>ฝ่ายสต็อก</span><span><i class="now"></i>ตอนนี้อยู่ที่</span><span><i class="now late"></i>เลยกำหนด</span></div>';
   SF.anim = false;
   return pipe + kpis + '<section class="panel sf-panel"><div class="panel-h"><h2>งานตามเลข Job</h2>' + legend + '</div>' + tools + (qq ? '<div class="co-sres" role="status"><b>' + list.length + '</b> รายการตรงกับ "' + esc(SF.q.trim()) + '"<small>ค้นจากงานทั้งหมด รวมที่ส่งแล้วและออกแบบเสร็จแล้ว</small></div>' : chips) + rows + '</section>';
