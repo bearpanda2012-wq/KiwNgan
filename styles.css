@@ -5995,3 +5995,4 @@ body.auth #bgSndBtn{display:none}
 .ex-depbtn svg{width:18px;height:18px}
 .ex-depbtn b{display:none;font-weight:600}
 @media (max-width:720px){.ex-depbtn span{display:none}.ex-depbtn b{display:inline}.ex-depbtn{padding:0 12px}}
+.pm-redraw .pm-card{animation:none}

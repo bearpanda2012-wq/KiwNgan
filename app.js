@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.100.2';
+const APP_VERSION = '2.100.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -7739,7 +7739,17 @@ function pImgsHtml(p, ro) {
     (up ? '<span class="pa-im pa-up"><span class="spin-dot"></span></span>' : '') +
     (!ro && own.length < IMG_MAX ? '<label class="pa-add">' + STI.camera + '<span>เพิ่มรูป</span><input type="file" id="pImgIn" accept="image/*" multiple hidden></label>' : '') + '</div></div>';
 }
+/* วาดหน้างานใหม่โดยไม่เด้งกลับขึ้นบน (ติ๊ก QC / เลือกเครื่อง / บันทึก → ตำแหน่งเลื่อนและช่องที่พิมพ์อยู่คงเดิม) */
 function pModalDraw() {
+  const m0 = $('#pModal'), b0 = m0 && m0.querySelector('.pm-b'), id0 = P2.id, top = b0 ? b0.scrollTop : 0, ae = document.activeElement;
+  const fid = ae && m0 && m0.contains(ae) && ae.id ? ae.id : '', sel = fid && typeof ae.selectionStart === 'number' ? [ae.selectionStart, ae.selectionEnd] : null;
+  pModalDraw0();
+  const m = $('#pModal'), b = m && m.querySelector('.pm-b'); if (!b || !b0 || P2.id !== id0) return;
+  b.scrollTop = top;
+  if (fid) { const n = document.getElementById(fid); if (n && m.contains(n)) { try { n.focus({ preventScroll: true }); if (sel) n.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
+  m.classList.add('pm-redraw'); clearTimeout(pModalDraw.t); pModalDraw.t = setTimeout(() => m.classList.remove('pm-redraw'), 400);
+}
+function pModalDraw0() {
   let m = $('#pModal');
   if (!P2.id && !P2.add) { if (m) m.remove(); return; }
   if (!m) { m = document.createElement('div'); m.id = 'pModal'; m.className = 'pmodal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); document.body.classList.add('pm-open'); }

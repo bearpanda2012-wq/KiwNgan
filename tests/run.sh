@@ -8,7 +8,7 @@ export PW="${PW:-$(npm root -g)/playwright/index.mjs}"
 JOBS="${JOBS:-1}"
 LOG="$(mktemp -d)"; export LOG
 GS="dup v116 deluser helpers v120 v121 v125 v126 v129 v1321 v133 v134 v135 v136 v137 v138 v139 v141 v144 v145 v146 v147 swpush swpush2"
-UI="demo timer e2e sugg dupui cam admin gantt grange ghover due chat note helpers v224 newx fast prod hovercl salehov prodadd chatimg inkboth qc mobile rtc stock cadcam tabs urgent joblink v262 v271 v272 v273 v275 v2751 v2752 v276 v2761 v277 v2771 v278 v279 v280 v281 v282 v283 v284 v285 v287 v2891 v291 v295 v296 v2962 v297 v298 v2100"
+UI="demo timer e2e sugg dupui cam admin gantt grange ghover due chat note helpers v224 newx fast prod hovercl salehov prodadd chatimg inkboth qc mobile rtc stock cadcam tabs urgent joblink v262 v271 v272 v273 v275 v2751 v2752 v276 v2761 v277 v2771 v278 v279 v280 v281 v282 v283 v284 v285 v287 v2891 v291 v295 v296 v2962 v297 v298 v2100 v21003"
 if [ $# -gt 0 ]; then GS=""; UI="$*"; fi
 
 check() {   # $1 = ชื่อ, $2 = exit code, $3 = ไฟล์ log
