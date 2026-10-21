@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.102.1';
+const APP_VERSION = '2.102.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -8235,7 +8235,8 @@ document.addEventListener('input', e => {
 const SF = { v: LS.get('saleView', 'flow'), step: 'all', q: '', sale: '', open: {}, anim: true, f: {} };
 /* ตัวกรองหน้าภาพรวม (ระดับเลข Job): ขั้นงาน · เครื่อง · ผู้รับผิดชอบ · กลุ่มงาน · รายละเอียดงาน · กำหนดส่ง · ด่วน */
 const SFK = ['stage', 'mach', 'who', 'group', 'type', 'due', 'urg'];
-const sfMach = r => (r.prod && r.prod.machines || []).map(m => m && m.m).filter(Boolean);
+/* เครื่อง = งานที่ "กำลังลงเครื่อง" อยู่ตอนนี้ (นับตรงกับช่องลงเครื่องด้านบน) · เครื่องที่ติ๊กเสร็จแล้วไม่นับ (ยกเว้นเสร็จครบทุกเครื่องแต่ยังไม่กดไปขั้นถัดไป) */
+const sfMach = r => { if (!r.prod || r.step !== 'machine') return []; const ms = (r.prod.machines || []).filter(m => m && m.m), op = ms.filter(m => !m.d); return (op.length ? op : ms).map(m => m.m); };
 const sfWho = r => [...new Set(r.jobs.flatMap(j => [j.assignee].concat(String(j.helpers || '').split(',').map(x => x.trim()))).filter(Boolean))];
 function sfPass(r, f, skip) {
   const t = today();
@@ -8318,7 +8319,7 @@ function saleFlowHtml(d, sel) {
       const anyF = SFK.some(k => F[k]);
       return (sel ? '' : '<label class="spf' + (SF.sale ? ' on' : '') + '"><span class="spf-ic">' + STI.user + '</span><select data-sfsale="1" aria-label="Sale"><option value="">ทุก Sale</option>' + sales.map(x => '<option' + (SF.sale === x ? ' selected' : '') + '>' + esc(x) + '</option>').join('') + '</select></label>') +
         fs('stage', STI.doing, 'ขั้นงาน: ทั้งหมด', stages.map(x => opt('stage', x[0], x[1], cnt('stage', r => x[0] === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === x[0]))).join('')) +
-        fs('mach', PIC.machine, 'เครื่อง: ทั้งหมด', machs.map(m => opt('mach', m, m, cnt('mach', r => sfMach(r).indexOf(m) >= 0))).join('')) +
+        fs('mach', PIC.machine, 'ลงเครื่อง: ทุกเครื่อง', machs.map(m => opt('mach', m, m, cnt('mach', r => sfMach(r).indexOf(m) >= 0))).join('')) +
         fs('who', '👤', 'ผู้รับผิดชอบ: ทุกคน', uniqJ(sfWho).map(w => opt('who', w, w, cnt('who', r => sfWho(r).indexOf(w) >= 0))).join('') + opt('who', '__none', 'ยังไม่มอบหมาย', cnt('who', r => r.jobs.length && !r.jobs.some(j => j.assignee)))) +
         fs('group', STI.layers || '▦', 'ทุกกลุ่มงาน', uniqJ(r => [r.group].concat(r.jobs.map(j => j.group))).map(g => opt('group', g, groupShort(g), cnt('group', r => r.group === g || r.jobs.some(j => j.group === g)))).join('')) +
         fs('type', '✎', 'ทุกรายละเอียดงาน', uniqJ(r => r.jobs.map(j => j.taskType)).map(x => opt('type', x, x, cnt('type', r => r.jobs.some(j => j.taskType === x)))).join('')) +
