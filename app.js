@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.97.0';
+const APP_VERSION = '2.98.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -226,6 +226,57 @@ function permLegend() {   // ตารางสรุปสิทธิ์เร
 
 /* ============ utils ============ */
 const $ = (s, el) => (el || document).querySelector(s);
+/* ============ ความลื่น (v2.98): มือถือ Android/iOS แท็บเล็ต iPad และคอมรุ่นเก่า ============
+   วัดแล้ว: เครื่องช้า CPU ทำงาน 45–88% ทั้งที่ไม่ได้แตะจอ เพราะแอนิเมชันวนซ้ำ (เรืองแสง แถบวิ่ง จุดเต้น) ทำให้วาดจอใหม่ทุกเฟรม
+   1) "สงบ" (data-calm): เข้าหน้า/ข้อมูลเปลี่ยน → แอนิเมชันวนเล่นสักพัก (≈6 วิ) แล้วหยุดที่ท่าปกติ · ไม่หยุดถ้ากำลังโทร/แชร์จอ
+   2) เครื่องช้า (โหมดอัตโนมัติ) → data-perf="lite": เล่นรอบเดียว ไม่เบลอกระจก
+      ตรวจจาก: iOS/iPadOS เก่ากว่า 15 · Android รุ่นเก่า/RAM น้อย · CPU ≤ 2–4 คอร์ · กดใช้งานแล้วกระตุกจริง (งานค้าง/เฟรมตกตอนเลื่อน)
+   3) ตั้ง "เต็ม" เอง = วนตลอด แต่แถวที่อยู่นอกจอหยุดไว้ */
+const PERF = (() => {
+  const root = document.documentElement, nav = navigator, ua = nav.userAgent || '';
+  const SEL = '.co-row,.pcard,.card,.row,.aitem,.sp-r,.kb-card,.ex-row,.tcard,.sf-item,.grow,.bub,.help-card,.mq-card,.sk-item,.st-row,.kpi,.co-step,.cpx-step';
+  const ios = (ua.match(/OS (\d+)_\d+(?:_\d+)? like Mac OS X/) || [])[1], saf = /Safari\//.test(ua) && !/Chrome|CriOS|Android/.test(ua) ? (ua.match(/Version\/(\d+)/) || [])[1] : 0;
+  const and = (ua.match(/Android (\d+)/) || [])[1], chr = (ua.match(/Chrome\/(\d+)/) || [])[1], touch = (nav.maxTouchPoints || 0) > 0;
+  const cores = nav.hardwareConcurrency || 0, mem = nav.deviceMemory || 0;
+  let why = '';
+  if (ios && +ios < 15) why = 'iOS ' + ios;
+  else if (saf && +saf < 15) why = 'Safari ' + saf;
+  else if (and && (+and < 9 || (chr && +chr < 90))) why = 'Android ' + and;
+  else if (mem && mem <= 3) why = 'RAM ' + mem + ' GB';
+  else if (cores && (cores <= 2 || (touch && and && cores <= 4 && (!mem || mem <= 4)))) why = cores + ' คอร์';
+  else if (nav.connection && nav.connection.saveData) why = 'ประหยัดข้อมูล';
+  let weak = !!why;
+  try { if (LS.get('perfWeak', 0)) { weak = true; why = why || 'เคยกระตุก'; } } catch (e) {}
+  if (window.__noPerfProbe) { weak = false; why = ''; }   // ใช้ตอนทดสอบ/วัดผล
+  let mode = 'auto';
+  // แถวนอกจอหยุดแอนิเมชัน (ใช้เฉพาะโหมด "เต็ม" เพราะโหมดอื่นหยุดวนอยู่แล้ว)
+  const seen = new WeakSet(); let io = null, scanQ = false;
+  const scan = () => { scanQ = false; if (!io) return; document.querySelectorAll(SEL).forEach(el => { if (!seen.has(el)) { seen.add(el); io.observe(el); } }); };
+  const queue = () => { if (io && !scanQ) { scanQ = true; requestAnimationFrame(scan); } };
+  if ('MutationObserver' in window) new MutationObserver(queue).observe(document.documentElement, { childList: true, subtree: true });
+  const ioOn = on => { if (on && !io && 'IntersectionObserver' in window) { io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.removeAttribute('data-off'); else e.target.setAttribute('data-off', ''); }), { rootMargin: '160px 0px' }); queue(); }
+    if (!on && io) { io.disconnect(); io = null; document.querySelectorAll('[data-off]').forEach(el => el.removeAttribute('data-off')); } };
+  // สงบหลังเข้าหน้า 6 วิ (ยกเว้นตอนโทร/แชร์จอ/สายเรียกเข้า)
+  let calmT = 0;
+  const live = () => !!document.querySelector('.rtc-ring,.rtc-live,.rtc-rec,.rtc-go,.rtc-dots');
+  const calm = () => { calmT = 0; if (mode === 'full') return; if (live()) { calmT = setTimeout(calm, 4000); return; } root.setAttribute('data-calm', ''); };
+  const wake = () => { if (root.hasAttribute('data-calm')) root.removeAttribute('data-calm'); clearTimeout(calmT); calmT = mode === 'full' ? 0 : setTimeout(calm, 6000); };
+  const apply = m => { if (m) mode = m; const lite = (mode === 'auto' && weak) || mode === 'off';
+    if (lite) root.setAttribute('data-perf', 'lite'); else root.removeAttribute('data-perf');
+    ioOn(mode === 'full'); if (mode === 'full') { clearTimeout(calmT); root.removeAttribute('data-calm'); } else if (!calmT && !root.hasAttribute('data-calm')) wake(); };
+  const auto = !window.__noPerfProbe && (!nav.webdriver || window.__perfProbe);   // ทดสอบอัตโนมัติไม่สลับโหมดเอง (เครื่องทดสอบรันหนัก)
+  const mark = r => { if (weak || mode !== 'auto' || !auto) return; weak = true; why = r; try { LS.set('perfWeak', 1); } catch (e) {} apply(); };
+  // กระตุกจริงตอนใช้งาน: (1) Chrome/Edge/Android: งานค้าง ≥ 200 มิลลิวินาที บ่อย ๆ  (2) ทุกเบราว์เซอร์: เลื่อนจอแล้วเฟรมตก
+  let lt = [];
+  try { new PerformanceObserver(l => { const now = performance.now(); l.getEntries().forEach(e => { if (e.duration >= 200) lt.push(now); }); lt = lt.filter(t => now - t < 30000); if (lt.length >= 6) mark('งานค้างบ่อย'); }).observe({ type: 'longtask' }); } catch (e) {}
+  let sOn = false, strikes = 0;
+  addEventListener('scroll', () => { if (sOn || weak || mode !== 'auto' || document.visibilityState !== 'visible') return; sOn = true;
+    let last = 0, n = 0, slow = 0, idle = 0; const step = now => { if (last) { const d = now - last; n++; if (d > 34) slow++; } last = now;
+      idle = (idle || now); if (now - idle < 900 && n < 120) requestAnimationFrame(step); else { sOn = false; if (n >= 20 && slow / n > 0.35) { strikes++; if (strikes >= 3) mark('เลื่อนจอกระตุก'); } else if (n >= 20) strikes = Math.max(0, strikes - 1); } };
+    requestAnimationFrame(step); }, { capture: true, passive: true });
+  setTimeout(() => apply(), 0);
+  return { apply, wake, scan, get weak() { return weak; }, get why() { return why; }, reset() { weak = false; why = ''; strikes = 0; lt = []; try { LS.del('perfWeak'); } catch (e) {} apply(); } };
+})();
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 /* ค้นหาแบบเดียวกันทุกช่อง: ไม่สนตัวพิมพ์เล็กใหญ่ · ไม่ต้องพิมพ์ขีด/ช่องว่าง/จุด (6907028 = 69-07-028) · หลายคำ = ต้องเจอทุกคำ (เช่น "router 028") */
 const coNorm = t => String(t || '').toLowerCase().replace(/[\s\-_./()#]+/g, '');
@@ -1284,7 +1335,7 @@ const THEMES = [
   { id: 'classic', name: 'เรียบคลาสสิก', c1: '', c2: '', sidebar: 'plain', header: 'plain' }
 ];
 const THEME_DEFAULT = { bgdim: 'mid', bgblur: '0', preset: 'brand', mode: 'auto', c1: '#0B6B70', c2: '#5B3FD6', sidebar: 'gradient', header: 'gradient', radius: 'round',
-  bgfit: 'cover', bgpos: 'c', bgdimv: null, bgblurv: null, bgbri: 100, bgsat: 100, bgtint: 'auto', glass: 0, gblur: 12, zoom: 100, motion: 'full', shadow: 'soft', pattern: 'none', font: 'anuphan',
+  bgfit: 'cover', bgpos: 'c', bgdimv: null, bgblurv: null, bgbri: 100, bgsat: 100, bgtint: 'auto', glass: 0, gblur: 12, zoom: 100, motion: 'auto', shadow: 'soft', pattern: 'none', font: 'anuphan',
   hdc: 'theme', hd1: '', hd2: '', hdg: 0, hdb: 12, hdt: 'auto', rlc: 'theme', rl1: '', rl2: '', rlg: 0, rlb: 12, rlt: 'auto',   // แบนเนอร์บน (hd) + เมนูซ้าย (rl)
   bgsrc: 'auto', bgurl: '', bgfx: 'aurora',
   fcol: 'theme', fc1: '', fc2: '', fshadow: 'none', bgsound: false, bgvol: 60 };   // bgsound: เสียงของวิดีโอ/YouTube พื้นหลัง   // สีตัวอักษร (หลัก/รอง) + เงาตัวอักษร   // พื้นหลัง: auto = ไฟล์ในเครื่องถ้ามี · file · url · fx (เคลื่อนไหวสำเร็จรูป) · none
@@ -1477,7 +1528,7 @@ function fontLoad(k) {
 }
 const thNum = (v, d, lo, hi) => { const n = +v; return v === null || v === undefined || v === '' || isNaN(n) ? d : Math.max(lo, Math.min(hi, n)); };
 const isHex = v => /^#[0-9a-f]{6}$/i.test(v || '');
-function getTheme() { return Object.assign({}, THEME_DEFAULT, LS.get('theme', {}) || {}); }
+function getTheme() { const t = Object.assign({}, THEME_DEFAULT, LS.get('theme', {}) || {}); if (t.motion === 'full' && !t.mv2) t.motion = 'auto'; return t; }   // ธีมเก่าที่ยังไม่เคยเลือกเอง: 'เต็ม' = ค่าเริ่มต้นเดิม → อัตโนมัติ
 function setTheme(patch) { const t = Object.assign(getTheme(), patch); LS.set('theme', t); applyTheme(); themeTouched(); return t; }
 /* ธีมผูกกับบัญชี: แก้ที่เครื่องไหนก็ส่งขึ้นบัญชี (รอ 1.5 วิ รวบหลายครั้งเป็นครั้งเดียว) · เข้าแอปแล้วดึงของบัญชีมาใช้ถ้าใหม่กว่า · ปิดได้ทีละเครื่อง */
 const TSY = { t: 0, pulled: '', last: 0, busy: false };
@@ -1543,6 +1594,7 @@ function applyTheme() {
   if (gl > 0) { root.setAttribute('data-glass', ''); rs.setProperty('--glass', gl + '%'); rs.setProperty('--gblur', thNum(t.gblur, 12, 0, 30) + 'px'); } else { root.removeAttribute('data-glass'); rs.removeProperty('--glass'); rs.removeProperty('--gblur'); }
   const z = app ? thNum(t.zoom, 100, 80, 130) : 100; if (z !== 100) rs.setProperty('--uiz', String(z / 100)); else rs.removeProperty('--uiz');
   root.setAttribute('data-motion', app && ['less', 'off'].indexOf(t.motion) >= 0 ? t.motion : 'full');
+  PERF.apply(t.motion);
   root.setAttribute('data-shadow', app && ['none', 'strong'].indexOf(t.shadow) >= 0 ? t.shadow : 'soft');
   if (app && !bg && t.pattern && t.pattern !== 'none') root.setAttribute('data-pattern', t.pattern); else root.removeAttribute('data-pattern');
   const fk = app && FONTS[t.font] ? t.font : 'anuphan'; fontLoad(fk);
@@ -1591,7 +1643,7 @@ function themeMore(t) {
             '<small class="bar-note">หลัก = หัวข้อ/ข้อความ · รอง = คำอธิบาย เมนูย่อย ตัวเลขเล็ก ๆ</small></div>' +
             '<div class="f"><span class="lbl">เงาตัวอักษร (อ่านง่ายบนรูปพื้นหลัง)</span>' + thSeg(t, 'fshadow', [['none', 'ไม่มี'], ['soft', 'บาง'], ['strong', 'ชัด']]) + '</div>'; })() +
         '<div class="f"><span class="lbl">เงาการ์ด</span>' + thSeg(t, 'shadow', [['none', 'ไม่มี'], ['soft', 'บาง'], ['strong', 'ชัด']]) + '</div>' +
-        '<div class="f"><span class="lbl">ภาพเคลื่อนไหว</span>' + thSeg(t, 'motion', [['full', 'เต็ม'], ['less', 'น้อย'], ['off', 'ปิด']]) + '</div>' +
+        '<div class="f"><span class="lbl">ภาพเคลื่อนไหว</span>' + thSeg(t, 'motion', [['auto', 'อัตโนมัติ'], ['full', 'เต็ม'], ['less', 'น้อย'], ['off', 'ปิด']]) + '<small class="muted th-perf">' + (PERF.weak ? 'เครื่องนี้ใช้โหมดประหยัด' + (PERF.why ? ' (' + esc(PERF.why) + ')' : '') + ': แอนิเมชันเล่นรอบเดียว ไม่เบลอกระจก <button type="button" class="linkbtn" data-act="perfreset">ตรวจเครื่องใหม่</button>' : 'อัตโนมัติ: แอนิเมชันวนเล่นสักครู่แล้วหยุดเอง · เครื่องช้าลดให้อีก · "เต็ม" = วนตลอด') + '</small></div>' +
         (bgActive(t) ? '' : '<div class="f"><span class="lbl">ลายพื้นหลัง (เมื่อไม่ใส่รูป)</span><div class="th-pats">' + pats.map(p => '<button data-themeset="pattern" data-val="' + p[0] + '" aria-pressed="' + ((t.pattern || 'none') === p[0]) + '"><i class="pat-' + p[0] + '"></i>' + p[1] + '</button>').join('') + '</div></div>') +
       '</div></div>';
 }
@@ -2473,7 +2525,7 @@ async function salePage() {
         '<div class="sp-count">แสดง <b>' + jobs.length + '</b> จาก ' + all.length + ' งาน</div>' +
         '<div class="sp-wrap"><table class="sp-t"><thead><tr><th>งาน</th><th>รายละเอียด</th><th>ทีมงาน</th><th>สถานะ</th><th>รับงาน</th><th>กำหนดส่ง / เสร็จ</th><th>หมายเหตุ</th>' + (sel ? '' : '<th>Sale</th>') + '</tr></thead><tbody>' +
           (jobs.length ? jobs.map(row).join('') : '<tr><td colspan="8"><div class="sp-empty"><span>🔍</span><b>' + (anyF ? 'ไม่พบงานตามตัวกรอง' : 'ยังไม่มีงาน') + '</b>' + (anyF ? '<button class="btn sm" data-spclear="1">ล้างตัวกรอง</button>' : '') + '</div></td></tr>') + '</tbody></table></div>' +
-        '<p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · หน้านี้ดูได้อย่างเดียว</p>')) + '</div>';
+        '<p class="sub sp-foot">ข้อมูลล่าสุด ' + new Date().toLocaleTimeString('th-TH') + ' · อัปเดตเองทุก 1 นาที · หน้านี้ดูได้อย่างเดียว</p>')) + '</div>'; PERF.wake();
     // ตัวเลขนับขึ้น
     root.querySelectorAll('.sp-card b[data-n]').forEach(el => {
       const to = +el.dataset.n, from = prevN[el.dataset.k] !== undefined ? prevN[el.dataset.k] : 0; prevN[el.dataset.k] = to;
@@ -2566,7 +2618,7 @@ async function pollMessages(first) {
     const sig = M.list.map(m => m.id + (m.read ? 1 : 0) + m.status + ':' + (m.rc || 0)).join('|');
     fresh.forEach(notifyMsg);
     if (M.open) { renderMsgPanel(); markChanRead(M.ch); }
-    if (sig !== M.sig) { M.sig = sig; if (!first && !S.edit && !S.lb) render(); else { renderMsgFab(); if (S.screen === 'app') { $('#nav').innerHTML = navHtml(true); $('#tabbar').innerHTML = tabsHtml(); } } } else renderMsgFab();
+    if (sig !== M.sig) { M.sig = sig; if (!first && !S.edit && !S.lb && S.view === 'team') render(); else {   /* v2.98: ข้อความใหม่ไม่ต้องวาดทั้งหน้า (มีแค่หน้าทีมที่แสดงข้อความ) → อัปเดตแค่ป้ายตัวเลข */ renderMsgFab(); if (S.screen === 'app') { $('#nav').innerHTML = navHtml(true); $('#tabbar').innerHTML = tabsHtml(); } } } else renderMsgFab();
     fresh.forEach(m => peekHead(m));
   } catch (e) { /* offline: try again next tick */ }
   M.polling = false;
@@ -2710,7 +2762,9 @@ const EMO = [
   ['🛠️', 'งาน', '✅☑️❌⭕⚠️⛔🚫🔥⚡⏰⏳⌛📅📌📍📎📐📏✏️🖊️📝📋📁📂🗂️📦🚚🏭🏗️🔧🔨🛠️⚙️🪚🔩🧰💻🖥️🖨️📷🎨🧱🪵💡🔍📞💬📢🎯🏆🎉🚀'],
   ['☕', 'อื่นๆ', '☕🍵🍜🍚🍕🍔🍰🍺🥤🌞🌧️⛈️🌈⭐✨🌙🎂🎁🐻🐼🐶🐱🍀🌸']
 ];
-const emoSplit = str => (typeof Intl !== 'undefined' && Intl.Segmenter) ? Array.from(new Intl.Segmenter('th', { granularity: 'grapheme' }).segment(str), x => x.segment) : Array.from(str.match(/\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic}\uFE0F?)*|./gu) || []);
+// iOS/Safari รุ่นเก่าไม่รู้จัก \p{...} ถ้าเขียนเป็นตัวอักษรตรง ๆ ทั้งไฟล์จะเปิดไม่ขึ้น → สร้างตอนรันและมีทางสำรอง
+const EMO_RE = (() => { try { return new RegExp('\\p{Extended_Pictographic}(\\uFE0F|\\u200D\\p{Extended_Pictographic}\\uFE0F?)*|.', 'gu'); } catch (e) { return /[\uD800-\uDBFF][\uDC00-\uDFFF]|./g; } })();
+const emoSplit = str => (typeof Intl !== 'undefined' && Intl.Segmenter) ? Array.from(new Intl.Segmenter('th', { granularity: 'grapheme' }).segment(str), x => x.segment) : Array.from(str.match(EMO_RE) || []);
 function emoRecent() { const r = LS.get('emoRecent', []); return Array.isArray(r) ? r.slice(0, 16) : []; }
 function emoPopHtml() {
   const tab = M.emoTab || (emoRecent().length ? 'recent' : '0');
@@ -4345,6 +4399,8 @@ function renderTimerbar() {
 
 function render() {
   if (!S.settings || S.screen !== 'app') return;
+  if (document.visibilityState === 'hidden' && S.loaded) { S.renderHidden = true; return; }   // แอปอยู่เบื้องหลัง: ไม่วาด (วาดทีเดียวตอนกลับมา)
+  S.renderHidden = false;
   { const ae = document.activeElement, v0 = $('#view'); if (ae && ae.type === 'color' && v0 && v0.contains(ae)) { S.renderLater = true; return; } }   // กำลังเลือกสีอยู่ ไม่วาดทับ (หน้าต่างเลือกสีจะปิด)
   S.renderLater = false;
   setTimeout(() => { if (!hovEl || hovEl.isConnected) return;   // วาดใหม่แล้วแถวที่ชี้อยู่หายไป → ซ่อนการ์ดลอย (ถ้าเมาส์ยังชี้แถวเดียวกันที่วาดใหม่ ให้การ์ดอยู่ต่อ)
@@ -4365,7 +4421,7 @@ function render() {
   else if (S.view === 'report') h += viewReport();
   else if (S.view === 'settings') h += viewSettings();
   else h += viewHome();
-  v.innerHTML = h;
+  v.innerHTML = h; PERF.wake();
   if (fk) { const n = document.getElementById(fk.id); if (n) { if (n.value !== fk.v && !String(n.value || '').trim()) n.value = fk.v; n.focus({ preventScroll: true }); try { if (fk.a != null) n.setSelectionRange(fk.a, fk.b); } catch (e) {} } }
   decorate(v);
   { const gs = v.querySelector('.gscroll'), tl = gs && gs.querySelector('.gtoday'); if (gs && tl && gs.scrollWidth > gs.clientWidth) { const tr = tl.parentNode; gs.scrollLeft = Math.max(0, tr.offsetLeft + tl.offsetLeft - gs.clientWidth * 0.6); } }   // เลื่อนไทม์ไลน์ให้เห็น "วันนี้"
@@ -5613,7 +5669,13 @@ function pStageSince(p) { const h = phist(p).filter(x => x.s === p.stage).pop();
 function pAge(p) { const s = pStageSince(p); return s ? Math.max(0, daysBetween(String(s).slice(0, 10), today())) : 0; }
 const pAgeTxt = n => n <= 0 ? 'วันนี้' : n + ' วัน';
 function pStuck(p) { const n = pAge(p); return p.stage === 'wait' ? n >= 3 : p.stage === 'ready' ? n >= 3 : (p.stage === 'machine' || p.stage === 'paint' || p.stage === 'assemble' || p.stage === 'pack') ? n >= 2 : false; }
-function designJobsOf(code) { const c = String(code || '').toLowerCase(); return S.jobs.filter(j => String(j.code).toLowerCase() === c); }
+/* ค้นงานออกแบบตามเลข Job: ทำดัชนีครั้งเดียวต่อรอบวาด (เดิมไล่ทุกงานทุกครั้ง → ช้ามากเมื่องานเยอะ) */
+let DJX = null;
+function designJobsOf(code) {
+  const c = String(code || '').toLowerCase();
+  if (!DJX || DJX.src !== S.jobs || DJX.n !== S.jobs.length) { const m = new Map(); S.jobs.forEach(j => { const k = String(j.code).toLowerCase(); const a = m.get(k); if (a) a.push(j); else m.set(k, [j]); }); DJX = { src: S.jobs, n: S.jobs.length, m: m }; setTimeout(() => { DJX = null; }, 0); }
+  return (DJX.m.get(c) || []).slice();
+}
 function pDueTag(p) {   // กำหนดส่งของงานผลิต (ใส่ได้ตอนเพิ่มงานที่ไม่ผ่านฝ่ายแบบ)
   if (!p.due || p.stage === 'shipped') return '';
   const n = daysBetween(today(), p.due), done = p.stage === 'ready', cls = done ? '' : n < 0 ? ' late' : n <= 1 ? ' soon' : '';
@@ -8115,7 +8177,7 @@ document.addEventListener('click', async e => {
   if (d.pin) { pressKey(d.pin, t); return; }
   // user admin
   if (d.themepick) { setTheme(Object.assign({ preset: d.themepick }, d.themepick === 'classic' ? { sidebar: 'plain', header: 'plain' } : getTheme().preset === 'classic' ? { sidebar: 'gradient', header: 'gradient' } : {}, (THEMES.find(x => x.id === d.themepick) || {}).mode ? { mode: THEMES.find(x => x.id === d.themepick).mode } : {})); return render(); }
-  if (d.themeset) { setTheme({ [d.themeset]: d.val }); return render(); }
+  if (d.themeset) { setTheme(d.themeset === 'motion' ? { motion: d.val, mv2: 1 } : { [d.themeset]: d.val }); return render(); }
   if (d.umove) { moveUser(d.umove, +d.dir || 1); return; }
   if (d.bgtab) { BGT.tab = d.bgtab; if (d.bgtab === 'none' && bgActive()) { setTheme({ bgsrc: 'none' }); toast('ปิดพื้นหลังแล้ว'); } return render(); }
   if (d.bgfx) { BGT.tab = 'anim'; setTheme({ bgsrc: 'fx', bgfx: d.bgfx, pattern: 'none' }); return render(); }
@@ -8238,6 +8300,7 @@ document.addEventListener('click', async e => {
     case 'helpnojob': M.jobId = ''; renderMsgPanel(); return;
     case 'msgclear': M.confirmClear = true; renderMsgPanel(); return;
     case 'msgclearno': M.confirmClear = false; renderMsgPanel(); return;
+    case 'perfreset': { PERF.reset(); toast('ตรวจเครื่องใหม่แล้ว ถ้ายังกระตุกจะกลับเป็นโหมดประหยัดเอง'); render(); return; }
     case 'msgclearyes': { M.confirmClear = false; const ids = M.list.filter(m => chanOf(m) === M.ch).map(m => m.id); return delMsgs(ids, 'ล้างประวัติแล้ว ' + ids.length + ' ข้อความ'); }
     case 'helpoff': M.help = false; renderMsgPanel(); return;
     case 'askhelp': { const jid = d.job; closeEditor(); return openMsgPanel(null, { help: true, jobId: jid }); }
@@ -8616,13 +8679,15 @@ async function copyLink() {
 }
 
 /* ============ live clocks & polling ============ */
-setInterval(() => {
-  document.querySelectorAll('[data-since]').forEach(el => { const t = parseLocal(el.dataset.since); if (t) el.textContent = clock(Date.now() - t); });
-  document.querySelectorAll('[data-total]').forEach(el => { const j = jobById(el.dataset.total); if (j) el.textContent = fdur(totalMinutes(j)); });
+setInterval(() => {   // นาฬิกาจับเวลา: เปลี่ยนเฉพาะตัวเลขที่เปลี่ยนจริง · แอปอยู่เบื้องหลังไม่ต้องทำ
+  if (document.visibilityState === 'hidden') return;
+  document.querySelectorAll('[data-since]').forEach(el => { const t = parseLocal(el.dataset.since); if (t) { const v = clock(Date.now() - t); if (el.textContent !== v) el.textContent = v; } });
+  document.querySelectorAll('[data-total]').forEach(el => { const j = jobById(el.dataset.total); if (j) { const v = fdur(totalMinutes(j)); if (el.textContent !== v) el.textContent = v; } });
 }, 1000);
 setInterval(() => {
   if (S.screen === 'app' && mode() === 'sheet' && document.visibilityState === 'visible' && !S.edit && !S.draftDirty && !S.saving && S.sync !== 'busy') load(true);
 }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.renderHidden) render(); });
 document.addEventListener('visibilitychange', () => {
   if (S.screen === 'app' && document.visibilityState === 'visible' && mode() === 'sheet' && Date.now() - S.lastSync > 30000 && !S.edit && !S.saving) load(true);
 });
@@ -8644,9 +8709,10 @@ if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|u
 
 /* เปิด/ปิดหน้าต่าง (body.pm-open = ล็อกเลื่อน) แล้วพื้นหลังต้องอยู่ที่เดิม ไม่เด้งกลับขึ้นบน */
 (function keepScrollOnModal() {
-  const b = document.body, h = document.documentElement; let y = [0, 0], open = b.classList.contains('pm-open');
-  const save = () => { if (!b.classList.contains('pm-open')) y = [b.scrollTop, h.scrollTop]; };
-  b.addEventListener('scroll', save, { passive: true }); window.addEventListener('scroll', save, { passive: true });
+  const b = document.body, h = document.documentElement; let y = [0, 0], open = b.classList.contains('pm-open'), q = 0;
+  // เดิมอ่าน scrollTop ทุกครั้งที่เลื่อน (บังคับคำนวณหน้าใหม่ → กระตุก) · ตอนนี้จดตำแหน่งแค่ครั้งละเฟรม
+  const save = () => { if (q) return; q = setTimeout(() => { q = 0; if (!open) y = [0, window.pageYOffset]; }, 120); };   // หน้าเลื่อนที่ราก (v2.98) · body ไม่เลื่อนแล้ว
+  window.addEventListener('scroll', save, { passive: true });
   const fix = () => { if (b.scrollTop !== y[0]) b.scrollTop = y[0]; if (h.scrollTop !== y[1]) h.scrollTop = y[1]; };
   new MutationObserver(() => { const o = b.classList.contains('pm-open'); if (o === open) return; open = o; fix(); requestAnimationFrame(fix); }).observe(b, { attributes: true, attributeFilter: ['class'] });
 })();

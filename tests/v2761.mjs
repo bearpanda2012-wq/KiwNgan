@@ -19,7 +19,7 @@ eq('list scrolled into view (near top)', [before > 300, after >= 0 && after < 16
 eq('rows shown are design step', await pg.evaluate(() => [...document.querySelectorAll('.co-row')].every(r => r.classList.contains('co-design'))), true);
 // ชิปกรองในรายการไม่ทำให้เลื่อน
 await pg.evaluate(() => window.scrollTo(0, 0)); await pg.waitForTimeout(300); const b2 = await top();
-await pg.click('.qchips [data-cf="late"]').catch(() => {}); await pg.waitForTimeout(800);
+await pg.evaluate(() => { const c = document.querySelector('.qchips [data-cf="late"]'); if (c) c.click(); }); await pg.waitForTimeout(800);   // กดผ่านหน้าเว็บ (ไม่ให้ตัวทดสอบเลื่อนหาปุ่มเอง)
 eq('chips below do not trigger jump', Math.abs((await top()) - b2) < 5, true);
 console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.length ? errs : 'none');
 await b.close(); srv.close(); process.exit(bad ? 1 : 0);
