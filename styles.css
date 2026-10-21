@@ -6100,3 +6100,10 @@ body.auth #bgSndBtn{display:none}
 @media (max-width:640px){.skx-wrap{padding:12px}.skx-kpis{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px}.skx-kpis .sk-kpi em{display:none}.skx-list .ex-head{display:none}.skx-list .ex-row{grid-template-columns:minmax(0,1fr) auto!important;row-gap:4px}.skx-list .ex-c{grid-column:1}.skx-list .ex-n{grid-column:1/-1;grid-row:2}.skx-list .ex-q{grid-column:2;grid-row:1}}
 .skx-list .ex-head span:nth-child(-n+2){text-align:left}
 @media (max-width:640px){.skx-kpis .sk-kpi{padding:10px}.skx-kpis .skt small{white-space:nowrap}}
+/* ห้องเสียงทีม: ชี้/วาดบนจอที่แชร์ (ทุกคนในห้อง) */
+.room-stage canvas#roomInk{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.room-stage.drawing canvas#roomInk{pointer-events:auto;cursor:crosshair;touch-action:none}
+.room-ink{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:2;display:flex;align-items:center;gap:6px;padding:5px;border-radius:14px;background:rgba(11,15,19,.78);backdrop-filter:blur(8px);box-shadow:0 0 0 1px #2c3a47,0 8px 24px rgba(0,0,0,.35);max-width:calc(100% - 20px);overflow-x:auto}
+.room-ink .rtc-tb{height:34px}
+.room-ink .rtc-tb span{font-size:13px}
+@media (max-width:640px){.room-ink .rtc-tb span{display:none}.room-ink{top:6px;gap:4px}}
