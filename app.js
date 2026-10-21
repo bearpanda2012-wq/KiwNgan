@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.101';
+const APP_VERSION = '2.101.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4461,7 +4461,7 @@ function topbar(title, sub, extra) {
   const hr = d.getHours(), tod = hr < 6 || hr >= 18 ? 'moon' : hr < 11 ? 'sunrise' : 'sun';
   return '<div class="topbar"><span class="hero-ic" aria-hidden="true">' + (I[S.view] || I.home) + '</span><span class="hero-dots" aria-hidden="true"><i></i><i></i><i></i></span><div><div class="eyebrow"><span class="tod ' + tod + '" aria-hidden="true">' + DECO[tod] + '</span>' + esc(s.company) + ' · วัน' + TH_D[d.getDay()] + ' ' + fdY(today()) + '</div><h1>' + title + '</h1>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>' +
     (S.user ? (u => '<button type="button" class="hero-me" data-act="gome" title="ไปที่บัญชีของฉัน (เปลี่ยนรูป ชื่อ PIN แจ้งเตือน)" aria-label="บัญชีของฉัน">' + '<span class="hm-av">' + avUser(u, 'lg') + '<i class="hm-on"></i></span><span class="hm-t"><b>' + esc(u.name || S.me) + '</b><small>' + esc(ROLES[roleOf(u)].short || ROLES[roleOf(u)].label) + '</small></span></button>')(Object.assign({}, S.user, (typeof memberBy === 'function' && memberBy(S.me)) || {})) : '') +
-    '<div class="top-actions">' + (extra || '') + (S.me && ['prod', 'flow', 'stock'].indexOf(S.view) >= 0 ? '<button class="btn top-scan" data-act="scan" title="สแกน QR ฉลากงาน เปิดงานในแอป">' + SCAN_IC + '<span>สแกน QR</span></button>' : '') + (S.me ? (n => '<button class="btn top-due' + (n ? ' has' : '') + '" data-act="dueopen" title="กำหนดส่งงาน">' + STI.hourglass + '<span>กำหนดส่ง</span>' + (n ? '<b class="badge">' + n + '</b>' : '') + '</button>')(dueCount()) : '') + '<button class="btn top-msg' + (unreadAll() ? ' has' : '') + '" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span>' + (unreadAll() ? '<b class="badge msg-n">' + (unreadAll() > 99 ? '99+' : unreadAll()) + '</b>' : '') + '</button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
+    '<div class="top-actions">' + (extra || '') + (S.me ? '<button class="btn top-scan" data-act="scan" title="สแกน QR ฉลากงาน เปิดงานในแอป">' + SCAN_IC + '<span>สแกน QR</span></button>' : '') + (S.me ? (n => '<button class="btn top-due' + (n ? ' has' : '') + '" data-act="dueopen" title="กำหนดส่งงาน">' + STI.hourglass + '<span>กำหนดส่ง</span>' + (n ? '<b class="badge">' + n + '</b>' : '') + '</button>')(dueCount()) : '') + '<button class="btn top-msg' + (unreadAll() ? ' has' : '') + '" data-act="msgopen" title="ข้อความ">' + MSG_IC.chat + '<span>ข้อความ</span>' + (unreadAll() ? '<b class="badge msg-n">' + (unreadAll() > 99 ? '99+' : unreadAll()) + '</b>' : '') + '</button>' + (mode() === 'sheet' ? '<button class="btn" data-act="refresh" title="ดึงข้อมูลล่าสุด">' + I.refresh + '<span>รีเฟรช</span></button>' : '') +
     newBtn() + '</div></div>';
 }
 

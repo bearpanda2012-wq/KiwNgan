@@ -5999,3 +5999,10 @@ body.auth #bgSndBtn{display:none}
 /* v2.101: หน้า Sale — ปุ่มสแกน QR */
 .sp-scan{position:relative;z-index:1;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.95)!important;color:var(--brand)!important;border:0!important;font-weight:700}
 .sp-scan svg{width:17px;height:17px}
+/* v2.101.1: ปุ่มสแกน QR ทุกหน้า — แบบเดียวกับหน้า Sale (ปุ่มขาว ตัวอักษรสีแบรนด์ ไอคอน + "สแกน QR") */
+.top-actions .top-scan{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.95)!important;color:var(--brand)!important;border:0!important;font-weight:700;border-radius:10px;min-height:36px;padding:0 12px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.top-actions .top-scan svg{width:17px;height:17px}
+.top-actions .top-scan span{display:inline!important}
+.top-actions .top-scan:hover{background:#fff!important;transform:translateY(-1px)}
+[data-header="plain"] .top-actions .top-scan,[data-header="soft"] .top-actions .top-scan{box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--brand) 30%,var(--line)),0 1px 2px rgba(0,0,0,.05)}
+:root[data-theme="dark"][data-header="plain"] .top-actions .top-scan{background:color-mix(in oklab,var(--brand) 14%,var(--surface))!important;color:color-mix(in oklab,var(--brand) 60%,#fff)!important}
