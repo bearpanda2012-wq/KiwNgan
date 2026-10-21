@@ -30,6 +30,9 @@ eq('A4 counts sheets', /จำนวนแผ่น/.test(await pg.locator('.qr-
 await pg.click('[data-qrprint]'); await pg.waitForTimeout(200);
 eq('A4 × 1 sheet prints 8 labels, no browser header', await pg.evaluate(() => { const t = document.getElementById('qrFrame').srcdoc; return [(t.match(/class="ql"/g) || []).length, /size:A4 portrait;margin:0/.test(t)]; }), [8, true]);
 await pg.waitForTimeout(500);
+eq('print preview has close button', await pg.locator('#printView [data-pvclose]').count(), 1);
+await pg.click('#printView [data-pvclose]'); await pg.waitForTimeout(150);
+eq('close button closes preview, QR modal stays', [await pg.locator('#printView').count(), await pg.locator('#qrModal').count()], [0, 1]);
 await pg.click('[data-qrsize="label"]'); await pg.click('[data-qrn="1"]'); await pg.click('[data-qrn="1"]');
 await pg.locator('#qrModal .pm-card').screenshot({ path: shot('v262-qr') });
 await pg.evaluate(() => { HTMLIFrameElement.prototype.__noop = 1; });
@@ -37,6 +40,8 @@ await pg.click('[data-qrprint]'); await pg.waitForTimeout(200);
 const sd = await pg.evaluate(() => { const f = document.getElementById('qrFrame'); return f ? f.srcdoc : ''; });
 eq('label size × 3 prints 3 labels', [(sd.match(/class="ql"/g) || []).length, /100mm 70mm/.test(sd)], [3, true]);
 await pg.waitForTimeout(500); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
+eq('Esc closes preview first', await pg.locator('#printView').count(), 0);
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 eq('Esc closes QR modal, job modal stays', [await pg.locator('#qrModal').count(), await pg.locator('#pModal').count()], [0, 1]);
 await pg.keyboard.press('Escape');
 // machine stage: tick machines in modal

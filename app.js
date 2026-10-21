@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.101.2';
+const APP_VERSION = '2.101.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6848,13 +6848,36 @@ function exCalcPrint(pdf) {
   printHtml(html);
 }
 /* พิมพ์ในหน้าเดิม (ไม่เปิดแท็บ/หน้าต่างใหม่) → ขึ้นหน้าต่างเลือกเครื่องพิมพ์ทันที · ซ่อนหัว/ท้ายกระดาษของเบราว์เซอร์ (about:blank, วันที่) */
+/* หน้าสั่งพิมพ์: แสดงตัวอย่างเอกสารในหน้าแอป มีปุ่ม "พิมพ์" และ "ปิด" ชัดเจน แล้วเปิดหน้าต่างเลือกเครื่องพิมพ์ให้ทันที
+   (หน้าต่างพิมพ์ของเบราว์เซอร์แก้ไม่ได้ · กดยกเลิกที่นั่นแล้ว ยังปิดหน้าตัวอย่างนี้ได้ด้วยปุ่ม ปิด หรือ Esc) */
+const PV_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 function printHtml(html) {
   html = html.replace(/<script>[\s\S]*?<\/script>/g, '').replace('</style>', '@page{size:A4;margin:0}body{margin:0!important;padding:14mm 13mm!important}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>');
-  let f = $('#knPrint'); if (f) f.remove();
-  f = document.createElement('iframe'); f.id = 'knPrint'; f.setAttribute('aria-hidden', 'true'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
-  f.onload = () => setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { toast('เบราว์เซอร์นี้สั่งพิมพ์ไม่ได้', true); } try { window.focus(); } catch (e) {} }, 350);
-  f.srcdoc = html; document.body.appendChild(f);
+  printView(html, 'knPrint');
 }
+function printView(html, id, after) {
+  printViewClose(true);
+  const ttl = (html.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || 'เอกสาร';
+  const m = document.createElement('div'); m.id = 'printView'; m.className = 'pv-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', 'ตัวอย่างก่อนพิมพ์');
+  m.innerHTML = '<div class="pv-bar"><span class="pv-ic">' + I.print + '</span><div class="pv-t"><small>ตัวอย่างก่อนพิมพ์</small><b>' + ttl + '</b></div><span style="flex:1"></span>' +
+    '<button type="button" class="btn pv-go" data-pvprint="1">' + I.print + '<span>พิมพ์</span></button><button type="button" class="btn pv-x" data-pvclose="1" aria-label="ปิดหน้าสั่งพิมพ์">' + PV_X + '<span>ปิด</span></button></div><div class="pv-body"></div>';
+  const f = document.createElement('iframe'); f.id = id || 'knPrint'; f.className = 'pv-frame'; f.title = 'ตัวอย่างเอกสาร';
+  m.querySelector('.pv-body').appendChild(f); document.body.appendChild(m); document.body.classList.add('pm-open');
+  let first = true;
+  f.onload = () => { try { const d = f.contentDocument; f.style.height = Math.max(600, d.documentElement.scrollHeight + 8) + 'px'; } catch (e) {}
+    if (first) { first = false; setTimeout(() => printViewGo(after), 350); } };
+  f.srcdoc = html;
+  setTimeout(() => { const b = m.querySelector('[data-pvclose]'); if (b) b.focus({ preventScroll: true }); }, 50);
+}
+function printViewGo(after) {
+  const f = $('#printView .pv-frame'); if (!f) return;
+  try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { toast('เบราว์เซอร์นี้สั่งพิมพ์ไม่ได้', true); }
+  try { window.focus(); const b = $('#printView [data-pvclose]'); if (b) b.focus({ preventScroll: true }); } catch (e) {}
+  if (typeof after === 'function') try { after(); } catch (e) {}
+}
+function printViewClose(quiet) { const m = $('#printView'); if (!m) return; m.remove(); if (!quiet && !document.querySelector('.pmodal')) document.body.classList.remove('pm-open'); }
+document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-pvprint],[data-pvclose]'); if (t) { e.preventDefault(); e.stopPropagation(); return t.dataset.pvclose ? printViewClose() : printViewGo(); } if (e.target && e.target.id === 'printView') printViewClose(); }, true);
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#printView')) { e.preventDefault(); e.stopImmediatePropagation(); printViewClose(); } }, true);
 /* PDF จริง (ดาวน์โหลดไฟล์): วาดหน้าเอกสารเป็นภาพแล้วใส่ใน A4 · ตัดหน้าตรงรอยต่อแถว ไม่ตัดกลางบรรทัด */
 const PDF_LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
 const loadJs = src => new Promise((res, rej) => { if (document.querySelector('script[src="' + src + '"]')) return res(); const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error('โหลดตัวสร้าง PDF ไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)')); document.head.appendChild(sc); });
@@ -7323,10 +7346,7 @@ function stBuyPrint() {
     rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(r.x.name) + '</td><td>' + esc(r.x.cat || '') + '</td><td class="n">' + esc(stNum(r.x.qty)) + '</td><td class="n"><b>' + esc(stNum(r.q) + ' ' + (r.x.unit || '')) + '</b></td><td class="n">' + (+r.x.price ? esc(baht(r.x.price)) : '–') + '</td><td class="n">' + (r.cost ? esc(baht(r.cost)) : '–') + '</td></tr>').join('') +
     '</tbody><tfoot><tr><th colspan="6">รวม ' + rows.length + ' รายการ</th><th class="n">' + (tot ? esc(baht(tot)) : '–') + '</th></tr></tfoot></table>' + (BUY.note ? '<p>หมายเหตุ: ' + esc(BUY.note) + '</p>' : '') +
     '<div class="f"><div>ผู้ขอซื้อ</div><div>ผู้อนุมัติ</div></div></body></html>';
-  let f = $('#buyFrame'); if (f) f.remove();
-  f = document.createElement('iframe'); f.id = 'buyFrame'; f.setAttribute('aria-hidden', 'true'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
-  f.onload = () => setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { toast('เบราว์เซอร์นี้สั่งพิมพ์ไม่ได้', true); } try { window.focus(); } catch (e) {} }, 400);
-  f.srcdoc = html; document.body.appendChild(f);
+  printView(html, 'buyFrame');
 }
 function stBuyClose() { const m = $('#buyModal'); if (m) m.remove(); if (!P2.id && !P2.add && !SM.mode && !KM.mode) document.body.classList.remove('pm-open'); }
 /* ---- นับสต็อกประจำเดือน ---- */
@@ -7860,10 +7880,7 @@ function qrPrint() {
     '.ql-qr{width:' + (a4 ? '40mm' : '46mm') + ';flex:none}.ql-qr svg{width:100%;height:auto;display:block}.ql-t{min-width:0;display:flex;flex-direction:column;gap:1.2mm}' +
     '.ql-t small{font-size:8pt;color:#555}.ql-t b{font-family:"IBM Plex Mono",monospace;font-size:' + fs + 'pt;line-height:1.1;white-space:nowrap}.ql-t span{font-size:10pt;font-weight:600;line-height:1.25;max-height:3.8em;overflow:hidden}.ql-t em{font-style:normal;font-size:9pt}.ql-t i{font-style:normal;font-size:7.5pt;color:#666;margin-top:1mm}';
   const html = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(p.code) + '</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap"><style>' + css + '</style></head><body><div class="sheet">' + Array.from({ length: labels }, () => one).join('') + '</div></body></html>';
-  let f = $('#qrFrame'); if (f) f.remove();
-  f = document.createElement('iframe'); f.id = 'qrFrame'; f.setAttribute('aria-hidden', 'true'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
-  f.onload = () => setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { toast('เบราว์เซอร์นี้สั่งพิมพ์ไม่ได้', true); } try { window.focus(); const bt = $('#qrModal [data-qrprint]'); if (bt) bt.focus(); } catch (e) {} }, 350);   // พิมพ์เสร็จ: คืนโฟกัสให้หน้าแอป (กด Esc ปิดได้)
-  f.srcdoc = html; document.body.appendChild(f);
+  printView(html, 'qrFrame');
 }
 function qrClick(t, d) {
   if (d.qrlabel) { qrOpen(d.qrlabel); return true; }
