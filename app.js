@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.101.1';
+const APP_VERSION = '2.101.2';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -6527,7 +6527,8 @@ const exUnit = c => ((EX.tabs.units || {})[c]) || c || '';
 const exLocN = c => ((EX.tabs.locs || {})[c]) || c || '–';
 const exGrpN = c => ((EX.tabs.groups || {})[c]) || c || '–';
 const exDepN = c => !c ? '' : c + (typeof exDepLbl === 'function' && exDepLbl(c) ? ' · ' + exDepLbl(c) : '');
-const exDate = d => d && d.length === 8 ? fd(d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8)) : '';
+const exDate = d => d && d.length === 8 ? (+d.slice(6, 8)) + ' ' + TH_M[+d.slice(4, 6) - 1] + ' ' + (+d.slice(0, 4) + 543) : '';   // วัน เดือน ปี พ.ศ. เต็ม เช่น 21 ต.ค. 2569
+const exYmd = () => today().replace(/-/g, '');
 const exN = v => { v = +v || 0; return Math.abs(v - Math.round(v)) < 1e-9 ? Math.round(v).toLocaleString('th-TH') : v.toLocaleString('th-TH', { maximumFractionDigits: 2 }); };
 async function exRpc(fn, body) {
   const c = EX.cfg, r = await fetch(c.url.replace(/\/$/, '') + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: c.key, Authorization: 'Bearer ' + c.key, 'content-type': 'application/json' }, body: JSON.stringify(Object.assign({ tok: c.tok }, body || {})) });
@@ -6679,9 +6680,17 @@ function viewExpress() {
     : list.length ? '<div class="ex-list' + (ro ? ' ro' : '') + (q ? ' srch' : '') + (rowAnim ? ' in' : '') + '"><div class="ex-head">' + (ro ? '' : '<span class="ex-ck" role="checkbox" aria-checked="' + (list.slice(0, EV.lim).every(x => EV.sel.has(x[0])) ? 'true' : list.slice(0, EV.lim).some(x => EV.sel.has(x[0])) ? 'mixed' : 'false') + '" aria-label="เลือกทั้งหมดที่แสดง" data-exselall="1" title="เลือกทั้งหมดที่แสดง (' + Math.min(list.length, EV.lim) + ')"></span>') + '<span>รหัส</span><span>ชื่อสินค้า · ยอดแยกคลัง</span><span>คงเหลือ</span><span>ทุน/หน่วย</span></div>' + list.slice(0, EV.lim).map(row).join('') + '</div>' +
       (list.length > EV.lim ? '<div class="col-more">แสดง ' + EV.lim + ' จาก ' + exN(list.length) + ' รายการ <button class="btn ghost sm" data-exmore="1">แสดงเพิ่ม</button></div>' : '')
     : '<div class="sk-empty"><span>' + I.stock + '</span><b>' + (q ? 'ไม่พบ "' + esc(q) + '"' : 'ไม่มีสินค้าในมุมมองนี้') + '</b>' + (q ? '<small>ลองพิมพ์บางส่วนของรหัสหรือชื่อ</small><button type="button" class="btn sm" data-qclear="exQ">ล้างคำค้น</button>' : '') + '</div>';
-  const hist = !EX.recent ? '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>' : rec.length ? '<ol class="sk-log ex-log">' + rec.slice(0, 40).map(m => { const op = EX_OP[m[3]] || ['รายการ', 1], it = EX.items.get(m[10]);
-      return '<li class="' + (op[1] > 0 ? 'k-in' : 'k-out') + '" data-excard="' + esc(m[10]) + '"><span class="sk-ph none mini ex-ic"><i>' + (op[1] > 0 ? '↓' : '↑') + '</i></span><div><b>' + esc((it && it[1]) || m[10]) + '</b><small>' + esc(exDate(m[1]) + ' · ' + m[0] + (m[8] ? ' · ' + exDepN(m[8]) : '')) + '</small>' + (m[9] && (!it || m[9] !== it[1]) ? '<small class="sl-note">' + esc(m[9]) + '</small>' : '') + '</div>' +
-        '<span class="sl-q"><span class="sl-k">' + op[0] + '</span><b class="tnum">' + (op[1] > 0 ? '+' : '−') + exN(Math.abs(+m[4] || 0)) + '</b><em>' + esc(m[2]) + '</em></span></li>'; }).join('') + '</ol>' : '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ไม่มีการเคลื่อนไหว 7 วันล่าสุด</b></div>';
+  const hist = (() => { if (!EX.recent) return '<div class="sk-empty sm"><span class="spin-dot dark"></span><b>กำลังโหลด…</b></div>';
+    if (!rec.length) return '<div class="sk-empty sm"><span>' + STI.clock + '</span><b>ไม่มีการเคลื่อนไหว 7 วันล่าสุด</b></div>';
+    const td = exYmd(), yd = addDays(today(), -1).replace(/-/g, ''), now = rec.filter(m => m[1] <= td), fut = rec.filter(m => m[1] > td);
+    const li = m => { const op = EX_OP[m[3]] || ['รายการ', 1], it = EX.items.get(m[10]), sg = op[1] * ((+m[4] || 0) < 0 ? -1 : 1);
+      return '<li class="' + (sg > 0 ? 'k-in' : 'k-out') + '" data-excard="' + esc(m[10]) + '"><span class="sk-ph none mini ex-ic"><i>' + (sg > 0 ? '↓' : '↑') + '</i></span><div><b>' + esc((it && it[1]) || m[10]) + '</b><small>' + esc(exDate(m[1]) + ' · ' + m[0] + (m[8] ? ' · ' + exDepN(m[8]) : '')) + '</small>' + (m[9] && (!it || m[9] !== it[1]) ? '<small class="sl-note">' + esc(m[9]) + '</small>' : '') + '</div>' +
+        '<span class="sl-q"><span class="sl-k">' + op[0] + '</span><b class="tnum">' + (sg > 0 ? '+' : '−') + exN(Math.abs(+m[4] || 0)) + '</b><em>' + esc(m[2]) + '</em></span></li>'; };
+    let out = '', last = '', n = 0;
+    now.slice().sort((a, b) => b[1].localeCompare(a[1]) || String(b[0]).localeCompare(String(a[0]))).forEach(m => { if (n >= 60) return; if (m[1] !== last) { last = m[1]; const c = now.filter(x => x[1] === m[1]).length; out += '<li class="ex-day"><b>' + (m[1] === td ? 'วันนี้ · ' : m[1] === yd ? 'เมื่อวาน · ' : '') + esc(exDate(m[1])) + '</b><small>' + c + ' รายการ</small></li>'; } out += li(m); n++; });
+    if (!now.length) out += '<li class="ex-day"><b>ยังไม่มีรายการถึงวันนี้</b></li>';
+    if (fut.length) out += '<li class="ex-day fut"><b>ลงวันที่ล่วงหน้า · ' + fut.length + ' รายการ</b><small>เอกสารลงวันที่หลังวันนี้ใน Express</small></li>' + fut.slice(0, 20).map(li).join('');
+    return '<ol class="sk-log ex-log">' + out + '</ol>'; })();
   const banner = '<div class="ex-status ' + st.cls + '"><span class="ex-dot ' + st.cls + '"></span><b>' + esc(st.txt) + '</b><small>ยอดตรงกับโปรแกรม Express (แอปไม่แก้ข้อมูลใน Express) · ' + (canStock() ? 'เบิก/รับของ: บันทึก "รอลง Express" ในแอป → คีย์ใน Express → ระบบจับคู่ให้เอง' : 'ดูและค้นหาได้อย่างเดียว · ฝ่ายสต็อกเป็นผู้บันทึกเบิก/รับ') + '</small>' +
     (EX.err ? '<em class="ex-err">' + esc(EX.err) + '</em>' : '') + '<button type="button" class="btn ghost sm" data-exsync="1"' + (EX.busy ? ' disabled' : '') + '>' + (EX.busy ? 'กำลังอัปเดต…' : 'อัปเดตเดี๋ยวนี้') + '</button></div>';
   // เครื่องมือของคลังในแอป (ใบขอซื้อ · นับสต็อก · แจ้งต้องสั่ง) ใช้ได้จากแท็บนี้ด้วย ไม่ต้องสลับกลับ
@@ -6699,7 +6708,7 @@ function viewExpress() {
       (Object.keys(sGrp).length ? '<div class="qchips sk-chips ex-chips ex-sgrps">' + (EV.sgrp ? '<button class="qchip ex-chip fx" style="--ch:#6366B8" data-exsgrp=""><i class="ex-cic">' + ST_IC.sheet + '</i><span>ทุกหมวด</span><b>' + exN(sTot) + '</b></button>' : '') +
         Object.keys(sGrp).sort((a, b) => sGrp[b] - sGrp[a]).map(g => '<button class="qchip ex-chip" style="--ch:' + exGrpCol(g) + '" data-exsgrp="' + esc(g) + '" aria-pressed="' + (EV.sgrp === g) + '" title="หมวด ' + esc(g) + '"><i class="ex-cd"></i><span>' + esc(exGrpN(g)) + '</span><b>' + exN(sGrp[g]) + '</b></button>').join('') + '</div>' : '')
     : chips) + body + selBar + '</section>' +
-    '<div class="sk-side ex-side">' + exPendPanel() + '<section class="panel" id="exHist"><div class="panel-h"><h2>เคลื่อนไหว 7 วันล่าสุด</h2></div>' + hist + '</section></div></div>';
+    '<div class="sk-side ex-side">' + exPendPanel() + '<section class="panel" id="exHist"><div class="panel-h"><h2>เคลื่อนไหว 7 วันล่าสุด</h2><span class="sub ex-fresh ' + st.cls + '" title="' + esc(st.txt) + '">' + (st.cls === 'on' ? 'อัปเดต ' : 'หยุดตั้งแต่ ') + (EX.agent && EX.agent.at ? new Date(EX.agent.at).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' น.' : '–') + '</span></div>' + hist + '</section></div></div>';
 }
 /* ---- ตั้งแจ้งเตือนสินค้าใกล้หมด (ฝ่ายสต็อก) ----
    1) ทุกรายการในครั้งเดียว: ค่ารวม '*' ใช้กับสินค้าทุกตัวทุกหมวดที่ยังมียอด

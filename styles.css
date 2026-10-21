@@ -6006,3 +6006,11 @@ body.auth #bgSndBtn{display:none}
 .top-actions .top-scan:hover{background:#fff!important;transform:translateY(-1px)}
 [data-header="plain"] .top-actions .top-scan,[data-header="soft"] .top-actions .top-scan{box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--brand) 30%,var(--line)),0 1px 2px rgba(0,0,0,.05)}
 :root[data-theme="dark"][data-header="plain"] .top-actions .top-scan{background:color-mix(in oklab,var(--brand) 14%,var(--surface))!important;color:color-mix(in oklab,var(--brand) 60%,#fff)!important}
+/* v2.101.2: เคลื่อนไหว 7 วัน — หัวรายวัน · ลงวันที่ล่วงหน้าแยกไว้ล่างสุด · เวลาอัปเดตล่าสุด */
+.ex-log li.ex-day{display:flex;justify-content:space-between;align-items:baseline;gap:8px;position:sticky;top:0;z-index:1;background:var(--surface);padding:8px 4px 6px;border-bottom:1px solid var(--line);border-radius:0;cursor:default}
+.ex-log li.ex-day b{font-size:12.5px;color:var(--ink)}
+.ex-log li.ex-day small{font-size:11.5px;color:var(--muted)}
+.ex-log li.ex-day.fut b{color:#B45309}
+.ex-fresh{font-size:11.5px;white-space:nowrap}
+.ex-fresh.on{color:#15803D}.ex-fresh.off{color:#B91C1C;font-weight:600}
+.ex-log li.ex-day.fut{flex-direction:column;align-items:flex-start;gap:1px}

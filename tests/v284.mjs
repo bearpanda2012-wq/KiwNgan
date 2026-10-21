@@ -67,7 +67,7 @@ await pg.click('[data-exgrp="bal"].qchip'); await pg.selectOption('[data-exloc]'
 eq('location filter', await pg.evaluate(() => [...document.querySelectorAll('.ex-row')].map(r => r.dataset.excard)), ['GST-CL-FSS8083']);
 await pg.selectOption('[data-exloc]', ''); await pg.waitForTimeout(200);
 // เคลื่อนไหวล่าสุด + สต็อกการ์ด
-eq('recent moves listed', await pg.evaluate(() => document.querySelectorAll('.ex-log li').length), 2);
+eq('recent moves listed', await pg.evaluate(() => document.querySelectorAll('.ex-log li[data-excard]').length), 2);
 await pg.click('.ex-row[data-excard="RM-SB-02-0104"]'); await pg.waitForSelector('.ex-cr', { timeout: 5000 }).catch(() => {});
 eq('stock card rows with in/out', await pg.evaluate(() => [...document.querySelectorAll('#exModal .ex-cr')].map(r => r.className.split(' ')[1] + ':' + r.querySelector('span:last-child b').textContent)), ['out:−2', 'in:+7']);
 eq('card shows department name', await pg.evaluate(() => document.querySelector('#exModal .ex-cr').textContent.includes('ฝ่ายผลิต')), true);

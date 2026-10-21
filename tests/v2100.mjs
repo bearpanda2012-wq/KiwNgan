@@ -20,6 +20,7 @@ items.filter(x => x[6]).forEach(x => { if (!locs.some(l => l[0] === x[0])) locs.
 const td = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '');
 moves.push(['OU6910010', td, 'RM', '6', 2, 760, 1520, '', '115', '451/16512', 'RM-SB-02-0104'], ['RR6910003', td, 'RM', '0', 7, 760, 5320, 'SUP01', '', 'เหล็กกล่อง 2 mm. 1"x4"', 'RM-SB-02-0104']);
 const tabs = { units: { 'ส': 'เส้น', 'กป': 'กระป๋อง', 'ชน': 'ชิ้น', 'ผน': 'แผ่น' }, locs: { RM: 'วัตถุดิบ', GST1: 'วัสดุสิ้นเปลืองรง.', ZZ: 'เศษ', CU: 'วัสดุลูกค้า' }, groups: { RM: 'วัตถุดิบ', GST1: 'วัสดุสิ้นเปลืองรง.อื่น', ZZ: 'เศษวัสดุ', CU: 'ลูกค้า' }, deps: { '115': ',ฝ่ายผลิต', 'C20': 'พีอาร์เอ็กซ์ เอ็นเตอร์ไพรส์,Facade อาคาร PRX พัทยา', 'C43': 'เดอะ วันเปอร์เซนต์ เซอร์วิส,Facade คุณอาย พัทยา' } };
+moves.push(['IV6910002', '20991026', 'RM', '9', 1, 760, 760, '', 'C20', 'ล่วงหน้า', 'RM-SB-02-0104']);
 const dmv = [['OU6910034', td, 'RM', '6', 3, 760, 2280, 'สต็อก', 'C20', 'เหล็กกล่อง', 'RM-SB-02-0104', 'ROY69'], ['RR6910050', td, 'RM', '1', 10, 760, 7600, 'สต็อก', 'C20', 'เหล็กกล่อง', 'RM-SB-02-0104', 'ROY69'], ['IV6910002', td, 'GST1', '9', 1, 174.77, 174.77, '', 'C20', 'สี', 'GST-CL-FSS8083', 'ROY69']];
 let agentAt = new Date().toISOString(), pulls = [], extra = null;
 await pg.route('https://ex.test/rest/v1/rpc/**', async route => {
@@ -47,6 +48,14 @@ await pg.evaluate(() => T.exStart({ url: 'https://ex.test', key: 'k', tok: 'exr_
 await pg.click('[data-exsrc="ex"]');
 await pg.waitForFunction(() => document.querySelectorAll('.ex-row').length > 0, null, { timeout: 8000 }).catch(() => {}); await pg.waitForTimeout(500);
 
+// v2.101.2: เคลื่อนไหว 7 วัน — วันที่มีปี · ล่วงหน้าอยู่ล่างสุด · หัววันนี้
+await pg.evaluate(() => { EX.recentAt = 0; EX.recent = null; T.exSync(true); }); await pg.waitForTimeout(1200);
+const hd = await pg.$$eval('#exHist .ex-day b', a => a.map(x => x.textContent));
+eq('first day header is today', /^วันนี้ · \d+ \S+ 25\d\d$/.test(hd[0] || ''), true);
+eq('future group last', /ลงวันที่ล่วงหน้า/.test(hd[hd.length - 1] || ''), true);
+eq('row date has BE year', /\d+ \S+ 25\d\d · /.test(await pg.locator('#exHist li[data-excard] small').first().textContent()), true);
+eq('freshness label', /อัปเดต/.test(await pg.locator('#exHist .ex-fresh').textContent()), true);
+await pg.locator('#exHist').screenshot({ path: new URL('out/v21012.png', import.meta.url).pathname });
 // 1) พิมพ์ C20 ในช่องค้นหา → มีปุ่มแผนก C20
 await pg.fill('#exQ', 'C20'); await pg.waitForTimeout(300);
 eq('dept strip shows C20', await pg.locator('.ex-depstrip [data-exdep="C20"]').count(), 1);
