@@ -9,7 +9,8 @@ const b = await chromium.launch({ args: ['--no-proxy-server'] });
 const ctx = await b.newContext({ viewport: { width: W, height: H }, isMobile: W < 1000, hasTouch: W < 1000, deviceScaleFactor: W < 1000 ? 2 : 1 });
 const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.addInitScript(() => { if (!sessionStorage.getItem('kn')) { localStorage.clear(); sessionStorage.setItem('kn', 1); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve();
-  window.__noPerfProbe = true; window.__lt = []; try { new PerformanceObserver(l => l.getEntries().forEach(e => window.__lt.push(Math.round(e.duration)))).observe({ type: 'longtask', buffered: true }); } catch (e) {} });
+  window.__noPerfProbe = true; if (window.__FULL) {} window.__lt = []; try { new PerformanceObserver(l => l.getEntries().forEach(e => window.__lt.push(Math.round(e.duration)))).observe({ type: 'longtask', buffered: true }); } catch (e) {} });
+if (process.env.FULL) await pg.addInitScript(() => { try { if (!localStorage.getItem('kiwngan:theme')) localStorage.setItem('kiwngan:theme', JSON.stringify({ motion: 'full', mv2: 1 })); } catch (e) {} });
 await pg.goto('http://127.0.0.1:' + PORT + '/index.html'); await pg.waitForTimeout(700);
 await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); });
 await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1500);
@@ -17,11 +18,12 @@ await pg.evaluate(() => document.querySelectorAll('.ntf,.chat-heads').forEach(e 
 if (process.env.EXP) { const css = fs.readFileSync(process.env.EXP, 'utf8'); await pg.addStyleTag({ content: css }); await pg.evaluate(() => document.documentElement.setAttribute('data-perf', 'mid')); }
 if (process.env.ROOTSCROLL) await pg.addStyleTag({ content: 'html,body{overflow-x:visible!important}body{overflow-x:hidden!important}' });
 if (process.env.STEP) console.log('step', JSON.stringify(await pg.evaluate(fs.readFileSync(new URL('perf-step.js', import.meta.url), 'utf8') + ';window.__stepLoops(' + process.env.STEP + ',' + (process.env.STEPALL ? 'true' : 'false') + ')')));
+if (process.env.TICK) await pg.evaluate(fs.readFileSync(new URL('perf-tick.js', import.meta.url), 'utf8') + ';window.__tickLoops(' + process.env.TICK + ')');
 if (process.env.NOCALM) await pg.addStyleTag({ content: '[data-calm] body *,[data-calm] body *::before,[data-calm] body *::after{animation-iteration-count:infinite!important}' }).then(() => pg.evaluate(() => { const o = new MutationObserver(() => document.documentElement.removeAttribute('data-calm')); o.observe(document.documentElement, { attributes: true }); document.documentElement.removeAttribute('data-calm'); }));
 const cdp = await ctx.newCDPSession(pg); await cdp.send('Emulation.setCPUThrottlingRate', { rate: THR }); await cdp.send('Performance.enable');
 const metrics = async () => { const m = (await cdp.send('Performance.getMetrics')).metrics; const g = n => (m.find(x => x.name === n) || {}).value || 0; return { layout: g('LayoutDuration'), style: g('RecalcStyleDuration'), script: g('ScriptDuration'), task: g('TaskDuration') }; };
 const out = { thr: THR, w: W, views: {} };
-for (const v of ['home', 'flow', 'board', 'list', 'prod', 'stock', 'kb', 'team']) {
+for (const v of (process.env.VIEWS || 'home,flow,board,list,prod,stock,kb,team').split(',')) {
   await pg.evaluate(v => T.go(v), v); await pg.waitForTimeout(+(process.env.SETTLE || 900));
   // idle 5s: long tasks + style/layout work while doing nothing
   await pg.evaluate(() => { window.__lt = []; }); const m0 = await metrics(); await pg.waitForTimeout(5000); const m1 = await metrics();

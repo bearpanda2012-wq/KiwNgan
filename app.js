@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.98.0';
+const APP_VERSION = '2.99.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -256,14 +256,11 @@ const PERF = (() => {
   if ('MutationObserver' in window) new MutationObserver(queue).observe(document.documentElement, { childList: true, subtree: true });
   const ioOn = on => { if (on && !io && 'IntersectionObserver' in window) { io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.removeAttribute('data-off'); else e.target.setAttribute('data-off', ''); }), { rootMargin: '160px 0px' }); queue(); }
     if (!on && io) { io.disconnect(); io = null; document.querySelectorAll('[data-off]').forEach(el => el.removeAttribute('data-off')); } };
-  // สงบหลังเข้าหน้า 6 วิ (ยกเว้นตอนโทร/แชร์จอ/สายเรียกเข้า)
-  let calmT = 0;
-  const live = () => !!document.querySelector('.rtc-ring,.rtc-live,.rtc-rec,.rtc-go,.rtc-dots');
-  const calm = () => { calmT = 0; if (mode === 'full') return; if (live()) { calmT = setTimeout(calm, 4000); return; } root.setAttribute('data-calm', ''); };
-  const wake = () => { if (root.hasAttribute('data-calm')) root.removeAttribute('data-calm'); clearTimeout(calmT); calmT = mode === 'full' ? 0 : setTimeout(calm, 6000); };
+  // v2.99: แอนิเมชันวนตลอด (ไม่หยุดเอง) · หยุดเฉพาะตัวที่อยู่นอกจอ (มองไม่เห็นอยู่แล้ว) · เข้าจอแล้ววิ่งต่อทันที
+  const wake = () => {};
   const apply = m => { if (m) mode = m; const lite = (mode === 'auto' && weak) || mode === 'off';
     if (lite) root.setAttribute('data-perf', 'lite'); else root.removeAttribute('data-perf');
-    ioOn(mode === 'full'); if (mode === 'full') { clearTimeout(calmT); root.removeAttribute('data-calm'); } else if (!calmT && !root.hasAttribute('data-calm')) wake(); };
+    root.removeAttribute('data-calm'); ioOn(mode !== 'off'); };
   const auto = !window.__noPerfProbe && (!nav.webdriver || window.__perfProbe);   // ทดสอบอัตโนมัติไม่สลับโหมดเอง (เครื่องทดสอบรันหนัก)
   const mark = r => { if (weak || mode !== 'auto' || !auto) return; weak = true; why = r; try { LS.set('perfWeak', 1); } catch (e) {} apply(); };
   // กระตุกจริงตอนใช้งาน: (1) Chrome/Edge/Android: งานค้าง ≥ 200 มิลลิวินาที บ่อย ๆ  (2) ทุกเบราว์เซอร์: เลื่อนจอแล้วเฟรมตก
@@ -1643,7 +1640,7 @@ function themeMore(t) {
             '<small class="bar-note">หลัก = หัวข้อ/ข้อความ · รอง = คำอธิบาย เมนูย่อย ตัวเลขเล็ก ๆ</small></div>' +
             '<div class="f"><span class="lbl">เงาตัวอักษร (อ่านง่ายบนรูปพื้นหลัง)</span>' + thSeg(t, 'fshadow', [['none', 'ไม่มี'], ['soft', 'บาง'], ['strong', 'ชัด']]) + '</div>'; })() +
         '<div class="f"><span class="lbl">เงาการ์ด</span>' + thSeg(t, 'shadow', [['none', 'ไม่มี'], ['soft', 'บาง'], ['strong', 'ชัด']]) + '</div>' +
-        '<div class="f"><span class="lbl">ภาพเคลื่อนไหว</span>' + thSeg(t, 'motion', [['auto', 'อัตโนมัติ'], ['full', 'เต็ม'], ['less', 'น้อย'], ['off', 'ปิด']]) + '<small class="muted th-perf">' + (PERF.weak ? 'เครื่องนี้ใช้โหมดประหยัด' + (PERF.why ? ' (' + esc(PERF.why) + ')' : '') + ': แอนิเมชันเล่นรอบเดียว ไม่เบลอกระจก <button type="button" class="linkbtn" data-act="perfreset">ตรวจเครื่องใหม่</button>' : 'อัตโนมัติ: แอนิเมชันวนเล่นสักครู่แล้วหยุดเอง · เครื่องช้าลดให้อีก · "เต็ม" = วนตลอด') + '</small></div>' +
+        '<div class="f"><span class="lbl">ภาพเคลื่อนไหว</span>' + thSeg(t, 'motion', [['auto', 'อัตโนมัติ'], ['full', 'เต็ม'], ['less', 'น้อย'], ['off', 'ปิด']]) + '<small class="muted th-perf">' + (PERF.weak ? 'เครื่องนี้ใช้โหมดประหยัด' + (PERF.why ? ' (' + esc(PERF.why) + ')' : '') + ': ปิดความเบลอกระจก (แอนิเมชันยังวิ่งตามปกติ) <button type="button" class="linkbtn" data-act="perfreset">ตรวจเครื่องใหม่</button>' : 'อัตโนมัติ: แอนิเมชันวนตลอด · เครื่องช้าปิดความเบลอกระจกให้') + '</small></div>' +
         (bgActive(t) ? '' : '<div class="f"><span class="lbl">ลายพื้นหลัง (เมื่อไม่ใส่รูป)</span><div class="th-pats">' + pats.map(p => '<button data-themeset="pattern" data-val="' + p[0] + '" aria-pressed="' + ((t.pattern || 'none') === p[0]) + '"><i class="pat-' + p[0] + '"></i>' + p[1] + '</button>').join('') + '</div></div>') +
       '</div></div>';
 }

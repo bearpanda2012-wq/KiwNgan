@@ -5836,11 +5836,8 @@ body.auth #bgSndBtn{display:none}
 /* ============ v2.98 ความลื่น ============ */
 /* แถว/การ์ดนอกจอ: หยุดแอนิเมชัน (ไม่เปลือง CPU/GPU) */
 [data-off],[data-off] *,[data-off]::before,[data-off]::after,[data-off] *::before,[data-off] *::after{animation-play-state:paused!important}
-/* สงบหลังเข้าหน้า ~6 วิ: แอนิเมชันวนเล่นจบรอบแล้วหยุดที่ท่าปกติ (ไม่วาดจอใหม่ตลอดเวลา) */
-[data-calm] body *:not(.spinner):not(.spin):not(.spin-dot):not(.sp-ring),[data-calm] body *::before,[data-calm] body *::after{animation-iteration-count:1!important}
 /* (ลองใช้ content-visibility แล้ว: วาดหน้าเร็วขึ้นแต่เลื่อนจอกระตุกครึ่งหนึ่ง → ไม่ใช้) */
-/* เครื่องช้า (อัตโนมัติ): เล่นรอบเดียวไม่วน · ไม่เบลอกระจก */
-[data-perf="lite"] *:not(.spinner):not(.spin):not(.spin-dot):not(.sp-ring),[data-perf="lite"] *::before,[data-perf="lite"] *::after{animation-iteration-count:1!important}
+/* เครื่องช้า (อัตโนมัติ): ไม่เบลอกระจก (แอนิเมชันยังวิ่งตามปกติ) */
 [data-perf="lite"] *,[data-perf="lite"] *::before,[data-perf="lite"] *::after{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 [data-perf="lite"] .topbar,[data-perf="lite"] .lg-hero{animation:none!important}
 /* พื้นหลังหัวหน้าเลื่อนสีช้า ๆ: วาดใหม่แค่ ~6 ครั้ง/วินาที แทน 60 (ตาแยกไม่ออก) */
@@ -5849,3 +5846,69 @@ body.auth #bgSndBtn{display:none}
 .lg-hero{animation-timing-function:steps(90,end)}
 .th-perf{display:block;margin-top:6px}
 @media print{html::before{display:none}}
+
+/* ============ v2.99 แอนิเมชันวนตลอด แต่ให้การ์ดจอทำ (ไม่ต้องวาดหน้าใหม่ทุกเฟรม) ============
+   เดิมแสงเรือง/วงกระเพื่อม/แถบวิ่ง ใช้ box-shadow / background-position / filter → เบราว์เซอร์ต้องวาดหน้าใหม่และจัดชั้นทั้งหน้าทุกเฟรม
+   ตอนนี้: แสงเรืองเป็นชั้นแยก (::after) ที่จางเข้า-ออกด้วย opacity · วงกระเพื่อมขยายด้วย transform · แถบวิ่งเลื่อนด้วย transform
+   หน้าตาเหมือนเดิม และวิ่งตลอดเวลา */
+@keyframes gGlow{0%,100%{opacity:0}50%{opacity:1}}
+@keyframes gRing{0%{transform:scale(1);opacity:var(--go,.85)}100%{transform:scale(var(--gr,1.8));opacity:0}}
+@keyframes gBeat{0%,100%{transform:scale(1)}30%{transform:scale(var(--gb,1.12))}}
+@keyframes gSlide{from{transform:translateX(0)}to{transform:translateX(var(--gs,34px))}}
+@keyframes icShieldG{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
+@keyframes arrowDotG{0%,100%{opacity:.3;transform:scale(1)}40%{opacity:1;transform:scale(1.35)}}
+/* ชั้นแสงทั่วไป */
+.co-row.late::after,.sp-r.late td:first-child::after,.sf-date.k-late::after,.sf-date.k-today::after,.tag.urgent::after,.stg.s-late .stg-pill::after,.ch-tab.help::after,
+.hm-on::after,.ch-head.help::after,.timerbar .pulse::after,.tbtn.on::after,.rtc-rec::after,.sk-alert>span::after,.s-low .sk-st::after,.s-zero .sk-st::after,
+.hc-ic::after,.ntf.help .ntf-ic::after,.t-sos::after,.th-ic::after,.ntf.job-due.is-late .ntf-ic::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none}
+.sp-r.late td:first-child,.sf-date.k-late,.sf-date.k-today,.tag.urgent,.stg.s-late .stg-pill,.ch-tab.help,.timerbar .pulse,.tbtn.on,.rtc-rec,.sk-alert>span,.hc-ic,.ntf.help .ntf-ic,.th-ic,.ntf.job-due.is-late .ntf-ic{position:relative}
+/* แถวงานเลยกำหนด: ขอบแดงซ้ายคงที่ + แสงรอบแถวเรืองเข้าออก */
+.co-row.late{animation:none;box-shadow:inset 3px 0 0 0 var(--late)}
+.enter .co-row.late,.co-row.late.in{animation:coIn .45s cubic-bezier(.2,.9,.3,1.2) both;animation-delay:calc(var(--i,0) * 35ms)}
+.co-row.late::after{box-shadow:inset 0 0 0 3px color-mix(in oklab,var(--late) 18%,transparent);opacity:0;animation:gGlow 2.6s ease-in-out 1s infinite}
+.sp-r.late td:first-child{animation:none;box-shadow:inset 3px 0 0 0 var(--late)}
+.sp-r.late td:first-child::after{border-radius:0;box-shadow:0 0 0 3px color-mix(in oklab,var(--late) 14%,transparent);opacity:0;animation:gGlow 2.6s ease-in-out 1s infinite}
+/* ป้ายวันที่ เลยกำหนด/วันนี้ */
+.sf-date.k-late,.sf-date.k-today{animation:none}
+.sf-date.k-late::after{inset:-1px;box-shadow:0 0 0 4px color-mix(in oklab,var(--late) 18%,transparent);opacity:0;animation:gGlow 1.8s ease-in-out infinite}
+.sf-date.k-today::after{inset:-1px;box-shadow:0 0 0 4px color-mix(in oklab,var(--today) 18%,transparent);opacity:0;animation:gGlow 2.2s ease-in-out infinite}
+/* ป้ายด่วน */
+.tag.urgent{animation:none}
+.tag.urgent::after{box-shadow:0 0 0 3px rgba(255,107,0,.28),0 4px 14px -2px rgba(224,49,49,.85);opacity:0;animation:gGlow 1.8s ease-in-out infinite}
+.pcard.is-urgent .tag.urgent{animation:none}
+.pcard.is-urgent .tag.urgent::after{box-shadow:0 0 0 2px color-mix(in oklab,var(--urgent) 45%,transparent);opacity:0;--gr:1.25;animation:gRing 2s ease-out infinite}
+/* ป้ายขั้นงานเลยกำหนด (หน้าแรก/รายการ) */
+.stg.s-late .stg-pill{animation:none}
+.stg.s-late .stg-pill::after{box-shadow:0 0 0 4px color-mix(in oklab,var(--late) 22%,transparent);opacity:0;animation:gGlow 1.8s ease-in-out infinite}
+/* แท็บขอความช่วยเหลือ (มือถือ) */
+.ch-tab.help{animation:tabIn .45s cubic-bezier(.3,1.4,.5,1) both}
+.ch-tab.help::after{box-shadow:-3px 4px 18px -2px rgba(239,68,68,.75);opacity:0;animation:gGlow 1.6s ease-in-out .5s infinite}
+/* จุดออนไลน์บนรูปโปรไฟล์ */
+.hm-on{animation:none}
+.hm-on::after{box-shadow:0 0 0 2px rgba(52,211,153,.6);--gr:2;animation:gRing 2.4s ease-out infinite}
+/* หัวแชตที่ขอความช่วยเหลือ */
+.ch-head.help{animation:headSlide .35s cubic-bezier(.3,1.2,.5,1) both;box-shadow:0 0 0 2px var(--urgent),0 14px 30px -12px var(--urgent)}
+.ch-head.help::after{box-shadow:0 0 0 2px color-mix(in oklab,var(--urgent) 50%,transparent);--gr:1.45;animation:gRing 1.6s ease-out infinite}
+/* จุดกระพริบ: จับเวลา · ปุ่มจับเวลา · บันทึก/ในสาย */
+.timerbar .pulse,.tbtn.on,.rtc-rec{animation:none;box-shadow:none}
+.timerbar .pulse::after,.tbtn.on::after,.rtc-rec::after{box-shadow:0 0 0 2px color-mix(in oklab,var(--late) 60%,transparent);--gr:1.9;animation:gRing 1.6s ease-out infinite}
+.card .live::before{animation:gBeat 1.6s ease-in-out infinite;--gb:1.35}
+/* SOS / ขอช่วย / เลยกำหนด */
+.hc-ic,.ntf.help .ntf-ic,.t-sos,.th-ic,.ntf.job-due.is-late .ntf-ic{animation:none}
+.hc-ic::after,.ntf.help .ntf-ic::after,.t-sos::after,.th-ic::after{box-shadow:0 0 0 3px color-mix(in oklab,var(--urgent) 55%,transparent);--gr:1.6;animation:gRing 1.7s ease-out infinite}
+.ntf.job-due.is-late .ntf-ic::after{box-shadow:0 0 0 3px color-mix(in oklab,var(--late) 55%,transparent);--gr:1.45;animation:gRing 1.6s ease-out infinite}
+.ntf.help .ntf-ic,.ntf.job-due.is-late .ntf-ic{animation:pop .5s cubic-bezier(.3,1.6,.5,1)}
+/* คลังวัสดุ: ป้ายใกล้หมด/หมด */
+.sk-alert>span{animation:none}
+.sk-alert>span::after{box-shadow:0 0 0 3px color-mix(in oklab,var(--urgent) 45%,transparent);--gr:1.45;animation:gRing 2.2s ease-out infinite}
+.s-low .sk-st,.s-zero .sk-st{animation:none}
+.s-low .sk-st::after,.s-zero .sk-st::after{box-shadow:0 0 0 4px color-mix(in oklab,var(--urgent) 25%,transparent);opacity:0;animation:gGlow 2s ease-in-out infinite}
+/* วงต่อระหว่างขั้น (หัวภาพรวม): เต้นเบา ๆ */
+.cpx-step:not(:last-child)::before{animation:gBeat 2.4s ease-in-out infinite;--gb:1.12}
+/* ไอคอน QC / ส่งแล้ว: ขยายเต้น (ตัดเงาเรืองออก) */
+.flow-ic.ic-qc svg,.col-ic.ic-qc svg{animation-name:icShieldG}
+.flow-ic.ic-shipped svg,.col-ic.ic-shipped svg{animation-name:icShieldG}
+/* จุดลูกศรบนบอร์ด */
+.flow-arrow i{background:var(--brand);animation:arrowDotG 1.4s ease-in-out infinite}
+/* แถบวิ่งบนเส้นความคืบหน้า: เลื่อนด้วย transform (แถบกว้างกว่าเส้น 1 ช่วงลาย) */
+.rt-line i::after{left:-34px;--gs:34px;animation:gSlide 1s linear infinite}
