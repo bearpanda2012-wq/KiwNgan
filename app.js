@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.104';
+const APP_VERSION = '2.104.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -8367,22 +8367,26 @@ const sxU = c => ((SX.tabs.units || {})[c]) || c || '', sxL = c => ((SX.tabs.loc
 function saleExHtml() {
   if (!SX.at) { sxLoad(); return '<div class="skx-wrap"><div class="sp-empty"><span class="spin-dot dark"></span><b>กำลังโหลดคลังวัสดุ…</b><small>ยอดคงเหลือจากโปรแกรม Express</small></div></div>'; }
   const q = SX.q.trim(), have = new Set(SX.items.map(x => x[0]));
-  const list = SX.items.filter(x => (!SX.grp || x[3] === SX.grp) && (!q || qHit([x[0], x[1], x[2], sxG(x[3])], q)));
+  const list = SX.items.filter(x => (SX.grp === '__neg' ? (+x[5] || 0) < 0 : !SX.grp || x[3] === SX.grp) && (!q || qHit([x[0], x[1], x[2], sxG(x[3])], q)));
   const out = q && SX.found && SX.fq === q ? SX.found.filter(x => !have.has(x[0]) && (!SX.grp || x[3] === SX.grp)) : [];
   const gc = {}; SX.items.forEach(x => { gc[x[3]] = (gc[x[3]] || 0) + 1; });
-  const grps = Object.keys(gc).sort((a, b) => gc[b] - gc[a]).slice(0, 12);
+  const grps = Object.keys(gc).sort((a, b) => gc[b] - gc[a]).slice(0, 14), neg = SX.items.filter(x => (+x[5] || 0) < 0).length, nLoc = new Set(Object.values(SX.locs).flat().map(l => l[1])).size;
   const ag = SX.agent && SX.agent.at ? new Date(SX.agent.at) : null, stale = !ag || Date.now() - ag > 12 * 60000;
+  let ri = 0;
   const row = (x, zero) => { const ls = (SX.locs[x[0]] || []).slice().sort((a, b) => Math.abs(b[2]) - Math.abs(a[2])), b = +x[5] || 0, z = zero || Math.abs(b) < 1e-9;
-    return '<div class="skx-row' + (z ? ' zero' : b < 0 ? ' neg' : '') + '"><span class="skx-c"><b>' + coHl(x[0], q) + '</b><small>' + esc(sxG(x[3])) + '</small></span>' +
-      '<span class="skx-n"><b>' + coHl(x[1] || '–', q) + '</b>' + (x[2] ? '<small>' + coHl(x[2], q) + '</small>' : '') + (ls.length ? '<span class="skx-locs">' + ls.slice(0, 5).map(l => '<i title="' + esc(sxL(l[1])) + '">' + esc(sxL(l[1])) + ' <b>' + exN(l[2]) + '</b></i>').join('') + '</span>' : '') + '</span>' +
-      '<span class="skx-q">' + (z ? '<em class="skx-out">ของหมด</em>' : '<b class="tnum">' + exN(b) + '</b><small>' + esc(sxU(x[4])) + '</small>') + '</span></div>'; };
-  return '<div class="skx-wrap"><div class="skx-h"><div><h2>คลังวัสดุ</h2><small>ยอดคงเหลือจากโปรแกรม Express · ' + (ag ? (stale ? '<span class="skx-stale">ข้อมูลล่าสุด ' : 'อัปเดต ') + esc(ag.toLocaleString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })) + ' น.' + (stale ? '</span>' : '') : 'ยังไม่มีข้อมูล') + '</small></div>' +
-      '<span class="skx-kpi"><b>' + exN(SX.items.length) + '</b><small>รายการที่มีของ</small></span></div>' +
+    return '<div class="ex-row skx-row' + (z ? ' zero' : b < 0 ? ' neg' : '') + '" style="--g:' + exGrpCol(x[3]) + ';--r:' + (ri++) + '"><span class="ex-c"><b>' + coHl(x[0], q) + '</b><small class="ex-g"><i></i>' + esc(sxG(x[3])) + '</small></span>' +
+      '<span class="ex-n">' + coHl(x[1] || '–', q) + (x[2] ? '<small>' + coHl(x[2], q) + '</small>' : '') + (ls.length ? '<span class="ex-locs">' + ls.slice(0, 5).map(l => '<i title="' + esc(sxL(l[1])) + '">' + esc(sxL(l[1])) + ' <b>' + exN(l[2]) + '</b></i>').join('') + '</span>' : '') + '</span>' +
+      '<span class="ex-q">' + (z ? '<em class="skx-out">ของหมด</em>' : '<b class="tnum">' + exN(b) + '</b><small>' + esc(sxU(x[4])) + '</small>') + '</span></div>'; };
+  const kpi = (cls, ic, lab, n, sub, g) => '<button type="button" class="sk-kpi ' + cls + '" data-sxgrp="' + g + '" aria-pressed="' + (SX.grp === g && !!g) + '"><span class="ski">' + ic + '</span><span class="skt"><small>' + lab + '</small><b class="tnum">' + n + '</b><em>' + sub + '</em></span></button>';
+  const chip = (g, label, n) => { const fx = !g || g === '__neg', col = !g ? '#6366B8' : g === '__neg' ? '#C8505F' : exGrpCol(g);
+    return '<button type="button" class="qchip ex-chip' + (fx ? ' fx' : '') + '" style="--ch:' + col + '" data-sxgrp="' + esc(g) + '" aria-pressed="' + (SX.grp === g) + '">' + (fx ? '<i class="ex-cic">' + (g ? (PIC.xmark || '✕') : ST_IC.sheet) + '</i>' : '<i class="ex-cd"></i>') + '<span>' + esc(label) + '</span><b>' + exN(n) + '</b></button>'; };
+  return '<div class="skx-wrap"><div class="skx-h"><div><h2>คลังวัสดุ</h2><small>ยอดคงเหลือจากโปรแกรม Express · ' + (ag ? (stale ? '<span class="skx-stale">ข้อมูลล่าสุด ' : 'อัปเดต ') + esc(ag.toLocaleString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })) + ' น.' + (stale ? '</span>' : '') : 'ยังไม่มีข้อมูล') + '</small></div></div>' +
+    '<div class="sk-kpis ex-kpis skx-kpis">' + kpi('k-all', ST_IC.box, 'มีของในคลัง', exN(SX.items.length), 'รหัสสินค้าที่ยังมียอด', '') + kpi('k-tot', ST_IC.sheet, 'กลุ่มสินค้า', exN(Object.keys(gc).length), 'เก็บใน ' + nLoc + ' คลัง', '') + kpi('k-zero', PIC.xmark || STI.fire, 'ยอดติดลบ', exN(neg), neg ? 'ออกเกินยอด · สอบถามฝ่ายสต็อก' : 'ไม่มี · ยอดปกติ', neg ? '__neg' : '') + '</div>' +
     (SX.err ? '<div class="err">' + esc(SX.err) + '</div>' : '') +
-    '<label class="sp-search skx-search' + qOn(SX.q) + '">' + I.search + '<input id="sxQ" type="search" enterkeyhint="search" autocomplete="off" placeholder="ค้นหาสินค้า: รหัส ชื่อ ขนาด สี… (รวมรายการที่ของหมด)" value="' + esc(SX.q) + '" aria-label="ค้นหาสินค้าในคลัง">' + qX('sxQ', SX.q) + '</label>' +
-    '<div class="qchips skx-chips"><button type="button" class="qchip" data-sxgrp="" aria-pressed="' + !SX.grp + '">ทุกกลุ่ม<b>' + exN(SX.items.length) + '</b></button>' + grps.map(g => '<button type="button" class="qchip" data-sxgrp="' + esc(g) + '" aria-pressed="' + (SX.grp === g) + '">' + esc(sxG(g)) + '<b>' + exN(gc[g]) + '</b></button>').join('') + '</div>' +
-    (q ? '<div class="sp-count">พบ <b>' + exN(list.length) + '</b> รายการที่มีของ' + (out.length ? ' · ของหมด <b>' + out.length + '</b> รายการ' : '') + ' สำหรับ "' + esc(q) + '"</div>' : '') +
-    (list.length || out.length ? '<div class="skx-list"><div class="skx-head"><span>รหัส</span><span>ชื่อสินค้า · คลัง</span><span>คงเหลือ</span></div>' + list.slice(0, SX.lim).map(x => row(x)).join('') + (list.length > SX.lim ? '<div class="col-more">แสดง ' + SX.lim + ' จาก ' + exN(list.length) + ' <button type="button" class="btn sm ghost" data-sxmore="1">แสดงเพิ่ม</button></div>' : '') +
+    '<div class="sk-tools ex-tools"><label class="search skx-search' + qOn(SX.q) + '">' + I.search + '<input id="sxQ" type="search" enterkeyhint="search" autocomplete="off" placeholder="ค้นหาสินค้า: รหัส ชื่อ ขนาด สี… (รวมรายการที่ของหมด)" value="' + esc(SX.q) + '" aria-label="ค้นหาสินค้าในคลัง">' + qX('sxQ', SX.q) + '</label></div>' +
+    '<div class="qchips sk-chips ex-chips">' + chip('', 'ทุกกลุ่ม', SX.items.length) + (neg ? chip('__neg', 'ติดลบ', neg) : '') + grps.map(g => chip(g, sxG(g), gc[g])).join('') + '</div>' +
+    (q ? '<div class="co-sres ex-sres" role="status"><span>พบ <b>' + exN(list.length) + '</b> รายการที่มีของ' + (out.length ? ' · ของหมด <b>' + out.length + '</b> รายการ' : '') + ' สำหรับ "' + esc(q) + '"</span></div>' : '') +
+    (list.length || out.length ? '<div class="ex-list ro skx-list"><div class="ex-head"><span>รหัส</span><span>ชื่อสินค้า · คลัง</span><span>คงเหลือ</span></div>' + list.slice(0, SX.lim).map(x => row(x)).join('') + (list.length > SX.lim ? '<div class="col-more">แสดง ' + SX.lim + ' จาก ' + exN(list.length) + ' <button type="button" class="btn sm ghost" data-sxmore="1">แสดงเพิ่ม</button></div>' : '') +
       (out.length ? '<div class="skx-sep">ของหมด · มีรหัสใน Express แต่ไม่มียอดคงเหลือ</div>' + out.slice(0, 40).map(x => row(x, true)).join('') : '') + '</div>'
       : '<div class="sp-empty"><span>🔍</span><b>' + (q ? 'ไม่พบ "' + esc(q) + '"' : 'ไม่มีสินค้าในกลุ่มนี้') + '</b>' + (q ? '<small>ลองพิมพ์บางส่วนของรหัสหรือชื่อ' + (SX.found === null || SX.fq !== q ? ' · กำลังค้นในรายการที่ของหมด…' : '') + '</small>' : '') + '</div>') +
     '<p class="sub sp-foot">ดูได้อย่างเดียว · ไม่แสดงราคาทุน · ยอดตรงกับโปรแกรม Express ของฝ่ายสต็อก</p></div>';

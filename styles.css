@@ -6085,24 +6085,18 @@ body.auth #bgSndBtn{display:none}
 .skx-kpi{display:flex;flex-direction:column;align-items:flex-end;padding:6px 14px;border-radius:12px;background:color-mix(in oklab,var(--brand) 9%,var(--surface))}
 .skx-kpi b{font:700 22px var(--f-display);color:var(--brand)}.skx-kpi small{font-size:11.5px;color:var(--muted)}
 .skx-search{margin:0}
-.skx-chips{flex-wrap:wrap;overflow:visible}
-.skx-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.skx-head,.skx-row{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr) 110px;gap:12px;padding:9px 12px;align-items:start}
-.skx-head{background:var(--surface-2);color:var(--muted);font-size:11.5px;font-weight:600}
-.skx-head span:last-child,.skx-q{text-align:right}
-.skx-row{border-top:1px solid var(--line);font-size:13px}
-.skx-row:hover{background:var(--surface-2)}
-.skx-c b{display:block;font-family:var(--f-mono);font-size:12.5px;word-break:break-all}
-.skx-c small,.skx-n small{display:block;color:var(--muted);font-size:11.5px}
-.skx-n b{font-weight:600}
-.skx-locs{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
-.skx-locs i{font-style:normal;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
-.skx-locs i b{color:var(--ink)}
-.skx-q b{display:block;font:700 16px var(--f-display);color:var(--brand)}.skx-q small{font-size:11.5px;color:var(--muted)}
-.skx-row.neg .skx-q b{color:#B91C1C}
-.skx-row.zero{opacity:.75}
 .skx-out{font-style:normal;font-size:12px;font-weight:700;color:#B45309;background:#FEF3C7;padding:2px 9px;border-radius:999px;display:inline-block}
 .skx-sep{padding:8px 12px;background:#FFFBEB;color:#92400E;font-size:12px;font-weight:600;border-top:1px solid var(--line)}
 :root[data-theme="dark"] .skx-sep{background:#3A2E12;color:#FCD34D}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .skx-sep{background:#3A2E12;color:#FCD34D}}
-@media (max-width:640px){.skx-wrap{padding:12px}.skx-head{display:none}.skx-row{grid-template-columns:minmax(0,1fr) auto;row-gap:2px}.skx-c{grid-column:1}.skx-n{grid-column:1/-1;grid-row:2}.skx-q{grid-column:2;grid-row:1}}
+
+/* v2.104.1: สีสันแบบหน้า Express ฝ่ายสต็อก */
+.skx-kpis{grid-template-columns:repeat(3,minmax(0,1fr))!important;margin:0}
+.skx-list .ex-head,.skx-list .ex-row{display:grid;grid-template-columns:minmax(130px,190px) minmax(0,1fr) 110px!important;gap:12px;padding:10px 14px;align-items:start}
+.skx-list .ex-row{cursor:default;animation:none}
+.skx-list .ex-head span:last-child,.skx-list .ex-q{text-align:right}
+.skx-list .ex-row.zero{opacity:.8}
+.skx-search{flex:1}
+@media (max-width:640px){.skx-wrap{padding:12px}.skx-kpis{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px}.skx-kpis .sk-kpi em{display:none}.skx-list .ex-head{display:none}.skx-list .ex-row{grid-template-columns:minmax(0,1fr) auto!important;row-gap:4px}.skx-list .ex-c{grid-column:1}.skx-list .ex-n{grid-column:1/-1;grid-row:2}.skx-list .ex-q{grid-column:2;grid-row:1}}
+.skx-list .ex-head span:nth-child(-n+2){text-align:left}
+@media (max-width:640px){.skx-kpis .sk-kpi{padding:10px}.skx-kpis .skt small{white-space:nowrap}}
