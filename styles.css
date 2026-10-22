@@ -6164,3 +6164,21 @@ body.auth #bgSndBtn{display:none}
 .g-invite[hidden]{display:none}
 .g-invite .gi-e{font-size:26px}
 .g-invite b{display:block;font-size:14px}.g-invite small{color:var(--muted);font-size:12px}
+
+/* หน้า Sale: เปิดงานจากการสแกน QR → แถบบอกสถานะชัด ๆ */
+.sd-scan{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 16px 8px;padding:10px 14px;border-radius:12px;background:color-mix(in oklab,var(--brand) 12%,var(--surface));font-size:14px}
+.sd-scan svg{width:18px;height:18px;color:var(--brand)}
+.sd-scan>b{margin-left:auto;font-size:15px}
+.sd-scan.shipped{background:#DCFCE7;color:#14532D}.sd-scan.shipped svg{color:#16A34A}
+
+.sd-qr{display:flex;gap:12px;align-items:center;margin:0 16px 10px;padding:10px 12px;border-radius:14px;background:var(--surface-2);border:1px solid var(--line)}
+.sf-det .sd-qr{margin:0 0 10px}
+.sd-qr-box{width:96px;height:96px;flex:none;background:#fff;border-radius:10px;padding:6px;box-sizing:border-box;display:grid;place-items:center;box-shadow:var(--shadow-sm)}
+.sd-qr-box svg{width:84px;height:84px;display:block}
+.sd-qr-t{display:flex;flex-direction:column;gap:4px;min-width:0}
+.sd-qr-t b{font-size:14px}.sd-qr-t small{color:var(--muted);font-size:12px}
+.sd-qr-b{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.sd-qr-b svg{width:14px;height:14px}
+.hv-side .sd-qr,.hovercard:not(.wide) .sd-qr{flex-direction:column;align-items:center;text-align:center;margin:10px 0 0;padding:10px}
+.hv-side .sd-qr-t{align-items:center}
+.hv-side .sd-qr-b{justify-content:center}

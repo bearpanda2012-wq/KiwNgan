@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.113.2';
+const APP_VERSION = '2.114.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -627,9 +627,11 @@ const Demo = {
   async addComment(p) { const d = this.db(), u = this.me(d), text = String(p.text || '').trim(); if (!text) throw new Error('พิมพ์ข้อความก่อน'); const c = { id: uid('c_'), jobId: p.jobId, ts: nowLocal(), from: u.name, text: text }; d.comments = (d.comments || []).concat(c); this.save(d); return { comment: c }; },
   async deleteComment(p) { const d = this.db(), u = this.me(d), c = (d.comments || []).find(x => x.id === p.id); if (!c) throw new Error('ไม่พบคอมเมนต์'); if (!P.admin(u) && c.from !== u.name) throw new Error('ลบได้เฉพาะคอมเมนต์ของตัวเอง'); d.comments = d.comments.filter(x => x.id !== p.id); this.save(d); return { id: p.id, jobId: c.jobId }; },
   async saleLink(p) { const d = this.db(); this.admin(this.me(d)); if (!d.saleKey || p.reset) { d.saleKey = uid('k'); this.save(d); } return { key: d.saleKey }; },
+  async saleFind(p) { const c = String(p.code || '').trim().toLowerCase(), r = await this.saleView(Object.assign({}, p, { all: 1 })), hit = x => String(x.code || '').trim().toLowerCase() === c; return { jobs: (r.jobs || []).filter(hit), prods: (r.prods || []).filter(hit) }; },
+  async codeFind(p) { const d = this.db(), c = String(p.code || '').trim().toLowerCase(); this.me(d); return { prods: (d.prods || []).filter(x => String(x.code || '').trim().toLowerCase() === c) }; },
   async saleView(p) { const d = this.db(), keys = d.saleKeys || {}, own = Object.keys(keys).find(n => keys[n] === p.k) || ''; if (!own && (!d.saleKey || p.k !== d.saleKey)) throw new Error('ลิงก์นี้ใช้ไม่ได้แล้ว ขอลิงก์ใหม่จากแอดมิน'); const since = addDays(today(), -45); if (own) p = Object.assign({}, p, { sale: own });
     const ims = id => (d.images || []).filter(m => m.jobId === id), ship = x => { if (x.stage !== 'shipped') return null; let sp = {}; try { sp = JSON.parse(x.ship || '{}') || {}; } catch (e) {} const ds = ims('d_' + x.id), sg = ds.find(m => m.id === sp.sig); return { to: sp.to || '', note: sp.note || '', at: sp.at || x.shippedAt || '', by: sp.by || '', sig: sg ? sg.thumb : '', photos: ds.filter(m => m !== sg).map(m => m.thumb).filter(Boolean).slice(-6) }; };
-    return { kb: this.kbList(d, { role: 'user', name: '' }, true), own: own ? 1 : 0, prods: (d.prods || []).filter(x => !p.sale || x.sale === p.sale).map(x => ({ ship: ship(x), priority: x.priority === 'urgent' ? 'urgent' : '', code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: pms(x), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (d.images || []).filter(m => m.jobId === x.id).map(m => m.thumb).filter(Boolean).slice(-6) })), machines: d.settings.machines || DEF_MACHINES, brand: (await this.ping()).brand, people: d.users.filter(u => u.active && u.role !== 'admin').map(u => ({ name: u.name, color: u.color })), sales: own ? [own] : d.settings.sales || [], sale: p.sale || '', jobs: d.jobs.filter(j => (!p.sale || j.sale === p.sale) && (j.status !== 'done' || finDate(j) >= since)).map(j => { const c = clOf(j); return { assignee: j.assignee || '', helpers: j.helpers || '', code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', steps: c.length ? c.filter(x => x.d).length + '/' + c.length : '', imgs: (d.images || []).filter(m => m.jobId === j.id).map(m => m.thumb).filter(Boolean).slice(-6) }; }) }; },
+    return { kb: this.kbList(d, { role: 'user', name: '' }, true), own: own ? 1 : 0, prods: (d.prods || []).filter(x => !p.sale || x.sale === p.sale).map(x => ({ ship: ship(x), priority: x.priority === 'urgent' ? 'urgent' : '', code: x.code, title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: pms(x), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (d.images || []).filter(m => m.jobId === x.id).map(m => m.thumb).filter(Boolean).slice(-6) })), machines: d.settings.machines || DEF_MACHINES, brand: (await this.ping()).brand, people: d.users.filter(u => u.active && u.role !== 'admin').map(u => ({ name: u.name, color: u.color })), sales: own ? [own] : d.settings.sales || [], sale: p.sale || '', jobs: d.jobs.filter(j => (!p.sale || j.sale === p.sale) && (p.all || j.status !== 'done' || finDate(j) >= since)).map(j => { const c = clOf(j); return { assignee: j.assignee || '', helpers: j.helpers || '', code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', steps: c.length ? c.filter(x => x.d).length + '/' + c.length : '', imgs: (d.images || []).filter(m => m.jobId === j.id).map(m => m.thumb).filter(Boolean).slice(-6) }; }) }; },
   async thumbs(p) { const d = this.db(), out = {}; (d.images || []).forEach(m => { if ((p.ids || []).indexOf(m.id) >= 0) out[m.id] = m.thumb; }); return { thumbs: out }; },
   async image(p) { const m = (this.db().images || []).find(x => x.id === p.id); if (!m) throw new Error('ไม่พบรูปนี้'); return { id: m.id, full: m.full }; },
   async setPhoto(p) { const d = this.db(), me = this.me(d), id = p.userId || me.id; if (id !== me.id) this.admin(me); const u = d.users.find(x => x.id === id); if (!u) throw new Error('ไม่พบผู้ใช้'); u.photo = String(p.photo || ''); this.save(d); return { user: this.pub(u) }; },
@@ -927,7 +929,7 @@ const Remote = {
     return data.data;
   }
 };
-['exMinSet', 'exPendAdd', 'exPendSet', 'exPendMatch', 'themeGet', 'themeSave', 'digestTest', 'kbSave', 'kbDelete', 'kbAck', 'kbView', 'saleKbView', 'stockCount', 'pushTest', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
+['codeFind', 'exMinSet', 'exPendAdd', 'exPendSet', 'exPendMatch', 'themeGet', 'themeSave', 'digestTest', 'kbSave', 'kbDelete', 'kbAck', 'kbView', 'saleKbView', 'stockCount', 'pushTest', 'prodSave', 'prodDelete', 'stockSave', 'stockMove', 'stockDelete', 'salePin', 'saleOpen', 'addFile', 'deleteFile', 'comments', 'addComment', 'deleteComment', 'saleLink', 'saleView', 'copyImages', 'archive', 'ping', 'roster', 'login', 'logout', 'setPhoto', 'addImage', 'deleteImage', 'thumbs', 'image', 'messages', 'sendMessage', 'markRead', 'helpUpdate', 'deleteMessages', 'rtcSend', 'rtcPoll', 'pushKey', 'pushSub', 'pushUnsub', 'pushInfo', 'room', 'bootstrap', 'saveJob', 'deleteJob', 'startTimer', 'stopTimer', 'deleteLog', 'saveSettings', 'activity', 'changePin', 'saveUser', 'deleteUser', 'resetPin']
   .forEach(a => { Remote[a] = p => Remote.call(a, p); });
 const api = () => (mode() === 'sheet' ? Remote : Demo);
 
@@ -2034,7 +2036,8 @@ function saleHoverHtml(r) {
     side += '<section class="hv-sec hv-cl' + (a[0] === a[1] ? ' all' : '') + '"><div class="hv-sh"><b>' + STI.done + 'เช็กลิสต์</b><span class="hv-n">' + esc(j.steps) + '</span></div><div class="hv-bar" title="' + pct + '%"><i style="width:' + pct + '%"></i></div></section>'; }
   if (r.jobs.length > 1) side += '<section class="hv-sec hv-jobs"><div class="hv-sh"><b>' + STI.layers + 'งานของเลขนี้</b><span class="hv-n">' + r.jobs.length + '</span></div>' +
     r.jobs.map(x => '<div class="hv-jr">' + tc(x.taskType) + '<span class="pill ' + (ST[x.status] || ST.queue).cls + '">' + (ST[x.status] || ST.queue).label + '</span><span class="hv-jw">' + av(x.assignee, 'xs') + esc(x.assignee || '–') + '</span></div>').join('') + '</section>';
-  return { html: side ? '<div class="hv-col">' + h + '</div><div class="hv-side">' + side + '</div>' : h, wide: !!side, img: im.length > 0, st: r.late ? 'late' : r.step === 'design' ? j.status : '' };
+  const qr = saleQrHtml(r);   // QR ฉลากงาน ทุกงาน (การ์ดลอย + หน้ารายละเอียด)
+  return { html: side ? '<div class="hv-col">' + h + '</div><div class="hv-side">' + side + qr + '</div>' : h + qr, wide: !!side, img: im.length > 0, st: r.late ? 'late' : r.step === 'design' ? j.status : '' };
 }
 /* การ์ดลอยของงานที่ฝ่ายผลิตบันทึกเอง (ไม่มีงานฝ่ายแบบ): ข้อมูลงาน โน้ต รูป เครื่อง ประวัติ */
 function prodHoverHtml(p) {
@@ -2076,14 +2079,43 @@ function showProdHover(el) {
   h.querySelectorAll('img').forEach(im => im.addEventListener('load', () => { if (hovEl === el) place(); }, { once: true }));
 }
 /* หน้า Sale: กดแถวงานในตาราง → หน้าต่างรายละเอียด (ใช้ได้ทั้งมือถือและคอม) */
-function saleDetail(code) {
-  const r = SF.by && SF.by[code]; if (!r) return;
+function saleDetail(code, scanned) {
+  const r = (SF.by && SF.by[code]) || (SF.all && SF.all[code]); if (!r) return;
   hideHover();
   const o = saleHoverHtml(r);
   let m = $('#sdModal'); if (!m) { m = document.createElement('div'); m.id = 'sdModal'; m.className = 'pmodal sd-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); }
-  m.innerHTML = '<div class="pm-card sd-card ' + coStg(r) + '"><div class="sd-top"><span class="eyebrow">รายละเอียดงาน</span><button type="button" class="icon-btn" data-sdclose="1" aria-label="ปิด">✕</button></div><div class="sd-body hovercard show static' + (o.wide ? ' wide' : '') + (o.img ? ' has-img' : '') + '">' + o.html + '</div></div>';
-  document.body.classList.add('pm-open');
+  m.innerHTML = '<div class="pm-card sd-card ' + coStg(r) + '"><div class="sd-top"><span class="eyebrow">รายละเอียดงาน</span><button type="button" class="icon-btn" data-sdclose="1" aria-label="ปิด">✕</button></div>' + (scanned ? '<div class="sd-scan' + (r.prod && r.prod.stage === 'shipped' ? ' shipped' : '') + '">' + SCAN_IC + '<span>สแกน <b class="mono">' + esc(r.code) + '</b></span><b>' + esc(saleRowStatus(r)) + '</b></div>' : '') + '<div class="sd-body hovercard show static' + (o.wide ? ' wide' : '') + (o.img ? ' has-img' : '') + '">' + o.html + '</div></div>';
+  document.body.classList.add('pm-open'); sqrFill();
 }
+/* QR ฉลากงานในหน้า Sale (ทุกงาน): สแกนแล้วเปิดงานนี้ · พิมพ์ฉลากได้ */
+function saleQrHtml(r) {
+  if (!r || !r.code) return '';
+  return '<div class="sd-qr"><div class="sd-qr-box" data-sqr="' + esc(r.code) + '"><span class="spin-dot"></span></div><div class="sd-qr-t"><b>QR ฉลากงาน <span class="mono">' + esc(r.code) + '</span></b><small>สแกนด้วยกล้องมือถือ → เปิดงานนี้และดูสถานะ</small>' +
+    '<span class="sd-qr-b"><button type="button" class="btn sm" data-sqrprint="' + esc(r.code) + '">' + I.print + 'พิมพ์ฉลาก</button><button type="button" class="btn sm ghost" data-sqrcopy="' + esc(r.code) + '">คัดลอกลิงก์</button></span></div></div>';
+}
+function sqrFill() {
+  if (!document.querySelector('[data-sqr]:not([data-done])')) return;
+  loadQr(() => { if (!window.qrcode) return; document.querySelectorAll('[data-sqr]:not([data-done])').forEach(b => { b.innerHTML = qrSvg(jobLinkUrl(b.dataset.sqr), 4); b.dataset.done = '1'; }); });
+}
+function sqrRow(code) { return (SF.by && SF.by[code]) || (SF.all && SF.all[code]) || { code: code, jobs: [] }; }
+function sqrPrint(code) {
+  loadQr(() => {
+    if (!window.qrcode) return toast('สร้าง QR ไม่ได้', true);
+    const r = sqrRow(code), j = (r.jobs || [])[0] || {}, pr = r.prod || {};
+    const p = { code: code, title: pr.title || j.title || '', sale: pr.sale || j.sale || '', due: pr.due || j.due || '', priority: pr.priority || j.priority || '' };
+    const due = p.due ? 'ส่ง ' + fdY(p.due) : '', s = S.settings || {};
+    printHtml('<!doctype html><html><head><meta charset="utf-8"><title>' + esc(code) + '</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap"><style>body{font-family:Anuphan,Tahoma,sans-serif;color:#111}' +
+      '.ql{width:100mm;height:70mm;padding:5mm;display:flex;gap:4mm;align-items:center;border:.3mm dashed #999;box-sizing:border-box}.ql-qr{width:46mm;flex:none}.ql-qr svg{width:100%;height:auto;display:block}.ql-t{display:flex;flex-direction:column;gap:1.2mm;min-width:0}' +
+      '.ql-t small{font-size:8pt;color:#555}.ql-t b{font-family:"IBM Plex Mono",monospace;font-size:15pt}.ql-t span{font-size:10pt;font-weight:600}.ql-t em{font-style:normal;font-size:9pt}.ql-t i{font-style:normal;font-size:7.5pt;color:#666}</style></head><body>' +
+      '<div class="ql"><div class="ql-qr">' + qrSvg(jobLinkUrl(code)) + '</div><div class="ql-t"><small>' + esc(s.company || s.appName || '') + '</small><b>' + esc(code) + '</b>' + (p.title ? '<span>' + esc(p.title) + '</span>' : '') + '<em>' + [p.sale ? 'Sale ' + esc(p.sale) : '', esc(due), p.priority === 'urgent' ? '🔥 ด่วน' : ''].filter(Boolean).join(' · ') + '</em><i>สแกนเพื่อเปิดงาน · ดูสถานะ</i></div></div></body></html>');
+  });
+}
+document.addEventListener('click', e => {
+  const b = e.target && e.target.closest && e.target.closest('[data-sqrprint],[data-sqrcopy]'); if (!b) return;
+  e.stopPropagation();
+  if (b.dataset.sqrprint) return sqrPrint(b.dataset.sqrprint);
+  const u = jobLinkUrl(b.dataset.sqrcopy); try { navigator.clipboard.writeText(u).then(() => toast('คัดลอกลิงก์แล้ว'), () => toast(u)); } catch (x) { toast(u); }
+}, true);
 function saleDetailClose() { const m = $('#sdModal'); if (m) m.remove(); document.body.classList.remove('pm-open'); }
 document.addEventListener('click', e => {
   const t = e.target; if (!t || !t.closest) return;
@@ -2099,7 +2131,7 @@ function showSaleHover(el) {
   let h = $('#hovercard'); if (!h) { h = document.createElement('div'); h.id = 'hovercard'; h.className = 'hovercard'; h.setAttribute('role', 'tooltip'); document.body.appendChild(h); }
   const o = saleHoverHtml(r);
   h.className = 'hovercard' + (o.st && ST[o.st] ? ' s-' + o.st : '') + (o.img ? ' has-img' : '') + (o.wide ? ' wide' : '');
-  h.innerHTML = o.html;
+  h.innerHTML = o.html; sqrFill();
   if (!h.dataset.wired) { h.dataset.wired = '1'; h.addEventListener('mouseenter', () => { clearTimeout(hovT); hovT = null; }); h.addEventListener('mouseleave', e => { if (!(hovEl && e.relatedTarget && hovEl.contains(e.relatedTarget))) hideHoverSoon(); }); }
   const rc = el.getBoundingClientRect(), W = h.offsetWidth || 340, vw = window.innerWidth, vh = window.innerHeight;
   let x = rc.left + Math.min(rc.width * .3, 360); if (x + W > vw - 8) x = Math.max(8, vw - W - 8);
@@ -2619,7 +2651,7 @@ async function salePage() {
         '<td>' + fdY(j.received) + '</td><td>' + (j.status === 'done' ? '<b class="' + (ok ? 'ok' : 'bad') + '">เสร็จ ' + fdY(fin) + '</b>' : '<b class="' + (late ? 'bad' : '') + '">' + fdY(j.due) + '</b>') + badge + '</td>' +
         '<td class="sp-note">' + (j.note ? esc(j.note) : '<span class="sub">–</span>') + '</td>' + (sel ? '' : '<td>' + esc(j.sale || '–') + '</td>') + '</tr>';
     };
-    if (d) { SF.by = {}; saleRows(d).forEach(r => { SF.by[r.code] = r; }); }   // การ์ดลอยรายละเอียดเมื่อชี้แถวในตาราง
+    if (d) { SF.by = {}; saleRows(d).forEach(r => { SF.by[r.code] = r; }); SF.all = Object.assign({}, SF.all || {}, SF.by); }   // การ์ดลอยรายละเอียดเมื่อชี้แถวในตาราง
     const b = (d && d.brand) || {}, anyF = F.st !== 'all' || F.status || F.sale || F.group || F.type || F.range || F.who || F.prod || q;
     const pall = Object.values(PM).filter(x => !sel || x.sale === sel), pn = st => pall.filter(x => x.stage === st).length;
     const pstrip = pall.length ? '<div class="sp-pflow"><span class="sp-pf-h">' + PIC.machine + 'ฝ่ายผลิต</span>' + PCOLS.concat('shipped').map(st => '<button type="button" class="sp-pf ' + PSTG[st].cls + (F.prod === st ? ' on' : '') + '" data-spprod="' + st + '">' + PIC[st] + '<b>' + pn(st) + '</b><span>' + PSTG[st].label + (st === 'shipped' ? ' (60 วัน)' : '') + '</span></button>').join('') + '</div>' : '';
@@ -2653,6 +2685,7 @@ async function salePage() {
       requestAnimationFrame(step);
     });
     if (d) firstAnim = false;
+    sqrFill();
   };
   // เร็วขึ้น: แสดงข้อมูลที่จำไว้ทันที → ดึงใหม่เบื้องหลัง (ทางด่วนผ่านกล่องรับ + ส่งคำขอสำรองถ้าช้า)
   const ck = 'saleCache:' + SALE_Q.k + ':' + SALE_Q.sale;
@@ -8513,7 +8546,7 @@ function scanLoop() {
 function saleScanKey(text) {
   const t = String(text || '').trim(); let c = '';
   try { const u = new URL(t); c = u.searchParams.get('job') || ''; } catch (e) {}
-  const by = SF.by || {}, want = (c || t).toLowerCase();
+  const by = Object.assign({}, SF.all || {}, SF.by || {}), want = (c || t).toLowerCase();
   return Object.keys(by).find(k => k.toLowerCase() === want) || (c ? c : '');
 }
 function scanHit(text) {
@@ -8521,8 +8554,39 @@ function scanHit(text) {
   if (!code) { const h = $('#scanModal .scan-hint'); if (h) { h.textContent = 'QR นี้ไม่ใช่ฉลากงานของระบบ'; h.classList.add('bad'); } return false; }
   try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) {}
   const fr = $('#scanModal .scan-frame'); if (fr) fr.classList.add('hit');
-  setTimeout(() => { scanClose(); if (SALE_Q) { if (SF.by && SF.by[code]) saleDetail(code); else toast('ไม่พบงาน ' + code + ' ในรายการของหน้านี้', true); return; } if (prodOfCode(code) || designJobsOf(code).length) coOpen(code); else toast('ไม่พบเลข Job ' + code + ' ในระบบ', true); }, 220);
+  setTimeout(() => { scanClose(); if (SALE_Q) return saleScanOpen(code); if (prodOfCode(code) || designJobsOf(code).length) { coOpen(code); scanStatusToast(code); return; } codeFindOpen(code); }, 220);
   return true;
+}
+/* สถานะหลังสแกน: บอกให้รู้ทันทีว่างานอยู่ขั้นไหน (เช่น ส่งแล้ว วันที่…) */
+function saleRowStatus(r) {
+  const p = r && r.prod;
+  if (p && p.stage === 'shipped') return '✅ ส่งแล้ว' + (p.shippedAt ? ' ' + fdY(String(p.shippedAt).slice(0, 10)) : '');
+  if (p && PSTG[p.stage]) return 'ฝ่ายผลิต: ' + PSTG[p.stage].label;
+  const j = r && (r.jobs || []).find(x => x.status !== 'done') || (r && r.jobs || [])[0];
+  return j ? (j.status === 'done' ? 'ฝ่ายแบบ: เสร็จแล้ว' : 'ฝ่ายแบบ: ' + ((ST[j.status] || ST.queue).label)) : '';
+}
+function scanStatusToast(code) {
+  const p = prodOfCode(code), js = designJobsOf(code);
+  const t = saleRowStatus({ prod: p, jobs: js }); if (t) toast(code + ' · ' + t);
+}
+async function saleScanOpen(code) {
+  const show = c => { saleDetail(c, true); const r = (SF.by || {})[c] || (SF.all || {})[c]; const t = saleRowStatus(r); if (t) toast(c + ' · ' + t); };
+  if ((SF.by && SF.by[code]) || (SF.all && SF.all[code])) return show(code);
+  toast('กำลังค้นหา ' + code + '…');
+  try {
+    const q = { k: SALE_Q.k, sale: SALE_Q.sale, code: code }, res = mode() === 'sheet' ? await Remote.call('saleFind', q) : await Demo.saleFind(q);
+    const rows = saleRows(res || {}); if (!rows.length) return toast('ไม่พบงาน ' + code + (SALE_Q.sale ? ' ของ ' + SALE_Q.sale : '') + ' ในระบบ', true);
+    SF.all = SF.all || {}; rows.forEach(r => { SF.all[r.code] = r; }); show(rows[0].code);
+  } catch (e) { toast('ค้นหาไม่สำเร็จ: ' + e.message, true); }
+}
+async function codeFindOpen(code) {
+  toast('กำลังค้นหา ' + code + '…');
+  try {
+    const r = await api().codeFind({ code: code }), ps = (r && r.prods) || [];
+    ps.forEach(p => { if (!S.prods.some(x => x.id === p.id)) S.prods.push(p); });
+    if (prodOfCode(code) || designJobsOf(code).length) { coOpen(code); scanStatusToast(code); }
+    else toast('ไม่พบเลข Job ' + code + ' ในระบบ', true);
+  } catch (e) { toast('ไม่พบเลข Job ' + code + ' ในระบบ', true); }
 }
 function scanStop() { clearTimeout(SCAN.raf); if (SCAN.stream) { SCAN.stream.getTracks().forEach(t => t.stop()); SCAN.stream = null; } }
 function scanClose() { scanStop(); const m = $('#scanModal'); if (m) m.remove(); }
@@ -8547,8 +8611,8 @@ function openPendingLink() {
   const code = LS.get('pendJob', ''), view = LS.get('pendView', '');
   if (view) { LS.del('pendView'); if (viewsFor(S.user).some(v => v.id === view)) go(view); }
   if (!code) return; LS.del('pendJob');
-  if (prodOfCode(code) || designJobsOf(code).length) { coOpen(code); toast('เปิดงาน ' + code + ' จาก QR'); }
-  else toast('ไม่พบเลข Job ' + code + ' ในระบบ', true);
+  if (prodOfCode(code) || designJobsOf(code).length) { coOpen(code); scanStatusToast(code); }
+  else codeFindOpen(code);
 }
 
 document.addEventListener('change', e => {
@@ -8773,13 +8837,14 @@ function saleFlowHtml(d, sel) {
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
   const dateBox = coDate;
   const dueTxt = r => { if (!r.due) return r.info; const dd = daysBetween(t, r.due); return 'กำหนดส่งแบบ ' + fd(r.due) + (dd < 0 ? ' · เลย ' + (-dd) + ' วัน' : dd === 0 ? ' · วันนี้' : dd === 1 ? ' · พรุ่งนี้' : ''); };
-  const detail = r => '<div class="sf-det">' + saleShipHtml(r) + saleImgs(r) + (r.jobs.length ? '<div class="sf-jobs">' + r.jobs.map(j => '<div class="sf-job"><span class="sp-type" style="--tc:' + typeColorPub(j.taskType) + '">' + esc(j.taskType || 'งาน') + '</span>' +
+  const detail = r => '<div class="sf-det">' + saleQrHtml(r) + saleShipHtml(r) + saleImgs(r) + (r.jobs.length ? '<div class="sf-jobs">' + r.jobs.map(j => '<div class="sf-job"><span class="sp-type" style="--tc:' + typeColorPub(j.taskType) + '">' + esc(j.taskType || 'งาน') + '</span>' +
       '<span class="pill ' + (ST[j.status] || ST.queue).cls + '">' + (ST[j.status] || ST.queue).label + '</span><span class="sf-who">' + (j.assignee ? av(j.assignee, 'sm') + esc(j.assignee) : 'ยังไม่มอบหมาย') + '</span>' +
       '<small>' + (j.status === 'done' ? 'เสร็จ ' + fd(String(j.finishedAt).slice(0, 10)) : j.due ? 'กำหนด ' + fd(j.due) : '') + (j.steps ? ' · เช็กลิสต์ ' + esc(j.steps) : '') + '</small></div>').join('') + '</div>' : '') +
     (r.prod ? '<div class="sf-prod ' + PSTG[r.prod.stage].cls + '">' + PIC.machine + '<b>ฝ่ายผลิต: ' + PSTG[r.prod.stage].label + '</b>' + ((r.prod.machines || []).length ? '<span>' + (r.prod.machines || []).map(m => '<i class="' + (m.d ? 'on' : '') + '">' + (m.d ? '✓ ' : '') + esc(m.m) + '</i>').join('') + '</span>' : '') +
       '<small>' + [r.prod.paint === 'no' ? 'ไม่ทำสี' : '', r.prod.assy === 'no' ? 'ไม่ประกอบ' : '', r.prod.enteredAt ? 'เข้าผลิต ' + fd(r.prod.enteredAt) : '', r.prod.shippedAt ? 'ส่งแล้ว ' + fd(r.prod.shippedAt) : ''].filter(Boolean).join(' · ') + '</small></div>' : '') +
     ((r.jobs.find(j => j.note) || {}).note ? '<p class="sf-note">' + STI.note + esc(r.jobs.find(j => j.note).note) + '</p>' : '') + '</div>';
   SF.by = {}; list.forEach(r => { SF.by[r.code] = r; });
+  SF.all = {}; saleRows(d).forEach(r => { SF.all[r.code] = r; });   // สแกน QR หาจากทุกงาน ไม่ใช่เฉพาะที่กรองอยู่
   const rows = list.length ? '<div class="co-list sf-list">' + list.slice(0, 300).map((r, k) => { const op = !!SF.open[r.code];
       return '<div class="sf-item' + (op ? ' open' : '') + '"><button type="button" class="co-row ' + coStg(r) + ' co-' + (r.step === 'ddone' ? 'design' : r.step) + (r.late ? ' late' : '') + (SF.anim ? ' in' : '') + '" style="--i:' + Math.min(k, 24) + '" data-sfopen="' + esc(r.code) + '" data-shov="' + esc(r.code) + '" aria-expanded="' + op + '">' +
         '<span class="co-code"><span class="co-cline"><b>' + coHl(r.code, qq) + '</b>' + codeTh(r, 'in') + '</span>' + (r.urgent ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + '<small>' + coHl(r.title || '–', qq) + '</small></span>' + coX(r, { sale: !sel }) +

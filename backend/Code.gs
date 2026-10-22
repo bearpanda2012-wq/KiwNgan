@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.50.0';
+const VERSION = '1.51.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -116,6 +116,7 @@ const PUBLIC = {
   login: p => login_(p.userId, p.pin, p.name),
   // ลิงก์ให้ Sale ดูสถานะงาน (อ่านอย่างเดียว ไม่ต้องเข้าสู่ระบบ) — ต้องมีกุญแจที่แอดมินสร้าง
   saleView: p => saleView_(p.k, p.sale),
+  saleFind: p => saleFind_(p.k, p.sale, p.code),
   // ปุ่ม Sale ที่หน้าเข้าสู่ระบบ: ใส่ PIN ของ Sale (แอดมินตั้งไว้) แล้วได้กุญแจเปิดหน้าสถานะงาน
   saleOpen: p => saleOpen_(p.pin),
   // หน้า Sale เปิดอ่านเรื่องในคลังความรู้ → นับคนดู (ลิงก์รายคน = ชื่อ Sale · ลิงก์รวม = รหัสเครื่อง)
@@ -164,6 +165,8 @@ const ACTIONS = {
   addComment: (p, u) => withLock_(() => addComment_(p, u)),
   deleteComment: (p, u) => withLock_(() => deleteComment_(p.id, u)),
   saleLink: (p, u) => { admin_(u); return { key: saleKey_(!!p.reset) }; },
+  // สแกน QR ในแอปแล้วไม่เจอ (งานผลิตที่ส่งแล้วนานเกิน 60 วันไม่ได้โหลดมา) → หาเลข Job นั้นจากทุกแถว
+  codeFind: (p, u) => { const c = String(p.code || '').trim().toLowerCase(); return { prods: c ? readAll_('Prod').filter(x => String(x.code || '').trim().toLowerCase() === c).map(x => maskProd_(x, u)) : [] }; },
   salePin: (p, u) => withLock_(() => { admin_(u); return salePin_(p.pin, p.sale); }),
   prodSave: (p, u) => withLock_(() => ({ prod: maskProd_(prodSave_(p.prod, u), u) })),
   prodDelete: (p, u) => withLock_(() => prodDelete_(p.id, u)),
@@ -576,16 +579,35 @@ function saleView_(k, sale) {
   const im = {}; let metas = [];   // รูปงานที่เก็บใน Drive (แชร์แบบมีลิงก์) ให้ Sale ดูในการ์ดลอยได้
   try { metas = imageMeta_(); metas.forEach(m => { if (m.fileId) (im[m.jobId] = im[m.jobId] || []).push(m.fileId); }); } catch (e) {}
   const jobs = readAll_('Jobs').filter(j => (!sale || j.sale === sale) && (j.status !== 'done' || String(j.finishedAt).slice(0, 10) >= since || live[j.code.toLowerCase()]))
-    .map(j => { let cl = []; try { cl = JSON.parse(j.checklist || '[]'); } catch (e) {}
-      return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', assignee: maskName_(j.assignee, { role: 'user' }) || '', helpers: helpersOf_(j).map(n => maskName_(n, { role: 'user' })).join(','),
-               steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '', imgs: (im[j.id] || []).slice(-6) }; });
+    .map(j => saleJobRow_(j, im));
   const people = usersLite_().filter(x => x.active && x.role !== 'admin').map(x => ({ name: x.name, color: x.color }));
-  const pv = prods.map(x => ({ code: x.code, priority: x.priority === 'urgent' ? 'urgent' : '', title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6), qc: (q => ({ res: q.res, at: q.at, fails: q.fails, ok: q.ok, ng: q.ng }))(prodQc_(x.qc)), ship: x.stage === 'shipped' ? saleShip_(x, metas) : null }));
+  const pv = prods.map(x => saleProdRow_(x, im, metas));
   let kb = []; try { kb = kbList_({ role: 'user' }, metas); } catch (e) { kb = []; }
   const exT = exSaleTok_();
   const out = { ex: exT ? { url: RT_URL, key: RT_KEY, tok: exT } : null, brand: publicBrand_(), sales: own ? [own] : s.sales || [], sale: sale || '', own: own ? 1 : 0, jobs: jobs, prods: pv, kb: kb, machines: s.machines || ['Router', 'Laser', 'Punching', 'WaterJet'], people: people, at: nowIso_(), rt: RT_URL && RT_KEY ? { url: RT_URL, key: RT_KEY } : null };
   try { const t = JSON.stringify(out); if (t.length < 95000) cache.put(ck, t, 600); } catch (e) {}
   return out;
+}
+
+function saleJobRow_(j, im) {
+  let cl = []; try { cl = JSON.parse(j.checklist || '[]'); } catch (e) {}
+  return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', assignee: maskName_(j.assignee, { role: 'user' }) || '', helpers: helpersOf_(j).map(n => maskName_(n, { role: 'user' })).join(','),
+           steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '', imgs: (im[j.id] || []).slice(-6) };
+}
+function saleProdRow_(x, im, metas) {
+  return { code: x.code, priority: x.priority === 'urgent' ? 'urgent' : '', title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6), qc: (q => ({ res: q.res, at: q.at, fails: q.fails, ok: q.ok, ng: q.ng }))(prodQc_(x.qc)), ship: x.stage === 'shipped' ? saleShip_(x, metas) : null };
+}
+/** สแกน QR ในหน้า Sale แล้วไม่อยู่ในรายการ (เช่น ส่งแล้วนานเกิน 45–60 วัน): หาเลข Job นั้นจากทุกงาน */
+function saleFind_(k, sale, code) {
+  const key = PropertiesService.getScriptProperties().getProperty('SALE_KEY'), keys = jsonProp_('SALE_KEYS');
+  const own = k ? Object.keys(keys).find(n => keys[n] === String(k)) : '';
+  if (!k || (String(k) !== key && !own)) throw new Error('ลิงก์นี้ใช้ไม่ได้แล้ว ขอลิงก์ใหม่จากแอดมิน');
+  if (own) sale = own;
+  const c = String(code || '').trim().toLowerCase(); if (!c) return { jobs: [], prods: [] };
+  const im = {}; let metas = [];
+  try { metas = imageMeta_(); metas.forEach(m => { if (m.fileId) (im[m.jobId] = im[m.jobId] || []).push(m.fileId); }); } catch (e) {}
+  const hit = x => String(x.code || '').trim().toLowerCase() === c && (!sale || x.sale === sale);
+  return { jobs: readAll_('Jobs').filter(hit).map(j => saleJobRow_(j, im)), prods: readAll_('Prod').filter(hit).map(x => saleProdRow_(x, im, metas)) };
 }
 
 /** หลักฐานส่งมอบสำหรับหน้า Sale: ผู้รับ เวลา หมายเหตุ รูปของที่ส่ง และลายเซ็น (รหัสไฟล์ Drive ที่แชร์แบบมีลิงก์) */
