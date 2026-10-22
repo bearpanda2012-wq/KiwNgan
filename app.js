@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.105.0';
+const APP_VERSION = '2.106.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1054,11 +1054,14 @@ async function load(silent, boot) {
 }
 
 /* ============ install as an app (PWA) ============ */
-const INST = { evt: null, installed: false, help: false };
+const INST = { evt: null, installed: false, help: false, tab: '', os: '' };
 try { INST.installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) {}
 const UA = navigator.userAgent || '';
 const IS_IOS = /iphone|ipad|ipod/i.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
 const IS_ANDROID = /android/i.test(UA);
+/* เปิดในเบราว์เซอร์ในแอป (LINE / Facebook / IG / Messenger / TikTok) = ติดตั้งไม่ได้ ต้องออกไป Safari/Chrome ก่อน */
+const IN_APP = (/\bLine\//i.test(UA) && 'LINE') || (/FBAN|FBAV|FB_IAB|FBIOS|Messenger/i.test(UA) && 'Facebook') || (/Instagram/i.test(UA) && 'Instagram') || (/musical_ly|BytedanceWebview|TikTok/i.test(UA) && 'TikTok') || '';
+const IOS_OTHER = IS_IOS && /CriOS|FxiOS|EdgiOS|OPiOS/i.test(UA);   // Chrome/Firefox/Edge บน iPhone (ติดตั้งได้ทาง แชร์ แต่ Safari ชัวร์สุด)
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); INST.evt = e; if (S.screen === 'login') renderLogin(); });
 window.addEventListener('appinstalled', () => { INST.installed = true; INST.evt = null; INST.help = false; toast('ติดตั้งแอปเรียบร้อย เปิดได้จากหน้าจอหลักหรือเมนูแอป'); if (S.screen === 'login') renderLogin(); });
 async function installApp() {
@@ -1067,42 +1070,84 @@ async function installApp() {
     try { await e.prompt(); const c = await e.userChoice; if (c && c.outcome === 'accepted') { INST.installed = true; } } catch (x) {}
     if (S.screen === 'login') renderLogin(); return;
   }
-  INST.help = !INST.help; renderLogin();
+  INST.help = !INST.help; renderLogin(); if (INST.help) drawQr();
 }
 const appUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');
+/* ลิงก์ใน QR: บอกระบบปฏิบัติการ (เปิดมาแล้วขึ้นวิธีติดตั้งของเครื่องนั้นทันที) + openExternalBrowser=1 ให้ LINE เปิดออกไปเบราว์เซอร์จริง */
+const instUrl = os => appUrl() + '?install=' + os + '&openExternalBrowser=1';
+(function readInstallParam() {
+  try {
+    const u = new URL(location.href), os = u.searchParams.get('install');
+    if (!os && !u.searchParams.has('openExternalBrowser')) return;
+    // LINE บางรุ่นไม่ออกเอง → เด้งซ้ำ 1 ครั้งพร้อมพารามิเตอร์ (มีอยู่แล้วไม่วน)
+    if (IN_APP === 'LINE' && !u.searchParams.has('openExternalBrowser')) { u.searchParams.set('openExternalBrowser', '1'); location.replace(u.href); return; }
+    if (/^(ios|android|desktop)$/.test(os || '')) { INST.os = os; INST.help = !INST.installed; INST.scroll = 1; INST.tab = os === 'desktop' ? 'desktop' : 'mobile'; }
+    u.searchParams.delete('install'); u.searchParams.delete('openExternalBrowser');
+    history.replaceState(null, '', u.pathname + u.search + u.hash);   // ไอคอนที่ติดตั้งจะเปิดที่ลิงก์สะอาด
+  } catch (e) {}
+})();
 function loadQr(cb) {
   if (window.qrcode) return cb();
   const sc = document.createElement('script'); sc.src = 'vendor/qrcode.js'; // qrcode-generator (MIT), served with the app
-  sc.onload = cb; sc.onerror = () => { const el = $('#instQr'); if (el) el.innerHTML = '<small>สร้าง QR ไม่ได้ ใช้ปุ่มคัดลอกลิงก์แทน</small>'; };
+  sc.onload = cb; sc.onerror = () => document.querySelectorAll('.qr-box[data-qr]').forEach(el => { el.innerHTML = '<small>สร้าง QR ไม่ได้ ใช้ปุ่มคัดลอกลิงก์แทน</small>'; });
   document.head.appendChild(sc);
 }
 function drawQr() {
-  const el = $('#instQr'); if (!el || el.dataset.done) return;
+  if (!document.querySelector('.qr-box[data-qr]:not([data-done])')) return;
   loadQr(() => {
-    const box = $('#instQr'); if (!box || !window.qrcode) return;
-    const q = window.qrcode(0, 'M'); q.addData(appUrl()); q.make();
-    box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); box.dataset.done = '1';
+    if (!window.qrcode) return;
+    document.querySelectorAll('.qr-box[data-qr]:not([data-done])').forEach(box => {
+      const q = window.qrcode(0, 'M'); q.addData(instUrl(box.dataset.qr)); q.make();
+      box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); box.dataset.done = '1';
+    });
   });
+}
+const INST_STEPS = {
+  ios: ['สแกน QR ด้วย <b>กล้อง</b> แล้วแตะลิงก์ที่ขึ้นมา (เปิดใน <b>Safari</b>)', 'แตะปุ่ม <b>แชร์</b> <span class="k">⬆︎</span> ด้านล่าง (iPad อยู่มุมขวาบน)', 'เลื่อนลงเลือก <b>เพิ่มไปยังหน้าจอโฮม</b>', 'เปิด <b>เปิดเป็นเว็บแอป</b> ไว้ (ถ้ามี) → แตะ <b>เพิ่ม</b>'],
+  android: ['สแกน QR ด้วย <b>กล้อง</b> หรือ Google Lens แล้วเปิดใน <b>Chrome</b>', 'แตะ <b>ติดตั้งเลย</b> บนหน้านี้ หรือ <span class="k">⋮</span> มุมขวาบน', 'เลือก <b>ติดตั้งแอป</b> (บางเครื่องเขียนว่า <b>เพิ่มลงในหน้าจอหลัก</b> → <b>ติดตั้ง</b>)', 'ไอคอน KiwNgan ขึ้นที่หน้าจอหลัก'],
+  desktop: ['เปิดลิงก์นี้ใน <b>Chrome</b> หรือ <b>Edge</b>', 'กดไอคอน <span class="k">⤓</span> ท้ายช่องที่อยู่เว็บ หรือปุ่ม <b>ติดตั้งเลย</b> บนหน้านี้<br><small>หรือเมนู <span class="k">⋮</span> → <b>บันทึกและแชร์ / แอป</b> → <b>ติดตั้ง KiwNgan คิวงาน</b></small>', 'หน้าต่างถามยืนยัน (ชื่อ <b>KiwNgan คิวงาน</b>) → กด <b>ติดตั้ง</b>']
+};
+const OS_NAME = { ios: 'iPhone / iPad', android: 'Android' };
+const instOl = a => '<ol class="lg-steps">' + a.map(x => '<li>' + x + '</li>').join('') + '</ol>';
+/* การ์ดต่อระบบ: QR (เฉพาะตอนเปิดบนคอม) + ขั้นตอน */
+function instCard(os, qr) {
+  const steps = INST_STEPS[os].slice(qr ? 0 : 1);
+  if (!qr && os === 'ios' && IOS_OTHER) steps.unshift('<b>แนะนำเปิดใน Safari</b> (แตะ <b>คัดลอกลิงก์</b> ด้านล่าง แล้ววางใน Safari) · Chrome บน iPhone ก็ใช้เมนู <b>แชร์</b> ได้เหมือนกัน');
+  return '<div class="inst-card" data-os="' + os + '"><b class="os">' + OS_NAME[os] + '</b>' +
+    (qr ? '<div class="qr-box" data-qr="' + os + '"><span class="spinner"></span></div>' : '') + instOl(steps) + '</div>';
 }
 function installBlock() {
   if (INST.installed) return '';
-  const tab = INST.tab || (IS_IOS || IS_ANDROID ? 'mobile' : 'desktop');
-  const ol = a => '<ol class="lg-steps">' + a.map(x => '<li>' + x + '</li>').join('') + '</ol>';
-  const mobile = '<div class="inst-grid">' +
-      (!(IS_IOS || IS_ANDROID) ? '<div class="inst-qr"><div id="instQr" class="qr-box"><span class="spinner"></span></div><small>สแกนด้วยกล้องมือถือ<br>เพื่อเปิดแอปบนมือถือ</small></div>' : '') +
-      '<div class="inst-os"><b class="os">iPhone / iPad</b>' + ol(['เปิดลิงก์ใน <b>Safari</b>', 'แตะ <b>แชร์</b> <span class="k">⬆︎</span>', 'เลือก <b>เพิ่มไปยังหน้าจอโฮม</b> → <b>เพิ่ม</b>']) +
-      '<b class="os">Android</b>' + ol(['เปิดลิงก์ใน <b>Chrome</b>', 'แตะ <span class="k">⋮</span> มุมขวาบน', 'เลือก <b>ติดตั้งแอป</b> / <b>เพิ่มลงในหน้าจอหลัก</b>']) + '</div></div>';
-  const desktop = '<div class="inst-os"><b class="os">Windows / Mac — Chrome หรือ Edge</b>' +
-      ol(['เปิดลิงก์นี้ใน <b>Chrome</b> หรือ <b>Edge</b>', 'กดไอคอน <span class="k">⊕</span> หรือ <span class="k">⤓</span> ท้ายช่องที่อยู่เว็บ<br><small>หรือเมนู <span class="k">⋮</span> → <b>บันทึกและแชร์ / แอป</b> → <b>ติดตั้ง KiwNgan</b></small>', 'กด <b>ติดตั้ง</b> แอปจะอยู่บนเดสก์ท็อปและเมนู Start / Dock']) +
-      '<b class="os">Mac — Safari</b>' + ol(['เมนู <b>ไฟล์</b> → <b>เพิ่มไปที่ Dock</b>']) + '</div>';
+  const phone = IS_IOS || IS_ANDROID, myOs = INST.os === 'ios' || INST.os === 'android' ? INST.os : (IS_IOS ? 'ios' : IS_ANDROID ? 'android' : '');
+  const tab = INST.tab || (phone || INST.evt ? 'mobile' : 'desktop');
+  const warn = IN_APP ? '<div class="inst-warn">⚠️ ตอนนี้เปิดอยู่ใน <b>' + IN_APP + '</b> ติดตั้งแอปจากในนี้ไม่ได้ · แตะ <span class="k">⋯</span> หรือ <span class="k">⋮</span> → <b>เปิดใน' + (IS_IOS ? ' Safari' : 'เบราว์เซอร์ / Chrome') + '</b> แล้วทำตามขั้นตอนด้านล่าง</div>' : '';
+  // มือถือ: ขั้นตอนของเครื่องนี้ (กดดูของอีกระบบได้) · คอม: QR แยก iPhone / Android ให้สแกน
+  const mobile = phone
+    ? instCard(myOs || 'android', false) + '<details class="inst-other"><summary>ดูวิธีของ ' + OS_NAME[myOs === 'ios' ? 'android' : 'ios'] + '</summary>' + instCard(myOs === 'ios' ? 'android' : 'ios', false) + '</details>'
+    : '<p class="inst-tip">สแกน QR ให้ตรงกับเครื่อง จะเปิดหน้านี้พร้อมวิธีติดตั้งของเครื่องนั้นทันที</p><div class="inst-qrs">' + instCard('ios', true) + instCard('android', true) + '</div>' +
+      '<button type="button" class="btn sm ghost inst-print" data-act="instprint">' + I.print + 'พิมพ์ QR ติดบอร์ด</button>';
+  const desktop = '<div class="inst-card"><b class="os">Windows / Mac — Chrome หรือ Edge</b>' + instOl(INST_STEPS.desktop) +
+      '<div class="inst-note">ใช้ <b>ติดตั้ง</b> เท่านั้น ไม่ใช้เมนู <b>สร้างทางลัด</b> · ถ้าไอคอนเก่าเปิดแล้วขึ้นแอปอื่น ให้เปิดไอคอนนั้น → <span class="k">⋮</span> → <b>ถอนการติดตั้ง</b> แล้วติดตั้งใหม่จากหน้านี้</div>' +
+      '<b class="os">Mac — Safari</b>' + instOl(['เมนู <b>ไฟล์</b> → <b>เพิ่มไปที่ Dock</b>']) + '</div>';
   return '<div class="lg-install">' +
     '<div class="lg-inst-row"><span class="lg-inst-ic">' + I.download + '</span><div><b>ติดตั้งแอปลงเครื่อง</b><small>ใช้ได้ทั้งมือถือและคอมพิวเตอร์ เปิดจากไอคอนได้ทันที</small></div>' +
       (INST.evt ? '<button type="button" class="btn primary sm" data-act="install">ติดตั้งเลย</button>' : '') +
-      '<button type="button" class="btn sm' + (INST.evt ? '' : ' primary') + '" data-act="insthelp">' + (INST.help ? 'ปิด' : (INST.evt ? 'อุปกรณ์อื่น' : 'วิธีติดตั้ง')) + '</button></div>' +
-    (INST.help ? '<div class="inst-panel"><div class="seg" role="tablist"><button data-insttab="mobile" aria-pressed="' + (tab === 'mobile') + '">📱 มือถือ</button><button data-insttab="desktop" aria-pressed="' + (tab === 'desktop') + '">💻 คอมพิวเตอร์</button></div>' +
+      '<button type="button" class="btn sm' + (INST.evt ? '' : ' primary') + '" data-act="insthelp">' + (INST.help ? 'ปิด' : (INST.evt ? (phone ? 'วิธีติดตั้ง' : 'QR มือถือ') : 'วิธีติดตั้ง')) + '</button></div>' +
+    (INST.help ? '<div class="inst-panel">' + warn + '<div class="seg" role="tablist"><button data-insttab="mobile" aria-pressed="' + (tab === 'mobile') + '">📱 มือถือ</button><button data-insttab="desktop" aria-pressed="' + (tab === 'desktop') + '">💻 คอมพิวเตอร์</button></div>' +
       (tab === 'mobile' ? mobile : desktop) +
       '<div class="inst-link"><span class="mono">' + esc(appUrl().replace(/^https?:\/\//, '')) + '</span><button type="button" class="btn sm" data-act="copyapp">คัดลอกลิงก์</button></div></div>' : '') +
   '</div>';
+}
+/* แผ่น QR สำหรับพิมพ์ติดบอร์ด: A4 · iPhone ซ้าย Android ขวา */
+function instPrint() {
+  loadQr(() => {
+    if (!window.qrcode) return toast('สร้าง QR ไม่ได้', true);
+    const s = S.settings || {}, card = os => '<div class="c"><h2>' + OS_NAME[os] + '</h2><div class="q">' + qrSvg(instUrl(os), 6) + '</div><ol>' + INST_STEPS[os].map(x => '<li>' + x + '</li>').join('') + '</ol></div>';
+    printHtml('<!doctype html><html><head><meta charset="utf-8"><title>ติดตั้ง KiwNgan</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;600;700&display=swap"><style>' +
+      'body{font-family:Anuphan,Tahoma,sans-serif;color:#111}h1{font-size:24pt;margin:0 0 2mm}p.s{margin:0 0 8mm;color:#444;font-size:12pt}.g{display:grid;grid-template-columns:1fr 1fr;gap:10mm}' +
+      '.c{border:.4mm solid #ccc;border-radius:5mm;padding:7mm}.c h2{margin:0 0 4mm;font-size:18pt}.q svg{width:70mm;height:70mm;display:block;margin:0 auto 5mm}ol{margin:0;padding-left:6mm;font-size:11.5pt;line-height:1.55}.k{border:.3mm solid #999;border-radius:1.5mm;padding:0 1.5mm}' +
+      'footer{margin-top:10mm;font-size:10pt;color:#555;word-break:break-all}</style></head><body><h1>ติดตั้งแอป ' + esc(s.appName || 'KiwNgan คิวงาน') + '</h1><p class="s">สแกน QR ให้ตรงกับมือถือของคุณ แล้วทำตามขั้นตอน</p><div class="g">' + card('ios') + card('android') + '</div><footer>' + esc(s.company || '') + ' · ' + esc(appUrl()) + '</footer></body></html>');
+  });
 }
 
 /* ============ login ============ */
@@ -1170,7 +1215,9 @@ function renderLogin() {
           (mode() === 'demo' ? '<button type="button" class="btn ghost sm" data-act="showconn">เชื่อมต่อ Google Sheet ของทีม</button>' : '') + '</div>') +
     '</div></div>' + installBlock() + '<p class="lg-legal">' + esc(b.company || '') + ' · KiwNgan v' + APP_VERSION + '</p></section></div>';
   const focus = L.adminMode && !L.adminName ? $('#adminName') : $('#pinIn');
-  if (focus && (!('ontouchstart' in window) || focus.id === 'adminName')) focus.focus();
+  if (focus && (!('ontouchstart' in window) || focus.id === 'adminName') && !INST.scroll) focus.focus();
+  drawQr();
+  if (INST.scroll && INST.help) { INST.scroll = 0; setTimeout(() => { const el = $('.lg-install'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 350); }   // มาจาก QR: เลื่อนไปที่วิธีติดตั้งเลย
 }
 // keypad: update in place (no full redraw) so it feels instant and the name field keeps its text
 function pressKey(k, btn) {
@@ -8749,6 +8796,7 @@ document.addEventListener('click', async e => {
     case 'editmode': if (S.edit) { S.edit.mode = 'edit'; renderEditor(); } return;
     case 'install': return installApp();
     case 'insthelp': INST.help = !INST.help; renderLogin(); if (INST.help) drawQr(); return;
+    case 'instprint': return instPrint();
     case 'copyapp': try { await navigator.clipboard.writeText(appUrl()); toast('คัดลอกลิงก์แล้ว ส่งให้ทีมหรือเปิดบนอีกเครื่องได้เลย'); } catch (x) { toast(appUrl()); } return;
     case 'bgremove': { const A = bgActive(); if (A && A.src === 'file') { try { localStorage.removeItem('kiwngan:bgimg'); } catch (x) {} bgPut(null).catch(() => {}); bgUse(null); } setTheme({ bgsrc: 'none' }); BGT.tab = ''; toast('เอาพื้นหลังออกแล้ว'); return render(); }
     case 'bgurl': return bgUseUrl(($('#bgUrl') || {}).value);
