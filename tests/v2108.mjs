@@ -13,7 +13,7 @@ await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอด�
 await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(900);
 // ตัวแปลงข้อความประวัติ
 eq('editDetail text', await pg.evaluate(() => T.editDetail({ due: '2026-10-22', note: 'ก', assignee: 'อ๊อฟ', priority: 'normal' }, { due: '2026-10-24', note: 'ก\nข', assignee: 'ฝน', priority: 'urgent' }, 'สลับคิว')),
-  'ผู้รับผิดชอบ อ๊อฟ → ฝน · ความด่วน · เลื่อนกำหนดส่ง 22 ต.ค. → 24 ต.ค. (+2 วัน) · เพิ่มบรีฟ: ข · เหตุผล: สลับคิว'.replace('ความด่วน', 'ตั้งเป็นงานด่วน'));
+  'ผู้รับผิดชอบ อ๊อฟ → ฝน · ความด่วน · เลื่อนกำหนดส่ง 22 ต.ค. → 24 ต.ค. (+2 วัน) · ข · เหตุผล: สลับคิว'.replace('ความด่วน', 'ตั้งเป็นงานด่วน'));
 eq('checklist/helpers/ds detail', await pg.evaluate(() => T.editDetail(
   { checklist: JSON.stringify([{ t: 'เขียนแบบ', d: 0 }, { t: 'ตรวจ', d: 0 }]), helpers: 'ฝน', ds: JSON.stringify({ area: '100', furn: [] }), qty: 'single', group: 'A' },
   { checklist: JSON.stringify([{ t: 'เขียนแบบ', d: 1 }, { t: 'ส่งลูกค้า', d: 0 }]), helpers: 'ต้น', ds: JSON.stringify({ area: '120', furn: [{ n: 'โต๊ะ' }] }), qty: 'multi', group: 'B' }, '')),
@@ -36,7 +36,7 @@ const hist = await pg.locator('#hist').innerText();
 eq('comment shows in history', hist.split('\n')[0].includes('คอมเมนต์ · “ปรับแบบใหม่ให้สมส่วน”'), true);
 console.log(hist.split('\n').slice(0, 3).join(' | '));
 eq('history shows postpone', /เลื่อนกำหนดส่ง .* \(\+3 วัน\)/.test(hist), true);
-eq('history shows brief', /บรีฟ: .*-ลูกค้าเพิ่มด้านข้าง/.test(hist), true);
+eq('history shows brief text without label', /\(\+3 วัน\) · บรีฟเดิม -ลูกค้าเพิ่มด้านข้าง/.test(hist) && !/บรีฟ:/.test(hist), true);
 eq('history shows reason', hist.includes('เหตุผล: สลับกับงาน MV Food'), true);
 await pg.locator('#hist').screenshot({ path: out + 'hist-why.png' });
 await pg.evaluate(() => T.closeEditor()); await pg.waitForTimeout(200);

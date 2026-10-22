@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.113.0';
+const APP_VERSION = '2.113.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5841,8 +5841,8 @@ function editDetail(a, b, why) {
     } else if (h === 'note') {
       const xt = x.trim(), yt = y.trim();
       if (!yt) out.push('ลบบรีฟ/หมายเหตุ (เดิม: ' + cut(xt, 80) + ')');
-      else if (xt && yt.indexOf(xt) === 0) out.push('เพิ่มบรีฟ: ' + cut(yt.slice(xt.length), 160));
-      else out.push((xt ? 'แก้บรีฟ: ' : 'บรีฟ: ') + cut(yt, 160));
+      else if (xt && yt.indexOf(xt) === 0) out.push(cut(yt.slice(xt.length), 160));
+      else out.push(cut(yt, 160));
     } else if (h === 'priority') out.push(y === 'urgent' ? 'ตั้งเป็นงานด่วน' : 'ยกเลิกงานด่วน');
     else if (h === 'revision') out.push(y === 'true' || y === '1' ? 'ตั้งเป็นงานแก้' : 'ยกเลิกงานแก้');
     else if (h === 'received') out.push('วันรับงาน ' + d8(x) + ' → ' + d8(y));
@@ -5880,7 +5880,8 @@ function histHtml(h, cmts) {
   const stl = s => String(s).replace(/\b(queue|doing|review|fix|hold|done)\b/g, m => ST[m].label);
   // ประวัติเก่า (ก่อน v2.108) เก็บแค่ชื่อช่อง เช่น "due, note, ds" → แปลเป็นชื่อไทย
   const old = s => /^[A-Za-z]+(, [A-Za-z]+)*$/.test(s) ? 'แก้ ' + s.split(', ').map(k => ED_LBL[k] || k).join(', ') : s;
-  const det = a => { const t = a.action === 'edit' ? old(String(a.detail)) : a.action === 'comment' ? '“' + String(a.detail).replace(/\s+/g, ' ').trim() + '”' : stl(a.detail); return esc(t).replace(/(เหตุผล:)/, '<b class="why">$1</b>'); };
+  const nob = t => t.replace(/(^| · )(?:เพิ่มบรีฟ|แก้บรีฟ|บรีฟ): /g, '$1');   // ไม่ต้องขึ้นคำว่า เพิ่มบรีฟ/แก้บรีฟ แสดงแค่ข้อความ
+  const det = a => { const t = a.action === 'edit' ? nob(old(String(a.detail))) : a.action === 'comment' ? '“' + String(a.detail).replace(/\s+/g, ' ').trim() + '”' : stl(a.detail); return esc(t).replace(/(เหตุผล:)/, '<b class="why">$1</b>'); };
   return h.slice(0, 80).map(a => '<div class="h-' + esc(a.action) + '"><b>' + esc(a.who || 'ระบบ') + '</b> ' + esc(act[a.action] || a.action) + (a.detail && a.action !== 'create' ? ' · ' + det(a) : '') + ' <span class="muted">· ' + esc(fdt(String(a.ts).slice(0, 16))) + '</span></div>').join('');
 }
 function renderEditor() {
