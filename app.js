@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.107.0';
+const APP_VERSION = '2.108.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -792,7 +792,13 @@ const Demo = {
     if (cur.status === 'done' && !cur.finishedAt) cur.finishedAt = now;
     if (cur.status !== 'done') cur.finishedAt = '';
     if (WORKING(cur.status) && !cur.startedAt) cur.startedAt = now;
-    this.act(d, cur.id, u.name, !before ? 'create' : (before.status !== cur.status ? 'status' : 'edit'), !before ? cur.code : (before.status !== cur.status ? before.status + '→' + cur.status : ''));
+    const why = String(cur.why || '').trim(); delete cur.why;
+    if (!before) this.act(d, cur.id, u.name, 'create', cur.code);
+    else {
+      const ed = editDetail(before, cur, '');
+      if (before.status !== cur.status) this.act(d, cur.id, u.name, 'status', before.status + '→' + cur.status + (why && !ed ? ' · เหตุผล: ' + why : ''));
+      if (ed || before.status === cur.status) this.act(d, cur.id, u.name, 'edit', editDetail(before, cur, why) || 'บันทึก (ไม่มีการเปลี่ยนแปลง)');
+    }
     if (cur.status === 'done' && (!before || before.status !== 'done') && toProdType(cur.taskType, d.settings)) this.pensure(d, cur, u);
     this.save(d); return { job: this.mj(d, u, clone(cur)) };
   },
@@ -2182,7 +2188,7 @@ function dsDueHtml(E, j, k) {
       (mode === 'custom' ? '<input type="date" id="e-due" data-e="due" value="' + esc(j.due) + '" style="margin-top:8px">' : '') + '</div>' +
     (!E.isNew ? '<div class="f"><label for="e-started">เริ่มทำ</label><input type="datetime-local" id="e-started" data-e="startedAt" value="' + esc(j.startedAt) + '"></div>' +
       '<div class="f"><label for="e-finished">ปิดงาน</label><input type="datetime-local" id="e-finished" data-e="finishedAt" value="' + esc(j.finishedAt) + '"' + (j.status !== 'done' ? ' disabled' : '') + '></div>' : '') +
-    '<div class="f full"><label for="e-note">หมายเหตุ / Brief จาก Sales</label><textarea id="e-note" data-e="note" autocomplete="off" rows="3" placeholder="ความต้องการลูกค้า ขอบเขตงาน สิ่งที่ต้องระวัง">' + esc(j.note) + '</textarea></div></fieldset>';
+    '<div class="f full"><label for="e-note">หมายเหตุ / Brief จาก Sales</label><textarea id="e-note" data-e="note" autocomplete="off" rows="3" placeholder="ความต้องการลูกค้า ขอบเขตงาน สิ่งที่ต้องระวัง">' + esc(j.note) + '</textarea></div>' + whyField(E) + '</fieldset>';
 }
 function renderDsEditor(E, j, live, ro, timer, statusSeg) {
   const k = dsKindOf(j) || DS_KINDS[0], d = E.dsd;
@@ -2325,7 +2331,7 @@ function renderDetail(E, j, live, ro, timer) {
       '<span>ผู้รับผิดชอบ</span><b class="hv-who">' + av(jj.assignee) + esc(jj.assignee || 'ยังไม่มอบหมาย') + '</b>' +
       (helpersOf(jj).length ? '<span>ผู้ร่วมทำงาน</span><b class="hv-who hv-helpers">' + helpersOf(jj).map(n => '<span>' + av(n) + esc(n) + '</span>').join('') + '</b>' : '') +
       '<span>Sale</span><b>' + esc(jj.sale || '–') + '</b>' +
-      '<span>จำนวน / ระดับ</span><b>' + (jj.qty === 'multi' ? 'หลายชิ้น' : 'ชิ้นเดียว') + ' · ' + lvBars(jj.level) + '</b>' +
+      (isDs(jj) ? '' : '<span>จำนวน / ระดับ</span><b>' + (jj.qty === 'multi' ? 'หลายชิ้น' : 'ชิ้นเดียว') + ' · ' + lvBars(jj.level) + '</b>') +
       '<span>รับงาน</span><b>' + fdY(jj.received) + '</b>' +
       '<span>กำหนดส่ง</span><b class="' + (di.cls === 'late' ? 'bad' : '') + '">' + fdY(jj.due) + ' <small>(' + esc(di.text) + ')</small></b>' +
       '<span>เริ่มทำ</span><b>' + fdt(jj.startedAt) + '</b>' +
@@ -5129,7 +5135,7 @@ function card(j, i) {
     (nextSt && mine ? '<button class="adv" data-move="' + esc(j.id) + '" data-to="' + nextSt + '" title="เลื่อนเป็น ' + ST[nextSt].label + '" aria-label="เลื่อนเป็น ' + ST[nextSt].label + '">' + I.next + '</button>' : '') + '</div>' +
     (j.title ? '<div class="title">' + esc(j.title) + '</div>' : '') +
     '<div class="tags">' + (j.priority === 'urgent' ? '<span class="tag urgent">' + STI.fire + 'ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">' + STI.pen + 'แก้ไข</span>' : '') + (j.status === 'hold' ? '<span class="pill s-hold">' + STI.hold + 'พักไว้</span>' : '') +
-      typeChip(j.taskType) + groupChip(j.group) + lvBars(j.level) + '</div>' +
+      typeChip(j.taskType) + groupChip(j.group) + (isDs(j) ? '' : lvBars(j.level)) + '</div>' +
     tracker(j) + cardExtras(j) + prodChip(j) +
     '<div class="card-foot">' + timerBtn(j, mine) + avTeam(j) + (run ? '<span class="live" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : (mins ? '<span class="tg">' + STI.timer + fdur(mins) + '</span>' : '<span>' + esc(j.sale ? 'Sale ' + j.sale : '') + '</span>')) +
       '<span class="due ' + di.cls + '">' + dueIc + esc(di.text) + '</span></div></div>';
@@ -5201,7 +5207,7 @@ function viewList() {
     const di = dueInfo(j), run = runningOf(j.id), mins = totalMinutes(j), tc = typeColor(j.taskType);
     return '<div class="row' + (tc ? ' has-tc' : '') + (isLate(j) ? ' is-late' : '') + (j.priority === 'urgent' ? ' is-urgent' : '') + '"' + (tc ? ' style="--tc:' + tc + '"' : '') + ' data-open="' + esc(j.id) + '" tabindex="0" role="button">' +
       '<div class="cell c-main"><div class="code"><span class="qno">' + (i + 1) + '</span>' + stBadge(j) + esc(j.code) + jobTh(j, 'in') + '</div><div class="meta">' + (j.priority === 'urgent' ? '<span class="tag urgent">ด่วน</span>' : '') + (j.revision ? '<span class="tag rev">แก้ไข</span>' : '') +
-        typeChip(j.taskType) + groupChip(j.group) + (j.title ? '<span>' + esc(j.title) + '</span>' : '') + lvBars(j.level) + cardExtras(j) + '</div></div>' +
+        typeChip(j.taskType) + groupChip(j.group) + (j.title ? '<span>' + esc(j.title) + '</span>' : '') + (isDs(j) ? '' : lvBars(j.level)) + cardExtras(j) + '</div></div>' +
       '<div class="cell c-who"><span class="who">' + avTeam(j) + '<span>' + esc(j.assignee || 'ยังไม่มอบหมาย') + (helpersOf(j).length ? '<small class="helpers">+ ' + esc(helpersOf(j).join(', ')) + '</small>' : '') + '<small>Sale ' + esc(j.sale || '–') + '</small></span></span></div>' +
       '<div class="cell c-time">' + (run ? '<span class="tag late" data-since="' + esc(run.start) + '">' + clock(Date.now() - parseLocal(run.start)) + '</span>' : '<span class="tnum">' + (mins ? fdur(mins) : '–') + '</span>') + '<small>เริ่ม ' + fdt(j.startedAt) + '</small></div>' +
       '<div class="cell">รับ ' + fd(j.received) + '<small>' + esc(j.taskType || '') + '</small></div>' +
@@ -5750,11 +5756,49 @@ function opts(list, val, ph, labelFn) {
   const arr = (list || []).slice(); if (val && arr.indexOf(val) < 0) arr.unshift(val);
   return '<option value="">' + (ph || 'เลือก') + '</option>' + arr.map(x => '<option value="' + esc(x) + '"' + (x === val ? ' selected' : '') + '>' + esc(labelFn ? labelFn(x) : x) + '</option>').join('');
 }
+/* ช่อง "เหตุผล" ตอนแก้งานเดิม → ขึ้นในประวัติ · เลื่อนกำหนดส่งต้องใส่ */
+function whyField(E) {
+  if (!E || E.isNew) return '';
+  return '<div class="f full why-f"><label for="e-why">เหตุผลที่แก้ไข / เลื่อนกำหนดส่ง <small>แสดงในประวัติ · เลื่อนกำหนดส่งต้องใส่</small></label><textarea id="e-why" data-e="why" rows="2" autocomplete="off" placeholder="เช่น ลูกค้าขอเพิ่มด้านข้าง, สลับคิวกับงาน MV Food">' + esc(E.job.why || '') + '</textarea></div>';
+}
+/* ประวัติ "แก้ไข": บอกว่าแก้อะไร เป็นอะไร และเพราะอะไร (ฟังก์ชันเดียวกับหลังบ้าน editDetail_) */
+const ED_LBL = { code: 'เลข Job', title: 'ชื่องาน', group: 'กลุ่มงาน', taskType: 'ประเภทงาน', qty: 'จำนวน', level: 'ระดับ', assignee: 'ผู้รับผิดชอบ', sale: 'Sale', priority: 'ความด่วน', revision: 'งานแก้', status: 'สถานะ', received: 'วันรับงาน', due: 'กำหนดส่ง', startedAt: 'เวลาเริ่ม', finishedAt: 'เวลาปิดงาน', note: 'บรีฟ/หมายเหตุ', helpers: 'ผู้ร่วมทำงาน', checklist: 'ขั้นตอนงาน', ds: 'รายละเอียดงานออกแบบ' };
+function editDetail(a, b, why) {
+  const TM = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const d8 = s => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (+m[3]) + ' ' + TM[+m[2] - 1] : 'ไม่กำหนด'; };
+  const cut = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const sv = (o, h) => String(o[h] === undefined || o[h] === null ? '' : o[h]);
+  const skip = { id: 1, updatedAt: 1, updatedBy: 1, minutes: 1, createdAt: 1, createdBy: 1, status: 1, startedAt: 1, finishedAt: 1, why: 1, baseUpdatedAt: 1 };
+  const out = [], rest = [];
+  Object.keys(ED_LBL).forEach(h => {
+    if (skip[h] || sv(a, h) === sv(b, h)) return;
+    const x = sv(a, h), y = sv(b, h);
+    if (h === 'due') {
+      const dd = x && y ? Math.round((Date.parse(y.slice(0, 10)) - Date.parse(x.slice(0, 10))) / 864e5) : 0;
+      out.push((dd > 0 ? 'เลื่อนกำหนดส่ง ' : dd < 0 ? 'เร่งกำหนดส่ง ' : 'กำหนดส่ง ') + d8(x) + ' → ' + d8(y) + (dd ? ' (' + (dd > 0 ? '+' : '−') + Math.abs(dd) + ' วัน)' : ''));
+    } else if (h === 'note') {
+      const xt = x.trim(), yt = y.trim();
+      if (!yt) out.push('ลบบรีฟ/หมายเหตุ');
+      else if (xt && yt.indexOf(xt) === 0) out.push('เพิ่มบรีฟ: ' + cut(yt.slice(xt.length), 160));
+      else out.push((xt ? 'แก้บรีฟ: ' : 'บรีฟ: ') + cut(yt, 160));
+    } else if (h === 'assignee' || h === 'sale') out.push(ED_LBL[h] + ' ' + (x || '–') + ' → ' + (y || '–'));
+    else if (h === 'priority') out.push(y === 'urgent' ? 'ตั้งเป็นงานด่วน' : 'ยกเลิกงานด่วน');
+    else if (h === 'received') out.push('วันรับงาน ' + d8(x) + ' → ' + d8(y));
+    else if (h === 'title' || h === 'code') out.push(ED_LBL[h] + ' → ' + cut(y, 60));
+    else rest.push(ED_LBL[h]);
+  });
+  if (rest.length) out.push('แก้ ' + rest.join(', '));
+  if (why && String(why).trim()) out.push('เหตุผล: ' + cut(why, 200));
+  return out.join(' · ');
+}
 function histHtml(h) {
   if (!h || !h.length) return '<span>ยังไม่มีประวัติ</span>';
   const act = { create: 'สร้างงาน', status: 'เปลี่ยนสถานะ', edit: 'แก้ไข', timer: 'จับเวลา', delete: 'ลบ' };
   const stl = s => String(s).replace(/\b(queue|doing|review|fix|hold|done)\b/g, m => ST[m].label);
-  return h.slice(0, 12).map(a => '<div><b>' + esc(a.who || 'ระบบ') + '</b> ' + esc(act[a.action] || a.action) + (a.detail && a.action !== 'create' ? ' · ' + esc(stl(a.detail)) : '') + ' <span class="muted">· ' + esc(fdt(String(a.ts).slice(0, 16))) + '</span></div>').join('');
+  // ประวัติเก่า (ก่อน v2.108) เก็บแค่ชื่อช่อง เช่น "due, note, ds" → แปลเป็นชื่อไทย
+  const old = s => /^[A-Za-z]+(, [A-Za-z]+)*$/.test(s) ? 'แก้ ' + s.split(', ').map(k => ED_LBL[k] || k).join(', ') : s;
+  const det = a => { const t = a.action === 'edit' ? old(String(a.detail)) : stl(a.detail); return esc(t).replace(/(เหตุผล:)/, '<b class="why">$1</b>'); };
+  return h.slice(0, 20).map(a => '<div class="h-' + esc(a.action) + '"><b>' + esc(a.who || 'ระบบ') + '</b> ' + esc(act[a.action] || a.action) + (a.detail && a.action !== 'create' ? ' · ' + det(a) : '') + ' <span class="muted">· ' + esc(fdt(String(a.ts).slice(0, 16))) + '</span></div>').join('');
 }
 function renderEditor() {
   const E = S.edit; if (!E) return;
@@ -5805,7 +5849,7 @@ function renderEditor() {
       '<div class="f"><label for="e-due">กำหนดส่ง</label><input type="date" id="e-due" data-e="due" value="' + esc(j.due) + '">' + dueHint + '</div>' +
       (!E.isNew ? '<div class="f"><label for="e-started">เริ่มทำ</label><input type="datetime-local" id="e-started" data-e="startedAt" value="' + esc(j.startedAt) + '"></div>' +
         '<div class="f"><label for="e-finished">ปิดงาน</label><input type="datetime-local" id="e-finished" data-e="finishedAt" value="' + esc(j.finishedAt) + '"' + (j.status !== 'done' ? ' disabled' : '') + '></div>' : '') +
-      '<div class="f full"><label for="e-note">หมายเหตุ</label><textarea id="e-note" data-e="note" autocomplete="off" placeholder="เช่น เหลืออีก 1 แผ่น, รอไฟล์ลูกค้า">' + esc(j.note) + '</textarea></div>' +
+      '<div class="f full"><label for="e-note">หมายเหตุ</label><textarea id="e-note" data-e="note" autocomplete="off" placeholder="เช่น เหลืออีก 1 แผ่น, รอไฟล์ลูกค้า">' + esc(j.note) + '</textarea></div>' + whyField(S.edit) +
     '</fieldset>' +
     (!E.isNew ? '<div class="f"><span class="lbl">ประวัติ</span><div class="hist" id="hist">' + (E.hist ? histHtml(E.hist) : '<span>กำลังโหลด…</span>') + '</div>' +
       (live && live.updatedAt ? '<span class="hint">แก้ไขล่าสุด ' + esc(fdt(String(live.updatedAt).slice(0, 16))) + (live.updatedBy ? ' โดย ' + esc(live.updatedBy) : '') + '</span>' : '') + '</div>' : '') +
@@ -5864,6 +5908,10 @@ async function saveEditor() {
   const dsJob = S.edit.team === 'ds' && isDs(j);
   if (dsJob) dsPrepareSave(S.edit, j);
   if (!j.code && !dsJob) { err.hidden = false; err.textContent = 'ใส่เลข Job ก่อนบันทึก'; $('#e-code').focus(); return; }
+  if (!S.edit.isNew) {   // เลื่อนกำหนดส่งออกไป ต้องบอกเหตุผล (เก็บในประวัติ)
+    const was = jobById(j.id);
+    if (was && was.due && j.due && j.due.slice(0, 10) > was.due.slice(0, 10) && !String(j.why || '').trim()) { err.hidden = false; err.textContent = 'เลื่อนกำหนดส่ง ' + fdY(was.due) + ' → ' + fdY(j.due) + ' — ใส่เหตุผลที่เลื่อนก่อนบันทึก'; const w = $('#e-why'); if (w) { w.focus(); w.closest('.f').classList.add('need'); } return; }
+  }
   if (S.edit.isNew) { const clash = codeClash(j.code, j.taskType, S.jobs); if (clash) { err.hidden = false; err.textContent = clash; return; } if (!clOf(j).length && clTemplate(j.taskType).length) j.checklist = JSON.stringify(clTemplate(j.taskType)); }
   const btn = document.querySelector('#sheetFoot [data-act="save"]'); btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
   const pre = Object.assign({}, j); delete pre.minutes;
@@ -5871,7 +5919,7 @@ async function saveEditor() {
   // แก้ไขงานเดิม: ปิดหน้าต่างและอัปเดตบนจอทันที แล้วบันทึกเบื้องหลัง (ถ้าไม่สำเร็จจะเปิดฟอร์มเดิมคืนให้)
   if (!S.edit.isNew && !(pre.status === 'done' && runningOf(pre.id))) {
     const live = jobById(pre.id), prev = live ? clone(live) : null, draft = clone(j);
-    if (live) Object.assign(live, pre);
+    if (live) { Object.assign(live, pre); delete live.why; }
     closeEditor(); render();
     S.saving = (S.saving || 0) + 1;
     try { await saveJob(pre, 'บันทึกแล้ว'); if (pre.status === 'done' && prev && prev.status !== 'done') offerCam(jobById(pre.id)); }

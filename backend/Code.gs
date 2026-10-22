@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.48.0';
+const VERSION = '1.49.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -819,10 +819,45 @@ function saveJob_(job, u) {
   notifyJob_(before, merged, u);
   if (merged.status === 'done' && (!before || before.status !== 'done') && toProd_(merged.taskType)) { try { ensureProd_(merged, u); } catch (e) {} }
 
+  const why = String(job.why || '').trim().slice(0, 300);
   if (!before) log_(merged.id, u.name, 'create', merged.code);
-  else if (before.status !== merged.status) log_(merged.id, u.name, 'status', before.status + '→' + merged.status);
-  else log_(merged.id, u.name, 'edit', diffText_(before, merged));
+  else {   // ประวัติบอกว่าแก้อะไร เป็นอะไร และเหตุผล (เลื่อนกำหนดส่ง ฯลฯ)
+    const ed = editDetail_(before, merged, '');
+    if (before.status !== merged.status) log_(merged.id, u.name, 'status', before.status + '→' + merged.status + (why && !ed ? ' · เหตุผล: ' + why : ''));
+    if (ed || before.status === merged.status) log_(merged.id, u.name, 'edit', editDetail_(before, merged, why) || 'บันทึก (ไม่มีการเปลี่ยนแปลง)');
+  }
   return { job: toObj_('Jobs', SHEETS.Jobs, SHEETS.Jobs.map(h => merged[h] === undefined ? '' : String(merged[h]))) };
+}
+
+/* ประวัติ "แก้ไข": บอกว่าแก้อะไร เป็นอะไร และเพราะอะไร (ฟังก์ชันเดียวกับหน้าเว็บ editDetail ใน app.js) */
+var ED_LBL_ = { code: 'เลข Job', title: 'ชื่องาน', group: 'กลุ่มงาน', taskType: 'ประเภทงาน', qty: 'จำนวน', level: 'ระดับ', assignee: 'ผู้รับผิดชอบ', sale: 'Sale', priority: 'ความด่วน', revision: 'งานแก้', status: 'สถานะ', received: 'วันรับงาน', due: 'กำหนดส่ง', startedAt: 'เวลาเริ่ม', finishedAt: 'เวลาปิดงาน', note: 'บรีฟ/หมายเหตุ', helpers: 'ผู้ร่วมทำงาน', checklist: 'ขั้นตอนงาน', ds: 'รายละเอียดงานออกแบบ' };
+function editDetail_(a, b, why) {
+  const TM = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const d8 = s => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (+m[3]) + ' ' + TM[+m[2] - 1] : 'ไม่กำหนด'; };
+  const cut = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const sv = (o, h) => String(o[h] === undefined || o[h] === null ? '' : o[h]);
+  const skip = { id: 1, updatedAt: 1, updatedBy: 1, minutes: 1, createdAt: 1, createdBy: 1, status: 1, startedAt: 1, finishedAt: 1, why: 1, baseUpdatedAt: 1 };
+  const out = [], rest = [];
+  Object.keys(ED_LBL_).forEach(h => {
+    if (skip[h] || sv(a, h) === sv(b, h)) return;
+    const x = sv(a, h), y = sv(b, h);
+    if (h === 'due') {
+      const dd = x && y ? Math.round((Date.parse(y.slice(0, 10)) - Date.parse(x.slice(0, 10))) / 864e5) : 0;
+      out.push((dd > 0 ? 'เลื่อนกำหนดส่ง ' : dd < 0 ? 'เร่งกำหนดส่ง ' : 'กำหนดส่ง ') + d8(x) + ' → ' + d8(y) + (dd ? ' (' + (dd > 0 ? '+' : '−') + Math.abs(dd) + ' วัน)' : ''));
+    } else if (h === 'note') {
+      const xt = x.trim(), yt = y.trim();
+      if (!yt) out.push('ลบบรีฟ/หมายเหตุ');
+      else if (xt && yt.indexOf(xt) === 0) out.push('เพิ่มบรีฟ: ' + cut(yt.slice(xt.length), 160));
+      else out.push((xt ? 'แก้บรีฟ: ' : 'บรีฟ: ') + cut(yt, 160));
+    } else if (h === 'assignee' || h === 'sale') out.push(ED_LBL_[h] + ' ' + (x || '–') + ' → ' + (y || '–'));
+    else if (h === 'priority') out.push(y === 'urgent' ? 'ตั้งเป็นงานด่วน' : 'ยกเลิกงานด่วน');
+    else if (h === 'received') out.push('วันรับงาน ' + d8(x) + ' → ' + d8(y));
+    else if (h === 'title' || h === 'code') out.push(ED_LBL_[h] + ' → ' + cut(y, 60));
+    else rest.push(ED_LBL_[h]);
+  });
+  if (rest.length) out.push('แก้ ' + rest.join(', '));
+  if (why && String(why).trim()) out.push('เหตุผล: ' + cut(why, 200));
+  return out.join(' · ');
 }
 
 function diffText_(a, b) {

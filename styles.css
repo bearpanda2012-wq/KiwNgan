@@ -322,6 +322,10 @@ legend{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--
 .logs .x:hover{color:var(--late);background:var(--late-soft)}
 .hist{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
 .hist b{color:var(--ink);font-weight:500}
+.hist b.why{color:var(--warn,#D97706);font-weight:600}
+.hist .h-edit{line-height:1.5}
+.why-f label small{color:var(--muted);font-weight:400;margin-left:6px;font-size:12px}
+.why-f.need textarea{border-color:#E5484D;box-shadow:0 0 0 3px rgba(229,72,77,.18)}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--late-soft);border-radius:10px;padding:10px 12px;font-size:13.5px}
 
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.2s;z-index:70;pointer-events:none;max-width:calc(100% - 32px)}
