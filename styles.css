@@ -6151,3 +6151,14 @@ body.auth #bgSndBtn{display:none}
 /* v2.109: แถว/การ์ดที่ตัดขอบอยู่แล้ว (overflow:hidden) → กั้นการวาดไว้ในกรอบ ไม่ให้ชั้นภาพของแอนิเมชันข้างในลามไปรวมกับแถวอื่น
    (จอความละเอียดสูงอย่าง Samsung S24 Ultra ชั้นภาพใหญ่เกิน → การ์ดว่าง/ภาพซ้อนตอนเลื่อน) */
 .pcard,.co-row,.kpi{contain:paint}
+/* ห้องเกม: ปุ่มในกล่องข้อความ · แถบห้องที่เปิดอยู่ · การ์ดคำชวน (ตัวเกมอยู่ใน games.js โหลดเมื่อใช้) */
+.mp-game{font-size:17px;line-height:1}
+.g-strip{display:flex;gap:6px;flex-wrap:wrap;padding:0 12px}
+.g-strip:empty{display:none}
+.g-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid color-mix(in oklab,var(--brand) 45%,transparent);background:color-mix(in oklab,var(--brand) 9%,var(--surface));color:var(--ink);border-radius:999px;padding:5px 12px;font:600 12.5px var(--f-body,inherit);cursor:pointer;margin-top:6px}
+.g-chip small{font-weight:400;color:var(--brand)}
+.g-chip.mine{border-style:dashed}
+.g-invite{position:fixed;right:16px;bottom:16px;z-index:125;display:flex;align-items:center;gap:10px;background:var(--surface);color:var(--ink);border-radius:16px;padding:10px 10px 10px 14px;box-shadow:0 18px 44px -12px rgba(0,0,0,.4),0 0 0 1px var(--line);max-width:calc(100vw - 32px);animation:riseIn .35s cubic-bezier(.2,.8,.2,1)}
+.g-invite[hidden]{display:none}
+.g-invite .gi-e{font-size:26px}
+.g-invite b{display:block;font-size:14px}.g-invite small{color:var(--muted);font-size:12px}

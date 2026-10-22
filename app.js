@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.110.0';
+const APP_VERSION = '2.111.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1005,10 +1005,55 @@ async function rtIn(p) {
   if (o.k === 'sig' && o.g) {
     const to = o.g.to, mine = to === S.me || ((to === 'admin' || to === ADMIN_LABEL) && isAdmin());
     if (mine && o.g.from !== S.me) rtcOnSigOnce(o.g);
+  } else if (o.k === 'g') { gameIn(o);
   } else if (o.k === 'chg') {
     if (o.what === 'msg') { if (M.loaded) pollMessages(); }
     else { clearTimeout(RT.chgT); RT.chgT = setTimeout(rtDataChanged, 350); }
   }
+}
+/* ============ ห้องเกม (games.js โหลดเมื่อใช้) ============ */
+const GOPEN = {}, GNAME = { rps: '✊ เป่ายิ้งฉุบ', mem: '🃏 จับคู่ภาพ', math: '⚡ คิดเลขไว', pig: '🎲 ทอยเต๋าเสี่ยงดวง' };
+const gMe = () => isAdmin() ? ADMIN_LABEL : S.me;
+const gForMe = to => to === 'team' || (Array.isArray(to) && to.indexOf(gMe()) >= 0);
+function gScope(ch) { ch = ch || M.ch || 'team'; if (ch === 'team') return 'team'; if (ch === 'admin') return [gMe(), ADMIN_LABEL]; return [gMe(), ch.slice(2)]; }
+const gSame = (to, sc) => to === 'team' ? sc === 'team' : Array.isArray(to) && Array.isArray(sc) && to.length === sc.length && sc.every(x => to.indexOf(x) >= 0);
+function gOpenRooms(sc) { const t = Date.now(); Object.keys(GOPEN).forEach(r => { if (t - GOPEN[r].at > 45000) delete GOPEN[r]; }); return Object.values(GOPEN).filter(r => !sc || gSame(r.to, sc)); }
+function gChanged() { if (M.open) { const el = $('#gStrip'); if (el) el.outerHTML = gStrip(); } }
+function gameIn(o) {
+  if (!o || !o.r || !gForMe(o.to)) return;
+  if (window.KNGames) return KNGames.recv(o);
+  if (o.t === 'open') { GBR.seen(o.r, { r: o.r, game: o.game, host: o.host, to: o.to, phase: 'lobby', players: [] }); GBR.invite(o); }
+  else if (o.t === 'st' && o.room) GBR.seen(o.r, o.room);
+  else if (o.t === 'close') GBR.gone(o.r);
+}
+const GBR = window.KN_G = {
+  me: gMe, live: () => mode() === 'sheet' && RT.ok, esc: esc, toast: m => toast(m),
+  send: o => { if (mode() === 'sheet' && RT.ok) rtSend(Object.assign({ k: 'g' }, o)); },
+  av: n => n === ADMIN_LABEL ? '<span class="av adm">' + MSG_IC.shield + '</span>' : /^บอท \d+$/.test(n) ? '<span class="av">🤖</span>' : av(n, 'sm'),
+  scopeName: sc => sc === 'team' ? 'ทั้งทีม · เล่นเป็นกลุ่ม' : 'เล่นแบบคู่กับ ' + (Array.isArray(sc) ? sc.filter(x => x !== gMe()).join(', ') : ''),
+  openRooms: sc => gOpenRooms(sc).filter(r => r.host !== gMe() && !(window.KNGames && KNGames.rooms()[r.r])),
+  known: r => GOPEN[r] || null,
+  seen: (r, room) => { const was = !!GOPEN[r]; GOPEN[r] = Object.assign(GOPEN[r] || {}, { r: r, game: room.game, host: room.host, to: room.to, phase: room.phase, players: room.players || [], at: Date.now() }); if (!was) gChanged(); },
+  gone: r => { delete GOPEN[r]; gChanged(); },
+  roomsChanged: () => gChanged(),
+  invite(o) {
+    if (o.host === gMe() || (window.KNGames && KNGames.rooms()[o.r]) || GBR.dis[o.r]) return;
+    GBR.dis[o.r] = 1; let el = $('#gInvite'); if (!el) { el = document.createElement('div'); el.id = 'gInvite'; el.className = 'g-invite'; document.body.appendChild(el); }
+    el.innerHTML = '<span class="gi-e">🎮</span><div><b>' + esc(o.host) + ' ชวนเล่น ' + esc(GNAME[o.game] || 'เกม') + '</b><small>' + (o.to === 'team' ? 'ห้องของทั้งทีม' : 'เล่นแบบคู่') + '</small></div><button type="button" class="btn sm primary" data-act="gjoin" data-r="' + esc(o.r) + '">เข้าร่วม</button><button type="button" class="icon-btn sm" data-act="gix" aria-label="ปิด">✕</button>';
+    el.hidden = false; clearTimeout(GBR.t); GBR.t = setTimeout(() => { el.hidden = true; }, 25000);
+    try { ping(false, true); } catch (e) {}
+  },
+  dis: {}
+};
+function gStrip() {
+  const rs = GBR.openRooms(gScope()), mine = window.KNGames ? Object.values(KNGames.rooms()).filter(r => gSame(r.to, gScope())) : [];
+  return '<div class="g-strip" id="gStrip">' + mine.map(r => '<button type="button" class="g-chip mine" data-act="gopen" data-r="' + esc(r.r) + '">🎮 ' + esc(GNAME[r.game] || '') + '<small>' + (r.phase === 'play' ? 'กำลังเล่น' : r.phase === 'end' ? 'จบเกม' : 'รอผู้เล่น') + '</small></button>').join('') +
+    rs.map(r => '<button type="button" class="g-chip" data-act="gjoin" data-r="' + esc(r.r) + '">🎮 ' + esc(r.host) + ' เปิด ' + esc(GNAME[r.game] || '') + '<small>' + (r.phase === 'play' ? 'ดู/ขอเข้าเล่น' : 'เข้าร่วม') + '</small></button>').join('') + '</div>';
+}
+async function gamesOpen(r) {
+  try { await loadJs('games.js?v=' + APP_VERSION); } catch (e) { return toast('โหลดห้องเกมไม่สำเร็จ ลองใหม่อีกครั้ง', true); }
+  const room = r && GOPEN[r]; const el = $('#gInvite'); if (el) el.hidden = true;
+  KNGames.open(room ? room.to : gScope(), r || '');
 }
 function rtDataChanged() {
   if (S.screen !== 'app') return;
@@ -2815,7 +2860,7 @@ function openMsgPanel(ch, opts) {
 document.addEventListener('mousedown', e => {
   if (!M.open) return; const p = $('#msgPanel'), t = e.target;
   if (!p || !t || !t.closest || p.contains(t)) return;
-  if (t.closest('#imgView, #lightbox, #hovercard, #rtcModal, #rtcView, #rtcHost, #rtcCall, #roomView, .rtc-peek, .toast, #chatHeads, [data-act="msgopen"], .modal, #sheet, #pModal, .ntf')) return;
+  if (t.closest('#gameView, #gInvite, #imgView, #lightbox, #hovercard, #rtcModal, #rtcView, #rtcHost, #rtcCall, #roomView, .rtc-peek, .toast, #chatHeads, [data-act="msgopen"], .modal, #sheet, #pModal, .ntf')) return;
   closeMsgPanel();
 }, true);
 function closeMsgPanel() { M.open = false; M.help = false; const p = $('#msgPanel'); if (p) p.classList.remove('open'); renderChatHeads(); }
@@ -2886,10 +2931,11 @@ function renderMsgPanel() {
       ('Notification' in window && Notification.permission === 'default' ? '<button class="icon-btn" data-act="notifyperm" title="เปิดแจ้งเตือนบนเครื่องนี้">' + MSG_IC.bell + '</button>' : '') +
       (isAdmin() && M.list.some(m => chanOf(m) === M.ch) ? '<button class="icon-btn" data-act="msgclear" title="ล้างประวัติห้องนี้">' + I.trash + '</button>' : '') +
       '<button class="icon-btn mp-snd' + (msgSoundOn() ? '' : ' off') + '" data-act="msgsound" title="' + (msgSoundOn() ? 'ปิดเสียง/สั่นแจ้งเตือนข้อความ' : 'เปิดเสียง/สั่นแจ้งเตือนข้อความ') + '" aria-pressed="' + msgSoundOn() + '">' + (msgSoundOn() ? RTC_IC.spk : RTC_IC.spkOff) + '</button>' +
+      '<button class="icon-btn mp-game" data-act="games" title="ห้องเกม — เล่นด้วยกัน (กลุ่ม/คู่)">🎮</button>' +
       '<button class="icon-btn" data-act="msgclose" aria-label="ปิด">✕</button></div>' +
     (M.confirmClear ? '<div class="mp-confirm"><span>' + I.trash + 'ลบข้อความทั้งหมดในห้อง <b>' + esc(cur.name) + '</b> (' + M.list.filter(m => chanOf(m) === M.ch).length + ' ข้อความ)? ย้อนกลับไม่ได้</span><button class="btn sm danger" data-act="msgclearyes">ลบทั้งหมด</button><button class="btn sm" data-act="msgclearno">ยกเลิก</button></div>' : '') +
     '<div class="mp-chans" data-n="' + chans.length + '">' + chans.map(c => { const n = unreadIn(c.id); return '<button class="mp-ch' + (c.id === M.ch ? ' on' : '') + '" data-ch="' + esc(c.id) + '">' + (c.user ? avUser(c.user) : '<span class="av ch-ic">' + c.icon + '</span>') + '<span>' + esc(c.name) + '</span>' + (n ? '<b>' + n + '</b>' : '') + '</button>'; }).join('') + '</div>' +
-    rtcStrip() +
+    rtcStrip() + gStrip() +
     (helps.length && M.ch !== 'team' ? '<button class="mp-sosbar" data-ch="team">' + MSG_IC.sos + helps.length + ' คำขอความช่วยเหลือรอคนช่วย · ดู</button>' : '') +
     '<div class="mp-body" id="mpBody">' + body + '</div>' +
     '<form class="mp-compose' + (M.help ? ' helping' : '') + '" id="msgForm">' + helpForm +
@@ -8960,6 +9006,9 @@ document.addEventListener('click', async e => {
     case 'holadd': { const dd = $('#holD'), nn = $('#holN'); if (!dd || !dd.value || !S.draft) return; S.draft.holidays = (S.draft.holidays || []).filter(h => h.d !== dd.value).concat({ d: dd.value, n: (nn && nn.value.trim()) || 'วันหยุด' }).sort((a, b) => a.d.localeCompare(b.d)); markDirty(); return render(); }
     case 'holfixed': { if (!S.draft) return; const y = new Date().getFullYear(); const add = [y, y + 1].flatMap(yy => FIXED_HOL.map(h => ({ d: yy + '-' + h[0], n: h[1] }))).filter(h => h.d >= today()); const have = new Set((S.draft.holidays || []).map(h => h.d)); S.draft.holidays = (S.draft.holidays || []).concat(add.filter(h => !have.has(h.d))).sort((a, b) => a.d.localeCompare(b.d)); markDirty(); toast('เพิ่มวันหยุดราชการ (วันที่ตายตัว) ' + add.filter(h => !have.has(h.d)).length + ' วัน'); return render(); }
     case 'msgclose': return closeMsgPanel();
+    case 'games': return gamesOpen('');
+    case 'gjoin': case 'gopen': return gamesOpen(t.dataset.r);
+    case 'gix': { const el = $('#gInvite'); if (el) el.hidden = true; return; }
     case 'msgsound': LS.set('msgSound', msgSoundOn() ? 0 : 1); if (msgSoundOn()) { ping(false, true); msgBuzz(false); } toast(msgSoundOn() ? 'เปิดเสียงและสั่นเมื่อมีข้อความ' : 'ปิดเสียงแจ้งเตือนข้อความแล้ว'); renderMsgPanel(); return;
     case 'msgattdel': M.att = null; renderMsgPanel(); { const t = $('#msgText'); if (t) t.focus(); } return;
     case 'helpon': M.help = true; M.helpTo = M.ch === 'admin' ? 'admin' : 'team'; renderMsgPanel(); { const x = $('#msgText'); if (x) x.focus(); } return;
@@ -9413,7 +9462,7 @@ document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === 
 }, true));
 document.addEventListener('focusout', e => { if (e.target && e.target.type === 'color' && S.renderLater) setTimeout(() => { const a = document.activeElement; if (!(a && a.type === 'color')) render(); }, 60); });
 bgLoad();
-window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION, renderPeek: renderPeek, rtcDc: rtcDc, renderRoom: renderRoom, rinkRecv: rinkRecv, renderRtc: renderRtc };
+window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION, renderPeek: renderPeek, rtcDc: rtcDc, renderRoom: renderRoom, rinkRecv: rinkRecv, renderRtc: renderRtc, gameIn: gameIn };
 if (SALE_Q) { salePage(); } else {
 if (mode() === 'sheet') ibStart(LS.get('rtpub', null));   // เปิดกล่องรับคำตอบไว้ก่อน ระหว่างรอ bootstrap ครั้งแรก
 load(false);
