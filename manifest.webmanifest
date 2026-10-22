@@ -1,11 +1,11 @@
 {
-  "id": "./",
+  "id": "https://bearpanda2012-wq.github.io/KiwNgan/",
   "name": "KiwNgan คิวงาน",
   "short_name": "KiwNgan",
   "description": "ระบบคิวงานออกแบบและงาน CAD/CAM สำหรับทีมผลิต",
   "lang": "th",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "https://bearpanda2012-wq.github.io/KiwNgan/",
+  "scope": "https://bearpanda2012-wq.github.io/KiwNgan/",
   "display": "standalone",
   "background_color": "#ECEFF2",
   "theme_color": "#0B6B70",
@@ -31,11 +31,11 @@
   "shortcuts": [
     {
       "name": "บอร์ดงาน",
-      "url": "./?view=board"
+      "url": "https://bearpanda2012-wq.github.io/KiwNgan/?view=board"
     },
     {
       "name": "สรุปรายงาน",
-      "url": "./?view=report"
+      "url": "https://bearpanda2012-wq.github.io/KiwNgan/?view=report"
     }
   ],
   "launch_handler": {

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.106.0';
+const APP_VERSION = '2.106.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1072,7 +1072,9 @@ async function installApp() {
   }
   INST.help = !INST.help; renderLogin(); if (INST.help) drawQr();
 }
-const appUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');
+/* ลิงก์จริงของแอป (ใช้ใน QR / คัดลอกลิงก์ / ฉลากงาน) · เปิดจากที่อื่น (เครื่องทดสอบ) ใช้ที่อยู่ปัจจุบัน */
+const APP_HOME = 'https://bearpanda2012-wq.github.io/KiwNgan/';
+const appUrl = () => location.host === 'bearpanda2012-wq.github.io' ? APP_HOME : location.origin + location.pathname.replace(/index\.html$/, '');
 /* ลิงก์ใน QR: บอกระบบปฏิบัติการ (เปิดมาแล้วขึ้นวิธีติดตั้งของเครื่องนั้นทันที) + openExternalBrowser=1 ให้ LINE เปิดออกไปเบราว์เซอร์จริง */
 const instUrl = os => appUrl() + '?install=' + os + '&openExternalBrowser=1';
 (function readInstallParam() {
