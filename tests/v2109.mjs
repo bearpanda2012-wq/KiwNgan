@@ -21,8 +21,9 @@ const A = await page('A');
 await A.click('[data-act="msgopen"]').catch(() => A.evaluate(() => document.querySelector('[data-act="msgopen"]') && document.querySelector('[data-act="msgopen"]').click()));
 await A.waitForTimeout(400);
 eq('game button in chat', await A.locator('#msgPanel [data-act="games"]').count(), 1);
+await A.locator('#msgPanel .mp-head').screenshot({ path: out + 'game-btn.png' });
 await A.click('#msgPanel [data-act="games"]'); await A.waitForTimeout(700);
-eq('4 games listed', await A.$$eval('#gameView [data-ga="new"]', a => a.map(x => x.dataset.v)), ['rps', 'mem', 'math', 'pig']);
+eq('11 games listed (work games first)', await A.$$eval('#gameView [data-ga="new"]', a => a.map(x => x.dataset.v)), ['quiz', 'sort', 'rps', 'mem', 'math', 'pig', 'draw', 'four', 'guess', 'react', 'bingo']);
 eq('offline note (demo)', await A.locator('#gameView .gm-note').count(), 1);
 await A.locator('#gameView .gm-card').screenshot({ path: out + 'games-lobby.png' });
 // ทุกเกมเล่นกับบอทจนจบได้

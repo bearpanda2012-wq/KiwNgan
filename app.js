@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.111.0';
+const APP_VERSION = '2.112.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1012,7 +1012,7 @@ async function rtIn(p) {
   }
 }
 /* ============ ห้องเกม (games.js โหลดเมื่อใช้) ============ */
-const GOPEN = {}, GNAME = { rps: '✊ เป่ายิ้งฉุบ', mem: '🃏 จับคู่ภาพ', math: '⚡ คิดเลขไว', pig: '🎲 ทอยเต๋าเสี่ยงดวง' };
+const GOPEN = {}, GNAME = { rps: '✊ เป่ายิ้งฉุบ', mem: '🃏 จับคู่ภาพ', math: '⚡ คิดเลขไว', pig: '🎲 ทอยเต๋าเสี่ยงดวง', quiz: '📋 ควิซคิวงาน', sort: '⏰ เรียงคิวด่วน', draw: '🎨 วาดภาพทายคำ', four: '🔴 เรียง 4', guess: '🔢 ทายเลขลับ', react: '🚦 ใครเร็วกว่า', bingo: '🎱 บิงโก' };
 const gMe = () => isAdmin() ? ADMIN_LABEL : S.me;
 const gForMe = to => to === 'team' || (Array.isArray(to) && to.indexOf(gMe()) >= 0);
 function gScope(ch) { ch = ch || M.ch || 'team'; if (ch === 'team') return 'team'; if (ch === 'admin') return [gMe(), ADMIN_LABEL]; return [gMe(), ch.slice(2)]; }
@@ -1028,6 +1028,9 @@ function gameIn(o) {
 }
 const GBR = window.KN_G = {
   me: gMe, live: () => mode() === 'sheet' && RT.ok, esc: esc, toast: m => toast(m),
+  // ข้อมูลงานสำหรับเกมคิวงาน (ไม่รวมชื่อผู้ดูแลระบบ)
+  jobs: () => { const adm = new Set((S.users || []).filter(u => u.role === 'admin').map(u => u.name)), nm = n => adm.has(n) ? ADMIN_LABEL : n;
+    return (S.jobs || []).filter(j => j.code && !j.pending).slice(-300).map(j => ({ code: j.code, title: j.title || '', assignee: j.assignee ? nm(j.assignee) : '', sale: j.sale || '', status: (ST[j.status] || {}).label || '', group: j.group || '', type: j.taskType || '', due: String(j.due || '').slice(0, 10) })); },
   send: o => { if (mode() === 'sheet' && RT.ok) rtSend(Object.assign({ k: 'g' }, o)); },
   av: n => n === ADMIN_LABEL ? '<span class="av adm">' + MSG_IC.shield + '</span>' : /^บอท \d+$/.test(n) ? '<span class="av">🤖</span>' : av(n, 'sm'),
   scopeName: sc => sc === 'team' ? 'ทั้งทีม · เล่นเป็นกลุ่ม' : 'เล่นแบบคู่กับ ' + (Array.isArray(sc) ? sc.filter(x => x !== gMe()).join(', ') : ''),
@@ -2931,7 +2934,7 @@ function renderMsgPanel() {
       ('Notification' in window && Notification.permission === 'default' ? '<button class="icon-btn" data-act="notifyperm" title="เปิดแจ้งเตือนบนเครื่องนี้">' + MSG_IC.bell + '</button>' : '') +
       (isAdmin() && M.list.some(m => chanOf(m) === M.ch) ? '<button class="icon-btn" data-act="msgclear" title="ล้างประวัติห้องนี้">' + I.trash + '</button>' : '') +
       '<button class="icon-btn mp-snd' + (msgSoundOn() ? '' : ' off') + '" data-act="msgsound" title="' + (msgSoundOn() ? 'ปิดเสียง/สั่นแจ้งเตือนข้อความ' : 'เปิดเสียง/สั่นแจ้งเตือนข้อความ') + '" aria-pressed="' + msgSoundOn() + '">' + (msgSoundOn() ? RTC_IC.spk : RTC_IC.spkOff) + '</button>' +
-      '<button class="icon-btn mp-game" data-act="games" title="ห้องเกม — เล่นด้วยกัน (กลุ่ม/คู่)">🎮</button>' +
+      '<button type="button" class="mp-game" data-act="games" title="ห้องเกม — เล่นด้วยกัน (กลุ่ม/คู่)"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 6h9A5.5 5.5 0 0 1 22 11.5v1.3a4.2 4.2 0 0 1-7.6 2.5L13.6 14h-3.2l-.8 1.3A4.2 4.2 0 0 1 2 12.8v-1.3A5.5 5.5 0 0 1 7.5 6zm-.5 3v1.5H5.5v1.5H7v1.5h1.5V12H10v-1.5H8.5V9H7zm9.3.2a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2zm-2.2 2.2a1.1 1.1 0 1 0 0 2.2 1.1 1.1 0 0 0 0-2.2z"/></svg><span>เกม</span></button>' +
       '<button class="icon-btn" data-act="msgclose" aria-label="ปิด">✕</button></div>' +
     (M.confirmClear ? '<div class="mp-confirm"><span>' + I.trash + 'ลบข้อความทั้งหมดในห้อง <b>' + esc(cur.name) + '</b> (' + M.list.filter(m => chanOf(m) === M.ch).length + ' ข้อความ)? ย้อนกลับไม่ได้</span><button class="btn sm danger" data-act="msgclearyes">ลบทั้งหมด</button><button class="btn sm" data-act="msgclearno">ยกเลิก</button></div>' : '') +
     '<div class="mp-chans" data-n="' + chans.length + '">' + chans.map(c => { const n = unreadIn(c.id); return '<button class="mp-ch' + (c.id === M.ch ? ' on' : '') + '" data-ch="' + esc(c.id) + '">' + (c.user ? avUser(c.user) : '<span class="av ch-ic">' + c.icon + '</span>') + '<span>' + esc(c.name) + '</span>' + (n ? '<b>' + n + '</b>' : '') + '</button>'; }).join('') + '</div>' +
