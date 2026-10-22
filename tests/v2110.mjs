@@ -50,6 +50,7 @@ const relay = async (from, to) => { const q = await from.evaluate(() => { const 
 for (const [pg, nm] of [[A, 'หมี'], [Bp, 'ฝน']]) await pg.evaluate(nm => { window.__out = []; KN_G.send = o => window.__out.push(JSON.parse(JSON.stringify(Object.assign({ k: 'g' }, o)))); KN_G.live = () => true; KN_G.me = () => nm; }, nm);
 const pump = async (n = 4) => { for (let i = 0; i < n; i++) { await relay(A, Bp); await relay(Bp, A); await A.waitForTimeout(80); } };
 await A.evaluate(() => KNGames.open('team')); await A.click('#gameView [data-ga="new"][data-v="draw"]'); await A.waitForTimeout(150); await pump();
+await A.click('#gameView [data-ga="iall"]'); await A.waitForTimeout(150); await pump();
 await Bp.click('#gInvite [data-act="gjoin"]'); await Bp.waitForTimeout(600); await pump();
 await A.click('#gameView [data-ga="start"]'); await pump();
 const word = await A.evaluate(() => Object.values(KNGames.rooms())[0].g.word);

@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.112.0';
+const APP_VERSION = '2.113.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1022,13 +1022,15 @@ function gChanged() { if (M.open) { const el = $('#gStrip'); if (el) el.outerHTM
 function gameIn(o) {
   if (!o || !o.r || !gForMe(o.to)) return;
   if (window.KNGames) return KNGames.recv(o);
-  if (o.t === 'open') { GBR.seen(o.r, { r: o.r, game: o.game, host: o.host, to: o.to, phase: 'lobby', players: [] }); GBR.invite(o); }
-  else if (o.t === 'st' && o.room) GBR.seen(o.r, o.room);
+  const me = gMe(), inv = v => v === 'all' || (Array.isArray(v) && v.indexOf(me) >= 0);
+  if (o.t === 'open') { if (!inv(o.who)) return; GBR.seen(o.r, { r: o.r, game: o.game, host: o.host, to: o.to, phase: 'lobby', players: [] }); GBR.invite(o); }   // แจ้งเฉพาะคนที่ถูกชวน
+  else if (o.t === 'st' && o.room && (inv(o.room.invited) || (o.room.players || []).some(p => p.n === me))) GBR.seen(o.r, o.room);
   else if (o.t === 'close') GBR.gone(o.r);
 }
 const GBR = window.KN_G = {
   me: gMe, live: () => mode() === 'sheet' && RT.ok, esc: esc, toast: m => toast(m),
   // ข้อมูลงานสำหรับเกมคิวงาน (ไม่รวมชื่อผู้ดูแลระบบ)
+  members: () => members().map(u => u.role === 'admin' ? ADMIN_LABEL : u.name).filter(n => n !== gMe()),
   jobs: () => { const adm = new Set((S.users || []).filter(u => u.role === 'admin').map(u => u.name)), nm = n => adm.has(n) ? ADMIN_LABEL : n;
     return (S.jobs || []).filter(j => j.code && !j.pending).slice(-300).map(j => ({ code: j.code, title: j.title || '', assignee: j.assignee ? nm(j.assignee) : '', sale: j.sale || '', status: (ST[j.status] || {}).label || '', group: j.group || '', type: j.taskType || '', due: String(j.due || '').slice(0, 10) })); },
   send: o => { if (mode() === 'sheet' && RT.ok) rtSend(Object.assign({ k: 'g' }, o)); },

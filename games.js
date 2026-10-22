@@ -432,7 +432,7 @@
   function next(room) { const a = room.players; let t = room.g.turn, k = 0; do { t = (t + 1) % a.length; } while (!a[t].on && ++k < a.length); room.g.turn = t; }
 
   /* ---------------- ห้อง ---------------- */
-  const G = { rooms: {}, view: '', scope: null, timers: {}, pen: { c: '#111827', w: 1 }, keep: {}, t0: {}, sel: {}, priv: {}, focus: '' };
+  const G = { pick: {}, rooms: {}, view: '', scope: null, timers: {}, pen: { c: '#111827', w: 1 }, keep: {}, t0: {}, sel: {}, priv: {}, focus: '' };
   const me = () => B.me();
   const isHost = room => room.host === me();
   const forMe = to => to === 'team' || (Array.isArray(to) && to.indexOf(me()) >= 0);
@@ -479,10 +479,15 @@
   }
   function create(game, scope) {
     const r = 'g' + now().toString(36) + rnd(1e6).toString(36);
-    const room = { r, game, host: me(), to: scope, players: [{ n: me(), s: 0, on: true, seen: now() }], phase: 'lobby', g: null, v: 0 };
-    G.rooms[r] = room; G.view = r; pub(room); invite(room); return room;
+    const room = { r, game, host: me(), to: scope, players: [{ n: me(), s: 0, on: true, seen: now() }], phase: 'lobby', g: null, v: 0, invited: [] };
+    G.rooms[r] = room; G.view = r; pub(room); return room;   // ไม่แจ้งใคร จนกว่าเจ้าของห้องจะกดชวนเอง
   }
-  function invite(room) { send(room, { t: 'open', game: room.game, host: room.host, n: room.players.length }); room.inv = now(); }
+  /* ชวนเฉพาะคนที่เลือก (หรือทุกคน) · คนที่ไม่ได้ถูกชวนไม่เห็นคำชวนและไม่เห็นห้องนี้ */
+  function invite(room, who) {
+    if (who === 'all') room.invited = 'all'; else if (room.invited !== 'all') room.invited = [...new Set((room.invited || []).concat(who))];
+    send(room, { t: 'open', game: room.game, host: room.host, n: room.players.length, who }); room.inv = now(); pub(room);
+  }
+  const invitedMe = room => room.invited === 'all' || (Array.isArray(room.invited) && room.invited.indexOf(me()) >= 0) || (room.players || []).some(p => p.n === me());
   function leave(room) {
     if (isHost(room)) { send(room, { t: 'close' }); clearAll(room); }
     else { send(room, { t: 'leave', n: me() }); delete G.rooms[room.r]; }
@@ -494,13 +499,14 @@
     let room = G.rooms[o.r];
     if (o.t === 'st' && o.room) {
       if (room && isHost(room)) return;
+      if (!invitedMe(o.room) && G.view !== o.r) { if (room) { delete G.rooms[o.r]; } return; }
       B.seen(o.r, o.room);
       if (!room && G.view !== o.r && o.room.players.every(p => p.n !== me())) return;
       G.rooms[o.r] = o.room; o.room.got = now(); o.room.lend = o.room.tl ? now() + o.room.tl : 0; render(); return;
     }
     if (o.t === 'priv') { G.priv[o.r] = o.d; render(); return; }
     if (o.t === 'act' && room && !isHost(room)) { const g = GAMES[room.game]; if (g.peer && o.n !== me()) g.peer(room, o.n, o.a || {}); return; }
-    if (o.t === 'open') { B.seen(o.r, { r: o.r, game: o.game, host: o.host, to: o.to, phase: 'lobby', players: [] }); if (!room) B.invite(o); return; }
+    if (o.t === 'open') { if (!(o.who === 'all' || (Array.isArray(o.who) && o.who.indexOf(me()) >= 0))) return; B.seen(o.r, { r: o.r, game: o.game, host: o.host, to: o.to, phase: 'lobby', players: [], invited: o.who }); if (!room) B.invite(o); return; }
     if (o.t === 'close') { if (room && !isHost(room)) { delete G.rooms[o.r]; B.toast('ห้องเกม ' + GAMES[room.game].name + ' ปิดแล้ว'); if (G.view === o.r) G.view = ''; render(); } B.gone(o.r); return; }
     if (!room || !isHost(room)) return;
     const p = pl(room, o.n);
@@ -518,7 +524,6 @@
     Object.values(G.rooms).forEach(room => {
       if (isHost(room)) {
         let ch = false; room.players.forEach(p => { if (!p.bot && p.n !== me() && p.on && now() - (p.seen || 0) > 30000) { p.on = false; ch = true; } });
-        if (room.phase === 'lobby' && now() - (room.inv || 0) > 20000) invite(room);
         if (ch || now() - (room.at || 0) > 6000) pub(room);
       } else if (pl(room, me())) { send(room, { t: 'ping', n: me() }); if (now() - (room.got || now()) > 40000) { room.lost = true; render(); } }
     });
@@ -532,13 +537,23 @@
     return '<div class="gm-players">' + room.players.map(p => '<span class="gm-p' + (p.n === turnName ? ' turn' : '') + (p.on ? '' : ' off') + (best !== null && p.s === best ? ' win' : '') + '">' + B.av(p.n) + '<b>' + esc(p.n) + (p.n === room.host ? ' <i title="เจ้าของห้อง">👑</i>' : '') + (done && done(room, p.n) ? ' ✓' : '') + '</b><em>' + p.s + '</em></span>').join('') + '</div>';
   }
   function privFor(room) { const g = GAMES[room.game]; if (isHost(room)) { const pv = g.priv && room.g ? g.priv(room) : null; return pv && pv.who === me() ? pv.d : null; } return G.priv[room.r] || null; }
+  function invState(room) { const v = room.invited; return v === 'all' ? 'ชวนทุกคนแล้ว รอเพื่อนเข้าร่วม' : v && v.length ? 'ชวน ' + v.map(esc).join(', ') + ' แล้ว รอเข้าร่วม' : 'ห้องส่วนตัว ยังไม่มีใครเห็น · ชวนเพื่อนได้ด้านล่าง หรือเพิ่มบอท'; }
+  /* เลือกคนที่จะชวน: แบบคู่ = คู่ของเรา · ทั้งทีม = เลือกเป็นรายคน หรือชวนทุกคน */
+  function invPicker(room) {
+    const inRoom = room.players.map(p => p.n), done = room.invited === 'all' ? null : (room.invited || []);
+    const cand = (Array.isArray(room.to) ? room.to.filter(n => n !== me()) : B.members()).filter(n => inRoom.indexOf(n) < 0);
+    if (!cand.length) return '';
+    const sel = G.pick[room.r] || [];
+    return '<div class="gm-inv"><b>ชวนเพื่อนเข้าห้อง</b><div class="gm-invl">' + cand.map(n => { const was = !done || done.indexOf(n) >= 0; return '<button type="button" data-ga="ipick" data-v="' + esc(n) + '" class="' + (sel.indexOf(n) >= 0 ? 'on' : '') + (was ? ' was' : '') + '"' + (was ? ' disabled' : '') + '>' + B.av(n) + esc(n) + (was ? ' ✓' : '') + '</button>'; }).join('') + '</div>' +
+      '<div class="gm-btns"><button type="button" class="btn sm primary" data-ga="isend"' + (sel.length ? '' : ' disabled') + '>ชวนที่เลือก (' + sel.length + ')</button>' + (room.to === 'team' && room.invited !== 'all' ? '<button type="button" class="btn sm" data-ga="iall">ชวนทุกคน</button>' : '') + '</div></div>';
+  }
   function roomHtml(room) {
     const g = GAMES[room.game], host = isHost(room), meIn = !!pl(room, me()), lobby = room.phase === 'lobby';
     const bestN = room.phase === 'end' ? room.players.filter(p => p.s === Math.max(...room.players.map(x => x.s))).map(p => p.n) : [];
     return '<div class="gm-top"><button type="button" class="icon-btn" data-ga="back" aria-label="กลับ">‹</button><b>' + g.emoji + ' ' + g.name + '</b><small>' + (room.to === 'team' ? 'ทั้งทีม' : 'แบบคู่') + (room.lost ? ' · ขาดการเชื่อมต่อกับเจ้าของห้อง' : '') + '</small><button type="button" class="btn sm" data-ga="leave">' + (host ? 'ปิดห้อง' : 'ออก') + '</button></div>' +
       scoreRow(room) +
-      (lobby ? '<div class="gm-lobby"><p>' + esc(g.desc) + '</p><p class="gm-hint">' + room.players.length + ' คนในห้อง · ' + (room.players.length < g.min ? 'รอเพื่อนเข้าร่วม (ส่งคำชวนไปแล้ว)' : 'พร้อมเริ่มแล้ว') + '</p>' +
-        (host ? '<div class="gm-btns"><button type="button" class="btn primary" data-ga="start"' + (room.players.length >= g.min ? '' : ' disabled') + '>เริ่มเกม</button>' + (room.players.length < g.max ? '<button type="button" class="btn" data-ga="bot">+ เพิ่มบอท</button>' : '') + '<button type="button" class="btn ghost" data-ga="invite">ชวนอีกครั้ง</button></div>'
+      (lobby ? '<div class="gm-lobby"><p>' + esc(g.desc) + '</p><p class="gm-hint">' + room.players.length + ' คนในห้อง · ' + (room.players.length >= g.min ? 'พร้อมเริ่มแล้ว' : invState(room)) + '</p>' +
+        (host ? invPicker(room) + '<div class="gm-btns"><button type="button" class="btn primary" data-ga="start"' + (room.players.length >= g.min ? '' : ' disabled') + '>เริ่มเกม</button>' + (room.players.length < g.max ? '<button type="button" class="btn" data-ga="bot">+ เพิ่มบอท</button>' : '') + '</div>'
           : meIn ? '<p class="gm-hint">รอ ' + esc(room.host) + ' กดเริ่มเกม</p>' : '<div class="gm-btns"><button type="button" class="btn primary" data-ga="join">เข้าร่วม</button></div>') + '</div>'
         : '<div class="gm-board">' + g.view(room, me(), privFor(room)) + '</div>' +
           (room.phase === 'end' ? '<div class="gm-end">🏆 ' + (bestN.length > 1 ? 'เสมอ: ' : 'ผู้ชนะ: ') + bestN.map(esc).join(', ') + (host ? '<div class="gm-btns"><button type="button" class="btn primary" data-ga="again">เล่นอีกครั้ง</button><button type="button" class="btn" data-ga="lobby">เปลี่ยนเกม</button></div>' : '<p class="gm-hint">รอ ' + esc(room.host) + ' เริ่มรอบใหม่</p>') + '</div>' : '') +
@@ -549,7 +564,7 @@
     return '<div class="gm-top"><b>🎮 ห้องเกม</b><small>' + esc(B.scopeName(sc)) + '</small><button type="button" class="icon-btn" data-ga="x" aria-label="ปิด">✕</button></div>' +
       (!B.live() ? '<div class="gm-note">ตอนนี้ยังไม่ได้เชื่อมต่อแบบเรียลไทม์ — เล่นกับบอทได้ (เพื่อนจะเข้าร่วมได้เมื่อเชื่อมต่อเรียลไทม์)</div>' : '') +
       (open.length ? '<div class="gm-sec">ห้องที่เปิดอยู่</div><div class="gm-open">' + open.map(r => '<button type="button" data-ga="enter" data-v="' + esc(r.r) + '">' + GAMES[r.game].emoji + ' <b>' + GAMES[r.game].name + '</b><small>' + esc(r.host) + (r.players && r.players.length ? ' · ' + r.players.length + ' คน' : '') + (r.phase === 'play' ? ' · กำลังเล่น' : ' · รอผู้เล่น') + '</small></button>').join('') + '</div>' : '') +
-      '<div class="gm-sec">เปิดห้องใหม่ ' + (sc === 'team' ? '(ทุกคนในทีมเห็นคำชวน · เล่นเป็นกลุ่ม)' : '(ชวนแบบคู่)') + '</div>' +
+      '<div class="gm-sec">เปิดห้องใหม่ ' + (sc === 'team' ? '(ห้องส่วนตัว · ชวนใครเข้ามาเองได้ เล่นเป็นกลุ่ม)' : '(แบบคู่ · กดชวนเองเมื่อพร้อม)') + '</div>' +
       [['📋 เกมคิวงาน (ใช้งานจริงในระบบ)', k => GAMES[k].work], ['🎲 เกมทั่วไป', k => !GAMES[k].work]].map(sec => '<div class="gm-sec2">' + sec[0] + '</div><div class="gm-list">' +
         Object.keys(GAMES).filter(sec[1]).map(k => '<button type="button" data-ga="new" data-v="' + k + '"' + (GAMES[k].work ? ' class="work"' : '') + '><span>' + GAMES[k].emoji + '</span><b>' + GAMES[k].name + '</b><small>' + esc(GAMES[k].desc) + '</small><em>' + GAMES[k].min + '–' + GAMES[k].max + ' คน</em></button>').join('') + '</div>').join('');
   }
@@ -584,7 +599,9 @@
     if (!room) return;
     if (a === 'leave') return leave(room);
     if (a === 'join') { send(room, { t: 'join', n: me() }); return; }
-    if (a === 'invite') { invite(room); B.toast('ส่งคำชวนอีกครั้งแล้ว'); return; }
+    if (a === 'ipick') { const s2 = G.pick[room.r] = G.pick[room.r] || [], i = s2.indexOf(v); if (i >= 0) s2.splice(i, 1); else s2.push(v); return render(); }
+    if (a === 'isend' && isHost(room)) { const w = (G.pick[room.r] || []).slice(); if (!w.length) return; G.pick[room.r] = []; invite(room, w); B.toast('ส่งคำชวนถึง ' + w.join(', ') + ' แล้ว'); return; }
+    if (a === 'iall' && isHost(room)) { invite(room, 'all'); B.toast('ชวนทุกคนในทีมแล้ว'); return; }
     if (isHost(room)) {
       if (a === 'start') return startGame(room);
       if (a === 'again') return startGame(room);
@@ -652,6 +669,13 @@
 .gm-die{text-align:center;font-size:84px;line-height:1}.gm-die.bust{color:#DC2626}
 .gm-pot{text-align:center}.gm-pot b{font-size:22px;color:var(--brand,#0B6B70)}
 .gm-end{text-align:center;font-weight:700;font-size:17px;padding:10px;border-radius:14px;background:#FEF3C7;color:#78350F}
+.gm-inv{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:14px;background:var(--surface-2,#f6f7f9);margin:6px 0}
+.gm-inv>b{font-size:13px}
+.gm-invl{display:flex;flex-wrap:wrap;gap:6px}
+.gm-invl button{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:999px;border:1px solid var(--line,#e3e6ea);background:var(--surface,#fff);font:inherit;font-size:13px;cursor:pointer;color:inherit}
+.gm-invl button .av{width:22px;height:22px;font-size:10px}
+.gm-invl button.on{border-color:var(--brand,#0B6B70);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand,#0B6B70) 30%,transparent)}
+.gm-invl button.was{opacity:.55;cursor:default}
 .gm-sec2{font-size:13px;font-weight:700;margin-top:2px}
 .gm-list button.work{border-color:color-mix(in srgb,var(--brand,#0B6B70) 45%,transparent);background:color-mix(in srgb,var(--brand,#0B6B70) 7%,var(--surface,#fff))}
 .gm-job{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:10px 12px;border-radius:12px;background:var(--surface-2,#f6f7f9);border-left:4px solid var(--brand,#0B6B70)}

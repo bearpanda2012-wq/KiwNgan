@@ -52,6 +52,9 @@ const relay = async (from, to) => { const q = await from.evaluate(() => { const 
 for (const [pg, nm] of [[A, 'หมี'], [Bp, 'ฝน']]) await pg.evaluate(nm => { window.__out = []; KN_G.send = o => window.__out.push(JSON.parse(JSON.stringify(Object.assign({ k: 'g' }, o)))); KN_G.live = () => true; KN_G.me = () => nm; }, nm);
 const pump = async (n = 4) => { for (let i = 0; i < n; i++) { await relay(A, Bp); await relay(Bp, A); await A.waitForTimeout(80); } };
 await A.evaluate(() => KNGames.open('team')); await A.click('#gameView [data-ga="new"][data-v="rps"]'); await A.waitForTimeout(150); await pump();
+eq('no invite until host invites', await Bp.locator('#gInvite:not([hidden])').count(), 0);
+eq('room hidden from others', await Bp.evaluate(() => KN_G.openRooms('team').length), 0);
+await A.click('#gameView [data-ga="iall"]'); await A.waitForTimeout(150); await pump();
 eq('B got invite', await Bp.locator('#gInvite:not([hidden]) [data-act="gjoin"]').count(), 1);
 await Bp.screenshot({ path: out + 'game-invite.png' });
 await Bp.click('#gInvite [data-act="gjoin"]'); await Bp.waitForTimeout(600); await pump();
