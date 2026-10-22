@@ -20,7 +20,7 @@ await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remov
     members: [{ name: S.me, mic: false, share: '', since: 3, admin: true }, { name: 'ฝน', mic: true, share: 'screen', since: 1 }, { name: 'ต้น', mic: true, share: '', since: 2 }] });
   KiwNgan.renderRoom();
 }); await pg.waitForTimeout(600);
-eq('stage has ink toolbar', await pg.locator('#roomStage #roomInkBar [data-room="tool"]').count(), 2);
+eq('stage has ink toolbar', await pg.locator('#roomStage #roomInkBar [data-room="tool"]').count(), 7);
 eq('stage owner = sharer', await pg.getAttribute('#roomStage', 'data-owner'), 'ฝน');
 await pg.click('#roomInkBar [data-v="pen"]'); await pg.waitForTimeout(150);
 eq('stage in drawing mode', await pg.locator('#roomStage.drawing').count(), 1);

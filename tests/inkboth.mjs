@@ -14,8 +14,8 @@ await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remov
   window.__sent = []; Object.assign(R, { role: 'host', state: 'live', src: 'screen', name: 'ฝน', peer: 'ฝน', stream: c.captureStream(5), peekOpen: true, dc: { readyState: 'open', send: x => window.__sent.push(JSON.parse(x)) } });
   KiwNgan.renderPeek();
 }); await pg.waitForTimeout(600);
-eq('peek shows draw tools', await pg.locator('.rtc-peek [data-peek="pen"]').count(), 1);
-await pg.click('.rtc-peek [data-peek="pen"]'); await pg.waitForTimeout(200);
+eq('peek shows draw tools', await pg.locator('.rtc-peek [data-peek="tool"][data-v="pen"]').count(), 1);
+await pg.click('.rtc-peek [data-peek="tool"][data-v="pen"]'); await pg.waitForTimeout(200);
 eq('peek in drawing mode', await pg.locator('.rtc-peek.drawing').count(), 1);
 const bx = await pg.locator('.rtc-peek canvas').boundingBox();
 await pg.mouse.move(bx.x + bx.width * .3, bx.y + bx.height * .4); await pg.mouse.down();

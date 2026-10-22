@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.106.1';
+const APP_VERSION = '2.107.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3269,6 +3269,11 @@ const RTC_IC = {
   full: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4.5L16.5 4a2.1 2.1 0 0 1 3 3L8 18.5z"/><path d="M14 6.5l3 3"/></svg>',
   laser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="7.5" opacity=".55"/><path d="M12 1.5v2.5M12 20v2.5M1.5 12H4M20 12h2.5"/></svg>',
+  hl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l-4 4v3h3l4-4"/><path d="M9 11l5.5-5.5a2.1 2.1 0 0 1 3 3L12 14z"/><path d="M14 21h7" stroke-width="3.5" opacity=".45"/></svg>',
+  arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19L19 5"/><path d="M9 5h10v10"/></svg>',
+  rect: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="1.5"/></svg>',
+  oval: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="9" ry="7"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
   undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   eraser: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h13"/><path d="M5.6 15.6l8.5-8.5a2 2 0 0 1 2.8 0l2 2a2 2 0 0 1 0 2.8L13 18.8a3 3 0 0 1-2.1.9H8.6a2 2 0 0 1-1.4-.6l-1.6-1.6a2 2 0 0 1 0-2.9z"/><path d="M10 11l5 5"/></svg>',
   head: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4.5" height="6.5" rx="1.5"/><rect x="16.5" y="14" width="4.5" height="6.5" rx="1.5"/></svg>',
@@ -3295,9 +3300,81 @@ const CAN_CAM = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia
 const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 const srcWord = src => src === 'camera' ? 'กล้อง' : 'หน้าจอ';
 const CAN_PIP = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
-const INK_COLORS = ['#FF3B5C', '#FFB020', '#22C55E', '#3B82F6'];
+/* ---------- ชุดเครื่องมือวาดบนจอ (ใช้ร่วมกัน: โทร/แชร์จอตัวต่อตัว + ห้องเสียงทีม) ---------- */
+const INK_COLORS = ['#FF3B5C', '#FF7A1A', '#FFD60A', '#22C55E', '#14B8A6', '#3B82F6', '#8B5CF6', '#EC4899', '#FFFFFF', '#111827'];
+const INK_CNAME = ['แดง', 'ส้ม', 'เหลือง', 'เขียว', 'เขียวน้ำทะเล', 'น้ำเงิน', 'ม่วง', 'ชมพู', 'ขาว', 'ดำ'];
+const INK_SIZES = [[1, 'เล็ก'], [2, 'กลาง'], [3, 'ใหญ่'], [4, 'ใหญ่มาก']];
+const INK_MUL = { 1: .55, 2: 1, 3: 1.9, 4: 3.2 };
+/* [ชนิด, ชื่อ, ปุ่มลัด] · ชี้ = เลเซอร์จางหาย · ไฮไลต์ = สีโปร่งเส้นหนา · ลูกศร/กรอบ/วงกลม = ลากจากจุดเริ่มถึงจุดปล่อย · ยางลบ = แตะเส้นไหนลบเส้นนั้น */
+const INK_TOOLS = [['laser', 'ชี้', 'L'], ['pen', 'ปากกา', 'P'], ['hl', 'ไฮไลต์', 'H'], ['arrow', 'ลูกศร', 'A'], ['rect', 'กรอบ', 'R'], ['oval', 'วงกลม', 'O'], ['erase', 'ยางลบ', 'E']];
+const INK_SHAPE = { arrow: 1, rect: 1, oval: 1 };
+const INK_KINDS = { pen: 1, hl: 1, arrow: 1, rect: 1, oval: 1 };
+const inkK = k => INK_KINDS[k] ? k : 'pen';
+const inkW = w => INK_MUL[+w] ? +w : 2;
+const inkPref = LS.get('inkPref', null) || {};
+const INK_C0 = /^#[0-9A-F]{6}$/i.test(inkPref.c || '') ? inkPref.c : INK_COLORS[0], INK_W0 = inkW(inkPref.w || 2);
+function inkSavePref(c, w) { LS.set('inkPref', { c: c, w: w }); }
+/* เส้นทั้งหมดของกระดาน (P = แปลงพิกัด 0..1 เป็นพิกเซล, base = ความหนาพื้นฐานตามขนาดภาพ) */
+function inkDrawStrokes(g, strokes, P, base, now) {
+  g.lineCap = g.lineJoin = 'round';
+  strokes.forEach(x => {
+    if (!x.pts.length) return;
+    const k = x.l ? 'pen' : (x.k || 'pen'), lw = x.l ? base * 1.5 : base * (INK_MUL[x.w] || 1) * (k === 'hl' ? 3.4 : 1);
+    g.globalAlpha = (x.l && x.end ? Math.max(0, 1 - (now - x.end) / 1500) : 1) * (k === 'hl' ? .38 : 1);
+    g.strokeStyle = g.fillStyle = x.c; g.lineWidth = lw; g.shadowColor = x.c; g.shadowBlur = x.l ? 14 : 0;
+    // สีขาว/ดำ: มีขอบเงาบาง ๆ ให้เห็นได้ทั้งบนพื้นสว่างและพื้นมืด
+    if (!x.l && (x.c === '#FFFFFF' || x.c === '#111827')) { g.shadowColor = x.c === '#FFFFFF' ? 'rgba(0,0,0,.65)' : 'rgba(255,255,255,.6)'; g.shadowBlur = 3; }
+    const a = P(x.pts[0]), b = P(x.pts[x.pts.length - 1]);
+    g.beginPath();
+    if (INK_SHAPE[k]) {
+      if (x.pts.length < 2 || Math.hypot(b[0] - a[0], b[1] - a[1]) < 2) return;
+      if (k === 'rect') { g.rect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])); g.stroke(); return; }
+      if (k === 'oval') { g.ellipse((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, Math.abs(b[0] - a[0]) / 2, Math.abs(b[1] - a[1]) / 2, 0, 0, Math.PI * 2); g.stroke(); return; }
+      const ang = Math.atan2(b[1] - a[1], b[0] - a[0]), hl = Math.max(12, lw * 3.6);
+      g.moveTo(a[0], a[1]); g.lineTo(b[0] - Math.cos(ang) * hl * .6, b[1] - Math.sin(ang) * hl * .6); g.stroke();
+      g.beginPath(); g.moveTo(b[0], b[1]); g.lineTo(b[0] - hl * Math.cos(ang - .45), b[1] - hl * Math.sin(ang - .45)); g.lineTo(b[0] - hl * Math.cos(ang + .45), b[1] - hl * Math.sin(ang + .45)); g.closePath(); g.fill(); return;
+    }
+    x.pts.forEach((p, i) => { const q = P(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); });
+    if (x.pts.length === 1) g.lineTo(a[0] + .1, a[1]);
+    g.stroke();
+  });
+  g.shadowBlur = 0; g.globalAlpha = 1;
+}
+/* ยางลบ: หาเส้นที่อยู่ใต้นิ้ว/เมาส์ (ตัวบนสุดก่อน) */
+function inkHit(strokes, q, P, base) {
+  const seg = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy; let t = L ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); };
+  for (let i = strokes.length - 1; i >= 0; i--) {
+    const x = strokes[i]; if (x.l || !x.pts.length) continue;
+    const k = x.k || 'pen', tol = Math.max(10, base * (INK_MUL[x.w] || 1) * (k === 'hl' ? 3.4 : 1) / 2 + 6), a = P(x.pts[0]), b = P(x.pts[x.pts.length - 1]);
+    let d = Infinity;
+    if (k === 'rect') { const c = [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]]; for (let j = 0; j < 4; j++) d = Math.min(d, seg(q, c[j], c[(j + 1) % 4])); }
+    else if (k === 'oval') { const cx = (a[0] + b[0]) / 2, cy = (a[1] + b[1]) / 2, rx = Math.abs(b[0] - a[0]) / 2, ry = Math.abs(b[1] - a[1]) / 2; let pv = null; for (let j = 0; j <= 36; j++) { const t = j / 36 * Math.PI * 2, pt = [cx + rx * Math.cos(t), cy + ry * Math.sin(t)]; if (pv) d = Math.min(d, seg(q, pv, pt)); pv = pt; } }
+    else if (k === 'arrow') d = seg(q, a, b);
+    else { let pv = null; x.pts.forEach(p => { const pt = P(p); d = Math.min(d, pv ? seg(q, pv, pt) : Math.hypot(q[0] - pt[0], q[1] - pt[1])); pv = pt; }); }
+    if (d <= tol) return x;
+  }
+  return null;
+}
+/* แถบเครื่องมือ (หน้าเดียวกันทั้งโทรตัวต่อตัวและห้องทีม) · at = ชื่อ data-* ของแต่ละที่ · extra = ปุ่มท้ายแถบ */
+function inkKitHtml(st, at, extra) {
+  const T = st.tool, sub = T && T !== 'erase';
+  const tools = INK_TOOLS.map(t => '<button type="button" class="rtc-tb ink-t' + (T === t[0] ? ' on' : '') + '" data-' + at + '="tool" data-v="' + t[0] + '" title="' + t[1] + ' (' + t[2] + ')" aria-pressed="' + (T === t[0]) + '">' + RTC_IC[t[0] === 'erase' ? 'eraser' : t[0]] + '<span>' + t[1] + '</span></button>').join('');
+  const sizes = T === 'laser' ? '' : '<span class="ink-sizes" role="group" aria-label="ขนาดหัวแปรง">' + INK_SIZES.map(s => '<button type="button" class="ink-sz' + (st.size === s[0] ? ' on' : '') + '" data-' + at + '="size" data-v="' + s[0] + '" title="หัวแปรง' + s[1] + ' ([ ])" aria-label="หัวแปรง' + s[1] + '"><i style="--d:' + [0, 4, 7, 11, 16][s[0]] + 'px;--c:' + st.color + '"></i></button>').join('') + '</span>';
+  const colors = '<span class="rtc-dots-c ink-colors" role="group" aria-label="สี">' + INK_COLORS.map((c, i) => '<button type="button" class="rtc-dot' + (c === st.color ? ' on' : '') + '" data-' + at + '="color" data-v="' + c + '" style="--c:' + c + '" title="' + INK_CNAME[i] + '" aria-label="สี' + INK_CNAME[i] + '"></button>').join('') + '</span>';
+  return '<span class="ink-kit"><span class="ink-tools">' + tools + '</span>' + (extra || '') +
+    (sub ? '<span class="ink-sub">' + sizes + (sizes ? '<i class="ink-sep"></i>' : '') + colors + '</span>' : '') + '</span>';
+}
+/* ปุ่มลัด: L P H A R O E = เลือกเครื่องมือ · [ ] = ขนาด · 1–0 = สี (เมื่อกำลังวาดอยู่) */
+function inkKey(e, st) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return null;
+  const k = e.key.length === 1 ? e.key.toUpperCase() : e.key, t = INK_TOOLS.find(x => x[2] === k);
+  if (t) return { tool: st.tool === t[0] ? '' : t[0] };
+  if (k === '[' || k === ']') return { size: Math.max(1, Math.min(4, st.size + (k === ']' ? 1 : -1))) };
+  if (/^[0-9]$/.test(k)) return { color: INK_COLORS[(+k + 9) % 10] };
+  return null;
+}
 const RTC_ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
-const R = { spkOff: !!LS.get('spkOff', 0), sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, t0: 0, loop: null, tick: null, guard: null, prompt: null, dc: null, tool: '', color: INK_COLORS[0], ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, pip: null, rmode: false };
+const R = { spkOff: !!LS.get('spkOff', 0), sid: '', peer: '', name: '', role: '', state: '', pc: null, stream: null, remote: null, t0: 0, loop: null, tick: null, guard: null, prompt: null, dc: null, tool: '', color: INK_C0, size: INK_W0, ink: { strokes: [], ptr: null, rips: [] }, peek: null, peekOpen: true, pip: null, rmode: false };
 const rtcBusy = () => !!R.state || (typeof V !== 'undefined' && V.on);
 const sigPeer = g => (g.fromAdmin && !isAdmin() ? 'admin' : g.from);
 const sigName = g => (g.fromAdmin && !isAdmin() ? ADMIN_LABEL : g.from);
@@ -3541,9 +3618,8 @@ async function rtcAct(a, t) {
     case 'close': return closeRtcModal();
     case 'view': voiceUnlock(); return rtcRequest(t.dataset.peer, t.dataset.name);
     case 'remote': voiceUnlock(); return rtcRequest(t.dataset.peer, t.dataset.name, true);
-    case 'tool': R.tool = R.tool === t.dataset.v ? '' : t.dataset.v; if (!R.tool) inkSendAll({ t: 'pl' }); return inkBarSync();
-    case 'color': R.color = t.dataset.v; if (!R.tool) R.tool = 'pen'; return inkBarSync();
-    case 'undo': inkSendAll({ t: 'undo' }); return inkBarSync();
+    case 'tool': case 'color': case 'size': inkSet(R, a, t.dataset.v, () => inkSendAll({ t: 'pl' })); return inkBarSync();
+    case 'undo': inkUndo(); return inkBarSync();
     case 'clear': inkSendAll({ t: 'clr' }); return inkBarSync();
     case 'pip': return rtcPip();
     case 'mic': return voiceMic();
@@ -3638,7 +3714,7 @@ function rtcStrip() {
 /* ============ ห้องเสียงทีม (แบบ Discord) ============
    ทุกคนในห้องต่อตรงหากัน (mesh) — เหมาะกับทีมเล็ก ~2–8 คน
    คนที่เข้าห้องทีหลังเป็นฝ่ายโทรหาคนที่อยู่ก่อน · เสียงและจอวิ่งตรงระหว่างเครื่อง ฐานข้อมูลเก็บแค่ใครอยู่ในห้อง */
-const V = { on: false, joining: false, since: 0, peers: {}, mic: null, muted: false, deaf: false, share: null, shareKind: '', members: [], beatT: null, view: false, focus: '', an: {}, speakT: null, known: null, speaking: {}, ink: {}, tool: '', color: '', drawId: '', pip: null, inkRaf: 0, nudgeT: 0 };
+const V = { on: false, joining: false, since: 0, peers: {}, mic: null, muted: false, deaf: false, share: null, shareKind: '', members: [], beatT: null, view: false, focus: '', an: {}, speakT: null, known: null, speaking: {}, ink: {}, tool: '', color: INK_C0, size: INK_W0, drawId: '', pip: null, inkRaf: 0, nudgeT: 0 };
 const roomKey = m => (m.admin && !isAdmin()) ? 'admin' : m.name;
 const roomIsMe = m => m.name === S.me && (!m.admin || isAdmin());
 const roomMine = () => V.members.find(roomIsMe);
@@ -3818,8 +3894,7 @@ function roomAct(a, t) {
     case 'open': V.view = true; return renderRoom();
     case 'close': V.view = false; return renderRoom();
     case 'focus': V.focus = t.dataset.key || ''; return renderRoom();
-    case 'tool': { const v = t.dataset.v; V.tool = V.tool === v ? '' : v; if (!V.color) V.color = INK_COLORS[0]; if (!V.tool) rinkSendAll({ t: 'pl' }); return rinkBarSync(); }
-    case 'color': V.color = t.dataset.v; if (!V.tool) V.tool = 'pen'; return rinkBarSync();
+    case 'tool': case 'color': case 'size': inkSet(V, a, t.dataset.v, () => rinkSendAll({ t: 'pl' })); return rinkBarSync();
     case 'undo': return rinkUndo();
     case 'clear': rinkSendAll({ t: 'clr' }); return rinkBarSync();
     case 'pip': return rinkPip();
@@ -3932,17 +4007,21 @@ function rinkApply(m, who) {
     case 'p': k.ptrs[a] = { x: inkN(m.x), y: inkN(m.y), c: inkC(m.c), t: now }; break;
     case 'pl': if (k.ptrs[a]) k.ptrs[a].t = Math.min(k.ptrs[a].t, now - 2400); break;
     case 'b': {
-      const st = { id: a + '|' + String(m.id), c: inkC(m.c), l: !!m.l, pts: [[inkN(m.x), inkN(m.y)]], end: 0, a: a };
+      const st = { id: a + '|' + String(m.id), c: inkC(m.c), l: !!m.l, k: inkK(m.k), w: inkW(m.w), pts: [[inkN(m.x), inkN(m.y)]], end: 0, a: a };
       k.strokes.push(st); if (k.strokes.length > 400) k.strokes.shift();
       k.ptrs[a] = { x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }; k.rips.push({ x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }); break;
     }
-    case 'm': { const st = k.strokes.find(x => x.id === a + '|' + String(m.id)); if (st && st.pts.length < 4000) { st.pts.push([inkN(m.x), inkN(m.y)]); k.ptrs[a] = { x: inkN(m.x), y: inkN(m.y), c: st.c, t: now }; } break; }
+    case 'm': { const st = k.strokes.find(x => x.id === a + '|' + String(m.id)); if (st && st.pts.length < 4000) { const q = [inkN(m.x), inkN(m.y)]; if (INK_SHAPE[st.k] && !st.l) st.pts[1] = q; else st.pts.push(q); k.ptrs[a] = { x: q[0], y: q[1], c: st.c, t: now }; } break; }
     case 'e': { const st = k.strokes.find(x => x.id === a + '|' + String(m.id)); if (st) st.end = now; break; }
     case 'undo': { const i = k.strokes.findIndex(x => x.id === a + '|' + String(m.id)); if (i >= 0) k.strokes.splice(i, 1); break; }
     case 'clr': k.strokes = []; break;
+    case 'del': {   // ยางลบ: ลบเส้นของใครก็ได้ · m.a = เจ้าของเส้น (ชื่อจริง) → ที่เครื่องเจ้าของเส้น คีย์คือ ''
+      const key = (m.a === S.me ? '' : String(m.a || '')) + '|' + String(m.id), i = k.strokes.findIndex(x => x.id === key);
+      if (i >= 0) k.strokes.splice(i, 1); break;
+    }
     default: return;
   }
-  if (/^(e|clr|undo)$/.test(m.t)) rinkBarSync(true);
+  if (/^(e|clr|undo|del)$/.test(m.t)) rinkBarSync(true);
   rinkKick();
 }
 function rinkUndo() {
@@ -3962,12 +4041,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 /* แถบเครื่องมือบนจอ */
 function rinkBar(o) {
   const mine = o === S.me, k = V.ink[o], myPen = k && k.strokes.some(x => !x.a && !x.l), anyPen = k && k.strokes.some(x => !x.l);
-  return '<div class="room-ink" id="roomInkBar"><button class="rtc-tb' + (V.tool === 'laser' ? ' on' : '') + '" data-room="tool" data-v="laser" title="ชี้ (เลเซอร์) — ทุกคนในห้องเห็นจุดที่คุณชี้">' + RTC_IC.laser + '<span>ชี้</span></button>' +
-    '<button class="rtc-tb' + (V.tool === 'pen' ? ' on' : '') + '" data-room="tool" data-v="pen" title="วาด / วงจุดบนจอ — ทุกคนในห้องเห็น">' + RTC_IC.pen + '<span>วาด</span></button>' +
-    (V.tool ? '<span class="rtc-dots-c">' + INK_COLORS.map(c => '<button class="rtc-dot' + (c === (V.color || INK_COLORS[0]) ? ' on' : '') + '" data-room="color" data-v="' + c + '" style="--c:' + c + '" aria-label="สี"></button>').join('') + '</span>' : '') +
-    (myPen ? '<button class="rtc-tb" data-room="undo" title="ย้อนเส้นของคุณ (Ctrl+Z)">' + RTC_IC.undo + '</button>' : '') +
-    (anyPen ? '<button class="rtc-tb" data-room="clear" title="ล้างที่วาดทั้งหมด (ของทุกคน)">' + RTC_IC.eraser + '</button>' : '') +
-    (mine && CAN_PIP && V.shareKind === 'screen' ? '<button class="rtc-tb' + (V.pip ? ' on' : '') + '" data-room="pip" title="หน้าต่างลอยอยู่บนสุด — เห็นจุดที่เพื่อนชี้ขณะใช้โปรแกรมอื่น">' + RTC_IC.pip + '<span>' + (V.pip ? 'ปิดลอย' : 'ลอย') + '</span></button>' : '') + '</div>';
+  const extra = '<span class="ink-acts">' + '<button type="button" class="rtc-tb" data-room="undo" title="ย้อนเส้นของคุณ (Ctrl+Z)"' + (myPen ? '' : ' disabled') + '>' + RTC_IC.undo + '</button>' +
+    '<button type="button" class="rtc-tb" data-room="clear" title="ล้างที่วาดทั้งหมด (ของทุกคน)"' + (anyPen ? '' : ' disabled') + '>' + RTC_IC.trash + '</button>' +
+    (mine && CAN_PIP && V.shareKind === 'screen' ? '<button type="button" class="rtc-tb' + (V.pip ? ' on' : '') + '" data-room="pip" title="หน้าต่างลอยอยู่บนสุด — เห็นจุดที่เพื่อนชี้ขณะใช้โปรแกรมอื่น">' + RTC_IC.pip + '<span>' + (V.pip ? 'ปิดลอย' : 'ลอย') + '</span></button>' : '') + '</span>';
+  return '<div class="room-ink" id="roomInkBar">' + inkKitHtml({ tool: V.tool, color: V.color, size: V.size }, 'room', extra) + '</div>';
 }
 function rinkBarSync(quiet) {
   const b = $('#roomInkBar'), st = $('#roomStage');
@@ -3984,16 +4061,8 @@ function rinkPaint(cv, vid, o) {
   const k = V.ink[o]; if (!k) return false;
   const r = inkFit(box, vid && vid.videoWidth, vid && vid.videoHeight), P = p => [r.x + p[0] * r.w, r.y + p[1] * r.h];
   const now = performance.now(), lw = Math.max(2.5, r.w / 300);
-  g.lineCap = g.lineJoin = 'round';
   k.strokes = k.strokes.filter(x => !(x.l && x.end && now - x.end > 1500));
-  k.strokes.forEach(x => {
-    g.globalAlpha = x.l && x.end ? Math.max(0, 1 - (now - x.end) / 1500) : 1;
-    g.strokeStyle = x.c; g.lineWidth = x.l ? lw * 1.5 : lw; g.shadowColor = x.c; g.shadowBlur = x.l ? 14 : 0;
-    g.beginPath(); x.pts.forEach((p, i) => { const q = P(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); });
-    if (x.pts.length === 1) { const q = P(x.pts[0]); g.lineTo(q[0] + .1, q[1]); }
-    g.stroke();
-  });
-  g.shadowBlur = 0;
+  inkDrawStrokes(g, k.strokes, P, lw, now);
   k.rips = k.rips.filter(x => now - x.t < 900);
   k.rips.forEach(x => { const q = P([x.x, x.y]), f = (now - x.t) / 900; g.globalAlpha = 1 - f; g.strokeStyle = x.c; g.lineWidth = 3; g.beginPath(); g.arc(q[0], q[1], 10 + f * 36, 0, Math.PI * 2); g.stroke(); });
   let live = k.rips.length > 0 || k.strokes.some(x => x.l);
@@ -4039,19 +4108,27 @@ function rinkHook(cv, vidOf, ownerOf) {
   cv.addEventListener('pointerdown', e => {
     if (!V.tool) return; const p = rinkXY(e, cv, vidOf()); if (p.out) return;
     e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+    if (V.tool === 'erase') { V.erasing = 1; return rinkErase(e, cv, vidOf(), ownerOf()); }
     V.drawId = uid('k'); V.drawOwner = ownerOf();
-    rinkSendAll({ t: 'b', s: V.drawOwner, id: V.drawId, c: V.color || INK_COLORS[0], l: V.tool === 'laser' ? 1 : 0, x: p.x, y: p.y });
+    rinkSendAll({ t: 'b', s: V.drawOwner, id: V.drawId, c: V.color, l: V.tool === 'laser' ? 1 : 0, k: V.tool, w: V.size, x: p.x, y: p.y });
   });
   cv.addEventListener('pointermove', e => {
     if (!V.tool) return; const p = rinkXY(e, cv, vidOf());
+    if (V.tool === 'erase') { if (V.erasing) rinkErase(e, cv, vidOf(), ownerOf()); return; }
     if (V.drawId) return rinkSendAll({ t: 'm', s: V.drawOwner, id: V.drawId, x: p.x, y: p.y });
     if (p.out) return;
     const now = performance.now(); if (now - rinkLastP < 33) return; rinkLastP = now;
-    rinkSendAll({ t: 'p', s: ownerOf(), x: p.x, y: p.y, c: V.color || INK_COLORS[0] });
+    rinkSendAll({ t: 'p', s: ownerOf(), x: p.x, y: p.y, c: V.color });
   });
-  const up = () => { if (!V.drawId) return; const id = V.drawId; V.drawId = ''; rinkSendAll({ t: 'e', s: V.drawOwner, id: id }); rinkBarSync(); };
+  const up = () => { V.erasing = 0; if (!V.drawId) return; const id = V.drawId; V.drawId = ''; rinkSendAll({ t: 'e', s: V.drawOwner, id: id }); rinkBarSync(); };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-  cv.addEventListener('pointerleave', () => { if (!V.drawId && V.tool) rinkSendAll({ t: 'pl', s: ownerOf() }); });
+  cv.addEventListener('pointerleave', () => { if (!V.drawId && V.tool && V.tool !== 'erase') rinkSendAll({ t: 'pl', s: ownerOf() }); });
+}
+function rinkErase(e, cv, vid, o) {
+  const k = V.ink[o]; if (!k) return;
+  const box = cv.parentNode, rc = box.getBoundingClientRect(), r = inkFit(box, vid && vid.videoWidth, vid && vid.videoHeight), P = p => [r.x + p[0] * r.w, r.y + p[1] * r.h];
+  const x = inkHit(k.strokes, [e.clientX - rc.left, e.clientY - rc.top], P, Math.max(2.5, r.w / 300));
+  if (x) rinkSendAll({ t: 'del', s: o, a: x.a || S.me, id: x.id.slice(x.id.indexOf('|') + 1) });
 }
 function rinkBind() {
   const cv = $('#roomInk'); if (!cv) return;
@@ -4059,18 +4136,16 @@ function rinkBind() {
   const v = $('#roomVid'); if (v && !v.__rink) { v.__rink = 1; v.addEventListener('resize', rinkKick); v.addEventListener('loadedmetadata', rinkKick); }
 }
 document.addEventListener('keydown', e => {
-  if (!V.on || !V.tool || /INPUT|TEXTAREA/.test((e.target && e.target.tagName) || '')) return;
-  if (e.key === 'Escape' && $('#roomStage')) { V.tool = ''; rinkBarSync(); return; }
+  if (!V.on || !V.tool || /INPUT|TEXTAREA|SELECT/.test((e.target && e.target.tagName) || '') || (e.target && e.target.isContentEditable)) return;
+  if (e.key === 'Escape' && $('#roomStage')) { V.tool = ''; rinkSendAll({ t: 'pl' }); rinkBarSync(); return; }
+  const kk = $('#roomStage') && inkKey(e, V); if (kk) { e.preventDefault(); const w = Object.keys(kk)[0]; inkSet(V, w, kk[w] || V.tool, () => rinkSendAll({ t: 'pl' })); return rinkBarSync(); }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && $('#roomStage')) { e.preventDefault(); rinkUndo(); }
 });
 /* คนแชร์: หน้าต่างลอย เห็นจอตัวเอง + จุดที่เพื่อนชี้ ขณะทำงานในโปรแกรมอื่น */
 function rinkPipBar() {
   const k = V.ink[S.me], myPen = k && k.strokes.some(x => !x.a && !x.l), anyPen = k && k.strokes.some(x => !x.l);
-  return '<span class="rtc-peek-rec"></span><b>ห้องเสียงทีม · จอของคุณ</b>' +
-    '<button data-pk="laser" class="' + (V.tool === 'laser' ? 'on' : '') + '" title="ชี้">' + RTC_IC.laser + '</button>' +
-    '<button data-pk="pen" class="' + (V.tool === 'pen' ? 'on' : '') + '" title="วาด">' + RTC_IC.pen + '</button>' +
-    (V.tool ? INK_COLORS.map(c => '<button data-pk="c" data-c="' + c + '" class="pk-dot' + (c === (V.color || INK_COLORS[0]) ? ' on' : '') + '" style="--c:' + c + '" aria-label="สี"></button>').join('') : '') +
-    (myPen ? '<button data-pk="undo" title="ย้อน">' + RTC_IC.undo + '</button>' : '') + (anyPen ? '<button data-pk="clr" title="ล้างทั้งหมด">' + RTC_IC.eraser + '</button>' : '');
+  return '<span class="rtc-peek-rec"></span><b>ห้องเสียงทีม · จอของคุณ</b>' + inkKitHtml({ tool: V.tool, color: V.color, size: V.size }, 'pk',
+    (myPen ? '<button data-pk="undo" title="ย้อนเส้นของคุณ">' + RTC_IC.undo + '</button>' : '') + (anyPen ? '<button data-pk="clr" title="ล้างทั้งหมด">' + RTC_IC.trash + '</button>' : ''));
 }
 async function rinkPip() {
   if (V.pip) return rinkPipClose();
@@ -4083,8 +4158,7 @@ async function rinkPip() {
   const v = w.document.getElementById('pipVid'); v.srcObject = V.share; v.play().catch(() => {}); v.addEventListener('loadedmetadata', rinkKick);
   w.document.getElementById('pipInkBar').addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-pk]'); if (!b) return; const a = b.dataset.pk; V.pipOn = true;
-    if (a === 'laser' || a === 'pen') { V.tool = V.tool === a ? '' : a; if (!V.color) V.color = INK_COLORS[0]; if (!V.tool) rinkSendAll({ t: 'pl', s: S.me }); }
-    else if (a === 'c') { V.color = b.dataset.c; if (!V.tool) V.tool = 'pen'; }
+    if (a === 'tool' || a === 'color' || a === 'size') inkSet(V, a, b.dataset.v, () => rinkSendAll({ t: 'pl', s: S.me }));
     else if (a === 'undo') rinkUndo(); else if (a === 'clr') rinkSendAll({ t: 'clr', s: S.me });
     V.pipOn = false; rinkBarSync();
   });
@@ -4271,6 +4345,18 @@ const PEEK_CSS = `.pip-wait{font:500 14px system-ui,sans-serif;color:#cfe;paddin
 .rtc-peek-bar .pk-dot{width:18px;height:18px;padding:0;border-radius:50%;background:var(--c);border:2px solid #1a232c}
 .rtc-peek-bar .pk-dot.on{box-shadow:0 0 0 2px #fff}
 .rtc-peek-bar{flex-wrap:wrap}
+.rtc-peek-bar .ink-kit{display:contents}
+.rtc-peek-bar .ink-tools{display:flex;gap:4px;flex-wrap:wrap}
+.rtc-peek-bar .ink-t{width:30px;padding:0;justify-content:center}
+.rtc-peek-bar .ink-t span{display:none}
+.rtc-peek-bar .ink-sub{flex-basis:100%;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:2px 0 0}
+.rtc-peek-bar .ink-sizes,.rtc-peek-bar .ink-colors{display:flex;gap:4px;flex-wrap:wrap}
+.rtc-peek-bar .ink-sz{width:26px;height:26px;padding:0;justify-content:center;background:transparent;border-color:transparent}
+.rtc-peek-bar .ink-sz.on{background:#243039;border-color:#3a4652}
+.rtc-peek-bar .ink-sz i{width:var(--d);height:var(--d);border-radius:50%;background:var(--c);box-shadow:0 0 0 1px rgba(255,255,255,.35)}
+.rtc-peek-bar .rtc-dot{width:20px;height:20px;padding:0;border-radius:50%;background:var(--c);border:2px solid #1a232c;box-shadow:0 0 0 1px #3a4652}
+.rtc-peek-bar .rtc-dot.on{box-shadow:0 0 0 2px #fff}
+.rtc-peek-bar .ink-sep{width:1px;height:18px;background:#2c3742}
 .rtc-peek-where{display:flex;align-items:center;gap:7px;padding:7px 12px 9px;color:#93a3b2;font-size:13px}
 .rtc-peek-where b{color:#fff}
 .rtc-peek-where i{width:10px;height:10px;border-radius:50%;flex:none;box-shadow:0 0 8px currentColor}
@@ -4287,26 +4373,44 @@ function rtcDc(ch) {
 }
 function inkSend(m) { if (R.dc && R.dc.readyState === 'open') { try { R.dc.send(JSON.stringify(m)); } catch (e) {} } }
 function inkSendAll(m) { inkApply(m); inkSend(m); }
+/* เลือกเครื่องมือ/สี/ขนาด (ใช้ร่วมกันทั้งโทรตัวต่อตัวและห้องทีม) · off = เลิกชี้ */
+function inkSet(st, what, v, off) {
+  if (what === 'tool') { st.tool = st.tool === v ? '' : (INK_TOOLS.some(x => x[0] === v) ? v : ''); if (!st.tool && off) off(); return; }
+  if (what === 'color') { st.color = inkC(v); if (!st.tool || st.tool === 'erase') st.tool = 'pen'; }
+  if (what === 'size') { st.size = inkW(v); if (!st.tool || st.tool === 'erase' || st.tool === 'laser') st.tool = 'pen'; }
+  inkSavePref(st.color, st.size);
+}
+function inkUndo() { const k = R.ink; for (let i = k.strokes.length - 1; i >= 0; i--) { const x = k.strokes[i]; if (!x.l && !x.r) { inkSendAll({ t: 'undo', id: x.id }); return; } } }
+/* ยางลบ (โทรตัวต่อตัว): หาเส้นใต้จุด แล้วลบทั้งสองฝั่ง */
+function inkErase(e, cv, vid) {
+  const box = cv.parentNode, rc = box.getBoundingClientRect(), r = inkFit(box, vid && vid.videoWidth, vid && vid.videoHeight), P = p => [r.x + p[0] * r.w, r.y + p[1] * r.h];
+  const x = inkHit(R.ink.strokes, [e.clientX - rc.left, e.clientY - rc.top], P, Math.max(2.5, r.w / 300));
+  if (x) inkSendAll({ t: 'del', id: x.id });
+}
 const inkN = v => Math.round(Math.min(1, Math.max(0, +v || 0)) * 10000) / 10000;
-const inkC = c => INK_COLORS.indexOf(c) >= 0 ? c : INK_COLORS[0];
+const inkC = c => typeof c === 'string' && /^#[0-9A-F]{6}$/i.test(c) ? c.toUpperCase() : INK_COLORS[0];
 function inkApply(m, remote) {
   const k = R.ink, now = performance.now();
   switch (m.t) {
     case 'p': k.ptr = { x: inkN(m.x), y: inkN(m.y), c: inkC(m.c), t: now, r: !!remote }; break;
     case 'pl': if (k.ptr) k.ptr.t = Math.min(k.ptr.t, now - 2400); break;
     case 'b': {
-      const st = { id: String(m.id), c: inkC(m.c), l: !!m.l, pts: [[inkN(m.x), inkN(m.y)]], end: 0, r: !!remote };
+      const st = { id: String(m.id), c: inkC(m.c), l: !!m.l, k: inkK(m.k), w: inkW(m.w), pts: [[inkN(m.x), inkN(m.y)]], end: 0, r: !!remote };
       k.strokes.push(st); if (k.strokes.length > 300) k.strokes.shift();
       k.ptr = { x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now, r: !!remote }; k.rips.push({ x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }); break;
     }
-    case 'm': { const st = k.strokes.find(x => x.id === String(m.id)); if (st && st.pts.length < 4000) { st.pts.push([inkN(m.x), inkN(m.y)]); k.ptr = { x: inkN(m.x), y: inkN(m.y), c: st.c, t: now, r: st.r }; } break; }
+    case 'm': { const st = k.strokes.find(x => x.id === String(m.id)); if (st && st.pts.length < 4000) { const q = [inkN(m.x), inkN(m.y)]; if (INK_SHAPE[st.k] && !st.l) st.pts[1] = q; else st.pts.push(q); k.ptr = { x: q[0], y: q[1], c: st.c, t: now, r: st.r }; } break; }
     case 'e': { const st = k.strokes.find(x => x.id === String(m.id)); if (st) st.end = now; break; }
     case 'clr': k.strokes = []; break;
-    case 'undo': for (let i = k.strokes.length - 1; i >= 0; i--) if (!k.strokes[i].l) { k.strokes.splice(i, 1); break; } break;
+    case 'undo': {   // ย้อนเส้นของคนสั่ง (มี id) · รุ่นเก่าไม่ส่ง id = เส้นล่าสุด
+      const i = m.id ? k.strokes.findIndex(x => x.id === String(m.id)) : (() => { for (let j = k.strokes.length - 1; j >= 0; j--) if (!k.strokes[j].l) return j; return -1; })();
+      if (i >= 0) k.strokes.splice(i, 1); break;
+    }
+    case 'del': { const i = k.strokes.findIndex(x => x.id === String(m.id)); if (i >= 0) k.strokes.splice(i, 1); break; }
     default: return;
   }
   if (remote && R.role === 'host' && (m.t === 'p' || m.t === 'b')) inkNudge();
-  if (R.role === 'host' && R.peek && /^(e|clr|undo)$/.test(m.t)) R.peek.querySelector('.rtc-peek-bar').innerHTML = peekBar();
+  if (R.role === 'host' && R.peek && /^(e|clr|undo|del)$/.test(m.t)) R.peek.querySelector('.rtc-peek-bar').innerHTML = peekBar();
   inkKick();
 }
 function inkTitle(on) {
@@ -4369,16 +4473,8 @@ function inkPaint(cv, vid) {
   }
   if (vid && vid.videoWidth && cv.closest && cv.closest('.rtc-peek')) peekMask(g, r);
   const now = performance.now(), k = R.ink, lw = Math.max(2.5, r.w / 300);
-  g.lineCap = g.lineJoin = 'round';
   k.strokes = k.strokes.filter(x => !(x.l && x.end && now - x.end > 1500));
-  k.strokes.forEach(x => {
-    g.globalAlpha = x.l && x.end ? Math.max(0, 1 - (now - x.end) / 1500) : 1;
-    g.strokeStyle = x.c; g.lineWidth = x.l ? lw * 1.5 : lw; g.shadowColor = x.c; g.shadowBlur = x.l ? 14 : 0;
-    g.beginPath(); x.pts.forEach((p, i) => { const q = P(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); });
-    if (x.pts.length === 1) { const q = P(x.pts[0]); g.lineTo(q[0] + .1, q[1]); }
-    g.stroke();
-  });
-  g.shadowBlur = 0;
+  inkDrawStrokes(g, k.strokes, P, lw, now);
   k.rips = k.rips.filter(x => now - x.t < 900);
   k.rips.forEach(x => { const q = P([x.x, x.y]), f = (now - x.t) / 900; g.globalAlpha = 1 - f; g.strokeStyle = x.c; g.lineWidth = 3; g.beginPath(); g.arc(q[0], q[1], 10 + f * 36, 0, Math.PI * 2); g.stroke(); });
   if (k.ptr && now - k.ptr.t < 3000) {
@@ -4437,30 +4533,34 @@ document.addEventListener('pointerdown', e => {
   if (!e.target || e.target.id !== 'rtcInk' || !R.tool || R.state !== 'live') return;
   const p = inkXY(e); if (p.out) return;
   e.preventDefault(); try { e.target.setPointerCapture(e.pointerId); } catch (x) {}
-  R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, x: p.x, y: p.y });
+  if (R.tool === 'erase') { R.erasing = 1; return inkErase(e, e.target, $('#rtcVideo')); }
+  R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, k: R.tool, w: R.size, x: p.x, y: p.y });
 });
 document.addEventListener('pointermove', e => {
   if (!e.target || e.target.id !== 'rtcInk' || !R.tool || R.state !== 'live') return;
   const p = inkXY(e);
+  if (R.tool === 'erase') { if (R.erasing) inkErase(e, e.target, $('#rtcVideo')); return; }
   if (R.drawId) return inkSendAll({ t: 'm', id: R.drawId, x: p.x, y: p.y });
   if (p.out) return;
   const now = performance.now(); if (now - inkLastP < 33) return; inkLastP = now;
   inkSendAll({ t: 'p', x: p.x, y: p.y, c: R.color });
 });
-function inkUp() { if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); inkBarSync(); }
+function inkUp() { R.erasing = 0; if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); inkBarSync(); }
 document.addEventListener('pointerup', inkUp); document.addEventListener('pointercancel', inkUp);
-document.addEventListener('pointerout', e => { if (e.target && e.target.id === 'rtcInk' && !R.drawId && R.tool) inkSendAll({ t: 'pl' }); });
+document.addEventListener('pointerout', e => { if (e.target && e.target.id === 'rtcInk' && !R.drawId && R.tool && R.tool !== 'erase') inkSendAll({ t: 'pl' }); });
 document.addEventListener('keydown', e => {
-  if (R.role !== 'view' || R.state !== 'live' || /INPUT|TEXTAREA/.test((e.target && e.target.tagName) || '')) return;
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); inkSendAll({ t: 'undo' }); }
+  if (R.state !== 'live' || /INPUT|TEXTAREA|SELECT/.test((e.target && e.target.tagName) || '') || (e.target && e.target.isContentEditable)) return;
+  if (R.role !== 'view' && !(R.peek && R.tool)) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); inkUndo(); return R.role === 'view' ? inkBarSync() : renderPeek(); }
+  if (!R.tool) return;
+  if (e.key === 'Escape') { R.tool = ''; inkSendAll({ t: 'pl' }); return R.role === 'view' ? inkBarSync() : renderPeek(); }
+  const kk = inkKey(e, R); if (kk) { e.preventDefault(); const w = Object.keys(kk)[0]; inkSet(R, w, kk[w] || R.tool, () => inkSendAll({ t: 'pl' })); return R.role === 'view' ? inkBarSync() : renderPeek(); }
 });
-function inkHint() { return R.tool === 'laser' ? 'กำลังชี้ให้ ' + esc(R.name) + ' เห็น' : R.tool === 'pen' ? 'กำลังวาดให้ ' + esc(R.name) + ' เห็น' : 'กด "ชี้" หรือ "วาด" เพื่อบอกจุด'; }
+function inkHint() { const t = INK_TOOLS.find(x => x[0] === R.tool); return !t ? 'เลือกเครื่องมือ (ชี้ · ปากกา · ไฮไลต์ · ลูกศร · กรอบ · วงกลม) เพื่อบอกจุด' : R.tool === 'laser' ? 'กำลังชี้ให้ ' + esc(R.name) + ' เห็น' : R.tool === 'erase' ? 'แตะเส้นที่จะลบ' : t[1] + ' — ' + esc(R.name) + ' เห็นด้วย'; }
 function inkBar() {
-  const hasPen = R.ink.strokes.some(x => !x.l);
-  return '<div class="rtc-ink" id="rtcInkBar"><button class="rtc-tb' + (R.tool === 'laser' ? ' on' : '') + '" data-rtc="tool" data-v="laser" title="ชี้ (เลเซอร์) — เขาเห็นจุดที่คุณชี้ คลิกเพื่อทำวงกระเพื่อม">' + RTC_IC.laser + '<span>ชี้</span></button>' +
-    '<button class="rtc-tb' + (R.tool === 'pen' ? ' on' : '') + '" data-rtc="tool" data-v="pen" title="วาด / วงจุดบนจอ">' + RTC_IC.pen + '<span>วาด</span></button>' +
-    (R.tool ? '<span class="rtc-dots-c">' + INK_COLORS.map(c => '<button class="rtc-dot' + (c === R.color ? ' on' : '') + '" data-rtc="color" data-v="' + c + '" style="--c:' + c + '" aria-label="สี"></button>').join('') + '</span>' : '') +
-    (hasPen ? '<button class="rtc-tb" data-rtc="undo" title="ย้อน (Ctrl+Z)">' + RTC_IC.undo + '</button><button class="rtc-tb" data-rtc="clear" title="ล้างที่วาดทั้งหมด">' + RTC_IC.eraser + '</button>' : '') + '</div>';
+  const mine = R.ink.strokes.some(x => !x.l && !x.r), any = R.ink.strokes.some(x => !x.l);
+  const extra = '<span class="ink-acts"><button type="button" class="rtc-tb" data-rtc="undo" title="ย้อนเส้นของคุณ (Ctrl+Z)"' + (mine ? '' : ' disabled') + '>' + RTC_IC.undo + '</button><button type="button" class="rtc-tb" data-rtc="clear" title="ล้างที่วาดทั้งหมด"' + (any ? '' : ' disabled') + '>' + RTC_IC.trash + '</button></span>';
+  return '<div class="rtc-ink" id="rtcInkBar">' + inkKitHtml({ tool: R.tool, color: R.color, size: R.size }, 'rtc', extra) + '</div>';
 }
 function inkBarSync() {
   const b = $('#rtcInkBar'); if (b) b.outerHTML = inkBar();
@@ -4469,13 +4569,11 @@ function inkBarSync() {
 }
 /* คนแชร์: ภาพจอตัวเอง + จุดที่อีกฝ่ายชี้ (ในหน้า หรือหน้าต่างลอยอยู่บนสุด) */
 function peekBar() {
-  return '<span class="rtc-peek-rec"></span><b>' + esc(R.name) + (R.pip ? ' ชี้บนจอคุณ' : R.src === 'camera' ? ' เห็นภาพกล้องนี้' : ' เห็นจอนี้') + '</b>' +
-    '<button data-peek="laser" class="' + (R.tool === 'laser' ? 'on' : '') + '" title="ชี้ให้ ' + esc(R.name) + ' เห็น">' + RTC_IC.laser + '</button>' +
-    '<button data-peek="pen" class="' + (R.tool === 'pen' ? 'on' : '') + '" title="วาด/เขียนบอก ' + esc(R.name) + ' (เขาเห็นด้วย)">' + RTC_IC.pen + '</button>' +
-    (R.tool ? INK_COLORS.map(c => '<button data-peek="c" data-c="' + c + '" class="pk-dot' + (c === R.color ? ' on' : '') + '" style="--c:' + c + '" aria-label="สี"></button>').join('') : '') +
-    (R.ink.strokes.some(x => !x.l) ? '<button data-peek="undo" title="ย้อน">' + RTC_IC.undo + '</button><button data-peek="clr" title="ล้างที่วาดทั้งหมด">' + RTC_IC.eraser + '</button>' : '') +
+  const mine = R.ink.strokes.some(x => !x.l && !x.r), any = R.ink.strokes.some(x => !x.l);
+  const extra = (mine ? '<button data-peek="undo" title="ย้อนเส้นของคุณ">' + RTC_IC.undo + '</button>' : '') + (any ? '<button data-peek="clr" title="ล้างที่วาดทั้งหมด">' + RTC_IC.trash + '</button>' : '') +
     (R.pip ? '<button data-peek="stop" title="หยุดแชร์">' + RTC_IC.stop + 'หยุด</button>'
       : (CAN_PIP && R.src !== 'camera' ? '<button data-peek="pip" title="หน้าต่างลอยอยู่บนสุดของทุกโปรแกรม">' + RTC_IC.pip + 'ลอย</button>' : '') + '<button data-peek="hide" title="ซ่อน">✕</button>');
+  return '<span class="rtc-peek-rec"></span><b>' + esc(R.name) + (R.pip ? ' ชี้บนจอคุณ' : R.src === 'camera' ? ' เห็นภาพกล้องนี้' : ' เห็นจอนี้') + '</b>' + inkKitHtml({ tool: R.tool, color: R.color, size: R.size }, 'peek', extra);
 }
 function renderPeek() {
   const want = R.role === 'host' && R.state === 'live' && R.stream;
@@ -4490,17 +4588,17 @@ function renderPeek() {
       const a = b.dataset.peek;
       if (a === 'pip') rtcPip(); else if (a === 'hide') { R.peekOpen = false; renderRtc(); }
       else if (a === 'clr') { inkSendAll({ t: 'clr' }); renderPeek(); } else if (a === 'stop') rtcHang();
-      else if (a === 'undo') { inkSendAll({ t: 'undo' }); renderPeek(); }
-      else if (a === 'laser' || a === 'pen') { R.tool = R.tool === a ? '' : a; if (!R.tool) inkSendAll({ t: 'pl' }); renderPeek(); }
-      else if (a === 'c') { R.color = b.dataset.c; if (!R.tool) R.tool = 'pen'; renderPeek(); }
+      else if (a === 'undo') { inkUndo(); renderPeek(); }
+      else if (a === 'tool' || a === 'color' || a === 'size') { inkSet(R, a, b.dataset.v, () => inkSendAll({ t: 'pl' })); renderPeek(); }
     });
     {   // คนแชร์วาด/ชี้บนภาพจอตัวเองได้ด้วย อีกฝ่ายเห็นบนภาพที่เขาดูอยู่
       const cv = el.querySelector('canvas');
-      cv.addEventListener('pointerdown', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (p.out) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, x: p.x, y: p.y }); });
-      cv.addEventListener('pointermove', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (R.drawId) return inkSendAll({ t: 'm', id: R.drawId, x: p.x, y: p.y }); if (p.out) return; const now = performance.now(); if (now - inkLastP < 33) return; inkLastP = now; inkSendAll({ t: 'p', x: p.x, y: p.y, c: R.color }); });
-      const up = () => { if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); renderPeek(); };
+      const pv = () => { const v = el.querySelector('video'); return v && v.videoWidth ? v : inkDims(); };
+      cv.addEventListener('pointerdown', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (p.out) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} if (R.tool === 'erase') { R.erasing = 1; return inkErase(e, cv, pv()); } R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, k: R.tool, w: R.size, x: p.x, y: p.y }); });
+      cv.addEventListener('pointermove', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (R.tool === 'erase') { if (R.erasing) inkErase(e, cv, pv()); return; } if (R.drawId) return inkSendAll({ t: 'm', id: R.drawId, x: p.x, y: p.y }); if (p.out) return; const now = performance.now(); if (now - inkLastP < 33) return; inkLastP = now; inkSendAll({ t: 'p', x: p.x, y: p.y, c: R.color }); });
+      const up = () => { const er = R.erasing; R.erasing = 0; if (er) return renderPeek(); if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); renderPeek(); };
       cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-      cv.addEventListener('pointerleave', () => { if (!R.drawId && R.tool) inkSendAll({ t: 'pl' }); });
+      cv.addEventListener('pointerleave', () => { if (!R.drawId && R.tool && R.tool !== 'erase') inkSendAll({ t: 'pl' }); });
     }
     R.peek = el;
   }
@@ -9235,7 +9333,7 @@ document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === 
 }, true));
 document.addEventListener('focusout', e => { if (e.target && e.target.type === 'color' && S.renderLater) setTimeout(() => { const a = document.activeElement; if (!(a && a.type === 'color')) render(); }, 60); });
 bgLoad();
-window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION, renderPeek: renderPeek, rtcDc: rtcDc, renderRoom: renderRoom, rinkRecv: rinkRecv };
+window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION, renderPeek: renderPeek, rtcDc: rtcDc, renderRoom: renderRoom, rinkRecv: rinkRecv, renderRtc: renderRtc };
 if (SALE_Q) { salePage(); } else {
 if (mode() === 'sheet') ibStart(LS.get('rtpub', null));   // เปิดกล่องรับคำตอบไว้ก่อน ระหว่างรอ bootstrap ครั้งแรก
 load(false);
