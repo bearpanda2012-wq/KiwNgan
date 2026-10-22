@@ -6,7 +6,7 @@ const THR = +(process.argv[2] || 4), W = +(process.argv[3] || 390), H = W < 700 
 const root = new URL('..', import.meta.url).pathname, PORT = 8870 + (W % 7);
 const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,render};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(PORT);
 const b = await chromium.launch({ args: ['--no-proxy-server'] });
-const ctx = await b.newContext({ viewport: { width: W, height: H }, isMobile: W < 1000, hasTouch: W < 1000, deviceScaleFactor: W < 1000 ? 2 : 1 });
+const ctx = await b.newContext({ viewport: { width: W, height: H }, isMobile: W < 1000, hasTouch: W < 1000, deviceScaleFactor: +(process.env.DPR || (W < 1000 ? 2 : 1)), userAgent: process.env.UA || undefined });
 const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.addInitScript(() => { if (!sessionStorage.getItem('kn')) { localStorage.clear(); sessionStorage.setItem('kn', 1); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve();
   window.__noPerfProbe = true; if (window.__FULL) {} window.__lt = []; try { new PerformanceObserver(l => l.getEntries().forEach(e => window.__lt.push(Math.round(e.duration)))).observe({ type: 'longtask', buffered: true }); } catch (e) {} });

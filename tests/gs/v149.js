@@ -1,4 +1,5 @@
 // backend 1.49: ประวัติ "แก้ไข" บอกว่าแก้อะไร (เลื่อนกำหนดส่ง/เพิ่มบรีฟ) + เหตุผล
+const path = require('path'); process.argv[2] = process.argv[2] || path.join(__dirname, '../../backend/Code.gs');
 const m = require('./mock.js'); const logs = []; const ol = console.log; console.log = (...a) => logs.push(a.join(' ')); m.ctx.setup(); console.log = ol;
 const pin = (logs.join('\n').match(/PIN[^0-9]*(\d{4})/) || [])[1]; const A = m.call('login', { name: 'แอดมิน', pin }).data.token;
 let bad = 0; const eq = (l, a, w) => { const ok = JSON.stringify(a) === JSON.stringify(w); if (!ok) bad++; console.log((ok ? 'ok  ' : 'FAIL') + ' ' + l + (ok ? '' : ' → ' + JSON.stringify(a))); };

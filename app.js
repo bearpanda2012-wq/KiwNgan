@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.108.0';
+const APP_VERSION = '2.109.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -255,8 +255,15 @@ const PERF = (() => {
   // รอให้แอนิเมชันตอนเข้าหน้าเล่นจบก่อน (≈1.6 วิ รวมจังหวะเหลื่อมของแต่ละแถว) แล้วค่อยหยุดตัวที่อยู่นอกจอ — ไม่งั้นแถวล่าง ๆ ค้างท่าเริ่ม (จุดเล็ก/จาง)
   const queue = () => { if (io && !scanQ) { scanQ = true; setTimeout(() => requestAnimationFrame(scan), 1600); } };
   if ('MutationObserver' in window) new MutationObserver(queue).observe(document.documentElement, { childList: true, subtree: true });
-  const ioOn = on => { if (on && !io && 'IntersectionObserver' in window) { io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.removeAttribute('data-off'); else e.target.setAttribute('data-off', ''); }), { rootMargin: '160px 0px' }); queue(); }
-    if (!on && io) { io.disconnect(); io = null; document.querySelectorAll('[data-off]').forEach(el => el.removeAttribute('data-off')); } };
+  /* v2.109: นอกจอ = ยกเลิกแอนิเมชันวนไว้ก่อน (ไม่ใช่แค่หยุด) เพราะตัวที่หยุดไว้ยังกินชั้นภาพของการ์ดจอ
+     จอความละเอียดสูง (เช่น Samsung S24 Ultra) ชั้นภาพเกินหน่วยความจำการ์ดจอ → ภาพค้าง/การ์ดว่าง/ซ้อนตอนเลื่อน · เข้าจอแล้ววนต่อทันที */
+  const offA = new WeakMap();
+  const offAnim = (el, off) => {
+    if (off) { el.setAttribute('data-off', ''); if (offA.has(el)) return; let a = []; try { a = el.getAnimations({ subtree: true }).filter(x => x.effect && x.effect.getTiming().iterations === Infinity && x.playState !== 'idle'); a.forEach(x => x.cancel()); } catch (e) {} offA.set(el, a); }
+    else { el.removeAttribute('data-off'); const a = offA.get(el); if (a) { offA.delete(el); a.forEach(x => { try { x.play(); } catch (e) {} }); } }
+  };
+  const ioOn = on => { if (on && !io && 'IntersectionObserver' in window) { io = new IntersectionObserver(es => es.forEach(e => offAnim(e.target, !e.isIntersecting)), { rootMargin: '160px 0px' }); queue(); }
+    if (!on && io) { io.disconnect(); io = null; document.querySelectorAll('[data-off]').forEach(el => offAnim(el, false)); } };
   // v2.99: แอนิเมชันวนตลอด (ไม่หยุดเอง) · หยุดเฉพาะตัวที่อยู่นอกจอ (มองไม่เห็นอยู่แล้ว) · เข้าจอแล้ววิ่งต่อทันที
   const wake = () => {};
   const apply = m => { if (m) mode = m; const lite = (mode === 'auto' && weak) || mode === 'off';

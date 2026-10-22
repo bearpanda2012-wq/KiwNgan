@@ -6147,3 +6147,7 @@ body.auth #bgSndBtn{display:none}
   .ink-colors{flex-wrap:wrap;justify-content:center}
   .rtc-dot{width:24px;height:24px}
 }
+
+/* v2.109: แถว/การ์ดที่ตัดขอบอยู่แล้ว (overflow:hidden) → กั้นการวาดไว้ในกรอบ ไม่ให้ชั้นภาพของแอนิเมชันข้างในลามไปรวมกับแถวอื่น
+   (จอความละเอียดสูงอย่าง Samsung S24 Ultra ชั้นภาพใหญ่เกิน → การ์ดว่าง/ภาพซ้อนตอนเลื่อน) */
+.pcard,.co-row,.kpi{contain:paint}
