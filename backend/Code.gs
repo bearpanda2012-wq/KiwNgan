@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.49.0';
+const VERSION = '1.50.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -833,27 +833,46 @@ function saveJob_(job, u) {
 var ED_LBL_ = { code: 'เลข Job', title: 'ชื่องาน', group: 'กลุ่มงาน', taskType: 'ประเภทงาน', qty: 'จำนวน', level: 'ระดับ', assignee: 'ผู้รับผิดชอบ', sale: 'Sale', priority: 'ความด่วน', revision: 'งานแก้', status: 'สถานะ', received: 'วันรับงาน', due: 'กำหนดส่ง', startedAt: 'เวลาเริ่ม', finishedAt: 'เวลาปิดงาน', note: 'บรีฟ/หมายเหตุ', helpers: 'ผู้ร่วมทำงาน', checklist: 'ขั้นตอนงาน', ds: 'รายละเอียดงานออกแบบ' };
 function editDetail_(a, b, why) {
   const TM = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const DSL = { addr: 'ที่อยู่หน้างาน', area: 'ขนาดพื้นที่', brand: 'แบรนด์/งาน', budget: 'งบประมาณ', map: 'ลิงก์แผนที่', material: 'วัสดุ', measureAt: 'นัดวัดพื้นที่', pattern: 'Pattern', pcs: 'จำนวนชิ้น', room: 'ประเภทห้อง', size: 'ขนาดพื้นที่', style: 'สไตล์', surveyAt: 'วันนัดสำรวจ', wall: 'ขนาดผนัง', work: 'ชนิดงาน', furn: 'รายการเฟอร์นิเจอร์', due: 'แบบกำหนดส่ง', vr: 'VR', survey: 'สำรวจหน้างาน', vdo: 'วิดีโอ', repeat: 'งานประจำ' };
   const d8 = s => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (+m[3]) + ' ' + TM[+m[2] - 1] : 'ไม่กำหนด'; };
   const cut = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
   const sv = (o, h) => String(o[h] === undefined || o[h] === null ? '' : o[h]);
+  const J = (s, d) => { try { const v = JSON.parse(s || ''); return v && typeof v === 'object' ? v : d; } catch (e) { return d; } };
+  const lst = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+  const qv = v => v === 'multi' ? 'หลายชิ้น' : v === 'single' ? 'ชิ้นเดียว' : (v || '–');
   const skip = { id: 1, updatedAt: 1, updatedBy: 1, minutes: 1, createdAt: 1, createdBy: 1, status: 1, startedAt: 1, finishedAt: 1, why: 1, baseUpdatedAt: 1 };
   const out = [], rest = [];
   Object.keys(ED_LBL_).forEach(h => {
     if (skip[h] || sv(a, h) === sv(b, h)) return;
-    const x = sv(a, h), y = sv(b, h);
+    const x = sv(a, h), y = sv(b, h), L = ED_LBL_[h];
     if (h === 'due') {
       const dd = x && y ? Math.round((Date.parse(y.slice(0, 10)) - Date.parse(x.slice(0, 10))) / 864e5) : 0;
       out.push((dd > 0 ? 'เลื่อนกำหนดส่ง ' : dd < 0 ? 'เร่งกำหนดส่ง ' : 'กำหนดส่ง ') + d8(x) + ' → ' + d8(y) + (dd ? ' (' + (dd > 0 ? '+' : '−') + Math.abs(dd) + ' วัน)' : ''));
     } else if (h === 'note') {
       const xt = x.trim(), yt = y.trim();
-      if (!yt) out.push('ลบบรีฟ/หมายเหตุ');
+      if (!yt) out.push('ลบบรีฟ/หมายเหตุ (เดิม: ' + cut(xt, 80) + ')');
       else if (xt && yt.indexOf(xt) === 0) out.push('เพิ่มบรีฟ: ' + cut(yt.slice(xt.length), 160));
       else out.push((xt ? 'แก้บรีฟ: ' : 'บรีฟ: ') + cut(yt, 160));
-    } else if (h === 'assignee' || h === 'sale') out.push(ED_LBL_[h] + ' ' + (x || '–') + ' → ' + (y || '–'));
-    else if (h === 'priority') out.push(y === 'urgent' ? 'ตั้งเป็นงานด่วน' : 'ยกเลิกงานด่วน');
+    } else if (h === 'priority') out.push(y === 'urgent' ? 'ตั้งเป็นงานด่วน' : 'ยกเลิกงานด่วน');
+    else if (h === 'revision') out.push(y === 'true' || y === '1' ? 'ตั้งเป็นงานแก้' : 'ยกเลิกงานแก้');
     else if (h === 'received') out.push('วันรับงาน ' + d8(x) + ' → ' + d8(y));
-    else if (h === 'title' || h === 'code') out.push(ED_LBL_[h] + ' → ' + cut(y, 60));
-    else rest.push(ED_LBL_[h]);
+    else if (h === 'qty') out.push('จำนวน ' + qv(x) + ' → ' + qv(y));
+    else if (h === 'level') out.push('ระดับ ' + (x || '–') + ' → ' + (y || '–'));
+    else if (h === 'helpers') {
+      const pa = lst(x), pb = lst(y), add = pb.filter(n => pa.indexOf(n) < 0), del = pa.filter(n => pb.indexOf(n) < 0);
+      out.push('ผู้ร่วมทำงาน' + (add.length ? ' +' + add.join(', +') : '') + (del.length ? ' −' + del.join(', −') : ''));
+    } else if (h === 'checklist') {
+      const pa = J(x, []), pb = J(y, []), n0 = out.length;
+      if (Array.isArray(pa) && Array.isArray(pb)) {
+        pb.forEach(st => { const o = pa.find(q => q && st && q.t === st.t); if (!o) out.push('เพิ่มขั้นตอน: ' + cut(st && st.t, 60)); else if (!!o.d !== !!st.d) out.push((st.d ? '✓ เสร็จขั้น: ' : 'ยกเลิกขั้น: ') + cut(st.t, 60)); });
+        pa.forEach(st => { if (!pb.some(q => q && st && q.t === st.t)) out.push('ลบขั้นตอน: ' + cut(st && st.t, 60)); });
+      }
+      if (out.length === n0) rest.push('ลำดับ' + L);
+    } else if (h === 'ds') {
+      const pa = J(x, {}), pb = J(y, {}), ks = Object.keys(Object.assign({}, pa, pb)).filter(k => JSON.stringify(pa[k] === undefined ? '' : pa[k]) !== JSON.stringify(pb[k] === undefined ? '' : pb[k]));
+      if (!ks.length) return;
+      out.push(ks.map(k => { const u = pa[k], v = pb[k], nm = DSL[k] || k; return (u === undefined || typeof u !== 'object') && (v === undefined || typeof v !== 'object') ? nm + ' ' + cut(u === undefined || u === '' ? '–' : u, 40) + ' → ' + cut(v === undefined || v === '' ? '–' : v, 40) : 'แก้' + nm; }).join(', '));
+    } else out.push(L + ' ' + cut(x || '–', 60) + ' → ' + cut(y || '–', 60));
   });
   if (rest.length) out.push('แก้ ' + rest.join(', '));
   if (why && String(why).trim()) out.push('เหตุผล: ' + cut(why, 200));

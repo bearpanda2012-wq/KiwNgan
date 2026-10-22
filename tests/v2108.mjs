@@ -14,6 +14,10 @@ await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, 
 // ตัวแปลงข้อความประวัติ
 eq('editDetail text', await pg.evaluate(() => T.editDetail({ due: '2026-10-22', note: 'ก', assignee: 'อ๊อฟ', priority: 'normal' }, { due: '2026-10-24', note: 'ก\nข', assignee: 'ฝน', priority: 'urgent' }, 'สลับคิว')),
   'ผู้รับผิดชอบ อ๊อฟ → ฝน · ความด่วน · เลื่อนกำหนดส่ง 22 ต.ค. → 24 ต.ค. (+2 วัน) · เพิ่มบรีฟ: ข · เหตุผล: สลับคิว'.replace('ความด่วน', 'ตั้งเป็นงานด่วน'));
+eq('checklist/helpers/ds detail', await pg.evaluate(() => T.editDetail(
+  { checklist: JSON.stringify([{ t: 'เขียนแบบ', d: 0 }, { t: 'ตรวจ', d: 0 }]), helpers: 'ฝน', ds: JSON.stringify({ area: '100', furn: [] }), qty: 'single', group: 'A' },
+  { checklist: JSON.stringify([{ t: 'เขียนแบบ', d: 1 }, { t: 'ส่งลูกค้า', d: 0 }]), helpers: 'ต้น', ds: JSON.stringify({ area: '120', furn: [{ n: 'โต๊ะ' }] }), qty: 'multi', group: 'B' }, '')),
+  'กลุ่มงาน A → B · จำนวน ชิ้นเดียว → หลายชิ้น · ผู้ร่วมทำงาน +ต้น −ฝน · ✓ เสร็จขั้น: เขียนแบบ · เพิ่มขั้นตอน: ส่งลูกค้า · ลบขั้นตอน: ตรวจ · ขนาดพื้นที่ 100 → 120, แก้รายการเฟอร์นิเจอร์');
 // แก้งานเดิม: เลื่อนกำหนดส่งโดยไม่ใส่เหตุผล → บันทึกไม่ได้
 const id = await pg.evaluate(() => { const j = KiwNgan.S.jobs.find(x => x.status === 'queue' && x.due && !/^ออกแบบ/.test(x.taskType)); T.openEditor(j.id); return j.id; });
 await pg.waitForTimeout(300); await pg.click('[data-act="editmode"]'); await pg.waitForTimeout(250);
@@ -27,7 +31,9 @@ await pg.fill('#e-why', 'สลับกับงาน MV Food'); await pg.clic
 eq('saved', await pg.evaluate(id => T.jobById(id).due, id), later);
 eq('why not kept on job', await pg.evaluate(id => T.jobById(id).why, id), undefined);
 await pg.evaluate(id => T.openEditor(id), id); await pg.waitForTimeout(900);
+await pg.fill('#cmtText', 'ปรับแบบใหม่ให้สมส่วน'); await pg.click('[data-act="cmtsend"]'); await pg.waitForTimeout(900);
 const hist = await pg.locator('#hist').innerText();
+eq('comment shows in history', hist.split('\n')[0].includes('คอมเมนต์ · “ปรับแบบใหม่ให้สมส่วน”'), true);
 console.log(hist.split('\n').slice(0, 3).join(' | '));
 eq('history shows postpone', /เลื่อนกำหนดส่ง .* \(\+3 วัน\)/.test(hist), true);
 eq('history shows brief', /บรีฟ: .*-ลูกค้าเพิ่มด้านข้าง/.test(hist), true);
