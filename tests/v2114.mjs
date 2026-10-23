@@ -44,6 +44,25 @@ await pg.waitForTimeout(1500);
 eq('old job detail opened', await pg.locator('#sdModal').count(), 1);
 eq('says shipped', (await pg.locator('#sdModal .sd-scan').innerText()).includes('ส่งแล้ว'), true);
 await pg.locator('#sdModal .pm-card').screenshot({ path: out + 'v2114-sale-scan.png' });
+// เช็กลิสต์ในหน้า Sale แสดงทุกขั้น (ทำแล้ว ✓ / ขั้นถัดไป)
+const clc = await pg.evaluate(() => { const d = T.Demo.db(); const j = d.jobs.find(x => { try { const c = JSON.parse(x.checklist || '[]'); return c.length >= 3; } catch (e) { return false; } }); const jj = j || d.jobs.find(x => x.status !== 'done'); if (!jj) return null; const c = j ? JSON.parse(j.checklist) : [{ t: 'รับ Brief', d: 0 }, { t: 'วัดพื้นที่', d: 0 }, { t: 'ออกแบบ 3D', d: 0 }, { t: 'ส่งลูกค้า', d: 0 }]; c[0].d = 1; c[0].by = 'อ๊อฟ'; c[0].at = '2026-10-20 10:00'; jj.checklist = JSON.stringify(c); T.Demo.save(d); return { code: jj.code, n: c.length }; });
+if (clc) {
+  await pg.goto('http://127.0.0.1:8879/index.html?salek=' + key); await pg.waitForTimeout(1600);
+  await pg.evaluate(c => scanHit('https://x/KiwNgan/?job=' + encodeURIComponent(c)), clc.code); await pg.waitForTimeout(900);
+  eq('checklist items listed', await pg.locator('#sdModal .sl-cl li').count() >= clc.n, true);
+  eq('done item marked with who', (await pg.locator('#sdModal .sl-cl li.on').first().innerText()).includes('อ๊อฟ'), true);
+  eq('next step highlighted', await pg.locator('#sdModal .sl-cl li.nx').count(), 1);
+  await pg.locator('#sdModal .pm-card').screenshot({ path: out + 'v2115-sale-cl.png' });
+}
+// มุมมองตาราง: การ์ด "เลยกำหนด" นับตรงกับแถวที่ขึ้นป้ายแดง (ค้างเลยกำหนด + เสร็จช้ากว่ากำหนด)
+await pg.evaluate(() => { const d = T.Demo.db(), j = d.jobs.find(x => x.status === 'done'); if (j) { j.due = '2026-01-01'; j.finishedAt = (j.finishedAt && j.finishedAt > '2026-01-02' ? j.finishedAt : '2026-10-10 10:00'); } T.Demo.save(d); });
+await pg.goto('http://127.0.0.1:8879/index.html?salek=' + key); await pg.waitForTimeout(1400);
+await pg.click('[data-sfview="table"]'); await pg.waitForTimeout(800);
+await pg.click('[data-spst="late"]'); await pg.waitForTimeout(1500);
+const lateN = +(await pg.getAttribute('[data-spst="late"] b', 'data-n'));
+const rowsN = await pg.locator('tr.sp-r').count(), badN = await pg.locator('tr.sp-r .sp-bdg.bad').count();
+eq('late card count = rows shown', [lateN > 0, lateN === rowsN, badN === rowsN], [true, true, true]);
+await pg.locator('.sp-sum').screenshot({ path: out + 'v2115-late.png' });
 // ในแอป: งานผลิตเก่าที่ไม่ได้โหลดมา → สแกนแล้วค้นจากฐานข้อมูล
 await pg.goto('http://127.0.0.1:8879/index.html'); await pg.waitForTimeout(1500);
 await pg.evaluate(() => { S.prods = S.prods.filter(p => p.code !== 'OLD-2501'); S.jobs = S.jobs.filter(j => j.code !== 'OLD-2501'); });

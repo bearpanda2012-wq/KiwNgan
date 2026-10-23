@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.51.0';
+const VERSION = '1.52.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -592,7 +592,7 @@ function saleView_(k, sale) {
 function saleJobRow_(j, im) {
   let cl = []; try { cl = JSON.parse(j.checklist || '[]'); } catch (e) {}
   return { code: j.code, title: j.title, group: j.group, taskType: j.taskType, status: j.status, received: j.received, due: j.due, finishedAt: j.finishedAt, sale: j.sale, priority: j.priority, note: j.note || '', assignee: maskName_(j.assignee, { role: 'user' }) || '', helpers: helpersOf_(j).map(n => maskName_(n, { role: 'user' })).join(','),
-           steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '', imgs: (im[j.id] || []).slice(-6) };
+           steps: cl.length ? cl.filter(x => x.d).length + '/' + cl.length : '', cl: cl.map(x => ({ t: String(x.t || ''), d: x.d ? 1 : 0, by: maskName_(x.by || '', { role: 'user' }) || '', at: String(x.at || '').slice(0, 16) })), imgs: (im[j.id] || []).slice(-6) };
 }
 function saleProdRow_(x, im, metas) {
   return { code: x.code, priority: x.priority === 'urgent' ? 'urgent' : '', title: x.title, sale: x.sale, group: x.group, stage: x.stage, machines: prodMachines_(x.machines), paint: x.paint, assy: x.assy, enteredAt: x.enteredAt, finishedAt: x.finishedAt, shippedAt: x.shippedAt, due: x.due || '', note: x.note || '', imgs: (im[x.id] || []).slice(-6), qc: (q => ({ res: q.res, at: q.at, fails: q.fails, ok: q.ok, ng: q.ng }))(prodQc_(x.qc)), ship: x.stage === 'shipped' ? saleShip_(x, metas) : null };
