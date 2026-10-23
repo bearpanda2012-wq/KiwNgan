@@ -45,5 +45,20 @@ eq('choice remembered', (await st()).on, 'ship');
 await pg.setViewportSize({ width: 390, height: 800 }); await pg.click('[data-bndep="prod"]'); await pg.waitForTimeout(400);
 eq('mobile no overflow', await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
 await pg.locator('.rsec-flow').screenshot({ path: out + 'v2117-mobile.png' });
+// ตัวกรองสถานะในรายการงาน
+await pg.setViewportSize({ width: 1400, height: 900 }); await pg.evaluate(() => T.go('report')); await pg.waitForTimeout(600);
+const opts = await pg.$$eval('#rRes option', a => a.map(o => ({ v: o.value, n: +(o.textContent.match(/\((\d+)\)/) || [0, -1])[1], dis: o.disabled })));
+eq('status filter has options', opts.length >= 6, true);
+const want = { ok: /^ตรงเวลา$/, slow: /^ช้า/, late: /^เลยกำหนด$/ };
+for (const o of opts.filter(o => !o.dis)) {
+  await pg.selectOption('#rRes', o.v); await pg.waitForTimeout(350);
+  const rows = await pg.$$eval('.rjobs tbody tr', a => a.map(tr => tr.querySelector('.rres') ? tr.querySelector('.rres').textContent.trim() : ''));
+  eq('status ' + o.v + ': rows = count in option', rows.length, o.n);
+  if (want[o.v]) eq('status ' + o.v + ': every row matches', rows.every(t => want[o.v].test(t)), true);
+}
+await pg.selectOption('#rRes', 'slow'); await pg.waitForTimeout(300);
+eq('heading shows chosen status', (await pg.locator('.rsec-jobs h3').innerText()).includes('เสร็จช้า'), true);
+await pg.locator('.rep-controls').screenshot({ path: out + 'v2119-filter.png' });
+await pg.selectOption('#rRes', 'all');
 eq('no page errors', errs, []);
 console.log(ok + ' ok, ' + bad + ' fail'); await b.close(); srv.close(); process.exit(bad ? 1 : 0);

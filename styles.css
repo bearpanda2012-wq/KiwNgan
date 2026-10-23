@@ -459,7 +459,7 @@ body.auth main{padding-block:24px}
 
 /* ---------- report ---------- */
 .rep-controls{gap:12px}
-.rep-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.rep-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
 .rep-secs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .rep-secs .sub{margin-right:4px}
 .rep-secs input[type=checkbox]{width:17px;height:17px;margin:0;accent-color:var(--brand)}

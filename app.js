@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.118.0';
+const APP_VERSION = '2.119.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5371,6 +5371,9 @@ function viewTeam() {
 const R_SECTIONS = [['kpi', 'สรุปตัวเลข'], ['people', 'สรุปรายคน', true], ['groups', 'สรุปตามกลุ่มงาน'], ['flow', 'เวลาแต่ละขั้น / คอขวด', true], ['mat', 'ต้นทุนวัสดุต่อเลข Job', true], ['jobs', 'รายการงาน'], ['sign', 'ช่องลงชื่อ']];
 const R_PRESETS = [['today', 'วันนี้'], ['week', 'สัปดาห์นี้'], ['month', 'เดือนนี้'], ['lastmonth', 'เดือนก่อน'], ['year', 'ปีนี้'], ['custom', 'กำหนดเอง']];
 const R_SCOPES = [['all', 'งานที่เกี่ยวข้องในช่วงนี้'], ['received', 'งานที่รับเข้าในช่วงนี้'], ['done', 'งานที่เสร็จในช่วงนี้'], ['open', 'งานที่ยังค้างอยู่']];
+/* ตัวกรองสถานะ (คอลัมน์ "สถานะ" ในรายการงาน) */
+const R_RES = [['all', 'ทุกสถานะ', () => true], ['ok', 'ตรงเวลา', j => j.status === 'done' && onTime(j)], ['slow', 'เสร็จช้า', j => j.status === 'done' && !onTime(j)],
+  ['late', 'เลยกำหนด', j => isLate(j)], ['open', 'ยังไม่เสร็จ', j => isOpen(j)]].concat(['queue', 'doing', 'review', 'fix', 'hold'].map(k => [k, (ST[k] || {}).label || k, j => j.status === k && !isLate(j)]));
 function reportState() {
   if (!S.r) {
     const saved = LS.get('report', {}) || {};
@@ -5380,7 +5383,7 @@ function reportState() {
   }
   return S.r;
 }
-function saveReportState() { const r = S.r; LS.set('report', { preset: r.preset, from: r.preset === 'custom' ? r.from : '', to: r.preset === 'custom' ? r.to : '', scope: r.scope, orient: r.orient, sec: r.sec, bn: r.bn || 'all' }); }
+function saveReportState() { const r = S.r; LS.set('report', { preset: r.preset, from: r.preset === 'custom' ? r.from : '', to: r.preset === 'custom' ? r.to : '', scope: r.scope, res: r.res || 'all', orient: r.orient, sec: r.sec, bn: r.bn || 'all' }); }
 function applyPreset(p) {
   const r = S.r, d = new Date(), t = today();
   r.preset = p;
@@ -5561,6 +5564,7 @@ function viewReport() {
         : '<div class="f"><label>ผู้รับผิดชอบ</label><div class="rme">' + av(S.me) + '<b>' + esc(S.me) + '</b><small>งานของฉัน</small></div></div>') +
       '<div class="f"><label for="rGroup">กลุ่มงาน</label><select id="rGroup">' + opt('all', r.group, 'ทุกกลุ่มงาน') + (s.groups || []).map(g => opt(g, r.group, g)).join('') + '</select></div>' +
       '<div class="f"><label for="rScope">รายการงานที่แสดง</label><select id="rScope">' + R_SCOPES.map(x => opt(x[0], r.scope, x[1])).join('') + '</select></div>' +
+      '<div class="f"><label for="rRes">สถานะ</label><select id="rRes">' + R_RES.map(x => { const n = D.jobs.filter(x[2]).length; return '<option value="' + x[0] + '"' + ((r.res || 'all') === x[0] ? ' selected' : '') + (n || x[0] === r.res || x[0] === 'all' ? '' : ' disabled') + '>' + esc(x[1]) + ' (' + n + ')</option>'; }).join('') + '</select></div>' +
       '<div class="f"><label for="rOrient">หน้ากระดาษ A4</label><select id="rOrient">' + opt('portrait', r.orient, 'แนวตั้ง') + opt('landscape', r.orient, 'แนวนอน') + '</select></div>' +
     '</div>' +
     '<div class="rep-secs"><span class="sub">หัวข้อที่จะพิมพ์</span>' + R_SECTIONS.filter(x => !x[2] || isLead()).map(x => '<label class="toggle sm"><input type="checkbox" data-rsec="' + x[0] + '"' + (r.sec[x[0]] ? ' checked' : '') + '>' + x[1] + '</label>').join('') + '</div></div>';
@@ -5588,11 +5592,12 @@ function viewReport() {
     if (j.status === 'done') return onTime(j) ? '<span class="rres ok">ตรงเวลา</span>' : '<span class="rres bad">ช้า ' + (j.due && finDate(j) ? daysBetween(j.due, finDate(j)) + ' วัน' : '') + '</span>';
     return isLate(j) ? '<span class="rres bad">เลยกำหนด</span>' : '<span class="rres">' + esc((ST[j.status] || ST.queue).label) + '</span>';
   };
-  const scopeLabel = (R_SCOPES.find(x => x[0] === r.scope) || R_SCOPES[0])[1];
-  const jobs = r.sec.jobs ? '<section class="rsec rsec-jobs"><h3>รายการงาน <small>' + esc(scopeLabel) + ' · ' + D.jobs.length + ' งาน</small></h3>' + (D.jobs.length ? '<div class="rtable-wrap"><table class="rtable rjobs">' +
+  const scopeLabel = (R_SCOPES.find(x => x[0] === r.scope) || R_SCOPES[0])[1], resF = R_RES.find(x => x[0] === r.res) || R_RES[0];
+  const jl = D.jobs.filter(resF[2]);   // ตัวกรองสถานะใช้กับรายการงาน
+  const jobs = r.sec.jobs ? '<section class="rsec rsec-jobs"><h3>รายการงาน <small>' + esc(scopeLabel) + (resF[0] === 'all' ? '' : ' · สถานะ: ' + esc(resF[1])) + ' · ' + jl.length + ' งาน</small></h3>' + (jl.length ? '<div class="rtable-wrap"><table class="rtable rjobs">' +
     th([['#', 'n'], ['เลข Job'], ['ลูกค้า / รายละเอียด'], ['กลุ่ม'], ['ผู้รับผิดชอบ'], ['รับ'], ['กำหนดส่ง'], ['เสร็จ'], ['สถานะ'], ['เวลาทำ', 'n']]) + '<tbody>' +
-    D.jobs.map((j, i) => '<tr><td class="n">' + (i + 1) + '</td><td class="mono">' + esc(j.code) + (j.priority === 'urgent' ? ' <span class="rflag">ด่วน</span>' : '') + (j.revision ? ' <span class="rflag">แก้</span>' : '') + '</td><td>' + esc(j.title || '–') + '<small>' + esc(j.taskType || '') + (j.sale ? ' · Sale ' + esc(j.sale) : '') + '</small></td><td>' + esc(groupShort(j.group) || '–') + '</td><td>' + esc(j.assignee || '–') + '</td><td>' + fdY(j.received) + '</td><td>' + fdY(j.due) + '</td><td>' + (j.status === 'done' ? fdY(finDate(j)) : '–') + '</td><td>' + result(j) + '</td><td class="n">' + (totalMinutes(j) ? fdur(totalMinutes(j)) : '–') + '</td></tr>').join('') +
-    '</tbody></table></div>' : '<p class="rnone">ไม่มีงานในช่วงนี้</p>') + '</section>' : '';
+    jl.map((j, i) => '<tr><td class="n">' + (i + 1) + '</td><td class="mono">' + esc(j.code) + (j.priority === 'urgent' ? ' <span class="rflag">ด่วน</span>' : '') + (j.revision ? ' <span class="rflag">แก้</span>' : '') + '</td><td>' + esc(j.title || '–') + '<small>' + esc(j.taskType || '') + (j.sale ? ' · Sale ' + esc(j.sale) : '') + '</small></td><td>' + esc(groupShort(j.group) || '–') + '</td><td>' + esc(j.assignee || '–') + '</td><td>' + fdY(j.received) + '</td><td>' + fdY(j.due) + '</td><td>' + (j.status === 'done' ? fdY(finDate(j)) : '–') + '</td><td>' + result(j) + '</td><td class="n">' + (totalMinutes(j) ? fdur(totalMinutes(j)) : '–') + '</td></tr>').join('') +
+    '</tbody></table></div>' : '<p class="rnone">' + (resF[0] === 'all' ? 'ไม่มีงานในช่วงนี้' : 'ไม่มีงานสถานะ "' + esc(resF[1]) + '" ในช่วงนี้') + '</p>') + '</section>' : '';
 
   const sign = r.sec.sign ? '<section class="rsec rsign"><div><span></span>ผู้จัดทำรายงาน<small>(' + esc(S.me) + ')</small><small>วันที่ ........../........../..........</small></div><div><span></span>ผู้ตรวจสอบ<small>(..........................................)</small><small>วันที่ ........../........../..........</small></div></section>' : '';
 
@@ -9275,7 +9280,7 @@ document.addEventListener('change', e => {
     const cs = document.querySelector('.theme-sw.custom'); if (cs) { cs.classList.add('on'); cs.style.setProperty('--t1', c1); cs.style.setProperty('--t2', c2); }
     return;
   }
-  if (/^r(From|To|Member|Group|Scope|Orient)$/.test(t.id)) {
+  if (/^r(From|To|Member|Group|Scope|Orient|Res)$/.test(t.id)) {
     const r = reportState(), k = t.id.slice(1).toLowerCase();
     if (k === 'from' || k === 'to') { if (!t.value) return render(); r[k] = t.value; r.preset = 'custom'; if (r.from > r.to) { if (k === 'from') r.to = r.from; else r.from = r.to; } }
     else r[k] = t.value;
