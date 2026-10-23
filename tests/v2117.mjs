@@ -1,0 +1,35 @@
+// v2.117: รายงาน · คอขวดเลือกแผนกได้
+const { chromium } = await import(process.env.PW);
+import http from 'http'; import fs from 'fs'; import path from 'path';
+const PORT = 8916;
+const root = new URL('..', import.meta.url).pathname, out = new URL('out/', import.meta.url).pathname; fs.mkdirSync(out, { recursive: true });
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={go,render,api,Demo,SV,today,addDays};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(PORT);
+const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1400, height: 900 } });
+const errs = []; pg.on('pageerror', e => errs.push(e.message));
+let ok = 0, bad = 0; const eq = (lbl, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
+await pg.addInitScript(() => { if (!sessionStorage.getItem('x')) { localStorage.clear(); sessionStorage.setItem('x', 1); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
+const U = 'http://127.0.0.1:' + PORT + '/index.html';
+await pg.goto(U); await pg.waitForTimeout(700);
+const login = async () => { await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1200); };
+await login();
+
+await pg.evaluate(() => T.go('report')); await pg.waitForTimeout(900);
+const st = async () => pg.evaluate(() => ({ rows: document.querySelectorAll('.rsec-flow .bn-row').length, hl: (document.querySelector('.rsec-flow .bn-hl b') || {}).textContent || '', qc: !!document.querySelector('.rsec-flow .bn-qc'), on: (document.querySelector('.bn-dep .on') || {}).dataset?.bndep }));
+eq('picker shows 4 depts', await pg.locator('.bn-dep [data-bndep]').count(), 4);
+eq('default all: 9 rows + QC', (s => [s.rows, s.qc, s.on])(await st()), [9, true, 'all']);
+await pg.click('[data-bndep="design"]'); await pg.waitForTimeout(400);
+let s = await st(); eq('design: 2 rows, no QC', [s.rows, s.qc, s.on], [2, false, 'design']); eq('design bottleneck is a design stage', !s.hl || /ฝ่ายแบบ/.test(s.hl), true);
+await pg.locator('.rsec-flow').screenshot({ path: out + 'v2117-design.png' });
+await pg.click('[data-bndep="prod"]'); await pg.waitForTimeout(400);
+s = await st(); eq('prod: 6 rows + QC', [s.rows, s.qc], [6, true]); eq('prod bottleneck not design', !/ฝ่ายแบบ/.test(s.hl), true);
+await pg.locator('.rsec-flow').screenshot({ path: out + 'v2117-prod.png' });
+await pg.click('[data-bndep="ship"]'); await pg.waitForTimeout(400);
+s = await st(); eq('ship: 1 row', s.rows, 1);
+await pg.reload(); await pg.waitForTimeout(1500); if (await pg.locator('[data-act="adminon"]').count()) await login();
+await pg.evaluate(() => T.go('report')); await pg.waitForTimeout(800);
+eq('choice remembered', (await st()).on, 'ship');
+await pg.setViewportSize({ width: 390, height: 800 }); await pg.click('[data-bndep="prod"]'); await pg.waitForTimeout(400);
+eq('mobile no overflow', await pg.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+await pg.locator('.rsec-flow').screenshot({ path: out + 'v2117-mobile.png' });
+eq('no page errors', errs, []);
+console.log(ok + ' ok, ' + bad + ' fail'); await b.close(); srv.close(); process.exit(bad ? 1 : 0);

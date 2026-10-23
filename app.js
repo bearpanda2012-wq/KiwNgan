@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.116.0';
+const APP_VERSION = '2.117.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5380,7 +5380,7 @@ function reportState() {
   }
   return S.r;
 }
-function saveReportState() { const r = S.r; LS.set('report', { preset: r.preset, from: r.preset === 'custom' ? r.from : '', to: r.preset === 'custom' ? r.to : '', scope: r.scope, orient: r.orient, sec: r.sec }); }
+function saveReportState() { const r = S.r; LS.set('report', { preset: r.preset, from: r.preset === 'custom' ? r.from : '', to: r.preset === 'custom' ? r.to : '', scope: r.scope, orient: r.orient, sec: r.sec, bn: r.bn || 'all' }); }
 function applyPreset(p) {
   const r = S.r, d = new Date(), t = today();
   r.preset = p;
@@ -5459,8 +5459,8 @@ function stageTimes(r) {
   // ฝ่ายแบบ: รับงาน → เสร็จ (วันปฏิทิน) แยก CAD / CAM
   const dj = S.jobs.filter(j => j.status === 'done' && j.received && inR(finDate(j), r));
   const isCamT = j => taskCat(j.taskType) !== 'draw';
-  const dsg = ['draw', 'cam'].map(c => { const a = dj.filter(j => isCamT(j) === (c === 'cam')).map(j => ({ d: Math.max(0, (parseLocal(String(finDate(j)).slice(0, 10)) - parseLocal(String(j.received).slice(0, 10))) / msDay) + 1 }));
-    return { k: c, label: c === 'cam' ? 'ฝ่ายแบบ · CAM / CAD+CAM' : 'ฝ่ายแบบ · เขียนแบบ', n: a.length, avg: avg(a), now: S.jobs.filter(j => isOpen(j) && isCamT(j) === (c === 'cam')).length }; });
+  const dsg = ['draw', 'cam'].map(c => { const a = dj.filter(j => isCamT(j) === (c === 'cam')).map(j => ({ d: Math.max(0, (parseLocal(String(finDate(j)).slice(0, 10)) - parseLocal(String(j.received).slice(0, 10))) / msDay) + 1, code: j.code }));
+    return { k: c, dsg: 1, label: c === 'cam' ? 'ฝ่ายแบบ · CAM / CAD+CAM' : 'ฝ่ายแบบ · เขียนแบบ', n: a.length, avg: avg(a), max: a.slice().sort((x, y) => y.d - x.d)[0] || null, now: S.jobs.filter(j => isOpen(j) && isCamT(j) === (c === 'cam')).length }; });
   // QC: ผ่าน / ไม่ผ่าน ของงานที่ตรวจในช่วงนี้
   let pass = 0, fail = 0; const why = [], iQ = PORDER.indexOf('qc');
   prodsAll().forEach(p => { const h = phist(p).filter(e => e && e.t && e.s).slice().sort((a, b) => String(a.t).localeCompare(String(b.t)));
@@ -5469,16 +5469,22 @@ function stageTimes(r) {
   const all = rows.filter(x => x.avg != null), worst = all.slice().sort((a, b) => b.avg - a.avg)[0] || null;
   return { rows: rows, dsg: dsg, worst: worst, qc: { pass: pass, fail: fail, rate: pass + fail ? Math.round(fail / (pass + fail) * 100) : null, why: why.slice(-5).reverse() } };
 }
+/* คอขวด: เลือกแผนกที่จะดู (ทุกแผนก / ฝ่ายแบบ / ฝ่ายผลิต / ส่งมอบ) · คอขวด = ขั้นที่งานอยู่นานสุดในแผนกที่เลือก */
+const BN_DEPTS = [['all', 'ทุกแผนก', () => true], ['design', 'ฝ่ายแบบ', x => !!x.dsg], ['prod', 'ฝ่ายผลิต', x => !x.dsg && x.k !== 'ready'], ['ship', 'ส่งมอบ', x => x.k === 'ready']];
 function flowSec(r) {
-  const T = stageTimes(r), top = Math.max.apply(null, T.rows.concat(T.dsg).map(x => x.avg || 0).concat(0.01));
+  const dep = BN_DEPTS.find(x => x[0] === r.bn) || BN_DEPTS[0], T0 = stageTimes(r);
+  const T = { rows: T0.rows.filter(dep[2]), dsg: T0.dsg.filter(dep[2]), qc: T0.qc };
+  T.worst = T.dsg.concat(T.rows).filter(x => x.avg != null).sort((a, b) => b.avg - a.avg)[0] || null;
+  const top = Math.max.apply(null, T.rows.concat(T.dsg).map(x => x.avg || 0).concat(0.01));
+  const pick = '<div class="bn-dep" role="group" aria-label="เลือกแผนก">' + BN_DEPTS.map(x => '<button type="button" class="qchip' + (x[0] === dep[0] ? ' on' : '') + '" data-bndep="' + x[0] + '" aria-pressed="' + (x[0] === dep[0]) + '">' + x[1] + '</button>').join('') + '</div>';
   const bar = (x, hot) => '<div class="bn-row' + (hot ? ' hot' : '') + (x.avg == null ? ' none' : '') + '"><span class="bn-l">' + (PIC[x.k] ? '<i class="ic-' + x.k + '">' + PIC[x.k] + '</i>' : '<i class="ic-design">' + PIC.design + '</i>') + esc(x.label) + '</span>' +
     '<span class="bn-bar"><i style="width:' + (x.avg == null ? 0 : Math.max(3, x.avg / top * 100)).toFixed(1) + '%"></i></span><b class="bn-v">' + fdays(x.avg) + '</b><small class="bn-n">' + (x.n ? x.n + ' งาน' : 'ไม่มีข้อมูล') + (x.now ? ' · ค้าง ' + x.now : '') + '</small></div>';
   const w = T.worst, q = T.qc;
-  return '<section class="rsec rsec-flow"><h3>เวลาแต่ละขั้น / คอขวด <small>เฉลี่ยจากงานที่ผ่านขั้นนั้นในช่วงนี้</small></h3>' +
-    (w ? '<div class="bn-hl">' + STI.fire + '<div><b>คอขวด: ' + esc(w.label) + '</b><span>งานอยู่ขั้นนี้นานสุด เฉลี่ย ' + fdays(w.avg) + ' (' + w.n + ' งาน)' + (w.max ? ' · นานสุด ' + esc(w.max.code) + ' ' + fdays(w.max.d) : '') + '</span></div></div>' : '<p class="rnone">ยังไม่มีงานผลิตที่ย้ายขั้นในช่วงนี้</p>') +
-    '<div class="bn-list">' + T.dsg.map(x => bar(x, false)).join('') + T.rows.map(x => bar(x, w && x.k === w.k)).join('') + '</div>' +
-    '<div class="bn-qc"><div><span>QC ไม่ผ่าน</span><b class="' + (q.rate >= 20 ? 'bad' : '') + '">' + (q.rate == null ? '–' : q.rate + '%') + '</b><small>ผ่าน ' + q.pass + ' · ไม่ผ่าน ' + q.fail + ' ครั้ง</small></div>' +
-      (q.why.length ? '<ul>' + q.why.map(x => '<li><b class="mono">' + esc(x.code) + '</b> ' + esc(x.t) + '</li>').join('') + '</ul>' : '') + '</div></section>';
+  return '<section class="rsec rsec-flow"><h3>เวลาแต่ละขั้น / คอขวด <small>เฉลี่ยจากงานที่ผ่านขั้นนั้นในช่วงนี้' + (dep[0] === 'all' ? '' : ' · แผนก: ' + dep[1]) + '</small></h3>' +
+    pick + (w ? '<div class="bn-hl">' + STI.fire + '<div><b>คอขวด' + (dep[0] === 'all' ? '' : 'ใน' + dep[1]) + ': ' + esc(w.label) + '</b><span>งานอยู่ขั้นนี้นานสุด เฉลี่ย ' + fdays(w.avg) + ' (' + w.n + ' งาน)' + (w.max ? ' · นานสุด ' + esc(w.max.code) + ' ' + fdays(w.max.d) : '') + '</span></div></div>' : '<p class="rnone">' + (dep[0] === 'design' ? 'ยังไม่มีงานออกแบบที่เสร็จในช่วงนี้' : dep[0] === 'all' ? 'ยังไม่มีงานที่ผ่านขั้นในช่วงนี้' : 'ยังไม่มีงานที่ย้ายขั้นในช่วงนี้') + '</p>') +
+    '<div class="bn-list">' + T.dsg.map(x => bar(x, w === x)).join('') + T.rows.map(x => bar(x, w === x)).join('') + '</div>' +
+    (dep[0] === 'design' || dep[0] === 'ship' ? '' : '<div class="bn-qc"><div><span>QC ไม่ผ่าน</span><b class="' + (q.rate >= 20 ? 'bad' : '') + '">' + (q.rate == null ? '–' : q.rate + '%') + '</b><small>ผ่าน ' + q.pass + ' · ไม่ผ่าน ' + q.fail + ' ครั้ง</small></div>' +
+      (q.why.length ? '<ul>' + q.why.map(x => '<li><b class="mono">' + esc(x.code) + '</b> ' + esc(x.t) + '</li>').join('') + '</ul>' : '') + '</div>') + '</section>';
 }
 function matSec(r) {
   if (!S.stock) return '<section class="rsec"><h3>ต้นทุนวัสดุต่อเลข Job</h3><p class="rnone">ไม่มีสิทธิ์ดูคลังวัสดุ</p></section>';
@@ -8976,6 +8982,7 @@ document.addEventListener('click', async e => {
   if (d.view) return go(d.view);
   if (d.go) return go(d.go, d.sec);
   if (d.move) { e.stopPropagation(); return moveJob(d.move, d.to); }
+  if (d.bndep) { reportState().bn = d.bndep; saveReportState(); return render(); }   // คอขวด: เลือกแผนก
   if (d.rpreset) { reportState(); if (d.rpreset !== 'custom') applyPreset(d.rpreset); else S.r.preset = 'custom'; saveReportState(); return render(); }
   if (d.filterGo) { S.f.status = d.filterGo; S.f.month = d.fmonth || ''; S.f.q = ''; S.f.group = 'all'; if (S.f.member !== 'all') { S.f.member = 'all'; LS.set('fMember', 'all'); } return go('list'); }   // จากการ์ดตัวเลข: ล้างตัวกรองอื่น ให้รายการตรงกับตัวเลขบนการ์ด
   if (d.mine) { S.f.member = '__me'; LS.set('fMember', S.f.member); return go('board'); }

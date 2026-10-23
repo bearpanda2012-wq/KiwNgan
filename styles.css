@@ -6244,3 +6244,9 @@ body.auth #bgSndBtn{display:none}
   .skx-kpis .skt b{font-size:24px;line-height:1.05;order:1}
   .skx-kpis .sk-kpi::before{right:-50px;top:-56px}
 }
+/* v2.117 รายงาน · คอขวด: เลือกแผนก */
+.bn-dep{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px}
+.bn-dep .qchip{min-height:32px}
+.bn-dep .qchip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.bn-dep .qchip.on b{background:rgba(255,255,255,.22);color:#fff}
+@media print{.bn-dep{display:none}}
