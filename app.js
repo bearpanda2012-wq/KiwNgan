@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.115.3';
+const APP_VERSION = '2.115.4';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -8945,7 +8945,7 @@ function saleExHtml() {
 }
 document.addEventListener('input', e => { if (!e.target || e.target.id !== 'sxQ' || e.isComposing) return; SX.q = e.target.value; SX.lim = 150; sxFind(); if (SX.redraw) SX.redraw(); });
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-sxgrp],[data-sxmore]'); if (!b || !SALE_Q) return; if (b.dataset.sxmore) SX.lim += 300; else { SX.grp = SX.grp === b.dataset.sxgrp ? '' : b.dataset.sxgrp; SX.lim = 150; } if (SX.redraw) SX.redraw(); });
-const saleTabs = () => (setTimeout(sfGlide, 0), '<div class="sf-tabs' + (SF.gw ? ' ready' : '') + '" role="tablist" style="--gx:' + (SF.gx || 0) + 'px;--gw:' + (SF.gw || 0) + 'px" data-on="' + (SF.gw ? esc(SF.lastOn || '') : '') + '"><i class="sf-glide" aria-hidden="true"></i><button type="button" role="tab" data-sfview="flow" aria-selected="' + (SF.v === 'flow') + '">' + I.flow + 'ภาพรวมสถานะ</button><button type="button" role="tab" data-sfview="table" aria-selected="' + (SF.v !== 'flow' && SF.v !== 'kb' && SF.v !== 'ex') + '">' + I.list + 'ตารางงานฝ่ายแบบ</button><button type="button" role="tab" data-sfview="kb" aria-selected="' + (SF.v === 'kb') + '">' + I.kb + 'คลังความรู้</button>' + (SX.cfg ? '<button type="button" role="tab" data-sfview="ex" aria-selected="' + (SF.v === 'ex') + '">' + I.stock + 'คลังวัสดุ</button>' : '') + '</div>');
+const saleTabs = () => (setTimeout(sfGlide, 0), '<div class="sf-tabs' + (SF.gw ? ' ready' : '') + '" role="tablist" style="--gx:' + (SF.gx || 0) + 'px;--gw:' + (SF.gw || 0) + 'px" data-on="' + (SF.gw ? esc(SF.lastOn || '') : '') + '"><i class="sf-glide" aria-hidden="true"></i><button type="button" role="tab" data-sfview="flow" aria-selected="' + (SF.v === 'flow') + '">' + I.flow + '<span class="tl">ภาพรวมสถานะ</span><span class="ts">ภาพรวม</span></button><button type="button" role="tab" data-sfview="table" aria-selected="' + (SF.v !== 'flow' && SF.v !== 'kb' && SF.v !== 'ex') + '">' + I.list + '<span class="tl">ตารางงานฝ่ายแบบ</span><span class="ts">ตารางงาน</span></button><button type="button" role="tab" data-sfview="kb" aria-selected="' + (SF.v === 'kb') + '">' + I.kb + '<span class="tl">คลังความรู้</span><span class="ts">ความรู้</span></button>' + (SX.cfg ? '<button type="button" role="tab" data-sfview="ex" aria-selected="' + (SF.v === 'ex') + '">' + I.stock + '<span class="tl">คลังวัสดุ</span><span class="ts">วัสดุ</span></button>' : '') + '</div>');
 
 /* ============ events ============ */
 document.addEventListener('click', async e => {

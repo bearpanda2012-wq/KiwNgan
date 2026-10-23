@@ -6223,3 +6223,11 @@ body.auth #bgSndBtn{display:none}
   .sale-page .sp-h .sp-out.ask span{overflow:hidden;text-overflow:ellipsis}
   .sale-page .sp-h .sp-scan{min-width:0}
 }
+/* v2.115.4: แท็บหน้า Sale — คอมแสดงชื่อเต็ม · มือถือช่องเท่ากัน ไอคอนบน ชื่อสั้นบรรทัดเดียว */
+.sf-tabs .ts{display:none}
+@media (max-width:760px){
+  .sf-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);width:100%;gap:4px;padding:5px;box-sizing:border-box}
+  .sf-tabs button{flex-direction:column;justify-content:center;gap:4px;padding:9px 4px 8px;min-height:60px;font-size:12.5px;line-height:1.15;white-space:nowrap;min-width:0}
+  .sf-tabs button svg{width:20px;height:20px}
+  .sf-tabs .tl{display:none}.sf-tabs .ts{display:block;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+}

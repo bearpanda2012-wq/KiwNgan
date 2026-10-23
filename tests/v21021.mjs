@@ -30,6 +30,8 @@ eq('mobile ask: short label', (await pg.locator('.sp-h [data-saleout] span').tex
 eq('mobile ask: inside header', await pg.evaluate(() => { const h = document.querySelector('.sp-h').getBoundingClientRect(), b = document.querySelector('.sp-h [data-saleout]').getBoundingClientRect(); return b.right <= h.right - 4 && b.left >= h.left; }), true);
 eq('mobile ask: same height + one line', await pg.$$eval('.sp-h .sp-hb', a => { const h = a.map(b => b.getBoundingClientRect().height), t = a.map(b => b.getBoundingClientRect().top); return [Math.max(...h) - Math.min(...h) < 2, Math.max(...t) - Math.min(...t) < 3]; }), [true, true]);
 await pg.locator('.sp-h').screenshot({ path: new URL('out/v21153m.png', import.meta.url).pathname });
+eq('mobile tabs: one line each, equal width', await pg.$$eval('.sf-tabs button', a => { const w = a.map(b => b.getBoundingClientRect().width), h = a.map(b => b.getBoundingClientRect().height); return [Math.max(...w) - Math.min(...w) < 2, Math.max(...h) < 72]; }), [true, true]);
+await pg.locator('.sf-tabs').screenshot({ path: new URL('out/v21154m.png', import.meta.url).pathname });
 await pg.goto(pg.url()); await pg.waitForTimeout(1500);
 await pg.setViewportSize({ width: 1300, height: 800 }); await pg.waitForTimeout(300);
 await pg.click('.sp-h [data-saleout]'); await pg.waitForTimeout(200);
