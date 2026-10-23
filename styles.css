@@ -6197,3 +6197,14 @@ body.auth #bgSndBtn{display:none}
 .sl-cl li.on .hv-ck{background:var(--done,#16A34A);border-color:var(--done,#16A34A);color:#fff}
 .sl-cl li.nx .hv-ck{border-color:var(--brand)}
 .sl-cl .hv-ck svg{width:12px;height:12px}
+/* v2.115.1: เช็กลิสต์หน้า Sale สมส่วน — คอลัมน์ขวากว้างพอ ข้อความขึ้นบรรทัดใหม่ได้ ไม่ตัดคำ */
+.sd-card{width:min(880px,100%)}
+.sd-body.hovercard.static.wide .hv-col{flex:1 1 auto}
+.sd-body.hovercard.static.wide .hv-side{flex:0 0 340px}
+.sl-cl li{display:grid;grid-template-columns:20px minmax(0,1fr);align-items:start;gap:9px;font-size:13px;line-height:1.4}
+.sl-cl li .t{white-space:normal;overflow:visible;text-overflow:clip;display:flex;flex-direction:column;gap:1px}
+.sl-cl li.on .t{text-decoration:none;color:var(--ink)}
+.sl-cl li.on .t > :first-child,.sl-cl li.on .t{color:var(--ink)}
+.sl-cl .hv-ck{width:20px;height:20px;margin-top:0}
+.sl-cl{max-height:none;gap:7px}
+@media (max-width:700px){.sd-body.hovercard.static.wide .hv-side{flex:none}}
