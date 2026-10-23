@@ -42,5 +42,7 @@ eq('group chip filters', await pg.locator('.skx-list .ex-row').count(), 1);
 eq('only sale RPCs used', [...new Set(calls)].sort(), ['ex_sale_find', 'ex_sale_stock']);
 await pg.setViewportSize({ width: 390, height: 800 }); await pg.click('[data-sxgrp=""]'); await pg.waitForTimeout(300);
 await pg.screenshot({ path: new URL('out/v2104m.png', import.meta.url).pathname });
+await pg.locator('.skx-wrap').screenshot({ path: new URL('out/v2115m-kpi.png', import.meta.url).pathname }).catch(() => {});
+eq('mobile KPI: full labels, equal height, compact', await pg.$$eval('.skx-kpis .sk-kpi', a => { const h = a.map(x => x.getBoundingClientRect().height), sm = a.map(x => { const e = x.querySelector('.skt small'); return e.scrollWidth <= e.clientWidth + 1; }); return [Math.max(...h) - Math.min(...h) < 2, Math.max(...h) < 140, sm.every(Boolean)]; }), [true, true, true]);
 eq('no page errors', errs, []);
 console.log(ok + ' passed, ' + bad + ' failed'); await b.close(); srv.close(); process.exit(bad ? 1 : 0);
