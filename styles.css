@@ -6208,3 +6208,10 @@ body.auth #bgSndBtn{display:none}
 .sl-cl .hv-ck{width:20px;height:20px;margin-top:0}
 .sl-cl{max-height:none;gap:7px}
 @media (max-width:700px){.sd-body.hovercard.static.wide .hv-side{flex:none}}
+/* v2.115.2: หัวตารางหน้า Sale เป็นแถบมนกว้างเท่าแถวงาน (ไม่ล้นกรอบ) · กรอบนอกโปร่ง แถวงานเป็นการ์ดเรียงกัน */
+.sp-wrap{background:transparent;box-shadow:none;border-radius:0;padding:0 2px}
+.sp-t{border-spacing:0 6px}
+.sp-t thead th{background:var(--surface-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 12px}
+.sp-t thead th:first-child{border-left:4px solid var(--line);border-radius:12px 0 0 12px}
+.sp-t thead th:last-child{border-right:1px solid var(--line);border-radius:0 12px 12px 0}
+.sp-t thead th{box-shadow:0 2px 0 var(--bg,transparent)}

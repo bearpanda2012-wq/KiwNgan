@@ -64,6 +64,8 @@ const lateN = +(await pg.getAttribute('[data-spst="late"] b', 'data-n'));
 const rowsN = await pg.locator('tr.sp-r').count(), badN = await pg.locator('tr.sp-r .sp-bdg.bad').count();
 eq('late card count = rows shown', [lateN > 0, lateN === rowsN, badN === rowsN], [true, true, true]);
 await pg.locator('.sp-sum').screenshot({ path: out + 'v2115-late.png' });
+await pg.setViewportSize({ width: 1400, height: 900 }); await pg.waitForTimeout(300);
+await pg.locator('.sp-wrap').screenshot({ path: out + 'v2115-table.png', clip: undefined }).catch(() => {});
 // ในแอป: งานผลิตเก่าที่ไม่ได้โหลดมา → สแกนแล้วค้นจากฐานข้อมูล
 await pg.goto('http://127.0.0.1:8879/index.html'); await pg.waitForTimeout(1500);
 await pg.evaluate(() => { S.prods = S.prods.filter(p => p.code !== 'OLD-2501'); S.jobs = S.jobs.filter(j => j.code !== 'OLD-2501'); });
