@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.115.2';
+const APP_VERSION = '2.115.3';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2711,7 +2711,7 @@ async function salePage() {
   const cached = LS.get(ck, null);
   draw(cached && cached.jobs ? cached : null); go(); setInterval(go, 60000);
   document.addEventListener('click', e => {
-    if (e.target.closest && e.target.closest('[data-saleout]')) { const b = e.target.closest('[data-saleout]'); if (b.dataset.ask) return saleLogout(); b.dataset.ask = '1'; b.classList.add('ask'); b.querySelector('span').textContent = 'กดอีกครั้งเพื่อออก'; setTimeout(() => { if (b.isConnected) { delete b.dataset.ask; b.classList.remove('ask'); b.querySelector('span').textContent = 'ออกจากระบบ'; } }, 3500); return; }
+    if (e.target.closest && e.target.closest('[data-saleout]')) { const b = e.target.closest('[data-saleout]'); if (b.dataset.ask) return saleLogout(); b.dataset.ask = '1'; b.classList.add('ask'); b.querySelector('span').textContent = matchMedia('(max-width:760px)').matches ? 'ยืนยันออก' : 'กดอีกครั้งเพื่อออก'; setTimeout(() => { if (b.isConnected) { delete b.dataset.ask; b.classList.remove('ask'); b.querySelector('span').textContent = 'ออกจากระบบ'; } }, 3500); return; }
     const c = e.target.closest && e.target.closest('[data-spscan],[data-sale-refresh],[data-spst],[data-spclear],[data-spprod],[data-sfview],[data-sfstep],[data-sfopen]'); if (!c) return;
     if (c.dataset.sfview) { SF.lastOn = (document.querySelector('.sf-tabs') || { dataset: {} }).dataset.on || ''; SF.v = c.dataset.sfview; if (SF.v === 'ex') sxLoad(); SF.anim = true; LS.set('saleView', SF.v); return draw(last, lastErr); }
     if (c.dataset.sfstep) { const fromPipe = !!c.closest('.co-pipe, .co-kpis'); SF.step = SF.step === c.dataset.sfstep && c.dataset.sfstep !== 'all' ? 'all' : c.dataset.sfstep; SF.anim = true; draw(last, lastErr); if (fromPipe) pipeJump(); return; }

@@ -24,6 +24,13 @@ eq('buttons on one line', await pg.$$eval('.sp-h .sp-hb', a => new Set(a.map(b =
 await pg.setViewportSize({ width: 390, height: 800 }); await pg.waitForTimeout(300);
 await pg.locator('.sp-h').screenshot({ path: new URL('out/v21023m.png', import.meta.url).pathname });
 eq('mobile: buttons on one line', await pg.$$eval('.sp-h .sp-hb', a => new Set(a.map(b => Math.round(b.getBoundingClientRect().top))).size), 1);
+// มือถือ: กดออกครั้งแรก → ปุ่มยืนยันสั้น ไม่ล้นขอบ สูงเท่าปุ่มอื่น อยู่แถวเดียวกัน
+await pg.click('.sp-h [data-saleout]'); await pg.waitForTimeout(250);
+eq('mobile ask: short label', (await pg.locator('.sp-h [data-saleout] span').textContent()).trim(), 'ยืนยันออก');
+eq('mobile ask: inside header', await pg.evaluate(() => { const h = document.querySelector('.sp-h').getBoundingClientRect(), b = document.querySelector('.sp-h [data-saleout]').getBoundingClientRect(); return b.right <= h.right - 4 && b.left >= h.left; }), true);
+eq('mobile ask: same height + one line', await pg.$$eval('.sp-h .sp-hb', a => { const h = a.map(b => b.getBoundingClientRect().height), t = a.map(b => b.getBoundingClientRect().top); return [Math.max(...h) - Math.min(...h) < 2, Math.max(...t) - Math.min(...t) < 3]; }), [true, true]);
+await pg.locator('.sp-h').screenshot({ path: new URL('out/v21153m.png', import.meta.url).pathname });
+await pg.goto(pg.url()); await pg.waitForTimeout(1500);
 await pg.setViewportSize({ width: 1300, height: 800 }); await pg.waitForTimeout(300);
 await pg.click('.sp-h [data-saleout]'); await pg.waitForTimeout(200);
 eq('first click asks to confirm', (await pg.locator('.sp-h [data-saleout] span').textContent()).includes('กดอีกครั้ง'), true);

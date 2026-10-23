@@ -6215,3 +6215,11 @@ body.auth #bgSndBtn{display:none}
 .sp-t thead th:first-child{border-left:4px solid var(--line);border-radius:12px 0 0 12px}
 .sp-t thead th:last-child{border-right:1px solid var(--line);border-radius:0 12px 12px 0}
 .sp-t thead th{box-shadow:0 2px 0 var(--bg,transparent)}
+/* v2.115.3: มือถือ — ปุ่มยืนยันออกขนาดพอดีแถว สูงเท่าปุ่มอื่น ไม่ล้นขอบ */
+@media (max-width:760px){
+  .sp-acts{min-width:0}
+  .sp-ag{min-width:0}
+  .sale-page .sp-h .sp-out.ask{width:auto;max-width:132px;padding:0 12px!important;gap:6px;box-shadow:0 4px 12px -6px rgba(0,0,0,.35)}
+  .sale-page .sp-h .sp-out.ask span{overflow:hidden;text-overflow:ellipsis}
+  .sale-page .sp-h .sp-scan{min-width:0}
+}
