@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.114.0';
+const APP_VERSION = '2.114.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -2088,10 +2088,9 @@ function saleDetail(code, scanned) {
   document.body.classList.add('pm-open'); sqrFill();
 }
 /* QR ฉลากงานในหน้า Sale (ทุกงาน): สแกนแล้วเปิดงานนี้ · พิมพ์ฉลากได้ */
-function saleQrHtml(r) {
+function saleQrHtml(r) {   // ปุ่มเดียวกับหน้าฝ่ายผลิต → เปิดหน้าต่างฉลาก QR (ดู/พิมพ์/คัดลอกลิงก์)
   if (!r || !r.code) return '';
-  return '<div class="sd-qr"><div class="sd-qr-box" data-sqr="' + esc(r.code) + '"><span class="spin-dot"></span></div><div class="sd-qr-t"><b>QR ฉลากงาน <span class="mono">' + esc(r.code) + '</span></b><small>สแกนด้วยกล้องมือถือ → เปิดงานนี้และดูสถานะ</small>' +
-    '<span class="sd-qr-b"><button type="button" class="btn sm" data-sqrprint="' + esc(r.code) + '">' + I.print + 'พิมพ์ฉลาก</button><button type="button" class="btn sm ghost" data-sqrcopy="' + esc(r.code) + '">คัดลอกลิงก์</button></span></div></div>';
+  return '<div class="sd-qrbtn"><button type="button" class="btn pm-qr" data-qrsale="' + esc(r.code) + '" title="ฉลาก QR ของงานนี้ · สแกนแล้วเปิดงานนี้และดูสถานะ"><span class="pq-ic">' + QR_IC + '</span><span class="pq-t"><b>ฉลาก QR</b><small>ดู · พิมพ์ · คัดลอกลิงก์</small></span></button></div>';
 }
 function sqrFill() {
   if (!document.querySelector('[data-sqr]:not([data-done])')) return;
@@ -2110,6 +2109,10 @@ function sqrPrint(code) {
       '<div class="ql"><div class="ql-qr">' + qrSvg(jobLinkUrl(code)) + '</div><div class="ql-t"><small>' + esc(s.company || s.appName || '') + '</small><b>' + esc(code) + '</b>' + (p.title ? '<span>' + esc(p.title) + '</span>' : '') + '<em>' + [p.sale ? 'Sale ' + esc(p.sale) : '', esc(due), p.priority === 'urgent' ? '🔥 ด่วน' : ''].filter(Boolean).join(' · ') + '</em><i>สแกนเพื่อเปิดงาน · ดูสถานะ</i></div></div></body></html>');
   });
 }
+document.addEventListener('click', e => {
+  if (!SALE_Q) return; const q = e.target && e.target.closest && e.target.closest('[data-qrsale],[data-qrx],[data-qrsize],[data-qrn],[data-qrcopy],[data-qrprint],#qrModal');
+  if (q && (q.id !== 'qrModal' || e.target === q)) { e.stopPropagation(); qrClick(e.target === q ? q : q, q.dataset); }
+}, true);
 document.addEventListener('click', e => {
   const b = e.target && e.target.closest && e.target.closest('[data-sqrprint],[data-sqrcopy]'); if (!b) return;
   e.stopPropagation();
@@ -8360,10 +8363,11 @@ function qrLabelHtml(p, svg) {
     (p.title ? '<span>' + esc(p.title) + '</span>' : '') + '<em>' + [p.sale ? 'Sale ' + esc(p.sale) : '', esc(due), pUrgent(p) ? '🔥 ด่วน' : ''].filter(Boolean).join(' · ') + '</em><i>สแกนเพื่อเปิดงาน · อัปเดตขั้นผลิต</i></div></div>';
 }
 const qrCountLbl = () => QRL.size === 'a4' ? 'จำนวนแผ่น <small>แผ่นละ 8 ดวง</small>' : 'จำนวนดวง <small>ดวงละแผ่น 100×70 มม.</small>';
-function qrOpen(id) { QRL.id = id; QRL.copies = QRL.copies || 1; loadQr(qrDraw); }
+function qrOpen(id, obj) { QRL.id = id || ''; QRL.p = obj || null; QRL.copies = QRL.copies || 1; loadQr(qrDraw); }
+const qrP = () => QRL.p || prodById(QRL.id);
 function qrClose() { QRL.id = ''; const m = $('#qrModal'); if (m) m.remove(); }
 function qrDraw() {
-  const p = prodById(QRL.id); if (!p || !window.qrcode) return qrClose();
+  const p = qrP(); if (!p || !window.qrcode) return qrClose();
   let m = $('#qrModal'); if (!m) { m = document.createElement('div'); m.id = 'qrModal'; m.className = 'pmodal qr-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); }
   const svg = qrSvg(jobLinkUrl(p.code));
   m.innerHTML = '<div class="pm-card qr-card"><div class="pm-h"><div><span class="eyebrow">' + I.print + 'ฉลากติดชิ้นงาน</span><h3>' + esc(p.code) + '</h3><p class="sub">ช่างสแกน QR ด้วยกล้องมือถือ → เปิดงานนี้ในแอปทันที กดอัปเดตขั้นผลิตได้เลย</p></div><button type="button" class="icon-btn" data-qrx="1" aria-label="ปิด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
@@ -8374,7 +8378,7 @@ function qrDraw() {
     '<div class="pm-f"><span style="flex:1"></span><button type="button" class="btn" data-qrx="1">ปิด</button><button type="button" class="btn primary" data-qrprint="1">' + I.print + 'พิมพ์ฉลาก</button></div></div>';
 }
 function qrPrint() {
-  const p = prodById(QRL.id); if (!p || !window.qrcode) return;
+  const p = qrP(); if (!p || !window.qrcode) return;
   const n = Math.max(1, Math.min(40, Math.round(+(($('#qrN') || {}).value || QRL.copies) || 1))); QRL.copies = n;
   const a4 = QRL.size === 'a4', one = qrLabelHtml(p, qrSvg(jobLinkUrl(p.code))), labels = a4 ? n * 8 : n;   // A4: นับเป็นแผ่น (แผ่นละ 8 ดวง)
   const fs = Math.max(10, Math.min(17, Math.floor(17 * 11 / Math.max(11, String(p.code).length))));
@@ -8391,13 +8395,14 @@ function qrPrint() {
 }
 function qrClick(t, d) {
   if (d.qrlabel) { qrOpen(d.qrlabel); return true; }
+  if (d.qrsale) { const r = sqrRow(d.qrsale), j = (r.jobs || [])[0] || {}, pr = r.prod || {}; qrOpen('', { code: r.code || d.qrsale, title: pr.title || j.title || '', sale: pr.sale || j.sale || '', due: pr.due || j.due || '', priority: pr.priority || j.priority || '' }); return true; }
   if (d.qrx || t.id === 'qrModal') { qrClose(); return true; }
   if (d.qrsize) {   // สลับขนาด: เปลี่ยนเฉพาะปุ่มกับป้าย ไม่วาดหน้าต่างใหม่ (หน้าต่างไม่เด้ง/ไม่ขยับ)
     if (QRL.size !== d.qrsize) { QRL.copies = 1; const x = $('#qrN'); if (x) x.value = 1; }
     QRL.size = d.qrsize; document.querySelectorAll('#qrModal [data-qrsize]').forEach(b => b.setAttribute('aria-pressed', b.dataset.qrsize === QRL.size));
     const l = $('#qrModal .qc-l'); if (l) l.innerHTML = qrCountLbl(); return true; }
   if (d.qrn) { const x = $('#qrN'); if (x) { x.value = Math.max(1, Math.min(40, (+x.value || 1) + (+d.qrn))); QRL.copies = +x.value; } return true; }
-  if (d.qrcopy) { const p = prodById(QRL.id); if (p) navigator.clipboard.writeText(jobLinkUrl(p.code)).then(() => toast('คัดลอกลิงก์แล้ว'), () => toast(jobLinkUrl(p.code))); return true; }
+  if (d.qrcopy) { const p = qrP(); if (p) navigator.clipboard.writeText(jobLinkUrl(p.code)).then(() => toast('คัดลอกลิงก์แล้ว'), () => toast(jobLinkUrl(p.code))); return true; }
   if (d.qrprint) { qrPrint(); return true; }
   return false;
 }

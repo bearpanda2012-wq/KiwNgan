@@ -21,7 +21,13 @@ await pg.goto('http://127.0.0.1:8879/index.html?salek=' + key); await pg.waitFor
 // QR ทุกงาน: กางรายการ → มี QR
 const first = await pg.$('[data-sfopen]');
 if (first) { await first.click(); await pg.waitForTimeout(900); }
-eq('QR in expanded item', await pg.locator('.sf-det .sd-qr-box svg').count() >= 1, true);
+eq('QR button in expanded item', await pg.locator('.sf-det [data-qrsale]').count() >= 1, true);
+await pg.locator('.sf-det [data-qrsale]').first().click(); await pg.waitForTimeout(700);
+eq('QR modal like production', await pg.locator('#qrModal .qr-prev svg').count(), 1);
+eq('label sizes + print button', [await pg.locator('#qrModal [data-qrsize]').count(), await pg.locator('#qrModal [data-qrprint]').count()], [2, 1]);
+await pg.locator('#qrModal .pm-card').screenshot({ path: out + 'v2114-sale-qrmodal.png' });
+await pg.click('#qrModal [data-qrx]'); await pg.waitForTimeout(300);
+eq('QR modal closes', await pg.locator('#qrModal').count(), 0);
 await pg.locator('.sf-det').first().screenshot({ path: out + 'v2114-sale-qr.png' }).catch(() => {});
 // กรองเฉพาะ "ส่งแล้ว" แล้วสแกนงานที่ยังไม่ส่ง → ยังเจอ (ไม่ดูแค่ที่กรองอยู่)
 const tab = await pg.$('[data-sfstep="shipped"]'); if (tab) { await tab.click(); await pg.waitForTimeout(400); }
@@ -29,7 +35,8 @@ eq('scan job outside current filter', await pg.evaluate(c => scanHit('https://x/
 await pg.waitForTimeout(800);
 eq('detail opened', await pg.locator('#sdModal').count(), 1);
 eq('status banner shown', await pg.locator('#sdModal .sd-scan').count(), 1);
-eq('QR in detail', await pg.locator('#sdModal .sd-qr-box svg').count(), 1);
+eq('QR button in detail', await pg.locator('#sdModal [data-qrsale]').count(), 1);
+eq('no inline QR image', await pg.locator('#sdModal .sd-qr-box').count(), 0);
 await pg.click('#sdModal [data-sdclose]'); await pg.waitForTimeout(200);
 // งานส่งแล้วนานจนไม่อยู่ในหน้า Sale → ค้นจากฐานข้อมูล แล้วบอกว่าส่งแล้ว
 eq('scan old shipped job', await pg.evaluate(() => scanHit('https://x/KiwNgan/?job=OLD-2501')), true);

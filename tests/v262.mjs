@@ -66,7 +66,7 @@ await pg.keyboard.press('Escape'); await pg.waitForTimeout(150);
 eq('Esc closes scanner', await pg.locator('#scanModal').count(), 0);
 // deep link ?job=
 await pg.goto(URL0.replace('index.html', '') + '?job=' + encodeURIComponent(rp.code)); await pg.waitForTimeout(2200);
-eq('?job= link opens that job', await pg.evaluate(() => (document.querySelector('#pModal h3') || {}).textContent || ''), rp.code);
+eq('?job= link opens that job', await pg.evaluate(() => (document.querySelector('#pModal h3') || {}).textContent || '').then(t => t.replace(/\s*ด่วน$/, '')), rp.code);
 eq('?job= removed from address bar', await pg.evaluate(() => location.search), '');
 await pg.keyboard.press('Escape');
 
