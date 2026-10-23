@@ -14,10 +14,24 @@ const login = async () => { await pg.click('[data-act="adminon"]'); await pg.fil
 await login();
 
 await pg.evaluate(() => T.go('report')); await pg.waitForTimeout(900);
-const st = async () => pg.evaluate(() => ({ rows: document.querySelectorAll('.rsec-flow .bn-row').length, hl: (document.querySelector('.rsec-flow .bn-hl b') || {}).textContent || '', qc: !!document.querySelector('.rsec-flow .bn-qc'), on: (document.querySelector('.bn-dep .on') || {}).dataset?.bndep }));
+const st = async () => pg.evaluate(() => ({ rows: document.querySelectorAll('.rsec-flow .bn-list .bn-row').length, hl: (document.querySelector('.rsec-flow .bn-hl b') || {}).textContent || '', qc: !!document.querySelector('.rsec-flow .bn-qc'), on: (document.querySelector('.bn-dep .on') || {}).dataset?.bndep }));
 eq('picker shows 4 depts', await pg.locator('.bn-dep [data-bndep]').count(), 4);
 eq('default all: 9 rows + QC', (s => [s.rows, s.qc, s.on])(await st()), [9, true, 'all']);
+eq('all: 3 dept summary cards', await pg.locator('.bn-depts .bn-dc').count(), 3);
+eq('bottleneck row opened by default', await pg.locator('.bn-item.open .bn-det').count(), 1);
+eq('highlight names slowest person', await pg.locator('.bn-hl .bn-hw b').count(), 1);
+await pg.click('[data-bnall="1"]'); await pg.waitForTimeout(400);
+eq('expand all → 9 details', await pg.locator('.bn-det').count(), 9);
+eq('machine detail splits by machine', (await pg.locator('.bn-item:has([data-bnrow="machine"]) .bn-det').innerText()).includes('แยกตามเครื่อง'), true);
+eq('design detail lists people', await pg.locator('.bn-item:has([data-bnrow="draw"]) .bd-r').count() >= 1, true);
+await pg.locator('.rsec-flow').screenshot({ path: out + 'v2118-all.png' });
+await pg.click('[data-bnrow="paint"]'); await pg.waitForTimeout(300);
+eq('click row collapses', await pg.locator('.bn-item:has([data-bnrow="paint"]) .bn-det').count(), 0);
+await pg.click('[data-bnall="1"]'); await pg.waitForTimeout(300); await pg.click('[data-bnall="0"]'); await pg.waitForTimeout(300);
+eq('collapse all', await pg.locator('.bn-det').count(), 0);
 await pg.click('[data-bndep="design"]'); await pg.waitForTimeout(400);
+await pg.click('[data-bnall="1"]'); await pg.waitForTimeout(400);
+eq('design: both rows detailed with people', await pg.locator('.bn-det .bd-r').count() >= 2, true);
 let s = await st(); eq('design: 2 rows, no QC', [s.rows, s.qc, s.on], [2, false, 'design']); eq('design bottleneck is a design stage', !s.hl || /ฝ่ายแบบ/.test(s.hl), true);
 await pg.locator('.rsec-flow').screenshot({ path: out + 'v2117-design.png' });
 await pg.click('[data-bndep="prod"]'); await pg.waitForTimeout(400);

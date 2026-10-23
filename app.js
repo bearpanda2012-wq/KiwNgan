@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.117.0';
+const APP_VERSION = '2.118.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5450,17 +5450,19 @@ function stageTimes(r) {
   prodsAll().forEach(p => {
     const h = phist(p).filter(e => e && e.t && e.s).slice().sort((a, b) => String(a.t).localeCompare(String(b.t)));
     h.forEach((e, i) => { if (!seg[e.s]) return; const nx = h[i + 1];
-      if (nx) { const end = String(nx.t).slice(0, 10); if (end >= r.from && end <= r.to && nx.t > e.t) seg[e.s].push({ d: (parseLocal(nx.t) - parseLocal(e.t)) / msDay, code: p.code }); }
-      else if (p.stage === e.s && p.stage !== 'shipped') cur[e.s].push({ d: (now - parseLocal(e.t)) / msDay, code: p.code }); });
+      const ms = e.s === 'machine' ? pms(p).map(m => m.m) : [];
+      if (nx) { const end = String(nx.t).slice(0, 10); if (end >= r.from && end <= r.to && nx.t > e.t) seg[e.s].push({ d: (parseLocal(nx.t) - parseLocal(e.t)) / msDay, code: p.code, who: nx.by || '', ms: ms }); }   // คนที่ทำขั้นนี้เสร็จ = คนที่กดย้ายไปขั้นถัดไป
+      else if (p.stage === e.s && p.stage !== 'shipped') cur[e.s].push({ d: (now - parseLocal(e.t)) / msDay, code: p.code, who: e.by || '', ms: ms }); });
   });
   const avg = a => a.length ? a.reduce((x, y) => x + y.d, 0) / a.length : null;
   const rows = PCOLS.map(k => { const a = seg[k], c = cur[k], mx = a.concat(c).sort((x, y) => y.d - x.d)[0];
-    return { k: k, label: PSTG[k].label, n: a.length, avg: avg(a), now: c.length, nowAvg: avg(c), max: mx || null }; });
+    return { k: k, label: PSTG[k].label, n: a.length, avg: avg(a), now: c.length, nowAvg: avg(c), max: mx || null, seg: a, cur: c }; });
   // ฝ่ายแบบ: รับงาน → เสร็จ (วันปฏิทิน) แยก CAD / CAM
   const dj = S.jobs.filter(j => j.status === 'done' && j.received && inR(finDate(j), r));
   const isCamT = j => taskCat(j.taskType) !== 'draw';
-  const dsg = ['draw', 'cam'].map(c => { const a = dj.filter(j => isCamT(j) === (c === 'cam')).map(j => ({ d: Math.max(0, (parseLocal(String(finDate(j)).slice(0, 10)) - parseLocal(String(j.received).slice(0, 10))) / msDay) + 1, code: j.code }));
-    return { k: c, dsg: 1, label: c === 'cam' ? 'ฝ่ายแบบ · CAM / CAD+CAM' : 'ฝ่ายแบบ · เขียนแบบ', n: a.length, avg: avg(a), max: a.slice().sort((x, y) => y.d - x.d)[0] || null, now: S.jobs.filter(j => isOpen(j) && isCamT(j) === (c === 'cam')).length }; });
+  const dsg = ['draw', 'cam'].map(c => { const a = dj.filter(j => isCamT(j) === (c === 'cam')).map(j => ({ d: Math.max(0, (parseLocal(String(finDate(j)).slice(0, 10)) - parseLocal(String(j.received).slice(0, 10))) / msDay) + 1, code: j.code, who: j.assignee || '' }));
+    const c2 = S.jobs.filter(j => isOpen(j) && isCamT(j) === (c === 'cam')).map(j => ({ d: j.received ? Math.max(0, (now - parseLocal(String(j.received).slice(0, 10))) / msDay) : 0, code: j.code, who: j.assignee || '' }));
+    return { k: c, dsg: 1, label: c === 'cam' ? 'ฝ่ายแบบ · CAM / CAD+CAM' : 'ฝ่ายแบบ · เขียนแบบ', n: a.length, avg: avg(a), max: a.slice().sort((x, y) => y.d - x.d)[0] || null, seg: a, cur: c2, now: S.jobs.filter(j => isOpen(j) && isCamT(j) === (c === 'cam')).length }; });
   // QC: ผ่าน / ไม่ผ่าน ของงานที่ตรวจในช่วงนี้
   let pass = 0, fail = 0; const why = [], iQ = PORDER.indexOf('qc');
   prodsAll().forEach(p => { const h = phist(p).filter(e => e && e.t && e.s).slice().sort((a, b) => String(a.t).localeCompare(String(b.t)));
@@ -5477,12 +5479,39 @@ function flowSec(r) {
   T.worst = T.dsg.concat(T.rows).filter(x => x.avg != null).sort((a, b) => b.avg - a.avg)[0] || null;
   const top = Math.max.apply(null, T.rows.concat(T.dsg).map(x => x.avg || 0).concat(0.01));
   const pick = '<div class="bn-dep" role="group" aria-label="เลือกแผนก">' + BN_DEPTS.map(x => '<button type="button" class="qchip' + (x[0] === dep[0] ? ' on' : '') + '" data-bndep="' + x[0] + '" aria-pressed="' + (x[0] === dep[0]) + '">' + x[1] + '</button>').join('') + '</div>';
-  const bar = (x, hot) => '<div class="bn-row' + (hot ? ' hot' : '') + (x.avg == null ? ' none' : '') + '"><span class="bn-l">' + (PIC[x.k] ? '<i class="ic-' + x.k + '">' + PIC[x.k] + '</i>' : '<i class="ic-design">' + PIC.design + '</i>') + esc(x.label) + '</span>' +
-    '<span class="bn-bar"><i style="width:' + (x.avg == null ? 0 : Math.max(3, x.avg / top * 100)).toFixed(1) + '%"></i></span><b class="bn-v">' + fdays(x.avg) + '</b><small class="bn-n">' + (x.n ? x.n + ' งาน' : 'ไม่มีข้อมูล') + (x.now ? ' · ค้าง ' + x.now : '') + '</small></div>';
+  // แจงรายละเอียด: ใคร (ฝ่ายแบบ = ผู้รับผิดชอบ · ฝ่ายผลิต/ส่งมอบ = คนที่ทำขั้นนั้นเสร็จ) · ลงเครื่อง แยกตามเครื่องด้วย · งานที่ค้างอยู่ตอนนี้
+  const adm = new Set((S.users || []).filter(u => u.role === 'admin').map(u => u.name));
+  const nm = n => !n ? '' : adm.has(n) && !isAdmin() ? ADMIN_LABEL : n;
+  const grp = (items, keys) => { const g = {}; items.forEach(it => keys(it).forEach(k => { (g[k] = g[k] || { name: k, a: [] }).a.push(it); })); return Object.values(g); };
+  const stat = o => { const a = o.a, sum = a.reduce((x, y) => x + y.d, 0), mx = a.slice().sort((x, y) => y.d - x.d)[0]; return { name: o.name, n: a.length, avg: a.length ? sum / a.length : null, max: mx }; };
+  const who = x => grp(x.seg || [], it => [nm(it.who) || (x.dsg ? 'ยังไม่มอบหมาย' : 'ไม่ระบุ')]).map(stat).sort((p, q) => (q.avg || 0) - (p.avg || 0));
+  const curBy = x => { const c = {}; (x.cur || []).forEach(it => { const k = nm(it.who) || 'ยังไม่มอบหมาย'; c[k] = (c[k] || 0) + 1; }); return c; };
+  const slowWho = x => who(x).filter(p => p.avg != null)[0] || null, many = x => who(x).filter(p => p.avg != null).length > 1;
+  const open = r.bnOpen || {}, isOpenRow = x => open[x.k] != null ? !!open[x.k] : T.worst === x;   // ค่าเริ่ม: เปิดเฉพาะขั้นที่เป็นคอขวด
+  const detail = x => {
+    const ps = who(x), cb = x.dsg ? curBy(x) : {}, tp = Math.max.apply(null, ps.map(p => p.avg || 0).concat(0.01));
+    if (x.dsg) Object.keys(cb).forEach(k => { if (!ps.some(p => p.name === k)) ps.push({ name: k, n: 0, avg: null, max: null }); });
+    const line = (p, i, unit) => '<div class="bd-r' + (i === 0 && p.avg != null && ps.filter(y => y.avg != null).length > 1 ? ' top' : '') + '"><span class="bd-n">' + (unit ? '<i class="bd-m">' + PIC.machine + '</i>' : av(p.name, 'sm')) + '<b>' + esc(p.name) + '</b>' + (i === 0 && p.avg != null && ps.filter(y => y.avg != null).length > 1 && !unit ? '<em>' + STI.fire + 'ช้าสุด</em>' : '') + '</span>' +
+      '<span class="bd-bar"><i style="width:' + (p.avg == null ? 0 : Math.max(3, p.avg / tp * 100)).toFixed(1) + '%"></i></span><b class="bd-v">' + fdays(p.avg) + '</b>' +
+      '<small class="bd-s">' + (p.n ? p.n + ' งาน' : 'ยังไม่มีงานเสร็จ') + (x.dsg && cb[p.name] ? ' · ค้าง ' + cb[p.name] : '') + (p.max ? ' · นานสุด ' + esc(p.max.code) + ' ' + fdays(p.max.d) : '') + '</small></div>';
+    const mach = x.k === 'machine' ? grp(x.seg || [], it => it.ms.length ? it.ms : ['ไม่ระบุเครื่อง']).map(stat).sort((p, q) => (q.avg || 0) - (p.avg || 0)) : [];
+    const stuck = (x.cur || []).slice().sort((p, q) => q.d - p.d).slice(0, 6);
+    return '<div class="bn-det">' +
+      '<div class="bd-h">' + (x.dsg ? 'แยกตามผู้รับผิดชอบ · เวลาตั้งแต่รับงานจนเสร็จ' : 'แยกตามคนที่ทำขั้นนี้เสร็จ (กดย้ายไปขั้นถัดไป)') + '</div>' +
+      (ps.length ? ps.map((p, i) => line(p, i)).join('') : '<p class="rnone">ยังไม่มีงานที่ผ่านขั้นนี้ในช่วงนี้</p>') +
+      (mach.length ? '<div class="bd-h">แยกตามเครื่อง</div>' + mach.map((p, i) => line(p, i, true)).join('') : '') +
+      (stuck.length ? '<div class="bd-h">ค้างอยู่ที่ขั้นนี้ตอนนี้ ' + (x.cur || []).length + ' งาน</div><div class="bd-stuck">' + stuck.map(it => '<span><b class="mono">' + esc(it.code) + '</b>' + (it.who ? esc(nm(it.who)) + ' · ' : '') + fdays(it.d) + '</span>').join('') + ((x.cur || []).length > 6 ? '<span class="more">+' + ((x.cur || []).length - 6) + '</span>' : '') + '</div>' : '') + '</div>';
+  };
+  const bar = (x, hot) => { const op = isOpenRow(x), sw = slowWho(x);
+    return '<div class="bn-item' + (op ? ' open' : '') + '"><button type="button" class="bn-row' + (hot ? ' hot' : '') + (x.avg == null && !x.now ? ' none' : '') + '" data-bnrow="' + x.k + '" aria-expanded="' + op + '"><span class="bn-l">' + (PIC[x.k] ? '<i class="ic-' + x.k + '">' + PIC[x.k] + '</i>' : '<i class="ic-design">' + PIC.design + '</i>') + esc(x.label) + '</span>' +
+    '<span class="bn-bar"><i style="width:' + (x.avg == null ? 0 : Math.max(3, x.avg / top * 100)).toFixed(1) + '%"></i></span><b class="bn-v">' + fdays(x.avg) + '</b><small class="bn-n">' + (x.n ? x.n + ' งาน' : 'ไม่มีข้อมูล') + (x.now ? ' · ค้าง ' + x.now : '') + (sw && many(x) ? '<em class="bn-who">ช้าสุด ' + esc(sw.name) + '</em>' : sw ? '<em class="bn-who one">' + esc(sw.name) + '</em>' : '') + '</small><span class="bn-chev">' + I.next + '</span></button>' + (op ? detail(x) : '') + '</div>'; };
+  // ทุกแผนก: สรุปคอขวดของแต่ละแผนก (ขั้นที่นานสุด + ใครช้าสุด)
+  const deptCards = dep[0] !== 'all' ? '' : '<div class="bn-depts">' + BN_DEPTS.slice(1).map(d => { const xs = T0.dsg.concat(T0.rows).filter(d[2]), wx = xs.filter(x => x.avg != null).sort((p, q) => q.avg - p.avg)[0], sw = wx && slowWho(wx);
+    return '<button type="button" class="bn-dc" data-bndep="' + d[0] + '"><small>' + d[1] + '</small>' + (wx ? '<b>' + esc(wx.label.replace(/^ฝ่ายแบบ · /, '')) + ' · ' + fdays(wx.avg) + '</b><span>' + (sw ? 'ช้าสุด ' + esc(sw.name) + ' (' + fdays(sw.avg) + ')' : 'ไม่ระบุคน') + ' · ค้าง ' + xs.reduce((n, x) => n + (x.now || 0), 0) + '</span>' : '<b>ไม่มีข้อมูล</b><span>ยังไม่มีงานผ่านขั้นในช่วงนี้</span>') + '</button>'; }).join('') + '</div>';
   const w = T.worst, q = T.qc;
   return '<section class="rsec rsec-flow"><h3>เวลาแต่ละขั้น / คอขวด <small>เฉลี่ยจากงานที่ผ่านขั้นนั้นในช่วงนี้' + (dep[0] === 'all' ? '' : ' · แผนก: ' + dep[1]) + '</small></h3>' +
-    pick + (w ? '<div class="bn-hl">' + STI.fire + '<div><b>คอขวด' + (dep[0] === 'all' ? '' : 'ใน' + dep[1]) + ': ' + esc(w.label) + '</b><span>งานอยู่ขั้นนี้นานสุด เฉลี่ย ' + fdays(w.avg) + ' (' + w.n + ' งาน)' + (w.max ? ' · นานสุด ' + esc(w.max.code) + ' ' + fdays(w.max.d) : '') + '</span></div></div>' : '<p class="rnone">' + (dep[0] === 'design' ? 'ยังไม่มีงานออกแบบที่เสร็จในช่วงนี้' : dep[0] === 'all' ? 'ยังไม่มีงานที่ผ่านขั้นในช่วงนี้' : 'ยังไม่มีงานที่ย้ายขั้นในช่วงนี้') + '</p>') +
-    '<div class="bn-list">' + T.dsg.map(x => bar(x, w === x)).join('') + T.rows.map(x => bar(x, w === x)).join('') + '</div>' +
+    pick + deptCards + (w ? '<div class="bn-hl">' + STI.fire + '<div><b>คอขวด' + (dep[0] === 'all' ? '' : 'ใน' + dep[1]) + ': ' + esc(w.label) + '</b><span>งานอยู่ขั้นนี้นานสุด เฉลี่ย ' + fdays(w.avg) + ' (' + w.n + ' งาน)' + (w.max ? ' · นานสุด ' + esc(w.max.code) + ' ' + fdays(w.max.d) : '') + '</span>' + ((sw => sw ? '<span class="bn-hw">' + (w.dsg ? 'ผู้รับผิดชอบที่ใช้เวลานานสุด: ' : 'คนที่ใช้เวลาขั้นนี้นานสุด: ') + '<b>' + esc(sw.name) + '</b> เฉลี่ย ' + fdays(sw.avg) + ' (' + sw.n + ' งาน)</span>' : '')(slowWho(w))) + '</div></div>' : '<p class="rnone">' + (dep[0] === 'design' ? 'ยังไม่มีงานออกแบบที่เสร็จในช่วงนี้' : dep[0] === 'all' ? 'ยังไม่มีงานที่ผ่านขั้นในช่วงนี้' : 'ยังไม่มีงานที่ย้ายขั้นในช่วงนี้') + '</p>') +
+    '<div class="bn-tools"><small>กดที่แต่ละขั้นเพื่อดูว่าใคร/เครื่องไหน/งานไหนที่ช้า</small><button type="button" class="btn ghost sm" data-bnall="' + (T.dsg.concat(T.rows).every(isOpenRow) ? '0' : '1') + '">' + (T.dsg.concat(T.rows).every(isOpenRow) ? 'ย่อทั้งหมด' : 'แจงทุกขั้น') + '</button></div><div class="bn-list">' + T.dsg.map(x => bar(x, w === x)).join('') + T.rows.map(x => bar(x, w === x)).join('') + '</div>' +
     (dep[0] === 'design' || dep[0] === 'ship' ? '' : '<div class="bn-qc"><div><span>QC ไม่ผ่าน</span><b class="' + (q.rate >= 20 ? 'bad' : '') + '">' + (q.rate == null ? '–' : q.rate + '%') + '</b><small>ผ่าน ' + q.pass + ' · ไม่ผ่าน ' + q.fail + ' ครั้ง</small></div>' +
       (q.why.length ? '<ul>' + q.why.map(x => '<li><b class="mono">' + esc(x.code) + '</b> ' + esc(x.t) + '</li>').join('') + '</ul>' : '') + '</div>') + '</section>';
 }
@@ -8982,6 +9011,8 @@ document.addEventListener('click', async e => {
   if (d.view) return go(d.view);
   if (d.go) return go(d.go, d.sec);
   if (d.move) { e.stopPropagation(); return moveJob(d.move, d.to); }
+  if (d.bnrow) { const r = reportState(), o = r.bnOpen = r.bnOpen || {}, el = t.closest('.bn-item'); o[d.bnrow] = !(el && el.classList.contains('open')); return render(); }
+  if (d.bnall) { const r = reportState(), o = r.bnOpen = {}; ['draw', 'cam'].concat(PCOLS).forEach(k => { o[k] = d.bnall === '1'; }); return render(); }
   if (d.bndep) { reportState().bn = d.bndep; saveReportState(); return render(); }   // คอขวด: เลือกแผนก
   if (d.rpreset) { reportState(); if (d.rpreset !== 'custom') applyPreset(d.rpreset); else S.r.preset = 'custom'; saveReportState(); return render(); }
   if (d.filterGo) { S.f.status = d.filterGo; S.f.month = d.fmonth || ''; S.f.q = ''; S.f.group = 'all'; if (S.f.member !== 'all') { S.f.member = 'all'; LS.set('fMember', 'all'); } return go('list'); }   // จากการ์ดตัวเลข: ล้างตัวกรองอื่น ให้รายการตรงกับตัวเลขบนการ์ด
