@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.115.5';
+const APP_VERSION = '2.116.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -353,6 +353,13 @@ function av(name, cls) {
 }
 const isOpen = j => j.status !== 'done';
 const isLate = j => isOpen(j) && j.due && j.due < today();
+/* เลยกำหนดระดับเลข Job (ใช้ทุกหน้าให้ตัวเลขตรงกัน): งานแบบที่ยังไม่เสร็จเลยกำหนด หรือ งานผลิต (ยังไม่พร้อมส่ง/ยังไม่ส่ง) เลยกำหนดส่งลูกค้า */
+function codeLate(jobs, p, t) {
+  t = t || today();
+  const ds = (jobs || []).filter(j => j.status !== 'done' && j.due && j.due < t).map(j => j.due).sort();
+  const pl = !!(p && p.due && p.stage !== 'ready' && p.stage !== 'shipped' && p.due < t);
+  return { ds: ds.length > 0, dsDue: ds[0] || '', pl: pl, any: ds.length > 0 || pl };
+}
 const finDate = j => (j.finishedAt || '').slice(0, 10);
 const onTime = j => j.status === 'done' && (!j.due || !finDate(j) || finDate(j) <= j.due);
 const runningLogs = () => S.logs.filter(l => !l.end);
@@ -3197,7 +3204,7 @@ function jobAlerts(prev) {
    เตือนซ้ำเมื่อระดับเปลี่ยน (พรุ่งนี้ → วันนี้ → เลยกำหนด) และย้ำงานที่ต้องส่งวันนี้อีกครั้งหลังบ่ายสอง */
 const dueAhead = () => Math.max(1, Math.min(14, +LS.get('dueAhead', 2) || 2));        // เตือนล่วงหน้ากี่วัน (ตั้งในแผงกำหนดส่ง)
 const dueScope = () => isLead() ? LS.get('dueScope', 'all') : 'mine';                   // หัวหน้า/แอดมิน: ดูได้ทั้งทีม
-const dueJobs = () => S.jobs.filter(j => j.due && isOpen(j) && j.status !== 'hold' && (dueScope() === 'all' || inJob(j, S.me)));
+const dueJobs = withHold => S.jobs.filter(j => j.due && isOpen(j) && (withHold || j.status !== 'hold') && (dueScope() === 'all' || inJob(j, S.me)));   // แจ้งเตือนไม่นับงานพักไว้ · แผงกำหนดส่งนับด้วย ให้ตรงกับการ์ดหน้าแรก
 function dueLevel(j) {
   const t = today();
   if (!j.due || !isOpen(j)) return '';
@@ -3252,7 +3259,7 @@ function closeDue() { const p = $('#duePanel'); if (p) { p.classList.remove('sho
 function renderDue() {
   let p = $('#duePanel');
   if (!p) { p = document.createElement('div'); p.id = 'duePanel'; p.className = 'due-pop'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'กำหนดส่งงาน'); document.body.appendChild(p); requestAnimationFrame(() => p.classList.add('show')); }
-  const t = today(), js = dueJobs(), sel = S.dueDay || 'soon', ahead = dueAhead();
+  const t = today(), js = dueJobs(true), sel = S.dueDay || 'soon', ahead = dueAhead();
   const late = js.filter(j => j.due < t), soon = js.filter(j => j.due >= t && j.due <= addDays(t, ahead));
   const days = []; for (let i = 0; i < 14; i++) days.push(addDays(t, i));
   const cnt = d => js.filter(j => j.due === d).length;
@@ -5720,11 +5727,11 @@ function digestBuild(jobs, prods, items, td, yd, dow, topics, exLow, xpend) {
   const late = x => x.due && d10(x.due) < td, due = x => d10(x.due) === td;
   const codes = a => a.slice(0, 4).map(x => x.code || x.title || '-').join(', ') + (a.length > 4 ? ' +' + (a.length - 4) : '');
   const jo = jobs.filter(j => j.status !== 'done'), jl = jo.filter(late).length, jt = jo.filter(due).length;
-  const po = prods.filter(p => p.stage !== 'shipped'), pr = po.filter(p => p.stage === 'ready').length, pl = po.filter(late).length;
+  const po = prods.filter(p => p.stage !== 'shipped'), pr = po.filter(p => p.stage === 'ready').length, pLate = p => p.stage !== 'ready' && late(p), pl = po.filter(pLate).length;   // พร้อมส่งแล้ว = ผลิตเสร็จ ไม่นับเลยกำหนด (กติกาเดียวกับทุกหน้า)
   const pt = po.filter(due).length, pu = po.filter(p => p.priority === 'urgent').length, mc = po.filter(p => p.stage === 'machine').length;
   const sh = prods.filter(p => p.stage === 'shipped' && d10(p.shippedAt) === yd).length;
   const low = items.filter(x => x.own !== 'cust' && !x.grade && num(x.min) > 0 && num(x.qty) <= num(x.min));
-  const dueA = po.filter(due).concat(jo.filter(due)), lateA = po.filter(late).concat(jo.filter(late));
+  const dueA = po.filter(due).concat(jo.filter(due)), lateA = po.filter(pLate).concat(jo.filter(late));
   const m = +td.slice(5, 7), lines = [];
   if (on('design')) lines.push('🎨 ฝ่ายแบบ ค้าง ' + jo.length + ' งาน' + (jl ? ' · เลยกำหนด ' + jl : '') + (jt ? ' · ครบกำหนดวันนี้ ' + jt : ''));
   if (on('visit')) { const vt = []; jobs.forEach(j => { if (j.status !== 'done') dsVisits(j).forEach(v => { if (String(v.at).slice(0, 10) === td) vt.push({ j: j, v: v }); }); }); vt.sort((a, b) => String(a.v.at).localeCompare(String(b.v.at)));
@@ -6362,6 +6369,7 @@ function viewProd() {
   const cols = PCOLS.map(st => {
     let js = open.filter(p => p.stage === st);
     if (st === 'machine' && F !== 'all') js = js.filter(p => inMachine(p, F));
+    if (st === 'wait' && F !== 'all') js = js.filter(p => pms(p).some(x => x.m === F));   // เลือกเครื่อง: ช่องรอผลิตโชว์เฉพาะงานที่รอเครื่องนี้ ให้ตรงกับเลขบนการ์ดเครื่อง (กำลังทำ + รอ)
     js.sort((a, b) => (pUrgent(b) - pUrgent(a)) || String(pStageSince(a)).localeCompare(String(pStageSince(b))));   // งานด่วนขึ้นก่อน
     let extra = '';
     if (st === 'machine') extra = '<div class="pm-sum">' + machinesList().map(m => { const n = open.filter(p => inMachine(p, m)).length; return '<span class="' + (n ? 'on' : '') + '"' + mSty(m) + '>' + esc(m) + ' <b>' + n + '</b></span>'; }).join('') + '</div>';
@@ -6372,7 +6380,7 @@ function viewProd() {
         (S.pship ? '<div class="pship">' + sh.map(p => '<button type="button" class="pship-row" data-popen="' + esc(p.id) + '"><b>' + esc(p.code) + '</b><span>' + esc(p.title || '') + '</span><small>' + esc(fd(p.shippedAt)) + '</small></button>').join('') + '</div>' : '');
     }
     return '<section class="col ' + PSTG[st].cls + '" data-pcol="' + st + '"><div class="col-h"><span class="col-ic ic-' + st + '">' + PIC[st] + '</span><div class="col-t"><b>' + PSTG[st].label + '</b><small>' + PSTG[st].sub + '</small></div><span class="n">' + js.length + '</span></div>' + extra +
-      '<div class="col-list">' + (js.length ? js.map(pcard).join('') : '<div class="col-empty"><span class="ce-art ic-' + st + '">' + PIC[st] + '<i></i><i></i><i></i></span><b>' + (st === 'machine' && F !== 'all' ? 'ไม่มีงานรอเครื่อง ' + esc(F) : PSTG[st].empty) + '</b><small>' + (st === 'wait' ? 'งาน CAM ที่เสร็จจะเข้ามาที่นี่เอง' : '') + '</small></div>') + '</div>' + more + '</section>';
+      '<div class="col-list">' + (js.length ? js.map(pcard).join('') : '<div class="col-empty"><span class="ce-art ic-' + st + '">' + PIC[st] + '<i></i><i></i><i></i></span><b>' + (st === 'machine' && F !== 'all' ? 'ไม่มีงานที่ลงเครื่อง ' + esc(F) + ' อยู่' : st === 'wait' && F !== 'all' ? 'ไม่มีงานรอเครื่อง ' + esc(F) : PSTG[st].empty) + '</b><small>' + (st === 'wait' ? 'งาน CAM ที่เสร็จจะเข้ามาที่นี่เอง' : '') + '</small></div>') + '</div>' + more + '</section>';
   }).join('');
   const cnt = st => open.filter(p => p.stage === st).length;
   const flow = '<div class="flow pflow">' + PCOLS.map((st, i) => '<div class="flow-step ' + PSTG[st].cls + '" data-flowgo="pcol:' + st + '" role="button" tabindex="0" title="ไปที่คอลัมน์ ' + esc(PSTG[st].label) + '"><span class="flow-ic ic-' + st + '">' + PIC[st] + '</span><div><b>' + cnt(st) + '</b><small>' + PSTG[st].label + '</small></div></div>' + (i < PCOLS.length - 1 ? '<span class="flow-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '')).join('') + '</div>';
@@ -6444,21 +6452,25 @@ function coRows(all) {   // all = ค้นหา: รวมงานที่�
     const open = r.jobs.filter(j => j.status !== 'done'), last = r.jobs.slice().sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0] || {};
     const p = r.prod, ref = p || last;
     let step, sub, since, late = false;
-    if (p && p.stage !== 'shipped') { step = p.stage; sub = p.stage === 'machine' ? pms(p).filter(m => !m.d).map(m => m.m).join(' + ') || 'ครบแล้ว' : PSTG[p.stage].sub; since = pStageSince(p); late = pStuck(p); }
+    if (p && p.stage !== 'shipped') { step = p.stage; sub = p.stage === 'machine' ? pms(p).filter(m => !m.d).map(m => m.m).join(' + ') || 'ครบแล้ว' : PSTG[p.stage].sub; since = pStageSince(p); }
     else if (open.length) {
       const o = open.slice().sort((a, b) => ['doing', 'fix', 'review', 'queue', 'hold'].indexOf(a.status) - ['doing', 'fix', 'review', 'queue', 'hold'].indexOf(b.status))[0];
-      step = 'design'; sub = (o.taskType || 'ออกแบบ') + ' · ' + ST[o.status].label + (o.assignee ? ' · ' + o.assignee : ''); since = o.startedAt || o.received || ''; late = open.some(isLate);
+      step = 'design'; sub = (o.taskType || 'ออกแบบ') + ' · ' + ST[o.status].label + (o.assignee ? ' · ' + o.assignee : ''); since = o.startedAt || o.received || '';
     } else if (p && p.stage === 'shipped') { step = 'shipped'; sub = 'ส่งแล้ว ' + fd(p.shippedAt); since = p.shippedAt; }
     else { const fin = r.jobs.map(finDate).sort().pop() || ''; if (fin < cutoff && !all) return null; step = 'ddone'; sub = 'ออกแบบเสร็จ ' + fd(fin) + ' · ไม่ได้ส่งเข้าผลิต'; since = fin; }
     if (!all && step === 'shipped' && String(p.shippedAt).slice(0, 10) < addDays(today(), -SHIP_KEEP)) return null;
+    // เลยกำหนด = กติกาเดียวกับหน้า Sale (codeLate) · ค้างนาน = ผลิตอยู่ขั้นเดิมนาน (pStuck) แยกนับ
+    const L = step === 'shipped' || step === 'ddone' ? { any: false } : codeLate(r.jobs, p && p.stage !== 'shipped' ? p : null), stuck = !!(p && p.stage !== 'shipped' && step !== 'design' && pStuck(p));
+    late = !!L.any || stuck;
     // วันที่สำหรับป้ายวันที่ (แบบหน้า Sale): ฝ่ายแบบ = กำหนดส่งแบบ, ผลิต = วันเข้าผลิต/พร้อมส่ง, ส่งแล้ว = วันส่ง
     let due = '', dl = '', dd = '';
     if (step === 'design') { due = open.map(j => j.due).filter(Boolean).sort()[0] || ''; dl = 'กำหนดส่งแบบ'; dd = due; }
     else if (step === 'shipped') { dl = 'ส่งแล้ว'; dd = String(p.shippedAt).slice(0, 10); }
     else if (step === 'ddone') { dl = 'ออกแบบเสร็จ'; dd = String(since).slice(0, 10); }
+    else if (L.ds && !L.pl) { due = L.dsDue; dl = 'กำหนดส่งแบบ'; dd = due; }   // แก้แบบระหว่างผลิตแล้วเลยกำหนด
     else if (p && p.due && p.stage !== 'ready') { due = p.due; dl = 'กำหนดส่ง'; dd = due; }
     else if (p) { dl = p.stage === 'ready' ? 'พร้อมส่งตั้งแต่' : 'เข้าผลิต'; dd = String(p.stage === 'ready' ? p.finishedAt : p.enteredAt).slice(0, 10); }
-    return { code: r.code, title: ref.title || (r.jobs.find(j => j.title) || {}).title || '', sale: ref.sale || (r.jobs.find(j => j.sale) || {}).sale || '', group: ref.group || '', step: step, sub: sub, since: since, late: late, prod: p, jobs: r.jobs,
+    return { code: r.code, title: ref.title || (r.jobs.find(j => j.title) || {}).title || '', sale: ref.sale || (r.jobs.find(j => j.sale) || {}).sale || '', group: ref.group || '', step: step, sub: sub, since: since, late: late, overdue: !!L.any, stuck: stuck, prod: p, jobs: r.jobs,
       due: due, dl: dl, dd: dd,
       urgent: r.jobs.some(j => j.priority === 'urgent') || (!!p && p.priority === 'urgent') };   // ด่วนติดไปจนส่งมอบ
   }).filter(Boolean);
@@ -6559,7 +6571,7 @@ function viewFlow() {
   const depts = pipeHtml(stepTile, S.animIn);
   const shipped7 = rows.filter(r => r.step === 'shipped').length, late = rows.filter(r => r.late).length;
   const kpis = '<div class="co-kpis"><div class="kpi"><span>งานในสายทั้งหมด</span><b>' + rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length + '</b><small>เลข Job ที่ยังไม่ส่ง</small></div>' +
-    '<div class="kpi k-late"><span>ค้างนาน / เลยกำหนด</span><b>' + late + '</b><small>ฝ่ายแบบเลยกำหนด · ผลิตค้าง ≥2–3 วัน</small></div>' +
+    '<button type="button" class="kpi k-late" data-cf="late"><span>เลยกำหนด / ค้างนาน</span><b>' + late + '</b><small>' + (late ? ['เลยกำหนด ' + rows.filter(r => r.overdue).length, 'ผลิตค้างนาน ' + rows.filter(r => r.stuck && !r.overdue).length].join(' · ') : 'ไม่มีงานเลยกำหนดหรือค้างนาน') + '</small></button>' +
     '<div class="kpi k-done"><span>ส่งแล้ว ' + SHIP_KEEP + ' วัน</span><b>' + shipped7 + '</b><small>ปิดงานถึงลูกค้า</small></div></div>';
   // ค้นหา: ค้นจากงานทั้งหมด (รวมที่ส่งแล้ว/ออกแบบเสร็จนานแล้ว) ไม่สนตัวกรองด้านบน · ไม่ต้องพิมพ์ขีด/ช่องว่างก็เจอ · ตรงเลข Job ขึ้นก่อน
   let list;
@@ -6570,7 +6582,7 @@ function viewFlow() {
     list = rows.filter(r => F === 'all' ? r.step !== 'shipped' && r.step !== 'ddone' : F === 'late' ? r.late : F === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === F);
     list.sort((a, b) => (b.late - a.late) || (coIdx(b.step) - coIdx(a.step)) || String(a.since).localeCompare(String(b.since)));
   }
-  const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง'], ['late', 'ค้างนาน'], ['shipped', 'ส่งแล้ว ' + SHIP_KEEP + ' วัน']].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-cf="' + x[0] + '" aria-pressed="' + (F === x[0]) + '">' + x[1] + '<b>' + (x[0] === 'all' ? rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length : x[0] === 'late' ? late : shipped7) + '</b></button>').join('') +
+  const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง'], ['late', 'เลยกำหนด / ค้างนาน'], ['shipped', 'ส่งแล้ว ' + SHIP_KEEP + ' วัน']].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-cf="' + x[0] + '" aria-pressed="' + (F === x[0]) + '">' + x[1] + '<b>' + (x[0] === 'all' ? rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length : x[0] === 'late' ? late : shipped7) + '</b></button>').join('') +
     (F !== 'all' && F !== 'late' && F !== 'shipped' ? '<button class="qchip" data-cf="all" aria-pressed="true">' + esc(F === 'design' ? 'ฝ่ายแบบ' : PSTG[F] ? PSTG[F].label : F) + ' ✕</button>' : '') + '</div>';
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
   const hovJob = r => { const o = r.jobs.filter(j => j.status !== 'done'); return (o[0] || r.jobs.slice().sort((a, b) => String(finDate(b)).localeCompare(String(finDate(a))))[0] || {}).id || ''; };
@@ -6968,7 +6980,7 @@ document.addEventListener('keydown', e => {
    รูปสินค้าใช้ระบบรูปเดียวกับงาน (ชีต Images, jobId = รหัสวัสดุ s_…) เก็บใน Drive โฟลเดอร์ รูปงาน/คลังวัสดุ */
 const SV = { q: '', cat: 'all', sort: 'status', anim: false, src: LS.get('stockSrc', 'app') };
 const SM = { id: '', mode: '', kind: 'out', pend: [], del: false, busy: false, f: null, cond: 'ok', rpend: [] };
-const SKF = { all: 1, low: 1, scrap: 1, cust: 1 };
+const SKF = { all: 1, low: 1, scrap: 1, cust: 1, near: 1, zero: 1 };
 const SK = { in: { label: 'รับเข้า', cls: 'sk-in', sign: '+' }, out: { label: 'เบิกออก', cls: 'sk-out', sign: '−' }, adj: { label: 'ปรับยอด', cls: 'sk-adj', sign: '±' }, ret: { label: 'รับคืน', cls: 'sk-ret', sign: '+' }, back: { label: 'คืนลูกค้า', cls: 'sk-back', sign: '−' } };
 /* ของบริษัทปกติ / ของลูกค้า (own=cust) / ตำหนิ-เศษที่รับคืนจากหน้างาน (grade=ng|scrap แยกรายการจากวัสดุตั้งต้น base) */
 const stReg = x => !x.own && !x.grade;
@@ -7746,7 +7758,8 @@ document.addEventListener('click', e => {
   if (d.excard) { e.preventDefault(); return exCardOpen(d.excard); }
   if (d.exsrc) { if (d.exthen) { SV.cat = d.exthen; SV.anim = true; } if (d.exsrc === 'ex') EV.kAnim = false; SV.src = d.exsrc; try { LS.set('stockSrc', SV.src); } catch (x) {} render(); if (SV.src === 'ex') exSync(true); return; }
   if (d.exsgrp !== undefined) { EV.sgrp = EV.sgrp === d.exsgrp ? '' : d.exsgrp; EV.rowAnim = true; EV.lim = 200; return render(); }
-  if (d.exgrp) { EV.rowAnim = true; const fromKpi = !!d.exgo; EV.grp = fromKpi ? d.exgrp : EV.grp === d.exgrp && d.exgrp !== 'bal' ? 'bal' : d.exgrp; EV.lim = 200; render(); if (fromKpi) exGo('list'); return; }
+  if (d.exgrp) { EV.rowAnim = true; const fromKpi = !!d.exgo; if (fromKpi) { EV.q = ''; EV.loc = ''; EV.sgrp = ''; }   // จากการ์ดตัวเลข: ล้างคำค้น/คลัง ให้รายการตรงกับตัวเลขบนการ์ด
+    EV.grp = fromKpi ? d.exgrp : EV.grp === d.exgrp && d.exgrp !== 'bal' ? 'bal' : d.exgrp; EV.lim = 200; render(); if (fromKpi) exGo('list'); return; }
   if (d.exgo) return exGo(d.exgo);
   if (d.exmore) { EV.lim += 300; return render(); }
   if (d.exsync) { exSync(true); return render(); }
@@ -7772,17 +7785,18 @@ function viewStock() {
   const reg = all.filter(stReg), scr = all.filter(x => x.grade && !stZero(x)), cus = all.filter(x => stCustOf(x) && !stZero(x));
   const low = reg.filter(x => stLow(x) && !stZero(x)), zero = reg.filter(stZero), td = today(), wk = addDays(td, -7);
   const lw = logs.filter(l => String(l.ts).slice(0, 10) >= wk), nIn = lw.filter(l => l.kind === 'in' || l.kind === 'ret').length, nOut = lw.filter(l => l.kind === 'out' || l.kind === 'back').length;
-  const show = x => SV.cat === 'scrap' ? !!x.grade : SV.cat === 'cust' ? stCustOf(x) : SV.cat === 'low' ? stLow(x) : (stReg(x) || !stZero(x)) && (SV.cat === 'all' || x.cat === SV.cat);
+  // ตัวกรองต้องนับแบบเดียวกับตัวเลขบนการ์ด/ชิป: ต้องสั่งเพิ่ม = ใกล้หมด + หมด · ใกล้หมด = ต่ำกว่าจุดสั่งแต่ยังมีของ · หมด = วัสดุปกติที่ยอด ≤ 0
+  const show = x => SV.cat === 'scrap' ? !!x.grade : SV.cat === 'cust' ? stCustOf(x) : SV.cat === 'low' ? stReg(x) && (stLow(x) || stZero(x)) : SV.cat === 'near' ? stLow(x) && !stZero(x) : SV.cat === 'zero' ? stReg(x) && stZero(x) : (stReg(x) || !stZero(x)) && (SV.cat === 'all' || x.cat === SV.cat);
   const rank = x => stZero(x) ? 0 : stLow(x) ? 1 : 2;
   const list = all.filter(x => (q ? stReg(x) || !stZero(x) : show(x)) && (!q || qHit([x.name, x.cat, x.loc, x.note, x.cust, x.job, x.size, x.grade ? 'ตำหนิ เศษ' : ''], q)))
     .sort((a, b) => SV.sort === 'name' ? String(a.name).localeCompare(String(b.name), 'th') : SV.sort === 'qty' ? (+a.qty || 0) - (+b.qty || 0) : SV.sort === 'recent' ? String(b.updatedAt).localeCompare(String(a.updatedAt))
       : (rank(a) - rank(b)) || String(a.cat).localeCompare(String(b.cat), 'th') || String(a.name).localeCompare(String(b.name), 'th'));
   const kpi = (cls, ic, lab, n, sub, cf) => '<button type="button" class="sk-kpi ' + cls + '"' + (cf ? ' data-scat="' + cf + '"' : '') + '><span class="ski">' + ic + '</span><span class="skt"><small>' + lab + '</small><b class="tnum">' + n + '</b><em>' + sub + '</em></span></button>';
-  const kpis = '<div class="sk-kpis' + (an ? ' in' : '') + '">' + kpi('k-all', I.stock, 'วัสดุทั้งหมด', reg.length, cats.length + ' หมวด' + (reg.some(x => +x.price) ? ' · มูลค่า ' + baht(reg.reduce((s, x) => s + (+x.price || 0) * Math.max(0, +x.qty || 0), 0)) : ''), 'all') + kpi('k-low', STI.fire, 'ใกล้หมด', low.length, 'ต่ำกว่าจุดสั่งซื้อ', 'low') +
-    kpi('k-zero', PIC.xmark, 'หมดสต็อก', zero.length, zero.length ? 'ต้องสั่งด่วน' : 'ไม่มี', zero.length ? 'low' : '') + kpi('k-mv', STI.clock, 'เคลื่อนไหว 7 วัน', nIn + nOut, 'รับ ' + nIn + ' · เบิก ' + nOut, '') + '</div>';
+  const kpis = '<div class="sk-kpis' + (an ? ' in' : '') + '">' + kpi('k-all', I.stock, 'วัสดุทั้งหมด', all.filter(x => stReg(x) || !stZero(x)).length, cats.length + ' หมวด' + (reg.some(x => +x.price) ? ' · มูลค่า ' + baht(reg.reduce((s, x) => s + (+x.price || 0) * Math.max(0, +x.qty || 0), 0)) : ''), 'all') + kpi('k-low', STI.fire, 'ใกล้หมด', low.length, 'ต่ำกว่าจุดสั่งซื้อ', low.length ? 'near' : '') +
+    kpi('k-zero', PIC.xmark, 'หมดสต็อก', zero.length, zero.length ? 'ต้องสั่งด่วน' : 'ไม่มี', zero.length ? 'zero' : '') + kpi('k-mv', STI.clock, 'เคลื่อนไหว 7 วัน', nIn + nOut, 'รับ ' + nIn + ' · เบิก ' + nOut, '') + '</div>';
   const alert = low.length + zero.length ? '<button type="button" class="sk-alert" data-scat="low"><span>' + STI.fire + '</span><b>ต้องสั่งเพิ่ม ' + (low.length + zero.length) + ' รายการ</b><small>' + esc(zero.concat(low).slice(0, 4).map(x => x.name).join(' · ')) + (low.length + zero.length > 4 ? ' …' : '') + '</small><em>ดูทั้งหมด ›</em></button>' : '';
   const cdue = stCustDue(), calert = cdue.length ? '<button type="button" class="sk-alert sk-calert" data-scat="cust"><span>' + SKT_IC.back + '</span><b>ของลูกค้า ' + cdue.length + ' รายการ งานส่งแล้ว ควรคืนลูกค้า</b><small>' + esc(cdue.slice(0, 3).map(x => x.name + (x.cust ? ' (' + x.cust + ')' : '') + ' เหลือ ' + stNum(x.qty) + ' ' + (x.unit || '')).join(' · ')) + '</small><em>ดู ›</em></button>' : '';
-  const chips = '<div class="qchips sk-chips">' + [['all', 'ทั้งหมด', all.filter(x => stReg(x) || !stZero(x)).length], ['low', 'ต้องสั่งเพิ่ม', low.length + zero.length]].concat(scr.length || SV.cat === 'scrap' ? [['scrap', 'ตำหนิ / เศษ', scr.length]] : []).concat(cus.length || SV.cat === 'cust' ? [['cust', 'ของลูกค้า', cus.length]] : []).concat(cats.map(c => [c, c, all.filter(x => x.cat === c && (stReg(x) || !stZero(x))).length])).map(x => '<button class="qchip' + (x[0] === 'low' ? ' q-late' : '') + '" data-scat="' + esc(x[0]) + '" aria-pressed="' + (SV.cat === x[0]) + '"' + (SKF[x[0]] ? '' : ' style="--ch:' + stHue(x[0]) + '"') + '>' + (SKF[x[0]] ? '' : '<i class="sk-dot"></i>') + esc(x[1]) + '<b>' + x[2] + '</b></button>').join('') + '</div>';
+  const chips = '<div class="qchips sk-chips">' + [['all', 'ทั้งหมด', all.filter(x => stReg(x) || !stZero(x)).length], ['low', 'ต้องสั่งเพิ่ม', low.length + zero.length]].concat(SV.cat === 'near' ? [['near', 'ใกล้หมด', low.length]] : []).concat(SV.cat === 'zero' ? [['zero', 'หมดสต็อก', zero.length]] : []).concat(scr.length || SV.cat === 'scrap' ? [['scrap', 'ตำหนิ / เศษ', all.filter(x => x.grade).length]] : []).concat(cus.length || SV.cat === 'cust' ? [['cust', 'ของลูกค้า', all.filter(stCustOf).length]] : []).concat(cats.map(c => [c, c, all.filter(x => x.cat === c && (stReg(x) || !stZero(x))).length])).map(x => '<button class="qchip' + (x[0] === 'low' || x[0] === 'near' || x[0] === 'zero' ? ' q-late' : '') + '" data-scat="' + esc(x[0]) + '" aria-pressed="' + (SV.cat === x[0]) + '"' + (SKF[x[0]] ? '' : ' style="--ch:' + stHue(x[0]) + '"') + '>' + (SKF[x[0]] ? '' : '<i class="sk-dot"></i>') + esc(x[1]) + '<b>' + x[2] + '</b></button>').join('') + '</div>';
   const tools = '<div class="sk-tools"><label class="search' + qOn(SV.q) + '">' + I.search + '<input id="sq" type="search" autocomplete="off" enterkeyhint="search" placeholder="ค้นหาวัสดุ หมวด ที่เก็บ ลูกค้า…" value="' + esc(SV.q) + '" aria-label="ค้นหาวัสดุ">' + qX('sq', SV.q) + '</label>' +
     '<label class="sk-sort"><span>เรียง</span><select id="sSort" aria-label="เรียงตาม">' + [['status', 'ต้องสั่งก่อน'], ['qty', 'คงเหลือน้อย → มาก'], ['name', 'ชื่อ ก–ฮ'], ['recent', 'อัปเดตล่าสุด']].map(o => '<option value="' + o[0] + '"' + (SV.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>' +
     (ed ? '<button type="button" class="btn sk-tbtn t-buy" data-buyopen="1">' + SKT_IC.buy + '<span>ใบขอซื้อ</span>' + (low.length + zero.length ? '<em>' + (low.length + zero.length) + '</em>' : '') + '</button><button type="button" class="btn sk-tbtn t-cnt" data-cntopen="1">' + SKT_IC.count + '<span>นับสต็อก</span></button>' : '') + '</div>';
@@ -8119,7 +8133,7 @@ function stockClick(t, d) {
   if (d.camflip) { CAM.facing = CAM.facing === 'user' ? 'environment' : 'user'; camStart(); return true; }
   if (d.camfile) { const cb = CAM.cb; camClose(); const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = () => cb && cb(i.files); i.click(); return true; }
   if (t.id === 'sModal') { stClose(); return true; }
-  if (d.scat !== undefined) { if (!d.scat) return true; SV.cat = SV.cat === d.scat && d.scat !== 'all' ? 'all' : d.scat; SV.anim = true; render(); return true; }
+  if (d.scat !== undefined) { if (!d.scat) return true; SV.q = '';   /* ระหว่างค้นหา รายการไม่สนตัวกรอง → ล้างคำค้นให้รายการตรงกับตัวเลข */ SV.cat = SV.cat === d.scat && d.scat !== 'all' ? 'all' : d.scat; SV.anim = true; render(); return true; }
   if (d.sadd) { stockAddOpen(); return true; }
   if (d.sclose) { stClose(); return true; }
   if (d.squick) { stockOpen(d.sid, d.squick); return true; }
@@ -8811,12 +8825,14 @@ function saleRows(d) {
   (d.prods || []).forEach(p => { const k = key(p.code); const r = by[k] || (by[k] = { code: p.code, jobs: [], prod: null }); if (!r.prod || (r.prod.stage === 'shipped' && p.stage !== 'shipped')) r.prod = p; });
   return Object.values(by).map(r => {
     const p = r.prod, open = r.jobs.filter(j => j.status !== 'done'), ref = p || r.jobs[0] || {};
-    let step, sub, info = '', late = false, due = '';
+    let step, sub, info = '', late = false, due = '', lateDs = false;
     if (p && p.stage !== 'shipped') {
       step = p.stage; const ms = (p.machines || []).filter(m => m && m.m);
       sub = p.stage === 'machine' ? ms.map(m => (m.d ? '✓ ' : '') + m.m).join(' · ') : PSTG[p.stage].sub;
       info = p.stage === 'ready' ? 'พร้อมส่งตั้งแต่ ' + fd(p.finishedAt) : 'เข้าผลิต ' + fd(p.enteredAt); var dl = p.stage === 'ready' ? 'พร้อมส่งตั้งแต่' : 'เข้าผลิต', dd = String(p.stage === 'ready' ? p.finishedAt : p.enteredAt).slice(0, 10);
-      if (p.due && p.stage !== 'ready') { due = p.due; late = due < t; }
+      if (p.due && p.stage !== 'ready') { due = p.due; }
+      const L = codeLate(r.jobs, p, t); late = L.any; lateDs = L.ds && !L.pl;
+      if (lateDs) due = L.dsDue;   // งานแบบ (เช่น แก้ไขระหว่างผลิต) เลยกำหนด → โชว์กำหนดส่งแบบที่เลย ให้ตรงกับป้ายแดง
     } else if (open.length) {
       const o = open.slice().sort((a, b) => ['doing', 'fix', 'review', 'queue', 'hold'].indexOf(a.status) - ['doing', 'fix', 'review', 'queue', 'hold'].indexOf(b.status))[0];
       step = 'design'; sub = (o.taskType || 'ออกแบบ') + ' · ' + (ST[o.status] || ST.queue).label;
@@ -8824,7 +8840,7 @@ function saleRows(d) {
     } else if (p) { step = 'shipped'; sub = 'ส่งถึงลูกค้าแล้ว'; info = 'ส่งแล้ว ' + fd(p.shippedAt); dl = 'ส่งแล้ว'; dd = String(p.shippedAt).slice(0, 10); }
     else { const fin = r.jobs.map(j => String(j.finishedAt || '').slice(0, 10)).sort().pop() || ''; step = 'ddone'; sub = 'ออกแบบเสร็จ · รอเข้าผลิต'; info = 'เสร็จ ' + fd(fin); var old = fin < addDays(t, -14); dl = 'ออกแบบเสร็จ'; dd = fin; }
     return { code: r.code, title: ref.title || (r.jobs.find(j => j.title) || {}).title || '', sale: ref.sale || (r.jobs.find(j => j.sale) || {}).sale || '', group: ref.group || (r.jobs[0] || {}).group || '',
-      step: step, sub: sub, info: info, late: late, due: due, prod: p, old: step === 'ddone' && !!old, dl: due ? (step === 'design' ? 'กำหนดส่งแบบ' : 'กำหนดส่ง') : dl || '', dd: due || dd || '', jobs: r.jobs, urgent: r.jobs.some(j => j.priority === 'urgent') || (!!p && p.priority === 'urgent')};
+      step: step, sub: sub, info: info, late: late, lateD: late && (step === 'design' || codeLate(r.jobs, null, t).ds), lateP: late && codeLate(r.jobs, p, t).pl, due: due, prod: p, old: step === 'ddone' && !!old, dl: due ? (step === 'design' || lateDs ? 'กำหนดส่งแบบ' : 'กำหนดส่ง') : dl || '', dd: due || dd || '', jobs: r.jobs, urgent: r.jobs.some(j => j.priority === 'urgent') || (!!p && p.priority === 'urgent')};
   });
 }
 function saleFlowHtml(d, sel) {
@@ -8834,7 +8850,7 @@ function saleFlowHtml(d, sel) {
   const tile = (s, i) => cjTile(s, i, n(s.k), 'data-sfstep="' + s.k + '"', SF.step === s.k, s.k === 'shipped' ? '60 วันล่าสุด' : s.sub, 0);
   const pipe = pipeHtml(tile, SF.anim);
   const kpis = '<div class="co-kpis"><button type="button" class="kpi" data-sfstep="all"><span>งานที่ยังไม่ส่ง</span><b>' + live.length + '</b><small>เลข Job ที่อยู่ระหว่างทำ</small></button>' +
-    '<button type="button" class="kpi k-late" data-sfstep="late"><span>เลยกำหนด</span><b>' + late + '</b><small>' + (late ? ((ld, lp) => [ld ? 'ฝ่ายแบบ ' + ld : '', lp ? 'ฝ่ายผลิต ' + lp : ''].filter(Boolean).join(' · '))(all.filter(r => r.late && r.step === 'design').length, all.filter(r => r.late && r.step !== 'design').length) + ' · ควรติดตามกับทีม' : 'ฝ่ายแบบ + ฝ่ายผลิต · ยังไม่มีงานเลยกำหนด') + '</small></button>' +
+    '<button type="button" class="kpi k-late" data-sfstep="late"><span>เลยกำหนด</span><b>' + late + '</b><small>' + (late ? ((ld, lp) => [ld ? 'ฝ่ายแบบ ' + ld : '', lp ? 'ฝ่ายผลิต ' + lp : ''].filter(Boolean).join(' · '))(all.filter(r => r.lateD).length, all.filter(r => r.lateP).length) + ' · ควรติดตามกับทีม' : 'ฝ่ายแบบ + ฝ่ายผลิต · ยังไม่มีงานเลยกำหนด') + '</small></button>' +
     '<button type="button" class="kpi k-done" data-sfstep="shipped"><span>ส่งแล้ว</span><b>' + n('shipped') + '</b><small>ปิดงานถึงลูกค้า (60 วันล่าสุด)</small></button></div>';
   let list;
   if (qq) {   // ค้นหา: ค้นทุกงาน (รวมที่ส่งแล้ว/ออกแบบเสร็จนานแล้ว) ไม่สนขั้นที่เลือก · เลข Job ตรงขึ้นก่อน
@@ -8961,7 +8977,7 @@ document.addEventListener('click', async e => {
   if (d.go) return go(d.go, d.sec);
   if (d.move) { e.stopPropagation(); return moveJob(d.move, d.to); }
   if (d.rpreset) { reportState(); if (d.rpreset !== 'custom') applyPreset(d.rpreset); else S.r.preset = 'custom'; saveReportState(); return render(); }
-  if (d.filterGo) { S.f.status = d.filterGo; S.f.month = d.fmonth || ''; return go('list'); }
+  if (d.filterGo) { S.f.status = d.filterGo; S.f.month = d.fmonth || ''; S.f.q = ''; S.f.group = 'all'; if (S.f.member !== 'all') { S.f.member = 'all'; LS.set('fMember', 'all'); } return go('list'); }   // จากการ์ดตัวเลข: ล้างตัวกรองอื่น ให้รายการตรงกับตัวเลขบนการ์ด
   if (d.mine) { S.f.member = '__me'; LS.set('fMember', S.f.member); return go('board'); }
   if (d.memberjobs) { S.f.member = d.memberjobs; S.f.status = 'open'; LS.set('fMember', S.f.member); return go('list'); }
   if (d.fstatus) { S.f.status = d.fstatus; if (d.fstatus !== 'done') S.f.month = ''; return render(); }

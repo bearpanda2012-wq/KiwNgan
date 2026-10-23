@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.52.0';
+const VERSION = '1.53.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -2258,11 +2258,11 @@ function digestBuild_(jobs, prods, items, today, yday, dow, topics, exLow, xpend
   const late = x => x.due && d10(x.due) < today, due = x => d10(x.due) === today;
   const codes = a => a.slice(0, 4).map(x => x.code || x.title || '-').join(', ') + (a.length > 4 ? ' +' + (a.length - 4) : '');
   const jo = jobs.filter(j => j.status !== 'done'), jl = jo.filter(late).length, jt = jo.filter(due).length;
-  const po = prods.filter(p => p.stage !== 'shipped'), pr = po.filter(p => p.stage === 'ready').length, pl = po.filter(late).length;
+  const po = prods.filter(p => p.stage !== 'shipped'), pr = po.filter(p => p.stage === 'ready').length, pLate = p => p.stage !== 'ready' && late(p), pl = po.filter(pLate).length;   // พร้อมส่ง = ผลิตเสร็จ ไม่นับเลยกำหนด
   const pt = po.filter(due).length, pu = po.filter(p => p.priority === 'urgent').length, mc = po.filter(p => p.stage === 'machine').length;
   const sh = prods.filter(p => p.stage === 'shipped' && d10(p.shippedAt) === yday).length;
   const low = items.filter(x => x.own !== 'cust' && !x.grade && num(x.min) > 0 && num(x.qty) <= num(x.min));
-  const dueA = po.filter(due).concat(jo.filter(due)), lateA = po.filter(late).concat(jo.filter(late));
+  const dueA = po.filter(due).concat(jo.filter(due)), lateA = po.filter(pLate).concat(jo.filter(late));
   const m = +today.slice(5, 7), lines = [];
   if (on('design')) lines.push('🎨 ฝ่ายแบบ ค้าง ' + jo.length + ' งาน' + (jl ? ' · เลยกำหนด ' + jl : '') + (jt ? ' · ครบกำหนดวันนี้ ' + jt : ''));
   if (on('visit')) { const vt = visitsBetween_(jobs, today, today); if (vt.length) lines.push('📍 นัดหน้างานวันนี้ ' + vt.length + ': ' + vt.slice(0, 3).map(visitTxt_).join(', ') + (vt.length > 3 ? ' …' : '')); }
