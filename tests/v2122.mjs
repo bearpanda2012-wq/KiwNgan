@@ -31,14 +31,14 @@ eq('peer message once', await pg.locator('#rcList .rc-m:not(.me)').count(), 1);
 await pg.fill('#rcIn', 'กำลังพิมพ์'); await pg.evaluate(() => { KiwNgan.V.members[2].mic = true; KiwNgan.renderRoom(); }); await pg.waitForTimeout(200);
 eq('draft survives re-render', await pg.inputValue('#rcIn'), 'กำลังพิมพ์');
 // อีโมจิ + ยกมือ
-await pg.click('#roomChat [data-room="rx"][data-v="👍"]'); await pg.waitForTimeout(150);
+await pg.click('#roomChat [data-rcx="rx"][data-v="👍"]'); await pg.waitForTimeout(150);
 eq('reaction floats + sent', [await pg.locator('.rc-float').count() > 0, await pg.evaluate(() => window.__sent['ต้น'].some(m => m.t === 'rx' && m.e === '👍'))], [true, true]);
 await pg.click('#roomView .rtc-tools [data-room="hand"]'); await pg.waitForTimeout(200);
 eq('hand raised on my tile', [await pg.locator('#roomView .rm-tile[data-vkey="__me"] .rm-hand').count(), await pg.evaluate(() => window.__sent['ฝน'].some(m => m.t === 'hand' && m.on))], [1, true]);
 await pg.evaluate(() => KiwNgan.rcIn({ id: 'h1', t: 'hand', from: 'ต้น', on: true }, 'ต้น')); await pg.waitForTimeout(200);
 eq('peer hand shown', await pg.locator('#roomView .rm-tile[data-vkey="ต้น"] .rm-hand').count(), 1);
 // ปิดแชท → ข้อความใหม่ขึ้นตัวเลข
-await pg.click('#roomChat [data-room="chat"]'); await pg.waitForTimeout(200);
+await pg.click('#roomChat [data-rcx="chat"]'); await pg.waitForTimeout(200);
 await pg.evaluate(() => KiwNgan.rcIn({ id: 'x2', t: 'msg', from: 'ต้น', text: 'ได้ครับ', at: Date.now() }, 'ต้น')); await pg.waitForTimeout(200);
 eq('unread badge', await pg.locator('#roomView [data-room="chat"] .rc-badge').innerText().catch(() => ''), '1');
 await pg.click('#roomView .rtc-tools [data-room="chat"]'); await pg.waitForTimeout(200);
@@ -52,7 +52,7 @@ eq('presence join adds tile', await pg.locator('#roomView .rm-tile').count(), 4)
 await pg.evaluate(() => KiwNgan.roomPresenceIn({ k: 'room', op: 'leave', m: { name: 'บอส' } })); await pg.waitForTimeout(200);
 eq('presence leave removes tile', await pg.locator('#roomView .rm-tile').count(), 3);
 // v2.123: อีโมจิในช่องพิมพ์ · อีโมจิลอยขึ้นในแชท · ส่งรูป (แบ่งชิ้น)
-await pg.click('#roomChat [data-room="rx"][data-v="🎉"]'); await pg.waitForTimeout(150);
+await pg.click('#roomChat [data-rcx="rx"][data-v="🎉"]'); await pg.waitForTimeout(150);
 eq('reaction also logged in chat', await pg.locator('#rcList .rc-m.big p').last().innerText(), '🎉');
 await pg.click('#roomChat [data-rcemo="pick"]'); await pg.waitForTimeout(100);
 await pg.fill('#rcIn', 'สวัสดี '); await pg.click('#roomChat [data-rcemo="😊"]'); await pg.waitForTimeout(100);

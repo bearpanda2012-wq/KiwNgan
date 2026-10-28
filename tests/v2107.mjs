@@ -83,5 +83,31 @@ const rb = await pg.evaluate(() => { const box = document.querySelector('#rtcInk
 await pg.mouse.click(cb.x + rb.x + rb.w * .8, cb.y + rb.y + rb.h * .7); await pg.waitForTimeout(120);
 eq('1:1: eraser removed peer rect', await pg.evaluate(() => KiwNgan.R.ink.strokes.length), 0);
 eq('1:1: del sent', await pg.evaluate(() => window.__s1.some(m => m.t === 'del' && m.id === 'h1')), true);
+// ---- v2.125: ตัวต่อตัวมีแชทแบบเดียวกับห้องทีม + ลากย้ายข้อความ
+eq('1:1: chat panel beside stage', [await pg.locator('#rtcView .rtc-main #roomChat #rcIn').count(), await pg.locator('#rtcView [data-rcx="chat"].on').count()], [1, 1]);
+await pg.fill('#rcIn', 'ตรงนี้ใช่ไหม'); await pg.press('#rcIn', 'Enter'); await pg.waitForTimeout(150);
+await pg.screenshot({ path: new URL('out/v2125-1to1.png', import.meta.url).pathname });
+eq('1:1: chat sent over data channel', await pg.evaluate(() => window.__s1.some(m => m.t === 'rc' && m.m.t === 'msg' && m.m.text === 'ตรงนี้ใช่ไหม')), true);
+await pg.click('#roomChat [data-rcx="rx"][data-v="👍"]'); await pg.waitForTimeout(150);
+eq('1:1: reaction logged', await pg.locator('#rcList .rc-m.big').count(), 1);
+await pg.evaluate(() => { const s1 = window.__s1; KiwNgan.rtcDcMsg && 0; const ev = { data: JSON.stringify({ t: 'rc', m: { id: 'p1', t: 'msg', from: 'ฝน', text: 'ใช่ครับ', at: Date.now() } }) }; KiwNgan.R.dc.onmessage ? KiwNgan.R.dc.onmessage(ev) : KiwNgan.rcIn(JSON.parse(ev.data).m, 'ฝน'); });
+await pg.waitForTimeout(150);
+eq('1:1: peer message shown', await pg.locator('#rcList .rc-m:not(.me) p').last().innerText().catch(() => ''), 'ใช่ครับ');
+await pg.click('#roomChat [data-rcx="chat"]'); await pg.waitForTimeout(150);
+eq('1:1: chat can be hidden', await pg.locator('#roomChat').count(), 0);
+await pg.evaluate(() => KiwNgan.rcIn({ id: 'p2', t: 'msg', from: 'ฝน', text: 'อีกข้อความ', at: Date.now() }, 'ฝน')); await pg.waitForTimeout(150);
+eq('1:1: unread badge', await pg.locator('#rtcView [data-rcx="chat"] .rc-badge').innerText().catch(() => ''), '1');
+// ข้อความบนจอ: วาง แล้วลากย้าย
+await pg.click(IB + ' [data-v="text"]'); await pg.waitForTimeout(80);
+const ib = await pg.locator('#rtcInk').boundingBox();
+await pg.mouse.click(ib.x + ib.width * .3, ib.y + ib.height * .3); await pg.waitForTimeout(120);
+await pg.keyboard.type('ย้ายได้'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(150);
+const t0 = await pg.evaluate(() => KiwNgan.R.ink.strokes.find(s => s.k === 'text').pts[0]);
+await pg.mouse.move(ib.x + ib.width * .3 + 8, ib.y + ib.height * .3 + 8); await pg.mouse.down();
+for (let i = 1; i <= 6; i++) { await pg.mouse.move(ib.x + ib.width * (.3 + i * .05) + 8, ib.y + ib.height * (.3 + i * .04) + 8); await pg.waitForTimeout(40); }
+await pg.mouse.up(); await pg.waitForTimeout(150);
+const t1 = await pg.evaluate(() => KiwNgan.R.ink.strokes.find(s => s.k === 'text').pts[0]);
+eq('1:1: text dragged (moved, no new box)', [Math.abs(t1[0] - t0[0] - .3) < .03, Math.abs(t1[1] - t0[1] - .24) < .03, await pg.locator('#inkTxt').count(), await pg.evaluate(() => KiwNgan.R.ink.strokes.filter(s => s.k === 'text').length)], [true, true, 0, 1]);
+eq('1:1: move sent to peer', await pg.evaluate(() => window.__s1.some(m => m.t === 'mv')), true);
 console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.join(' | ') || 'none');
 await b.close(); srv.close(); if (bad || errs.length) process.exit(1);

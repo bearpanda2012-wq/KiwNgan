@@ -42,6 +42,12 @@ await pg.mouse.click(bx.x + bx.width * .2, bx.y + bx.height * .2); await pg.wait
 eq('text box appears', await pg.locator('#inkTxt').count(), 1);
 await pg.keyboard.type('ตรงนี้แก้'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(200);
 eq('text stroke on board + sent', [await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.filter(s => s.k === 'text' && s.tx === 'ตรงนี้แก้').length), await pg.evaluate(() => window.__sent['ฝน'].some(m => m.t === 'b' && m.k === 'text' && m.tx === 'ตรงนี้แก้'))], [1, true]);
+{ const t0 = await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.find(s => s.k === 'text').pts[0]);
+  await pg.mouse.move(bx.x + bx.width * .2 + 6, bx.y + bx.height * .2 + 6); await pg.mouse.down();
+  for (let i = 1; i <= 5; i++) { await pg.mouse.move(bx.x + bx.width * (.2 + i * .06) + 6, bx.y + bx.height * .2 + 6); await pg.waitForTimeout(40); }
+  await pg.mouse.up(); await pg.waitForTimeout(150);
+  const t1 = await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.find(s => s.k === 'text').pts[0]);
+  eq('room: text dragged + mv sent', [Math.abs(t1[0] - t0[0] - .3) < .03, await pg.evaluate(() => window.__sent['ต้น'].some(m => m.t === 'mv'))], [true, true]); }
 await pg.click('#roomInkBar [data-room="undo"]'); await pg.waitForTimeout(150);
 eq('undo removes the text', await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.filter(s => s.k === 'text').length), 0);
 await pg.click('#roomInkBar [data-v="pen"]'); await pg.waitForTimeout(100);

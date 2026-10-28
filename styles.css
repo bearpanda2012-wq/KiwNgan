@@ -6435,3 +6435,10 @@ button.bn-row{grid-template-columns:minmax(150px,215px) 1fr 70px minmax(80px,aut
 .rc-lb img{max-width:100%;max-height:calc(100% - 70px);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .rc-lb-b{display:flex;flex-wrap:wrap;align-items:center;gap:10px;color:#e9eef3;font-size:13.5px}
 .rc-form{align-items:stretch}
+/* v2.125: แชทตอนแชร์จอตัวต่อตัว (เหมือนห้องทีม) · ลากย้ายข้อความบนจอ */
+.rtc-main{flex:1;min-height:0;display:flex}
+.rtc-main>.rtc-stage{flex:1;min-width:0}
+.room-chat.rc-dock{position:fixed;right:16px;bottom:16px;width:min(360px,calc(100vw - 32px));height:min(480px,calc(100vh - 120px));z-index:130;border:1px solid rgba(255,255,255,.1);border-radius:18px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5);color:#e9eef3}
+#rtcInk.over-text,#roomInk.over-text,.rtc-peek canvas.over-text{cursor:move}
+#rtcInk.moving,#roomInk.moving{cursor:grabbing}
+@media (max-width:760px){.rtc-main{position:relative}.rtc-main>.room-chat{position:absolute;left:0;right:0;bottom:0;width:auto;height:min(62%,460px);border-left:0;border-top:1px solid rgba(255,255,255,.1);border-radius:18px 18px 0 0;box-shadow:0 -18px 40px rgba(0,0,0,.45);z-index:3}}
