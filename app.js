@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.125.0';
+const APP_VERSION = '2.126.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3452,14 +3452,15 @@ function inkHit(strokes, q, P, base) {
   return null;
 }
 /* เครื่องมือ "ข้อความ": แตะจุดบนจอ → ช่องพิมพ์ลอยตรงนั้น → Enter = วางข้อความ · Esc = ยกเลิก (ใช้ได้ทั้งในหน้าและหน้าต่างลอย) */
-function inkTextAsk(e, color, done) {
+function inkTextAsk(e, color, done, init) {
   const doc = (e.target && e.target.ownerDocument) || document, old = doc.getElementById('inkTxt'); if (old) old.remove();
   const inp = doc.createElement('input'); inp.id = 'inkTxt'; inp.className = 'ink-txt'; inp.maxLength = 200; inp.placeholder = 'พิมพ์ข้อความ แล้วกด Enter';
   inp.style.cssText = 'position:fixed;z-index:2147483000;left:' + Math.min(e.clientX, (doc.defaultView || window).innerWidth - 240) + 'px;top:' + (e.clientY - 4) + 'px;min-width:220px;padding:6px 10px;border-radius:10px;border:2px solid ' + color + ';background:rgba(15,21,27,.92);color:#fff;font:600 16px Prompt,sans-serif;outline:none;box-shadow:0 8px 24px rgba(0,0,0,.4)';
-  let fin = false; const end = ok => { if (fin) return; fin = true; const v = inp.value.trim(); inp.remove(); if (ok && v) done(v); };
+  if (init != null) inp.value = init;
+  let fin = false; const end = ok => { if (fin) return; fin = true; const v = inp.value.trim(); inp.remove(); if (ok && (v || init != null) && v !== init) done(v); };
   inp.addEventListener('keydown', k => { k.stopPropagation(); if (k.key === 'Enter') { k.preventDefault(); end(true); } else if (k.key === 'Escape') { k.preventDefault(); end(false); } });
   inp.addEventListener('blur', () => end(true));
-  doc.body.appendChild(inp); setTimeout(() => inp.focus(), 0);
+  doc.body.appendChild(inp); setTimeout(() => { inp.focus(); if (init != null) inp.select(); }, 0);
 }
 /* แถบเครื่องมือ (หน้าเดียวกันทั้งโทรตัวต่อตัวและห้องทีม) · at = ชื่อ data-* ของแต่ละที่ · extra = ปุ่มท้ายแถบ */
 function inkKitHtml(st, at, extra) {
@@ -4312,13 +4313,17 @@ function rinkApply(m, who) {
       const key = (m.a === S.me ? '' : String(m.a || '')) + '|' + String(m.id), st = k.strokes.find(x => x.id === key);
       if (st && st.k === 'text') st.pts[0] = [inkN(m.x), inkN(m.y)]; break;
     }
+    case 'tx': {   // แก้ข้อความ (ของใครก็ได้)
+      const key = (m.a === S.me ? '' : String(m.a || '')) + '|' + String(m.id), st = k.strokes.find(x => x.id === key);
+      if (st && st.k === 'text') st.tx = inkTx(m.tx); break;
+    }
     case 'del': {   // ยางลบ: ลบเส้นของใครก็ได้ · m.a = เจ้าของเส้น (ชื่อจริง) → ที่เครื่องเจ้าของเส้น คีย์คือ ''
       const key = (m.a === S.me ? '' : String(m.a || '')) + '|' + String(m.id), i = k.strokes.findIndex(x => x.id === key);
       if (i >= 0) k.strokes.splice(i, 1); break;
     }
     default: return;
   }
-  if (/^(e|clr|undo|del)$/.test(m.t)) rinkBarSync(true);
+  if (/^(e|clr|undo|del|tx)$/.test(m.t)) rinkBarSync(true);
   rinkKick();
 }
 function rinkUndo() {
@@ -4407,7 +4412,7 @@ function rinkHook(cv, vidOf, ownerOf) {
     e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {}
     if (V.tool === 'erase') { V.erasing = 1; return rinkErase(e, cv, vidOf(), ownerOf()); }
     if (V.tool === 'text') { const o0 = ownerOf(), hit = V.ink[o0] && inkTextAt(V.ink[o0].strokes, e, cv, vidOf());
-      if (hit) { V.tdrag = { o: o0, a: hit.a || S.me, id: hit.id.slice(hit.id.indexOf('|') + 1), dx: p.x - hit.pts[0][0], dy: p.y - hit.pts[0][1] }; cv.classList.add('moving'); return; }   // แตะที่ข้อความเดิม = ลากย้าย
+      if (hit) { V.tdrag = { o: o0, a: hit.a || S.me, id: hit.id.slice(hit.id.indexOf('|') + 1), dx: p.x - hit.pts[0][0], dy: p.y - hit.pts[0][1], cx: e.clientX, cy: e.clientY, moved: false, st: hit }; cv.classList.add('moving'); return; }   // แตะที่ข้อความเดิม = ลากย้าย
       const o = ownerOf(), c = V.color, w = V.size; return inkTextAsk(e, c, tx => { const id = uid('k'); rinkSendAll({ t: 'b', s: o, id: id, c: c, l: 0, k: 'text', w: w, x: p.x, y: p.y, tx: tx }); rinkSendAll({ t: 'e', s: o, id: id }); rinkBarSync(); }); }
     V.drawId = uid('k'); V.drawOwner = ownerOf();
     rinkSendAll({ t: 'b', s: V.drawOwner, id: V.drawId, c: V.color, l: V.tool === 'laser' ? 1 : 0, k: V.tool, w: V.size, x: p.x, y: p.y });
@@ -4415,14 +4420,16 @@ function rinkHook(cv, vidOf, ownerOf) {
   cv.addEventListener('pointermove', e => {
     if (!V.tool) return; const p = rinkXY(e, cv, vidOf());
     if (V.tool === 'erase') { if (V.erasing) rinkErase(e, cv, vidOf(), ownerOf()); return; }
-    if (V.tdrag) { const now = performance.now(); if (now - inkMvT < 30) return; inkMvT = now; const d = V.tdrag; return rinkSendAll({ t: 'mv', s: d.o, a: d.a, id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); }
+    if (V.tdrag) { const d = V.tdrag; if (!d.moved && Math.hypot(e.clientX - d.cx, e.clientY - d.cy) < 5) return; d.moved = true; const now = performance.now(); if (now - inkMvT < 30) return; inkMvT = now; return rinkSendAll({ t: 'mv', s: d.o, a: d.a, id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); }
     if (V.tool === 'text' && !V.drawId) { const o = ownerOf(); cv.classList.toggle('over-text', !!(V.ink[o] && inkTextAt(V.ink[o].strokes, e, cv, vidOf()))); }
     if (V.drawId) return rinkSendAll({ t: 'm', s: V.drawOwner, id: V.drawId, x: p.x, y: p.y });
     if (p.out) return;
     const now = performance.now(); if (now - rinkLastP < 33) return; rinkLastP = now;
     rinkSendAll({ t: 'p', s: ownerOf(), x: p.x, y: p.y, c: V.color });
   });
-  const up = e => { V.erasing = 0; if (V.tdrag) { const d = V.tdrag; V.tdrag = null; cv.classList.remove('moving'); if (e && e.clientX != null) { const p = rinkXY(e, cv, vidOf()); rinkSendAll({ t: 'mv', s: d.o, a: d.a, id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); } return; } if (!V.drawId) return; const id = V.drawId; V.drawId = ''; rinkSendAll({ t: 'e', s: V.drawOwner, id: id }); rinkBarSync(); };
+  const up = e => { V.erasing = 0; if (V.tdrag) { const d = V.tdrag; V.tdrag = null; cv.classList.remove('moving');
+      if (!d.moved) return inkTextAsk(e, d.st.c, tx => { if (!tx) rinkSendAll({ t: 'del', s: d.o, a: d.a, id: d.id }); else rinkSendAll({ t: 'tx', s: d.o, a: d.a, id: d.id, tx: tx }); rinkBarSync(); }, d.st.tx);   // แตะข้อความ (ไม่ลาก) = แก้ไข · ลบหมด = ลบข้อความ
+      if (e && e.clientX != null) { const p = rinkXY(e, cv, vidOf()); rinkSendAll({ t: 'mv', s: d.o, a: d.a, id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); } return; } if (!V.drawId) return; const id = V.drawId; V.drawId = ''; rinkSendAll({ t: 'e', s: V.drawOwner, id: id }); rinkBarSync(); };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   cv.addEventListener('pointerleave', () => { if (!V.drawId && V.tool && V.tool !== 'erase') rinkSendAll({ t: 'pl', s: ownerOf() }); });
 }
@@ -4716,6 +4723,7 @@ function inkApply(m, remote) {
     }
     case 'del': { const i = k.strokes.findIndex(x => x.id === String(m.id)); if (i >= 0) k.strokes.splice(i, 1); break; }
     case 'mv': { const st = k.strokes.find(x => x.id === String(m.id)); if (st && st.k === 'text') st.pts[0] = [inkN(m.x), inkN(m.y)]; break; }   // ย้ายข้อความ
+    case 'tx': { const st = k.strokes.find(x => x.id === String(m.id)); if (st && st.k === 'text') st.tx = inkTx(m.tx); break; }   // แก้ข้อความ
     default: return;
   }
   if (remote && R.role === 'host' && (m.t === 'p' || m.t === 'b')) inkNudge();
@@ -4843,7 +4851,7 @@ document.addEventListener('pointerdown', e => {
   const p = inkXY(e); if (p.out) return;
   e.preventDefault(); try { e.target.setPointerCapture(e.pointerId); } catch (x) {}
   if (R.tool === 'erase') { R.erasing = 1; return inkErase(e, e.target, $('#rtcVideo')); }
-  if (R.tool === 'text') { const hit = inkTextAt(R.ink.strokes, e, e.target, $('#rtcVideo')); if (hit) { R.tdrag = { id: hit.id, dx: p.x - hit.pts[0][0], dy: p.y - hit.pts[0][1] }; e.target.classList.add('moving'); return; }
+  if (R.tool === 'text') { const hit = inkTextAt(R.ink.strokes, e, e.target, $('#rtcVideo')); if (hit) { R.tdrag = { id: hit.id, dx: p.x - hit.pts[0][0], dy: p.y - hit.pts[0][1], cx: e.clientX, cy: e.clientY, moved: false, st: hit }; e.target.classList.add('moving'); return; }
     const c = R.color, w = R.size; return inkTextAsk(e, c, tx => { const id = uid('k'); inkSendAll({ t: 'b', id: id, c: c, l: 0, k: 'text', w: w, x: p.x, y: p.y, tx: tx }); inkSendAll({ t: 'e', id: id }); inkBarSync(); }); }
   R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, k: R.tool, w: R.size, x: p.x, y: p.y });
 });
@@ -4851,14 +4859,15 @@ document.addEventListener('pointermove', e => {
   if (!e.target || e.target.id !== 'rtcInk' || !R.tool || R.state !== 'live') return;
   const p = inkXY(e);
   if (R.tool === 'erase') { if (R.erasing) inkErase(e, e.target, $('#rtcVideo')); return; }
-  if (R.tdrag) { const now = performance.now(); if (now - inkMvT < 30) return; inkMvT = now; return inkSendAll({ t: 'mv', id: R.tdrag.id, x: inkN(p.x - R.tdrag.dx), y: inkN(p.y - R.tdrag.dy) }); }
+  if (R.tdrag) { const d = R.tdrag; if (!d.moved && Math.hypot(e.clientX - d.cx, e.clientY - d.cy) < 5) return; d.moved = true; const now = performance.now(); if (now - inkMvT < 30) return; inkMvT = now; return inkSendAll({ t: 'mv', id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); }
   if (R.tool === 'text' && !R.drawId) e.target.classList.toggle('over-text', !!inkTextAt(R.ink.strokes, e, e.target, $('#rtcVideo')));
   if (R.drawId) return inkSendAll({ t: 'm', id: R.drawId, x: p.x, y: p.y });
   if (p.out) return;
   const now = performance.now(); if (now - inkLastP < 33) return; inkLastP = now;
   inkSendAll({ t: 'p', x: p.x, y: p.y, c: R.color });
 });
-function inkUp(e) { R.erasing = 0; if (R.tdrag) { const d = R.tdrag; R.tdrag = null; const cv = $('#rtcInk'); if (cv) cv.classList.remove('moving'); if (cv && e && e.clientX != null) { const p = inkXY(e); inkSendAll({ t: 'mv', id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); } return; } if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); inkBarSync(); }
+function inkEditText(e, d) { inkTextAsk(e, d.st.c, tx => { inkSendAll(tx ? { t: 'tx', id: d.id, tx: tx } : { t: 'del', id: d.id }); if (R.role === 'host') renderPeek(); else inkBarSync(); }, d.st.tx); }
+function inkUp(e) { R.erasing = 0; if (R.tdrag) { const d = R.tdrag; if (d.cv) return; R.tdrag = null; const cv = $('#rtcInk'); if (cv) cv.classList.remove('moving'); if (!d.moved) return inkEditText(e, d); if (cv && e && e.clientX != null) { const p = inkXY(e); inkSendAll({ t: 'mv', id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); } return; } if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); inkBarSync(); }
 document.addEventListener('pointerup', inkUp); document.addEventListener('pointercancel', inkUp);
 document.addEventListener('pointerout', e => { if (e.target && e.target.id === 'rtcInk' && !R.drawId && R.tool && R.tool !== 'erase') inkSendAll({ t: 'pl' }); });
 document.addEventListener('keydown', e => {
@@ -4907,9 +4916,9 @@ function renderPeek() {
     {   // คนแชร์วาด/ชี้บนภาพจอตัวเองได้ด้วย อีกฝ่ายเห็นบนภาพที่เขาดูอยู่
       const cv = el.querySelector('canvas');
       const pv = () => { const v = el.querySelector('video'); return v && v.videoWidth ? v : inkDims(); };
-      cv.addEventListener('pointerdown', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (p.out) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} if (R.tool === 'erase') { R.erasing = 1; return inkErase(e, cv, pv()); } if (R.tool === 'text') { const hit = inkTextAt(R.ink.strokes, e, cv, pv()); if (hit) { R.tdrag = { id: hit.id, dx: p.x - hit.pts[0][0], dy: p.y - hit.pts[0][1], cv: cv }; return; } const c = R.color, w = R.size; return inkTextAsk(e, c, tx => { const id = uid('k'); inkSendAll({ t: 'b', id: id, c: c, l: 0, k: 'text', w: w, x: p.x, y: p.y, tx: tx }); inkSendAll({ t: 'e', id: id }); renderPeek(); }); } R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, k: R.tool, w: R.size, x: p.x, y: p.y }); });
-      cv.addEventListener('pointermove', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (R.tool === 'erase') { if (R.erasing) inkErase(e, cv, pv()); return; } if (R.tdrag) { const now = performance.now(); if (now - inkMvT < 30) return; inkMvT = now; return inkSendAll({ t: 'mv', id: R.tdrag.id, x: inkN(p.x - R.tdrag.dx), y: inkN(p.y - R.tdrag.dy) }); } if (R.drawId) return inkSendAll({ t: 'm', id: R.drawId, x: p.x, y: p.y }); if (p.out) return; const now = performance.now(); if (now - inkLastP < 33) return; inkLastP = now; inkSendAll({ t: 'p', x: p.x, y: p.y, c: R.color }); });
-      const up = e => { const er = R.erasing; R.erasing = 0; if (er) return renderPeek(); if (R.tdrag) { const d = R.tdrag; R.tdrag = null; if (e && e.clientX != null) { const p = inkXY(e); inkSendAll({ t: 'mv', id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); } return; } if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); renderPeek(); };
+      cv.addEventListener('pointerdown', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (p.out) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} if (R.tool === 'erase') { R.erasing = 1; return inkErase(e, cv, pv()); } if (R.tool === 'text') { const hit = inkTextAt(R.ink.strokes, e, cv, pv()); if (hit) { R.tdrag = { id: hit.id, dx: p.x - hit.pts[0][0], dy: p.y - hit.pts[0][1], cv: cv, cx: e.clientX, cy: e.clientY, moved: false, st: hit }; return; } const c = R.color, w = R.size; return inkTextAsk(e, c, tx => { const id = uid('k'); inkSendAll({ t: 'b', id: id, c: c, l: 0, k: 'text', w: w, x: p.x, y: p.y, tx: tx }); inkSendAll({ t: 'e', id: id }); renderPeek(); }); } R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, k: R.tool, w: R.size, x: p.x, y: p.y }); });
+      cv.addEventListener('pointermove', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (R.tool === 'erase') { if (R.erasing) inkErase(e, cv, pv()); return; } if (R.tdrag) { const d = R.tdrag; if (!d.moved && Math.hypot(e.clientX - d.cx, e.clientY - d.cy) < 5) return; d.moved = true; const now = performance.now(); if (now - inkMvT < 30) return; inkMvT = now; return inkSendAll({ t: 'mv', id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); } if (R.drawId) return inkSendAll({ t: 'm', id: R.drawId, x: p.x, y: p.y }); if (p.out) return; const now = performance.now(); if (now - inkLastP < 33) return; inkLastP = now; inkSendAll({ t: 'p', x: p.x, y: p.y, c: R.color }); });
+      const up = e => { const er = R.erasing; R.erasing = 0; if (er) return renderPeek(); if (R.tdrag) { const d = R.tdrag; R.tdrag = null; if (!d.moved) return inkEditText(e, d); if (e && e.clientX != null) { const p = inkXY(e); inkSendAll({ t: 'mv', id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); } return; } if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); renderPeek(); };
       cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
       cv.addEventListener('pointerleave', () => { if (!R.drawId && R.tool && R.tool !== 'erase') inkSendAll({ t: 'pl' }); });
     }

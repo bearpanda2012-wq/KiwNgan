@@ -48,6 +48,10 @@ eq('text stroke on board + sent', [await pg.evaluate(() => KiwNgan.V.ink['ฝน
   await pg.mouse.up(); await pg.waitForTimeout(150);
   const t1 = await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.find(s => s.k === 'text').pts[0]);
   eq('room: text dragged + mv sent', [Math.abs(t1[0] - t0[0] - .3) < .03, await pg.evaluate(() => window.__sent['ต้น'].some(m => m.t === 'mv'))], [true, true]); }
+{ await pg.mouse.click(bx.x + bx.width * .5 + 8, bx.y + bx.height * .2 + 8); await pg.waitForTimeout(150);   // ตำแหน่งข้อความหลังลาก (+0.3 ของความกว้าง)
+  eq('room: tap text opens editor with old text', await pg.inputValue('#inkTxt').catch(() => null), 'ตรงนี้แก้');
+  await pg.keyboard.press('Control+a'); await pg.keyboard.type('แก้แล้ว'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(150);
+  eq('room: text edited + sent', [await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.filter(s => s.k === 'text').map(s => s.tx)), await pg.evaluate(() => window.__sent['ต้น'].some(m => m.t === 'tx' && m.tx === 'แก้แล้ว'))], [['แก้แล้ว'], true]); }
 await pg.click('#roomInkBar [data-room="undo"]'); await pg.waitForTimeout(150);
 eq('undo removes the text', await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.filter(s => s.k === 'text').length), 0);
 await pg.click('#roomInkBar [data-v="pen"]'); await pg.waitForTimeout(100);

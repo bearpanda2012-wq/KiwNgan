@@ -108,6 +108,11 @@ for (let i = 1; i <= 6; i++) { await pg.mouse.move(ib.x + ib.width * (.3 + i * .
 await pg.mouse.up(); await pg.waitForTimeout(150);
 const t1 = await pg.evaluate(() => KiwNgan.R.ink.strokes.find(s => s.k === 'text').pts[0]);
 eq('1:1: text dragged (moved, no new box)', [Math.abs(t1[0] - t0[0] - .3) < .03, Math.abs(t1[1] - t0[1] - .24) < .03, await pg.locator('#inkTxt').count(), await pg.evaluate(() => KiwNgan.R.ink.strokes.filter(s => s.k === 'text').length)], [true, true, 0, 1]);
+{ const t = await pg.evaluate(() => KiwNgan.R.ink.strokes.find(s => s.k === 'text').pts[0]);
+  await pg.mouse.click(ib.x + ib.width * t[0] + 8, ib.y + ib.height * t[1] + 8); await pg.waitForTimeout(150);
+  eq('1:1: tap text opens editor', await pg.inputValue('#inkTxt').catch(() => null), 'ย้ายได้');
+  await pg.keyboard.press('Control+a'); await pg.keyboard.press('Backspace'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(150);
+  eq('1:1: clearing text deletes it', [await pg.evaluate(() => KiwNgan.R.ink.strokes.filter(s => s.k === 'text').length), await pg.evaluate(() => window.__s1.some(m => m.t === 'del'))], [0, true]); }
 eq('1:1: move sent to peer', await pg.evaluate(() => window.__s1.some(m => m.t === 'mv')), true);
 console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.join(' | ') || 'none');
 await b.close(); srv.close(); if (bad || errs.length) process.exit(1);
