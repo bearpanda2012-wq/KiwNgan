@@ -52,6 +52,9 @@ eq('text stroke on board + sent', [await pg.evaluate(() => KiwNgan.V.ink['ฝน
   eq('room: tap text opens editor with old text', await pg.inputValue('#inkTxt').catch(() => null), 'ตรงนี้แก้');
   await pg.keyboard.press('Control+a'); await pg.keyboard.type('แก้แล้ว'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(150);
   eq('room: text edited + sent', [await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.filter(s => s.k === 'text').map(s => s.tx)), await pg.evaluate(() => window.__sent['ต้น'].some(m => m.t === 'tx' && m.tx === 'แก้แล้ว'))], [['แก้แล้ว'], true]); }
+{ const id = await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.find(s => s.k === 'text').id.slice(1));
+  await pg.evaluate(id => KiwNgan.rinkRecv(JSON.stringify({ t: 'tx', s: 'ฝน', a: 'แอดมิน', id: id, tx: 'แอบแก้' }), KiwNgan.V.peers['ต้น']), id); await pg.waitForTimeout(100);
+  eq('room: others cannot edit my text', await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.find(s => s.k === 'text').tx), 'แก้แล้ว'); }
 await pg.click('#roomInkBar [data-room="undo"]'); await pg.waitForTimeout(150);
 eq('undo removes the text', await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.filter(s => s.k === 'text').length), 0);
 await pg.click('#roomInkBar [data-v="pen"]'); await pg.waitForTimeout(100);

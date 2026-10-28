@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.126.0';
+const APP_VERSION = '2.127.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -4313,7 +4313,8 @@ function rinkApply(m, who) {
       const key = (m.a === S.me ? '' : String(m.a || '')) + '|' + String(m.id), st = k.strokes.find(x => x.id === key);
       if (st && st.k === 'text') st.pts[0] = [inkN(m.x), inkN(m.y)]; break;
     }
-    case 'tx': {   // แก้ข้อความ (ของใครก็ได้)
+    case 'tx': {   // แก้ข้อความ: เฉพาะเจ้าของข้อความเท่านั้น (v2.127)
+      if ((a || S.me) !== String(m.a || '')) return;
       const key = (m.a === S.me ? '' : String(m.a || '')) + '|' + String(m.id), st = k.strokes.find(x => x.id === key);
       if (st && st.k === 'text') st.tx = inkTx(m.tx); break;
     }
@@ -4428,6 +4429,7 @@ function rinkHook(cv, vidOf, ownerOf) {
     rinkSendAll({ t: 'p', s: ownerOf(), x: p.x, y: p.y, c: V.color });
   });
   const up = e => { V.erasing = 0; if (V.tdrag) { const d = V.tdrag; V.tdrag = null; cv.classList.remove('moving');
+      if (!d.moved && d.st.a) return toast('แก้ได้เฉพาะข้อความของตัวเอง', true);
       if (!d.moved) return inkTextAsk(e, d.st.c, tx => { if (!tx) rinkSendAll({ t: 'del', s: d.o, a: d.a, id: d.id }); else rinkSendAll({ t: 'tx', s: d.o, a: d.a, id: d.id, tx: tx }); rinkBarSync(); }, d.st.tx);   // แตะข้อความ (ไม่ลาก) = แก้ไข · ลบหมด = ลบข้อความ
       if (e && e.clientX != null) { const p = rinkXY(e, cv, vidOf()); rinkSendAll({ t: 'mv', s: d.o, a: d.a, id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); } return; } if (!V.drawId) return; const id = V.drawId; V.drawId = ''; rinkSendAll({ t: 'e', s: V.drawOwner, id: id }); rinkBarSync(); };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
@@ -4723,7 +4725,7 @@ function inkApply(m, remote) {
     }
     case 'del': { const i = k.strokes.findIndex(x => x.id === String(m.id)); if (i >= 0) k.strokes.splice(i, 1); break; }
     case 'mv': { const st = k.strokes.find(x => x.id === String(m.id)); if (st && st.k === 'text') st.pts[0] = [inkN(m.x), inkN(m.y)]; break; }   // ย้ายข้อความ
-    case 'tx': { const st = k.strokes.find(x => x.id === String(m.id)); if (st && st.k === 'text') st.tx = inkTx(m.tx); break; }   // แก้ข้อความ
+    case 'tx': { const st = k.strokes.find(x => x.id === String(m.id)); if (st && st.k === 'text' && st.r === !!remote) st.tx = inkTx(m.tx); break; }   // แก้ข้อความ: เฉพาะเจ้าของ
     default: return;
   }
   if (remote && R.role === 'host' && (m.t === 'p' || m.t === 'b')) inkNudge();
@@ -4866,7 +4868,7 @@ document.addEventListener('pointermove', e => {
   const now = performance.now(); if (now - inkLastP < 33) return; inkLastP = now;
   inkSendAll({ t: 'p', x: p.x, y: p.y, c: R.color });
 });
-function inkEditText(e, d) { inkTextAsk(e, d.st.c, tx => { inkSendAll(tx ? { t: 'tx', id: d.id, tx: tx } : { t: 'del', id: d.id }); if (R.role === 'host') renderPeek(); else inkBarSync(); }, d.st.tx); }
+function inkEditText(e, d) { if (d.st.r) return toast('แก้ได้เฉพาะข้อความของตัวเอง', true); inkTextAsk(e, d.st.c, tx => { inkSendAll(tx ? { t: 'tx', id: d.id, tx: tx } : { t: 'del', id: d.id }); if (R.role === 'host') renderPeek(); else inkBarSync(); }, d.st.tx); }
 function inkUp(e) { R.erasing = 0; if (R.tdrag) { const d = R.tdrag; if (d.cv) return; R.tdrag = null; const cv = $('#rtcInk'); if (cv) cv.classList.remove('moving'); if (!d.moved) return inkEditText(e, d); if (cv && e && e.clientX != null) { const p = inkXY(e); inkSendAll({ t: 'mv', id: d.id, x: inkN(p.x - d.dx), y: inkN(p.y - d.dy) }); } return; } if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); inkBarSync(); }
 document.addEventListener('pointerup', inkUp); document.addEventListener('pointercancel', inkUp);
 document.addEventListener('pointerout', e => { if (e.target && e.target.id === 'rtcInk' && !R.drawId && R.tool && R.tool !== 'erase') inkSendAll({ t: 'pl' }); });
