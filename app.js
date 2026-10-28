@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.121.0';
+const APP_VERSION = '2.122.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1020,6 +1020,7 @@ async function rtIn(p) {
   if (o.k === 'sig' && o.g) {
     const to = o.g.to, mine = to === S.me || ((to === 'admin' || to === ADMIN_LABEL) && isAdmin());
     if (mine && o.g.from !== S.me) rtcOnSigOnce(o.g);
+  } else if (o.k === 'room') { if (o.op === 'rc') { if (Array.isArray(o.to) && o.to.indexOf(S.me) >= 0) rcIn(o.rc, o.rc && o.rc.from); } else roomPresenceIn(o);
   } else if (o.k === 'g') { gameIn(o);
   } else if (o.k === 'chg') {
     if (o.what === 'msg') { if (M.loaded) pollMessages(); }
@@ -3625,7 +3626,7 @@ function rtcIce(pc) {
     if (pc.iceGatheringState === 'complete') return res();
     let done = false, soon = null;
     const fin = () => { if (done) return; done = true; clearTimeout(cap); clearTimeout(soon); res(); };
-    const cap = setTimeout(fin, 1800);
+    const cap = setTimeout(fin, 1200);   // ไม่รอเก็บ ICE นาน (เดิม 1.8 วิ) → ต่อสายเร็วขึ้น
     pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') fin(); });
     pc.addEventListener('icecandidate', e => { if (!e.candidate) return fin(); if (/ typ (srflx|relay) /.test(e.candidate.candidate) && !soon) soon = setTimeout(fin, 250); });
   });
@@ -3801,7 +3802,7 @@ function rtcStrip() {
 /* ============ ห้องเสียงทีม (แบบ Discord) ============
    ทุกคนในห้องต่อตรงหากัน (mesh) — เหมาะกับทีมเล็ก ~2–8 คน
    คนที่เข้าห้องทีหลังเป็นฝ่ายโทรหาคนที่อยู่ก่อน · เสียงและจอวิ่งตรงระหว่างเครื่อง ฐานข้อมูลเก็บแค่ใครอยู่ในห้อง */
-const V = { on: false, joining: false, since: 0, peers: {}, mic: null, muted: false, deaf: false, share: null, shareKind: '', members: [], beatT: null, view: false, focus: '', an: {}, speakT: null, known: null, speaking: {}, ink: {}, tool: '', color: INK_C0, size: INK_W0, drawId: '', pip: null, inkRaf: 0, nudgeT: 0 };
+const V = { on: false, joining: false, since: 0, peers: {}, mic: null, muted: false, deaf: false, share: null, shareKind: '', members: [], beatT: null, view: false, focus: '', an: {}, speakT: null, known: null, speaking: {}, ink: {}, tool: '', color: INK_C0, size: INK_W0, drawId: '', pip: null, inkRaf: 0, nudgeT: 0, chat: [], chatOpen: true, unread: 0, hand: false, hands: {}, q: {}, qT: 0 };
 const roomKey = m => (m.admin && !isAdmin()) ? 'admin' : m.name;
 const roomIsMe = m => m.name === S.me && (!m.admin || isAdmin());
 const roomMine = () => V.members.find(roomIsMe);
@@ -3834,19 +3835,23 @@ async function roomJoin() {
   speakStart(); if (V.mic) speakWatch('__me', V.mic);
   roomTone(true);
   if (mode() === 'demo') { V.members = [{ name: S.me, mic: !V.muted, share: '', since: Date.now(), admin: isAdmin() }]; toast('โหมดทดลอง: ไม่มีคนอื่นในห้อง — ลองกดปุ่มต่างๆ ได้'); renderRoom(); return; }
+  roomPresence('join');   // บอกคนในห้องทันทีผ่านช่องด่วน — คนที่อยู่ก่อนตอบกลับ "here" แล้วเราเริ่มต่อสายได้เลยไม่ต้องรอเซิร์ฟเวอร์
   try { const r = await api().room({ op: 'join', mic: !V.muted }); roomOnPoll(r.room); }
   catch (e) { toast('เข้าห้องไม่สำเร็จ: ' + e.message, true); return roomLeave(true); }
   clearInterval(V.beatT); V.beatT = setInterval(roomBeat, 10000);
+  clearInterval(V.qT); V.qT = setInterval(roomQuality, 4000);
   rtcLoop();
 }
 function roomBeat() { if (!V.on || mode() === 'demo') return; api().room({ op: 'beat', mic: !V.muted && !!V.mic, share: V.shareKind }).then(r => roomOnPoll(r.room)).catch(() => {}); }
 function roomLeave(quiet) {
   if (!V.on) return;
+  roomPresence('leave');
   Object.keys(V.peers).forEach(k => { rtcSig(k, 'room', 'rbye', {}).catch(() => {}); roomDrop(k, true); });
   [V.mic, V.share].forEach(st => { if (st) st.getTracks().forEach(t => { t.onended = null; t.stop(); }); });
   clearInterval(V.beatT); speakStop();
   rinkPipClose();
-  Object.assign(V, { on: false, mic: null, share: null, shareKind: '', muted: false, deaf: false, view: false, focus: '', peers: {}, speaking: {}, ink: {}, tool: '' });
+  clearInterval(V.qT);
+  Object.assign(V, { on: false, mic: null, share: null, shareKind: '', muted: false, deaf: false, view: false, focus: '', peers: {}, speaking: {}, ink: {}, tool: '', chat: [], unread: 0, hand: false, hands: {}, q: {} });
   if (mode() !== 'demo') api().room({ op: 'leave' }).then(r => roomOnPoll(r.room)).catch(() => {});
   else V.members = [];
   if (!quiet) roomTone(false);
@@ -3864,9 +3869,14 @@ function roomPc(key, name) {
     const dc = pc.createDataChannel('rink', { negotiated: true, id: 7 });
     dc.onmessage = e => { if (V.peers[key] === P) rinkRecv(e.data, P); };
     P.dc = dc;
+    const cc = pc.createDataChannel('rchat', { negotiated: true, id: 8 });   // แชทในห้อง · อีโมจิ · ยกมือ (ส่งตรง ไม่ผ่านเซิร์ฟเวอร์)
+    cc.onmessage = e => { if (V.peers[key] === P) { let m; try { m = JSON.parse(e.data); } catch (x) { return; } rcIn(m, P.name); } };
+    cc.onopen = () => { if (V.peers[key] !== P) return; if (P.role === 'ans' && V.chat.length) { try { cc.send(JSON.stringify({ t: 'hist', a: V.chat.slice(-40) })); } catch (x) {} } if (V.hand) { try { cc.send(JSON.stringify({ t: 'hand', on: true, from: S.me })); } catch (x) {} } };
+    P.cc = cc;
   } catch (e) {}
   pc.ontrack = e => {
     if (V.peers[key] !== P) return;
+    try { if ('playoutDelayHint' in e.receiver) e.receiver.playoutDelayHint = 0; if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0; } catch (x) {}   // ลดดีเลย์: เล่นทันทีไม่พักบัฟเฟอร์
     if (e.track.kind === 'audio') {
       const a = document.createElement('audio'); a.autoplay = true; a.setAttribute('playsinline', ''); a.style.display = 'none';
       a.srcObject = new MediaStream([e.track]); a.muted = V.deaf; document.body.appendChild(a); a.play().catch(() => {});
@@ -3892,6 +3902,13 @@ async function roomTracks(P) {
   P.as = a.sender; P.vs = v.sender;
   const mt = V.mic && V.mic.getAudioTracks()[0], st = V.share && V.share.getVideoTracks()[0];
   try { await a.sender.replaceTrack(mt || null); await v.sender.replaceTrack(st || null); } catch (e) {}
+  roomVParams(P);
+}
+/* จอที่แชร์: คุมเฟรมเรต/บิตเรต ให้ภาพลื่น ไม่ค้างสะสมดีเลย์ (เน็ตช้า = ลดความคมก่อน ไม่ลดความลื่น) */
+function roomVParams(P) {
+  try { const sd = P.vs; if (!sd || !sd.getParameters) return; const pr = sd.getParameters(); if (!pr.encodings || !pr.encodings.length) return;
+    pr.encodings[0].maxFramerate = V.shareKind === 'camera' ? 24 : 15; pr.encodings[0].maxBitrate = V.shareKind === 'camera' ? 1200000 : 2500000;
+    pr.degradationPreference = 'maintain-framerate'; sd.setParameters(pr).catch(() => {}); } catch (e) {}
 }
 async function roomOffer(key, name) {
   const P = roomPc(key, name); P.role = 'off';
@@ -3943,7 +3960,7 @@ async function roomMic() {
   } else V.muted = !V.muted;
   if (!V.muted && V.deaf) roomDeaf(false);
   V.mic.getAudioTracks().forEach(t => { t.enabled = !V.muted; });
-  roomBeat(); renderRoom();
+  roomBeat(); roomPresence('st'); renderRoom();
 }
 function roomDeaf(on) {
   V.deaf = on == null ? !V.deaf : on;
@@ -3960,8 +3977,8 @@ async function roomShare() {
   const tr = st.getVideoTracks()[0]; try { tr.contentHint = kind === 'screen' ? 'detail' : 'motion'; } catch (e) {}
   tr.onended = () => roomUnshare();
   V.share = st; V.shareKind = kind; V.focus = '__me'; V.view = true;
-  Object.values(V.peers).forEach(P => { if (P.vs) P.vs.replaceTrack(tr).catch(() => {}); });
-  roomBeat(); renderRoom(); toast(kind === 'screen' ? 'กำลังแชร์จอให้ทั้งห้อง' : 'กำลังแชร์กล้องให้ทั้งห้อง');
+  Object.values(V.peers).forEach(P => { if (P.vs) P.vs.replaceTrack(tr).then(() => roomVParams(P)).catch(() => {}); });
+  roomBeat(); roomPresence('st'); renderRoom(); toast(kind === 'screen' ? 'กำลังแชร์จอให้ทั้งห้อง' : 'กำลังแชร์กล้องให้ทั้งห้อง');
 }
 function roomUnshare() {
   if (!V.share) return;
@@ -3969,7 +3986,7 @@ function roomUnshare() {
   V.share = null; V.shareKind = ''; if (V.focus === '__me') V.focus = '';
   delete V.ink[S.me]; rinkPipClose();
   Object.values(V.peers).forEach(P => { if (P.vs) P.vs.replaceTrack(null).catch(() => {}); });
-  roomBeat(); renderRoom();
+  roomBeat(); roomPresence('st'); renderRoom();
 }
 function roomAct(a, t) {
   switch (a) {
@@ -3978,13 +3995,17 @@ function roomAct(a, t) {
     case 'mic': return roomMic();
     case 'deaf': return roomDeaf();
     case 'share': return roomShare();
-    case 'open': V.view = true; return renderRoom();
+    case 'open': V.view = true; if (V.chatOpen) V.unread = 0; return renderRoom();
     case 'close': V.view = false; return renderRoom();
     case 'focus': V.focus = t.dataset.key || ''; return renderRoom();
     case 'tool': case 'color': case 'size': inkSet(V, a, t.dataset.v, () => rinkSendAll({ t: 'pl' })); return rinkBarSync();
     case 'undo': return rinkUndo();
     case 'clear': rinkSendAll({ t: 'clr' }); return rinkBarSync();
     case 'pip': return rinkPip();
+    case 'chat': V.chatOpen = !V.chatOpen; if (V.chatOpen) V.unread = 0; V.sig = ''; renderRoom(); if (V.chatOpen) setTimeout(() => { const i = $('#rcIn'); if (i && !IS_TOUCH) i.focus(); }, 30); return;
+    case 'hand': V.hand = !V.hand; rcSend({ t: 'hand', on: V.hand }); V.sig = ''; renderRoom(); return toast(V.hand ? '✋ ยกมือแล้ว — ทุกคนในห้องเห็น' : 'เอามือลงแล้ว');
+    case 'rx': rcSend({ t: 'rx', e: t.dataset.v }); return;
+    case 'send': return rcSubmit();
     case 'full': { const w = $('#roomStage'); if (!w) return; if (document.fullscreenElement) document.exitFullscreen(); else if (w.requestFullscreen) w.requestFullscreen().catch(() => {}); return; }
   }
 }
@@ -4011,6 +4032,82 @@ function speakStart() {
   }, 120);
 }
 function speakStop() { clearInterval(V.speakT); V.speakT = null; V.an = {}; }
+/* ---- ห้องเสียงทีม: บอกเข้า/ออก/เปลี่ยนไมค์ทันทีผ่านช่องด่วน (เข้ารหัส) · ฐานข้อมูลยังเป็นตัวจริง (ส่งสัญญาณทุก 10 วิ) ---- */
+function roomPresence(op) {
+  if (mode() !== 'sheet' || !V.since) return;
+  rtSend({ k: 'room', op: op, m: { name: S.me, admin: isAdmin(), mic: !V.muted && !!V.mic, share: V.shareKind || '', since: V.since } });
+}
+function roomPresenceIn(o) {
+  const m = o && o.m; if (!m || !m.name || (m.name === S.me && (!m.admin || isAdmin()))) return;
+  const k = roomKey(m), list = V.members.filter(x => roomKey(x) !== k);
+  if (o.op === 'leave') { if (V.peers[k]) roomDrop(k, true); delete V.hands[m.name]; return roomOnPoll(list); }
+  list.push({ name: m.name, admin: !!m.admin, mic: !!m.mic, share: m.share || '', since: +m.since || Date.now() });
+  roomOnPoll(list);
+  if (o.op === 'join' && V.on) roomPresence('here');   // คนเข้าใหม่จะรู้ว่าเราอยู่ แล้วโทรหาเราทันที
+}
+/* ---- แชทในห้อง · อีโมจิลอย · ยกมือ (ส่งตรงหากันผ่าน data channel · สำรองด้วยช่องด่วน) ---- */
+const RC_RX = ['👍', '👏', '😂', '❤️', '🎉', '❓'];
+function rcSend(m) {
+  m = Object.assign({ id: uid('rc'), from: S.me, at: Date.now() }, m);
+  rcIn(m, S.me, true);
+  const txt = JSON.stringify(m); let viaDc = 0;
+  Object.values(V.peers).forEach(P => { if (P.cc && P.cc.readyState === 'open') { try { P.cc.send(txt); viaDc++; } catch (e) {} } });
+  if (mode() === 'sheet' && viaDc < Object.keys(V.peers).length) rtSend({ k: 'room', op: 'rc', rc: m, to: V.members.map(x => x.name) });   // บางคนยังต่อไม่ติด → ส่งทางช่องด่วนด้วย
+}
+const RC_SEEN = {};
+function rcIn(m, who, mine) {
+  if (!m || !V.on) return;
+  if (m.t === 'hist') { (Array.isArray(m.a) ? m.a : []).forEach(x => { if (x && x.id && !RC_SEEN[x.id] && x.t === 'msg') { RC_SEEN[x.id] = 1; V.chat.push(x); } }); V.chat.sort((a, b) => a.at - b.at); return rcDraw(); }
+  if (m.id) { if (RC_SEEN[m.id]) return; RC_SEEN[m.id] = 1; }
+  const from = String(m.from || who || '?');
+  if (m.t === 'msg') {
+    const text = String(m.text || '').slice(0, 1000); if (!text.trim()) return;
+    V.chat.push({ id: m.id, t: 'msg', from: from, text: text, at: +m.at || Date.now() }); if (V.chat.length > 200) V.chat.splice(0, V.chat.length - 200);
+    if (!mine && (!V.view || !V.chatOpen)) { V.unread++; V.sig = ''; renderRoom(); if (!V.view) toast('💬 ' + from + ': ' + text.slice(0, 60)); }
+    rcDraw(); if (!mine) roomTone(true, true);
+  } else if (m.t === 'rx' && RC_RX.indexOf(m.e) >= 0) rcBurst(from, m.e);
+  else if (m.t === 'hand') { V.hands[from] = !!m.on; if (!mine && m.on) toast('✋ ' + from + ' ยกมือ'); V.sig = ''; renderRoom(); }
+}
+function rcSubmit() {
+  const i = $('#rcIn'); if (!i) return; const text = i.value.trim(); if (!text) return;
+  i.value = ''; rcSend({ t: 'msg', text: text }); i.focus();
+}
+function rcBurst(from, e) {   // อีโมจิลอยขึ้นจากรูปของคนส่ง
+  const mm = V.members.find(x => x.name === from), key = from === S.me ? '__me' : mm ? roomKey(mm) : '';
+  const host = (key && document.querySelector('#roomView .rm-tile[data-vkey="' + CSS.escape(key) + '"]')) || document.querySelector('#roomBar .rb-head');
+  if (!host) return;
+  const r = host.getBoundingClientRect(), el = document.createElement('span'); el.className = 'rc-float'; el.textContent = e;
+  el.style.left = (r.left + r.width / 2 + (Math.random() * 40 - 20)) + 'px'; el.style.top = (r.top + r.height * .35) + 'px';
+  document.body.appendChild(el); setTimeout(() => el.remove(), 1800);
+}
+function rcTime(t) { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function rcHtml() {
+  const list = V.chat.length ? V.chat.map((m, i) => { const me = m.from === S.me, cont = i > 0 && V.chat[i - 1].from === m.from && m.at - V.chat[i - 1].at < 120000;
+    return '<div class="rc-m' + (me ? ' me' : '') + (cont ? ' cont' : '') + '">' + (cont ? '' : '<div class="rc-h">' + peerAv(m.from, m.from, 'rtc-mini') + '<b>' + esc(me ? 'คุณ' : m.from) + '</b><small>' + rcTime(m.at) + '</small></div>') + '<p>' + msgRich(m.text) + '</p></div>'; }).join('')
+    : '<div class="rc-empty"><b>แชทในห้อง</b><small>พิมพ์คุยกับทุกคนในห้องได้ · พิมพ์เลข Job แล้วกดเปิดงานได้ทันที · ข้อความหายเมื่อทุกคนออกจากห้อง</small></div>';
+  return '<div class="rc-head"><b>' + MSG_IC.chat + 'แชทในห้อง</b><small>' + V.members.length + ' คน</small><button class="rtc-tb sm" data-room="chat" title="ซ่อนแชท">✕</button></div>' +
+    '<div class="rc-list" id="rcList">' + list + '</div>' +
+    '<div class="rc-rx">' + RC_RX.map(e => '<button type="button" data-room="rx" data-v="' + e + '" title="ส่ง ' + e + ' ให้ทุกคนเห็น">' + e + '</button>').join('') + '<button type="button" class="rc-hand' + (V.hand ? ' on' : '') + '" data-room="hand" title="' + (V.hand ? 'เอามือลง' : 'ยกมือ (ขอพูด)') + '">✋</button></div>' +
+    '<form class="rc-form" id="rcForm" autocomplete="off"><input id="rcIn" maxlength="1000" placeholder="พิมพ์ข้อความถึงทุกคนในห้อง…" enterkeyhint="send" aria-label="ข้อความ"><button type="submit" class="btn primary sm" aria-label="ส่ง">' + (MSG_IC.send || '➤') + '</button></form>';
+}
+function rcDraw() {
+  const box = $('#roomChat'); if (!box) return;
+  const L = $('#rcList'), atEnd = !L || L.scrollHeight - L.scrollTop - L.clientHeight < 60, inp = $('#rcIn'), val = inp ? inp.value : '', foc = document.activeElement === inp;
+  box.innerHTML = rcHtml();
+  const ni = $('#rcIn'); if (ni) { ni.value = val; if (foc) ni.focus(); }
+  const nl = $('#rcList'); if (nl && atEnd) nl.scrollTop = nl.scrollHeight;
+}
+document.addEventListener('submit', e => { if (e.target && e.target.id === 'rcForm') { e.preventDefault(); rcSubmit(); } });
+/* คุณภาพสาย: วัดเวลาไป-กลับ (RTT) ของแต่ละคนทุก 4 วิ · โชว์เป็นจุดสีบนรูป · ช่วยดูว่าดีเลย์มาจากเน็ตของใคร */
+async function roomQuality() {
+  if (!V.on) return;
+  let ch = false;
+  await Promise.all(Object.values(V.peers).map(async P => { if (P.state !== 'connected') return; try { const st = await P.pc.getStats(); let rtt = null;
+    st.forEach(r => { if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded' && r.currentRoundTripTime != null) rtt = r.currentRoundTripTime * 1000; });
+    if (rtt != null) { const lv = rtt < 150 ? 'good' : rtt < 400 ? 'ok' : 'bad'; if (!V.q[P.key] || V.q[P.key].lv !== lv) ch = true; V.q[P.key] = { ms: Math.round(rtt), lv: lv }; } } catch (e) {} }));
+  if (ch) { V.sig = ''; renderRoom(); }
+  document.querySelectorAll('#roomView .rm-q[data-qk]').forEach(el => { const q = V.q[el.dataset.qk]; if (q) el.title = 'ดีเลย์ไป-กลับ ' + q.ms + ' ms'; });
+}
 /* ---- UI ---- */
 function roomPeople() {
   return V.members.map(m => { const me = roomIsMe(m), k = me ? '__me' : roomKey(m), P = V.peers[roomKey(m)];
@@ -4046,23 +4143,25 @@ function renderRoom() {
   const ppl = roomPeople(), wait = ppl.filter(p => !p.me && p.state !== 'connected').length;
   if (!bar) { bar = document.createElement('div'); bar.id = 'roomBar'; bar.className = 'room-bar'; document.body.appendChild(bar); }
   /* สร้าง HTML ใหม่เฉพาะเมื่อสถานะเปลี่ยน — ไม่งั้นวิดีโอที่แชร์จะกระพริบทุกครั้งที่ดึงข้อมูล */
-  const sig = JSON.stringify([ppl.map(p => [p.key, p.mic, p.share, p.state]), V.muted, V.deaf, !!V.share, V.view, V.focus, !!V.mic]);
+  const sig = JSON.stringify([ppl.map(p => [p.key, p.mic, p.share, p.state, (V.q[p.peerKey] || {}).lv, p.me ? V.hand : !!V.hands[p.m.name]]), V.muted, V.deaf, !!V.share, V.view, V.focus, !!V.mic, V.chatOpen, V.unread]);
   if (sig === V.sig && $('#roomView') === null === !V.view) return;
   V.sig = sig;
-  bar.innerHTML = '<button class="rb-head" data-room="open" title="เปิดห้อง"><span class="rb-ic">' + RTC_IC.room + '</span><span class="rb-t"><b>ห้องเสียงทีม</b><small>' + ppl.length + ' คน' + (wait ? ' · กำลังต่อ ' + wait : ' · เชื่อมต่อแล้ว') + '</small></span></button>' +
+  bar.innerHTML = '<button class="rb-head" data-room="open" title="เปิดห้อง"><span class="rb-ic">' + RTC_IC.room + '</span><span class="rb-t"><b>ห้องเสียงทีม</b><small>' + ppl.length + ' คน' + (wait ? ' · กำลังต่อ ' + wait : ' · เชื่อมต่อแล้ว') + '</small></span>' + (V.unread ? '<em class="rb-unread" title="ข้อความใหม่ในห้อง">💬 ' + V.unread + '</em>' : '') + '</button>' +
     '<div class="rb-avs">' + ppl.slice(0, 6).map(p => roomAv(p, 'sm')).join('') + (ppl.length > 6 ? '<span class="rb-more">+' + (ppl.length - 6) + '</span>' : '') + '</div><div class="rb-btns">' + roomBtns(false) + '</div>';
   let v = $('#roomView');
   if (!V.view) { if (v) v.remove(); return; }
   if (!v) { v = document.createElement('div'); v.id = 'roomView'; v.className = 'rtc-view room-view in'; document.body.appendChild(v); }
+  let chatEl = $('#roomChat'); if (chatEl) chatEl.remove();   // เก็บกล่องแชทไว้ (ข้อความที่กำลังพิมพ์ไม่หาย) แล้วใส่กลับหลังวาดใหม่
   const sharers = ppl.filter(p => p.share);
   let focus = sharers.find(p => p.key === V.focus) || sharers[0];
   v.innerHTML = '<div class="rtc-bar"><span class="rb-ic big">' + RTC_IC.room + '</span><div class="rtc-who"><b>ห้องเสียงทีม</b><small>' + ppl.length + ' คนในห้อง' + (sharers.length ? ' · ' + esc(sharers.map(p => p.me ? 'คุณ' : p.m.name).join(', ')) + ' กำลังแชร์' : '') + '</small></div>' +
-    '<div class="rtc-tools">' + roomBtns(true) + (focus ? '<button class="rtc-tb" data-room="full" title="เต็มจอ">' + RTC_IC.full + '</button>' : '') + '<button class="rtc-tb" data-room="close" title="ย่อ (ยังอยู่ในห้อง)">✕</button></div></div>' +
-    '<div class="room-body' + (focus ? ' has-stage' : '') + '">' +
+    '<div class="rtc-tools">' + roomBtns(true) + '<button class="rtc-tb' + (V.hand ? ' on hand' : '') + '" data-room="hand" title="' + (V.hand ? 'เอามือลง' : 'ยกมือ (ขอพูด)') + '">✋</button><button class="rtc-tb' + (V.chatOpen ? ' on' : '') + '" data-room="chat" title="แชทในห้อง">' + MSG_IC.chat + '<span>แชท</span>' + (V.unread && !V.chatOpen ? '<em class="rc-badge">' + V.unread + '</em>' : '') + '</button>' + (focus ? '<button class="rtc-tb" data-room="full" title="เต็มจอ">' + RTC_IC.full + '</button>' : '') + '<button class="rtc-tb" data-room="close" title="ย่อ (ยังอยู่ในห้อง)">✕</button></div></div>' +
+    '<div class="room-main' + (V.chatOpen ? ' chat-on' : '') + '"><div class="room-body' + (focus ? ' has-stage' : '') + '">' +
     (focus ? '<div class="room-stage' + (V.tool ? ' drawing' : '') + '" id="roomStage" data-owner="' + esc(rinkOwner(focus)) + '"><video id="roomVid" autoplay playsinline muted></video><canvas id="roomInk"></canvas><span class="rs-name">' + (focus.share === 'camera' ? RTC_IC.cam : RTC_IC.cast) + esc(focus.me ? 'จอของคุณ (ทุกคนในห้องเห็น)' : focus.m.name) + '</span>' + rinkBar(rinkOwner(focus)) + '</div>' : '') +
-    '<div class="room-tiles">' + ppl.map(p => '<div class="rm-tile' + (focus && focus.key === p.key ? ' focused' : '') + '" data-vkey="' + esc(p.key) + '"' + (p.share ? ' data-room="focus" data-key="' + esc(p.key) + '" role="button" tabindex="0"' : '') + '>' + roomAv(p, 'lg') +
+    '<div class="room-tiles">' + ppl.map(p => '<div class="rm-tile' + (focus && focus.key === p.key ? ' focused' : '') + ((p.me ? V.hand : V.hands[p.m.name]) ? ' hand' : '') + '" data-vkey="' + esc(p.key) + '"' + (p.share ? ' data-room="focus" data-key="' + esc(p.key) + '" role="button" tabindex="0"' : '') + '>' + roomAv(p, 'lg') + ((p.me ? V.hand : V.hands[p.m.name]) ? '<i class="rm-hand" title="ยกมือ">✋</i>' : '') + (!p.me && V.q[p.peerKey] ? '<i class="rm-q q-' + V.q[p.peerKey].lv + '" data-qk="' + esc(p.peerKey) + '" title="ดีเลย์ไป-กลับ ' + V.q[p.peerKey].ms + ' ms"></i>' : '') +
       '<b>' + esc(p.m.name) + (p.me ? ' <span class="tag rev">คุณ</span>' : '') + '</b><small>' + (p.share ? (p.share === 'camera' ? 'แชร์กล้อง · แตะเพื่อดู' : 'แชร์จอ · แตะเพื่อดู') : p.state && p.state !== 'connected' ? 'กำลังเชื่อมต่อ…' : !p.mic ? 'ปิดไมค์' : 'ในห้อง') + '</small></div>').join('') +
-    (ppl.length < 2 ? '<div class="rm-empty">' + RTC_IC.room + '<b>รอเพื่อนเข้าห้อง</b><small>คนในทีมจะเห็นว่าคุณอยู่ในห้อง ที่หน้าทีมงานและแชท "ทั้งทีม"</small></div>' : '') + '</div></div>';
+    (ppl.length < 2 ? '<div class="rm-empty">' + RTC_IC.room + '<b>รอเพื่อนเข้าห้อง</b><small>คนในทีมจะเห็นว่าคุณอยู่ในห้อง ที่หน้าทีมงานและแชท "ทั้งทีม"</small></div>' : '') + '</div></div></div>';
+  if (V.chatOpen) { const fresh = !chatEl; if (!chatEl) { chatEl = document.createElement('aside'); chatEl.id = 'roomChat'; chatEl.className = 'room-chat'; } v.querySelector('.room-main').appendChild(chatEl); if (fresh) rcDraw(); else { const nl = $('#rcList'); if (nl) nl.scrollTop = nl.scrollHeight; } }
   roomVideos(focus);
   rinkBind(); rinkKick();
 }
@@ -9914,7 +10013,7 @@ document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === 
 }, true));
 document.addEventListener('focusout', e => { if (e.target && e.target.type === 'color' && S.renderLater) setTimeout(() => { const a = document.activeElement; if (!(a && a.type === 'color')) render(); }, 60); });
 bgLoad();
-window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION, renderPeek: renderPeek, rtcDc: rtcDc, renderRoom: renderRoom, rinkRecv: rinkRecv, renderRtc: renderRtc, gameIn: gameIn };
+window.KiwNgan = { S: S, M: M, R: R, V: V, pollMessages: pollMessages, seedDemo: seedDemo, suggestDue: suggestDue, addWorkDays: addWorkDays, version: APP_VERSION, renderPeek: renderPeek, rtcDc: rtcDc, renderRoom: renderRoom, rinkRecv: rinkRecv, renderRtc: renderRtc, gameIn: gameIn, rcIn: rcIn, roomPresenceIn: roomPresenceIn, roomQuality: roomQuality };
 if (SALE_Q) { salePage(); } else {
 if (mode() === 'sheet') ibStart(LS.get('rtpub', null));   // เปิดกล่องรับคำตอบไว้ก่อน ระหว่างรอ bootstrap ครั้งแรก
 load(false);
