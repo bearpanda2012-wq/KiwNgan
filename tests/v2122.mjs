@@ -42,7 +42,7 @@ await pg.click('#roomChat [data-room="chat"]'); await pg.waitForTimeout(200);
 await pg.evaluate(() => KiwNgan.rcIn({ id: 'x2', t: 'msg', from: 'ต้น', text: 'ได้ครับ', at: Date.now() }, 'ต้น')); await pg.waitForTimeout(200);
 eq('unread badge', await pg.locator('#roomView [data-room="chat"] .rc-badge').innerText().catch(() => ''), '1');
 await pg.click('#roomView .rtc-tools [data-room="chat"]'); await pg.waitForTimeout(200);
-eq('reopen clears badge, shows 3 msgs', [await pg.locator('.rc-badge').count(), await pg.locator('#rcList .rc-m').count()], [0, 3]);
+eq('reopen clears badge, shows 3 msgs + 1 reaction', [await pg.locator('.rc-badge').count(), await pg.locator('#rcList .rc-m').count()], [0, 4]);
 // คุณภาพสาย
 await pg.evaluate(() => KiwNgan.roomQuality()); await pg.waitForTimeout(300);
 eq('quality dots', await pg.evaluate(() => [...document.querySelectorAll('#roomView .rm-q')].map(e => e.className.replace('rm-q ', ''))), ['q-good', 'q-bad']);
@@ -51,6 +51,25 @@ await pg.evaluate(() => KiwNgan.roomPresenceIn({ k: 'room', op: 'join', m: { nam
 eq('presence join adds tile', await pg.locator('#roomView .rm-tile').count(), 4);
 await pg.evaluate(() => KiwNgan.roomPresenceIn({ k: 'room', op: 'leave', m: { name: 'บอส' } })); await pg.waitForTimeout(200);
 eq('presence leave removes tile', await pg.locator('#roomView .rm-tile').count(), 3);
+// v2.123: อีโมจิในช่องพิมพ์ · อีโมจิลอยขึ้นในแชท · ส่งรูป (แบ่งชิ้น)
+await pg.click('#roomChat [data-room="rx"][data-v="🎉"]'); await pg.waitForTimeout(150);
+eq('reaction also logged in chat', await pg.locator('#rcList .rc-m.big p').last().innerText(), '🎉');
+await pg.click('#roomChat [data-rcemo="pick"]'); await pg.waitForTimeout(100);
+await pg.fill('#rcIn', 'สวัสดี '); await pg.click('#roomChat [data-rcemo="😊"]'); await pg.waitForTimeout(100);
+eq('emoji inserted into input', await pg.inputValue('#rcIn'), 'สวัสดี 😊');
+await pg.press('#rcIn', 'Enter'); await pg.waitForTimeout(150);
+eq('emoji message sent', await pg.evaluate(() => window.__sent['ฝน'].some(m => m.t === 'msg' && m.text === 'สวัสดี 😊')), true);
+const big = await pg.evaluate(async () => { const c = document.createElement('canvas'); c.width = 2400; c.height = 1600; const g = c.getContext('2d'); for (let i = 0; i < 4000; i++) { g.fillStyle = 'hsl(' + (i * 37 % 360) + ',70%,50%)'; g.fillRect(Math.random() * 2400, Math.random() * 1600, 40, 40); } const b = await new Promise(r => c.toBlob(r, 'image/png')); const dt = new DataTransfer(); dt.items.add(new File([b], 'a.png', { type: 'image/png' })); const inp = document.querySelector('#rcFile'); inp.files = dt.files; inp.dispatchEvent(new Event('change', { bubbles: true })); return b.size; });
+await pg.waitForTimeout(1500);
+const chunks = await pg.evaluate(() => window.__sent['ต้น'].filter(m => m.t === 'img'));
+eq('image sent in chunks (<16k each), shown once', [chunks.length > 1, chunks.every(m => m.d.length <= 14000), await pg.locator('#rcList .rc-img').count()], [true, true, 1]);
+// อีกฝั่งส่งรูปมา (สลับลำดับชิ้น)
+await pg.evaluate(ch => { ch.slice().reverse().forEach(m => KiwNgan.rcIn(Object.assign({}, m, { id: 'z' + m.id, img: 'Z' + m.img, from: 'ต้น' }), 'ต้น')); }, chunks); await pg.waitForTimeout(300);
+eq('peer image reassembled', await pg.locator('#rcList .rc-img').count(), 2);
+await pg.click('#rcList .rc-img >> nth=1'); await pg.waitForTimeout(200);
+eq('lightbox opens', await pg.locator('.rc-lb img').count(), 1);
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(100);
+eq('lightbox closes', await pg.locator('.rc-lb').count(), 0);
 await pg.screenshot({ path: out + 'v2122-room.png' });
 await pg.setViewportSize({ width: 390, height: 800 }); await pg.evaluate(() => { KiwNgan.V.sig = ''; KiwNgan.renderRoom(); }); await pg.waitForTimeout(300);
 await pg.screenshot({ path: out + 'v2122-room-m.png' });

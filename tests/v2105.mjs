@@ -20,7 +20,7 @@ await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remov
     members: [{ name: S.me, mic: false, share: '', since: 3, admin: true }, { name: 'ฝน', mic: true, share: 'screen', since: 1 }, { name: 'ต้น', mic: true, share: '', since: 2 }] });
   KiwNgan.renderRoom();
 }); await pg.waitForTimeout(600);
-eq('stage has ink toolbar', await pg.locator('#roomStage #roomInkBar [data-room="tool"]').count(), 7);
+eq('stage has ink toolbar (+ข้อความ v2.123)', await pg.locator('#roomStage #roomInkBar [data-room="tool"]').count(), 8);
 eq('stage owner = sharer', await pg.getAttribute('#roomStage', 'data-owner'), 'ฝน');
 await pg.click('#roomInkBar [data-v="pen"]'); await pg.waitForTimeout(150);
 eq('stage in drawing mode', await pg.locator('#roomStage.drawing').count(), 1);
@@ -36,6 +36,15 @@ await pg.evaluate(() => { const V = KiwNgan.V; KiwNgan.rinkRecv(JSON.stringify({
 await pg.waitForTimeout(200);
 eq('other viewer stroke shown', await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.filter(s => s.a === 'ต้น').length), 1);
 eq('sharer pointer shown', await pg.evaluate(() => !!KiwNgan.V.ink['ฝน'].ptrs['ฝน']), true);
+// v2.123: เครื่องมือข้อความ — แตะจุดบนจอ พิมพ์ แล้ว Enter
+await pg.click('#roomInkBar [data-v="text"]'); await pg.waitForTimeout(100);
+await pg.mouse.click(bx.x + bx.width * .2, bx.y + bx.height * .2); await pg.waitForTimeout(150);
+eq('text box appears', await pg.locator('#inkTxt').count(), 1);
+await pg.keyboard.type('ตรงนี้แก้'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(200);
+eq('text stroke on board + sent', [await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.filter(s => s.k === 'text' && s.tx === 'ตรงนี้แก้').length), await pg.evaluate(() => window.__sent['ฝน'].some(m => m.t === 'b' && m.k === 'text' && m.tx === 'ตรงนี้แก้'))], [1, true]);
+await pg.click('#roomInkBar [data-room="undo"]'); await pg.waitForTimeout(150);
+eq('undo removes the text', await pg.evaluate(() => KiwNgan.V.ink['ฝน'].strokes.filter(s => s.k === 'text').length), 0);
+await pg.click('#roomInkBar [data-v="pen"]'); await pg.waitForTimeout(100);
 await pg.locator('#roomStage').screenshot({ path: out + 'room-ink.png' });
 // ย้อน = ลบเฉพาะเส้นของเรา
 await pg.click('#roomInkBar [data-room="undo"]'); await pg.waitForTimeout(150);

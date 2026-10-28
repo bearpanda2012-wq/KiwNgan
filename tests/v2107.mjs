@@ -21,7 +21,7 @@ await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remov
   KiwNgan.renderRoom();
 }); await pg.waitForTimeout(600);
 const RB = '#roomInkBar';
-eq('room: 7 tools', await pg.$$eval(RB + ' [data-room="tool"]', a => a.map(x => x.dataset.v)), ['laser', 'pen', 'hl', 'arrow', 'rect', 'oval', 'erase']);
+eq('room: 8 tools (+ข้อความ)', await pg.$$eval(RB + ' [data-room="tool"]', a => a.map(x => x.dataset.v)), ['laser', 'pen', 'hl', 'arrow', 'rect', 'oval', 'text', 'erase']);
 eq('room: no sub panel before tool', await pg.locator(RB + ' .ink-sub').count(), 0);
 await pg.click(RB + ' [data-v="pen"]'); await pg.waitForTimeout(150);
 eq('room: 10 colors', await pg.locator(RB + ' [data-room="color"]').count(), 10);
@@ -64,7 +64,7 @@ await pg.evaluate(() => { const V = KiwNgan.V; V.on = false; V.view = false; Kiw
   KiwNgan.renderRtc(); const v = document.querySelector('#rtcVideo'); if (v) v.srcObject = R.remote;
 }); await pg.waitForTimeout(700);
 const IB = '#rtcInkBar';
-eq('1:1: same 7 tools', await pg.$$eval(IB + ' [data-rtc="tool"]', a => a.map(x => x.dataset.v)), ['laser', 'pen', 'hl', 'arrow', 'rect', 'oval', 'erase']);
+eq('1:1: same 8 tools', await pg.$$eval(IB + ' [data-rtc="tool"]', a => a.map(x => x.dataset.v)), ['laser', 'pen', 'hl', 'arrow', 'rect', 'oval', 'text', 'erase']);
 await pg.click(IB + ' [data-v="arrow"]'); await pg.waitForTimeout(120);
 eq('1:1: colors + sizes', [await pg.locator(IB + ' [data-rtc="color"]').count(), await pg.locator(IB + ' [data-rtc="size"]').count()], [10, 4]);
 await pg.screenshot({ path: out + 'ink-kit-1to1.png' });

@@ -6422,3 +6422,16 @@ button.bn-row{grid-template-columns:minmax(150px,215px) 1fr 70px minmax(80px,aut
   .rtc-tb span{display:none}
 }
 @media (prefers-reduced-motion:reduce){.rm-hand,.rc-float,.rm-q.q-bad{animation:none}}
+/* v2.123: อีโมจิ · รูปในแชทห้อง · ข้อความบนจอ */
+.rc-m.big p{background:none!important;font-size:34px;line-height:1.1;padding:2px 0}
+.rc-img{display:block;margin:0 0 4px 29px;padding:0;border:0;border-radius:12px;overflow:hidden;background:#1b252f;cursor:zoom-in;max-width:calc(100% - 29px)}
+.rc-img img{display:block;max-width:100%;max-height:220px;object-fit:cover}
+.rc-ib{display:grid;place-items:center;flex:none;width:38px;border:0;border-radius:12px;background:#17202a;color:#cbd5e1;font-size:18px;cursor:pointer}
+.rc-ib svg{width:19px;height:19px}.rc-ib.on,.rc-ib:hover{background:#223040}
+.rc-emo{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding:6px 12px;border-top:1px solid rgba(255,255,255,.06);background:#0c1217}
+.rc-emo button{border:0;background:none;font-size:20px;height:34px;border-radius:8px;cursor:pointer}.rc-emo button:hover{background:#1b252f}
+.rc-pend{display:flex;align-items:center;gap:6px;padding:4px 14px;font-size:12px;color:#86efac}.rc-pend svg{width:14px;height:14px}
+.rc-lb{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.86);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px}
+.rc-lb img{max-width:100%;max-height:calc(100% - 70px);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.rc-lb-b{display:flex;flex-wrap:wrap;align-items:center;gap:10px;color:#e9eef3;font-size:13.5px}
+.rc-form{align-items:stretch}

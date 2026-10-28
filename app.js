@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.122.0';
+const APP_VERSION = '2.123.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -3348,6 +3348,7 @@ document.addEventListener('click', e => { const x = e.target.closest && e.target
    "รีโมท" = คนดูชี้/วาดบนภาพ ส่งผ่าน data channel ไปขึ้นที่เครื่องคนแชร์ (หน้าต่างลอย) — ไม่ต้องติดตั้งโปรแกรมใดๆ
    (เบราว์เซอร์ไม่ยอมให้หน้าเว็บคลิก/พิมพ์แทนบนเครื่องอื่น จึงเป็นการชี้บอก ไม่ใช่ควบคุมแทน) */
 const RTC_IC = {
+  text: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4.5h14V6M12 4.5v15M9 19.5h6"/></svg>',
   screen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><circle cx="12" cy="10" r="2.2"/><path d="M6.5 10s2-3 5.5-3 5.5 3 5.5 3-2 3-5.5 3-5.5-3-5.5-3z"/></svg>',
   cast: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M12 13V7M9.5 9.5L12 7l2.5 2.5"/></svg>',
@@ -3394,9 +3395,11 @@ const INK_CNAME = ['แดง', 'ส้ม', 'เหลือง', 'เขีย
 const INK_SIZES = [[1, 'เล็ก'], [2, 'กลาง'], [3, 'ใหญ่'], [4, 'ใหญ่มาก']];
 const INK_MUL = { 1: .55, 2: 1, 3: 1.9, 4: 3.2 };
 /* [ชนิด, ชื่อ, ปุ่มลัด] · ชี้ = เลเซอร์จางหาย · ไฮไลต์ = สีโปร่งเส้นหนา · ลูกศร/กรอบ/วงกลม = ลากจากจุดเริ่มถึงจุดปล่อย · ยางลบ = แตะเส้นไหนลบเส้นนั้น */
-const INK_TOOLS = [['laser', 'ชี้', 'L'], ['pen', 'ปากกา', 'P'], ['hl', 'ไฮไลต์', 'H'], ['arrow', 'ลูกศร', 'A'], ['rect', 'กรอบ', 'R'], ['oval', 'วงกลม', 'O'], ['erase', 'ยางลบ', 'E']];
+const INK_TOOLS = [['laser', 'ชี้', 'L'], ['pen', 'ปากกา', 'P'], ['hl', 'ไฮไลต์', 'H'], ['arrow', 'ลูกศร', 'A'], ['rect', 'กรอบ', 'R'], ['oval', 'วงกลม', 'O'], ['text', 'ข้อความ', 'T'], ['erase', 'ยางลบ', 'E']];
 const INK_SHAPE = { arrow: 1, rect: 1, oval: 1 };
-const INK_KINDS = { pen: 1, hl: 1, arrow: 1, rect: 1, oval: 1 };
+const INK_KINDS = { pen: 1, hl: 1, arrow: 1, rect: 1, oval: 1, text: 1 };
+const inkTx = v => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').slice(0, 200);
+const inkFs = (base, w) => Math.round(base * (INK_MUL[w] || 1) * 6 + 9);   // ขนาดตัวอักษรตามหัวแปรง
 const inkK = k => INK_KINDS[k] ? k : 'pen';
 const inkW = w => INK_MUL[+w] ? +w : 2;
 const inkPref = LS.get('inkPref', null) || {};
@@ -3413,6 +3416,10 @@ function inkDrawStrokes(g, strokes, P, base, now) {
     // สีขาว/ดำ: มีขอบเงาบาง ๆ ให้เห็นได้ทั้งบนพื้นสว่างและพื้นมืด
     if (!x.l && (x.c === '#FFFFFF' || x.c === '#111827')) { g.shadowColor = x.c === '#FFFFFF' ? 'rgba(0,0,0,.65)' : 'rgba(255,255,255,.6)'; g.shadowBlur = 3; }
     const a = P(x.pts[0]), b = P(x.pts[x.pts.length - 1]);
+    if (k === 'text') {   // ข้อความ: ตัวหนา มีขอบตัดสีให้อ่านได้ทั้งพื้นสว่าง/มืด
+      if (!x.tx) return; const fs = inkFs(base, x.w); g.shadowBlur = 0; g.font = '700 ' + fs + 'px Prompt, "Noto Sans Thai", sans-serif'; g.textBaseline = 'top';
+      g.lineWidth = Math.max(2, fs / 7); g.strokeStyle = x.c === '#111827' ? 'rgba(255,255,255,.85)' : 'rgba(0,0,0,.6)'; g.strokeText(x.tx, a[0], a[1]); g.fillStyle = x.c; g.fillText(x.tx, a[0], a[1]); return;
+    }
     g.beginPath();
     if (INK_SHAPE[k]) {
       if (x.pts.length < 2 || Math.hypot(b[0] - a[0], b[1] - a[1]) < 2) return;
@@ -3435,13 +3442,24 @@ function inkHit(strokes, q, P, base) {
     const x = strokes[i]; if (x.l || !x.pts.length) continue;
     const k = x.k || 'pen', tol = Math.max(10, base * (INK_MUL[x.w] || 1) * (k === 'hl' ? 3.4 : 1) / 2 + 6), a = P(x.pts[0]), b = P(x.pts[x.pts.length - 1]);
     let d = Infinity;
-    if (k === 'rect') { const c = [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]]; for (let j = 0; j < 4; j++) d = Math.min(d, seg(q, c[j], c[(j + 1) % 4])); }
+    if (k === 'text') { const fs = inkFs(base, x.w), wd = String(x.tx || '').length * fs * .62; if (q[0] >= a[0] - 6 && q[0] <= a[0] + wd + 6 && q[1] >= a[1] - 6 && q[1] <= a[1] + fs * 1.3) d = 0; }
+    else if (k === 'rect') { const c = [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]]; for (let j = 0; j < 4; j++) d = Math.min(d, seg(q, c[j], c[(j + 1) % 4])); }
     else if (k === 'oval') { const cx = (a[0] + b[0]) / 2, cy = (a[1] + b[1]) / 2, rx = Math.abs(b[0] - a[0]) / 2, ry = Math.abs(b[1] - a[1]) / 2; let pv = null; for (let j = 0; j <= 36; j++) { const t = j / 36 * Math.PI * 2, pt = [cx + rx * Math.cos(t), cy + ry * Math.sin(t)]; if (pv) d = Math.min(d, seg(q, pv, pt)); pv = pt; } }
     else if (k === 'arrow') d = seg(q, a, b);
     else { let pv = null; x.pts.forEach(p => { const pt = P(p); d = Math.min(d, pv ? seg(q, pv, pt) : Math.hypot(q[0] - pt[0], q[1] - pt[1])); pv = pt; }); }
     if (d <= tol) return x;
   }
   return null;
+}
+/* เครื่องมือ "ข้อความ": แตะจุดบนจอ → ช่องพิมพ์ลอยตรงนั้น → Enter = วางข้อความ · Esc = ยกเลิก (ใช้ได้ทั้งในหน้าและหน้าต่างลอย) */
+function inkTextAsk(e, color, done) {
+  const doc = (e.target && e.target.ownerDocument) || document, old = doc.getElementById('inkTxt'); if (old) old.remove();
+  const inp = doc.createElement('input'); inp.id = 'inkTxt'; inp.className = 'ink-txt'; inp.maxLength = 200; inp.placeholder = 'พิมพ์ข้อความ แล้วกด Enter';
+  inp.style.cssText = 'position:fixed;z-index:2147483000;left:' + Math.min(e.clientX, (doc.defaultView || window).innerWidth - 240) + 'px;top:' + (e.clientY - 4) + 'px;min-width:220px;padding:6px 10px;border-radius:10px;border:2px solid ' + color + ';background:rgba(15,21,27,.92);color:#fff;font:600 16px Prompt,sans-serif;outline:none;box-shadow:0 8px 24px rgba(0,0,0,.4)';
+  let fin = false; const end = ok => { if (fin) return; fin = true; const v = inp.value.trim(); inp.remove(); if (ok && v) done(v); };
+  inp.addEventListener('keydown', k => { k.stopPropagation(); if (k.key === 'Enter') { k.preventDefault(); end(true); } else if (k.key === 'Escape') { k.preventDefault(); end(false); } });
+  inp.addEventListener('blur', () => end(true));
+  doc.body.appendChild(inp); setTimeout(() => inp.focus(), 0);
 }
 /* แถบเครื่องมือ (หน้าเดียวกันทั้งโทรตัวต่อตัวและห้องทีม) · at = ชื่อ data-* ของแต่ละที่ · extra = ปุ่มท้ายแถบ */
 function inkKitHtml(st, at, extra) {
@@ -3871,7 +3889,7 @@ function roomPc(key, name) {
     P.dc = dc;
     const cc = pc.createDataChannel('rchat', { negotiated: true, id: 8 });   // แชทในห้อง · อีโมจิ · ยกมือ (ส่งตรง ไม่ผ่านเซิร์ฟเวอร์)
     cc.onmessage = e => { if (V.peers[key] === P) { let m; try { m = JSON.parse(e.data); } catch (x) { return; } rcIn(m, P.name); } };
-    cc.onopen = () => { if (V.peers[key] !== P) return; if (P.role === 'ans' && V.chat.length) { try { cc.send(JSON.stringify({ t: 'hist', a: V.chat.slice(-40) })); } catch (x) {} } if (V.hand) { try { cc.send(JSON.stringify({ t: 'hand', on: true, from: S.me })); } catch (x) {} } };
+    cc.onopen = () => { if (V.peers[key] !== P) return; if (P.role === 'ans' && V.chat.length) { try { cc.send(JSON.stringify({ t: 'hist', a: V.chat.filter(x => !x.img).slice(-40) })); } catch (x) {} } if (V.hand) { try { cc.send(JSON.stringify({ t: 'hand', on: true, from: S.me })); } catch (x) {} } };
     P.cc = cc;
   } catch (e) {}
   pc.ontrack = e => {
@@ -4057,7 +4075,7 @@ function rcSend(m) {
 const RC_SEEN = {};
 function rcIn(m, who, mine) {
   if (!m || !V.on) return;
-  if (m.t === 'hist') { (Array.isArray(m.a) ? m.a : []).forEach(x => { if (x && x.id && !RC_SEEN[x.id] && x.t === 'msg') { RC_SEEN[x.id] = 1; V.chat.push(x); } }); V.chat.sort((a, b) => a.at - b.at); return rcDraw(); }
+  if (m.t === 'hist') { (Array.isArray(m.a) ? m.a : []).forEach(x => { if (x && x.id && !RC_SEEN[x.id] && x.t === 'msg' && !x.img) { RC_SEEN[x.id] = 1; V.chat.push({ id: x.id, t: 'msg', from: String(x.from || ''), text: String(x.text || '').slice(0, 1000), big: x.big ? 1 : 0, at: +x.at || 0 }); } }); V.chat.sort((a, b) => a.at - b.at); return rcDraw(); }
   if (m.id) { if (RC_SEEN[m.id]) return; RC_SEEN[m.id] = 1; }
   const from = String(m.from || who || '?');
   if (m.t === 'msg') {
@@ -4065,8 +4083,67 @@ function rcIn(m, who, mine) {
     V.chat.push({ id: m.id, t: 'msg', from: from, text: text, at: +m.at || Date.now() }); if (V.chat.length > 200) V.chat.splice(0, V.chat.length - 200);
     if (!mine && (!V.view || !V.chatOpen)) { V.unread++; V.sig = ''; renderRoom(); if (!V.view) toast('💬 ' + from + ': ' + text.slice(0, 60)); }
     rcDraw(); if (!mine) roomTone(true, true);
-  } else if (m.t === 'rx' && RC_RX.indexOf(m.e) >= 0) rcBurst(from, m.e);
+  } else if (m.t === 'rx' && RC_RX.indexOf(m.e) >= 0) {   // อีโมจิ: ลอยขึ้นจากรูป + ขึ้นในแชทเป็นอีโมจิตัวใหญ่ (เห็นแน่นอนแม้รูปอยู่นอกจอ)
+    rcBurst(from, m.e); V.chat.push({ id: m.id, t: 'msg', from: from, text: m.e, big: 1, at: +m.at || Date.now() }); rcDraw();
+  } else if (m.t === 'img') rcImgPart(m, from, mine);
   else if (m.t === 'hand') { V.hands[from] = !!m.on; if (!mine && m.on) toast('✋ ' + from + ' ยกมือ'); V.sig = ''; renderRoom(); }
+}
+
+/* อีโมจิในช่องพิมพ์ · ส่งรูป (ย่อเป็น JPEG แล้วแบ่งชิ้นส่งตรงหากัน) */
+const RC_EMO = ['😀', '😂', '🤣', '😊', '😍', '😎', '🤔', '😅', '😭', '😡', '🙏', '👍', '👎', '👌', '👏', '💪', '🔥', '✅', '❌', '⚠️', '⏰', '📌', '🎉', '❤️'];
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-rcemo],[data-rcimg]'); if (!b || !V.on) return;
+  e.preventDefault(); e.stopPropagation();
+  if (b.dataset.rcimg) { const m = V.chat.find(x => x.id === b.dataset.rcimg); if (m && m.img) rcImgView(m); return; }
+  if (b.dataset.rcemo === 'pick') { V.emo = !V.emo; rcDraw(); return; }
+  const i = $('#rcIn'); if (!i) return; const a = i.selectionStart == null ? i.value.length : i.selectionStart, z = i.selectionEnd == null ? a : i.selectionEnd;
+  i.value = i.value.slice(0, a) + b.dataset.rcemo + i.value.slice(z); i.focus(); const c = a + b.dataset.rcemo.length; try { i.setSelectionRange(c, c); } catch (x) {}
+}, true);
+document.addEventListener('change', e => { if (e.target && e.target.id === 'rcFile') { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) rcSendImg(f); } });
+document.addEventListener('paste', e => {
+  if (!V.on || !e.target || e.target.id !== 'rcIn' || !e.clipboardData) return;
+  const it = [...e.clipboardData.items].find(x => x.type && x.type.indexOf('image/') === 0); if (!it) return;
+  e.preventDefault(); const f = it.getAsFile(); if (f) rcSendImg(f);
+});
+document.addEventListener('dragover', e => { if (V.on && e.target.closest && e.target.closest('#roomChat')) e.preventDefault(); });
+document.addEventListener('drop', e => { if (!V.on || !e.target.closest || !e.target.closest('#roomChat')) return; const f = [...(e.dataTransfer && e.dataTransfer.files || [])].find(x => /^image\//.test(x.type)); if (f) { e.preventDefault(); rcSendImg(f); } });
+async function rcShrink(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const im = await new Promise((ok, no) => { const x = new Image(); x.onload = () => ok(x); x.onerror = no; x.src = url; });
+    let W = im.naturalWidth, H = im.naturalHeight; const k = Math.min(1, 1280 / Math.max(W, H)); W = Math.round(W * k); H = Math.round(H * k);
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.drawImage(im, 0, 0, W, H);
+    let q = .8, d = c.toDataURL('image/jpeg', q); while (d.length > 260000 && q > .35) { q -= .12; d = c.toDataURL('image/jpeg', q); }
+    return d;
+  } finally { URL.revokeObjectURL(url); }
+}
+async function rcSendImg(file) {
+  if (!/^image\//.test(file.type || '')) return toast('ส่งได้เฉพาะไฟล์รูป', true);
+  V.rcPend = true; rcDraw();
+  try {
+    const d = await rcShrink(file), cap = (($('#rcIn') || {}).value || '').trim(), id = uid('rc'), CH = 14000, n = Math.ceil(d.length / CH);
+    if (cap) $('#rcIn').value = '';
+    for (let i = 0; i < n; i++) { rcSend({ t: 'img', id: id + '_' + i, img: id, n: n, i: i, d: d.slice(i * CH, (i + 1) * CH), cap: i === 0 ? cap : '' }); if (i % 4 === 3) await new Promise(r => setTimeout(r, 30)); }
+  } catch (e) { toast('ส่งรูปไม่สำเร็จ', true); }
+  V.rcPend = false; rcDraw();
+}
+const RC_IMG = {};
+function rcImgPart(m, from, mine) {
+  const id = String(m.img || ''), n = Math.min(80, +m.n || 0), i = +m.i; if (!id || !n || !(i >= 0 && i < n)) return;
+  const w = RC_IMG[id] = RC_IMG[id] || { parts: [], got: 0, cap: '', at: +m.at || Date.now() };
+  if (w.parts[i] === undefined) { w.parts[i] = String(m.d || ''); w.got++; } if (m.cap) w.cap = String(m.cap).slice(0, 500);
+  if (w.got < n) return;
+  delete RC_IMG[id]; const d = w.parts.join(''); if (!/^data:image\/(jpeg|png|webp);base64,/.test(d)) return;
+  V.chat.push({ id: id, t: 'msg', from: from, img: d, text: w.cap, at: w.at }); if (V.chat.length > 200) V.chat.splice(0, V.chat.length - 200);
+  if (!mine && (!V.view || !V.chatOpen)) { V.unread++; V.sig = ''; renderRoom(); if (!V.view) toast('🖼️ ' + from + ' ส่งรูปในห้อง'); }
+  rcDraw(); if (!mine) roomTone(true, true);
+}
+function rcImgView(m) {
+  const el = document.createElement('div'); el.className = 'rc-lb'; el.setAttribute('role', 'dialog');
+  el.innerHTML = '<img alt="" src="' + m.img + '"><div class="rc-lb-b"><b>' + esc(m.from === S.me ? 'คุณ' : m.from) + ' · ' + rcTime(m.at) + '</b>' + (m.text ? '<span>' + esc(m.text) + '</span>' : '') + '<a class="btn sm" download="room-' + rcTime(m.at).replace(':', '') + '.jpg" href="' + m.img + '">บันทึกรูป</a><button type="button" class="btn sm">ปิด</button></div>';
+  const close = () => { el.remove(); document.removeEventListener('keydown', esc1, true); }, esc1 = k => { if (k.key === 'Escape') { k.stopPropagation(); close(); } };
+  el.addEventListener('click', ev => { if (ev.target === el || (ev.target.tagName === 'BUTTON')) close(); });
+  document.addEventListener('keydown', esc1, true); document.body.appendChild(el);
 }
 function rcSubmit() {
   const i = $('#rcIn'); if (!i) return; const text = i.value.trim(); if (!text) return;
@@ -4083,12 +4160,15 @@ function rcBurst(from, e) {   // อีโมจิลอยขึ้นจา�
 function rcTime(t) { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 function rcHtml() {
   const list = V.chat.length ? V.chat.map((m, i) => { const me = m.from === S.me, cont = i > 0 && V.chat[i - 1].from === m.from && m.at - V.chat[i - 1].at < 120000;
-    return '<div class="rc-m' + (me ? ' me' : '') + (cont ? ' cont' : '') + '">' + (cont ? '' : '<div class="rc-h">' + peerAv(m.from, m.from, 'rtc-mini') + '<b>' + esc(me ? 'คุณ' : m.from) + '</b><small>' + rcTime(m.at) + '</small></div>') + '<p>' + msgRich(m.text) + '</p></div>'; }).join('')
+    return '<div class="rc-m' + (me ? ' me' : '') + (cont ? ' cont' : '') + (m.big ? ' big' : '') + '">' + (cont ? '' : '<div class="rc-h">' + peerAv(m.from, m.from, 'rtc-mini') + '<b>' + esc(me ? 'คุณ' : m.from) + '</b><small>' + rcTime(m.at) + '</small></div>') +
+      (m.img ? '<button type="button" class="rc-img" data-rcimg="' + esc(m.id) + '" aria-label="ดูรูปเต็ม"><img alt="" src="' + m.img + '"></button>' : '') + (m.text ? '<p>' + (m.big ? esc(m.text) : msgRich(m.text)) + '</p>' : '') + '</div>'; }).join('')
     : '<div class="rc-empty"><b>แชทในห้อง</b><small>พิมพ์คุยกับทุกคนในห้องได้ · พิมพ์เลข Job แล้วกดเปิดงานได้ทันที · ข้อความหายเมื่อทุกคนออกจากห้อง</small></div>';
   return '<div class="rc-head"><b>' + MSG_IC.chat + 'แชทในห้อง</b><small>' + V.members.length + ' คน</small><button class="rtc-tb sm" data-room="chat" title="ซ่อนแชท">✕</button></div>' +
     '<div class="rc-list" id="rcList">' + list + '</div>' +
     '<div class="rc-rx">' + RC_RX.map(e => '<button type="button" data-room="rx" data-v="' + e + '" title="ส่ง ' + e + ' ให้ทุกคนเห็น">' + e + '</button>').join('') + '<button type="button" class="rc-hand' + (V.hand ? ' on' : '') + '" data-room="hand" title="' + (V.hand ? 'เอามือลง' : 'ยกมือ (ขอพูด)') + '">✋</button></div>' +
-    '<form class="rc-form" id="rcForm" autocomplete="off"><input id="rcIn" maxlength="1000" placeholder="พิมพ์ข้อความถึงทุกคนในห้อง…" enterkeyhint="send" aria-label="ข้อความ"><button type="submit" class="btn primary sm" aria-label="ส่ง">' + (MSG_IC.send || '➤') + '</button></form>';
+    (V.emo ? '<div class="rc-emo" role="group" aria-label="อีโมจิ">' + RC_EMO.map(e => '<button type="button" data-rcemo="' + e + '">' + e + '</button>').join('') + '</div>' : '') +
+    (V.rcPend ? '<div class="rc-pend">' + STI.camera + 'กำลังส่งรูป…</div>' : '') +
+    '<form class="rc-form" id="rcForm" autocomplete="off"><button type="button" class="rc-ib' + (V.emo ? ' on' : '') + '" data-rcemo="pick" title="อีโมจิ" aria-label="อีโมจิ">😊</button><label class="rc-ib" title="ส่งรูป (หรือวางรูปในช่องพิมพ์)" aria-label="ส่งรูป">' + STI.camera + '<input type="file" accept="image/*" id="rcFile" hidden></label><input id="rcIn" maxlength="1000" placeholder="พิมพ์ข้อความ หรือวางรูป…" enterkeyhint="send" aria-label="ข้อความ"><button type="submit" class="btn primary sm" aria-label="ส่ง">' + (MSG_IC.send || '➤') + '</button></form>';
 }
 function rcDraw() {
   const box = $('#roomChat'); if (!box) return;
@@ -4193,7 +4273,7 @@ function rinkApply(m, who) {
     case 'p': k.ptrs[a] = { x: inkN(m.x), y: inkN(m.y), c: inkC(m.c), t: now }; break;
     case 'pl': if (k.ptrs[a]) k.ptrs[a].t = Math.min(k.ptrs[a].t, now - 2400); break;
     case 'b': {
-      const st = { id: a + '|' + String(m.id), c: inkC(m.c), l: !!m.l, k: inkK(m.k), w: inkW(m.w), pts: [[inkN(m.x), inkN(m.y)]], end: 0, a: a };
+      const st = { id: a + '|' + String(m.id), c: inkC(m.c), l: !!m.l, k: inkK(m.k), w: inkW(m.w), pts: [[inkN(m.x), inkN(m.y)]], end: 0, a: a, tx: inkTx(m.tx) };
       k.strokes.push(st); if (k.strokes.length > 400) k.strokes.shift();
       k.ptrs[a] = { x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }; k.rips.push({ x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }); break;
     }
@@ -4295,6 +4375,7 @@ function rinkHook(cv, vidOf, ownerOf) {
     if (!V.tool) return; const p = rinkXY(e, cv, vidOf()); if (p.out) return;
     e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {}
     if (V.tool === 'erase') { V.erasing = 1; return rinkErase(e, cv, vidOf(), ownerOf()); }
+    if (V.tool === 'text') { const o = ownerOf(), c = V.color, w = V.size; return inkTextAsk(e, c, tx => { const id = uid('k'); rinkSendAll({ t: 'b', s: o, id: id, c: c, l: 0, k: 'text', w: w, x: p.x, y: p.y, tx: tx }); rinkSendAll({ t: 'e', s: o, id: id }); rinkBarSync(); }); }
     V.drawId = uid('k'); V.drawOwner = ownerOf();
     rinkSendAll({ t: 'b', s: V.drawOwner, id: V.drawId, c: V.color, l: V.tool === 'laser' ? 1 : 0, k: V.tool, w: V.size, x: p.x, y: p.y });
   });
@@ -4581,7 +4662,7 @@ function inkApply(m, remote) {
     case 'p': k.ptr = { x: inkN(m.x), y: inkN(m.y), c: inkC(m.c), t: now, r: !!remote }; break;
     case 'pl': if (k.ptr) k.ptr.t = Math.min(k.ptr.t, now - 2400); break;
     case 'b': {
-      const st = { id: String(m.id), c: inkC(m.c), l: !!m.l, k: inkK(m.k), w: inkW(m.w), pts: [[inkN(m.x), inkN(m.y)]], end: 0, r: !!remote };
+      const st = { id: String(m.id), c: inkC(m.c), l: !!m.l, k: inkK(m.k), w: inkW(m.w), pts: [[inkN(m.x), inkN(m.y)]], end: 0, r: !!remote, tx: inkTx(m.tx) };
       k.strokes.push(st); if (k.strokes.length > 300) k.strokes.shift();
       k.ptr = { x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now, r: !!remote }; k.rips.push({ x: st.pts[0][0], y: st.pts[0][1], c: st.c, t: now }); break;
     }
@@ -4720,6 +4801,7 @@ document.addEventListener('pointerdown', e => {
   const p = inkXY(e); if (p.out) return;
   e.preventDefault(); try { e.target.setPointerCapture(e.pointerId); } catch (x) {}
   if (R.tool === 'erase') { R.erasing = 1; return inkErase(e, e.target, $('#rtcVideo')); }
+  if (R.tool === 'text') { const c = R.color, w = R.size; return inkTextAsk(e, c, tx => { const id = uid('k'); inkSendAll({ t: 'b', id: id, c: c, l: 0, k: 'text', w: w, x: p.x, y: p.y, tx: tx }); inkSendAll({ t: 'e', id: id }); inkBarSync(); }); }
   R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, k: R.tool, w: R.size, x: p.x, y: p.y });
 });
 document.addEventListener('pointermove', e => {
@@ -4780,7 +4862,7 @@ function renderPeek() {
     {   // คนแชร์วาด/ชี้บนภาพจอตัวเองได้ด้วย อีกฝ่ายเห็นบนภาพที่เขาดูอยู่
       const cv = el.querySelector('canvas');
       const pv = () => { const v = el.querySelector('video'); return v && v.videoWidth ? v : inkDims(); };
-      cv.addEventListener('pointerdown', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (p.out) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} if (R.tool === 'erase') { R.erasing = 1; return inkErase(e, cv, pv()); } R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, k: R.tool, w: R.size, x: p.x, y: p.y }); });
+      cv.addEventListener('pointerdown', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (p.out) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} if (R.tool === 'erase') { R.erasing = 1; return inkErase(e, cv, pv()); } if (R.tool === 'text') { const c = R.color, w = R.size; return inkTextAsk(e, c, tx => { const id = uid('k'); inkSendAll({ t: 'b', id: id, c: c, l: 0, k: 'text', w: w, x: p.x, y: p.y, tx: tx }); inkSendAll({ t: 'e', id: id }); renderPeek(); }); } R.drawId = uid('k'); inkSendAll({ t: 'b', id: R.drawId, c: R.color, l: R.tool === 'laser' ? 1 : 0, k: R.tool, w: R.size, x: p.x, y: p.y }); });
       cv.addEventListener('pointermove', e => { if (!R.tool || R.state !== 'live') return; const p = inkXY(e); if (R.tool === 'erase') { if (R.erasing) inkErase(e, cv, pv()); return; } if (R.drawId) return inkSendAll({ t: 'm', id: R.drawId, x: p.x, y: p.y }); if (p.out) return; const now = performance.now(); if (now - inkLastP < 33) return; inkLastP = now; inkSendAll({ t: 'p', x: p.x, y: p.y, c: R.color }); });
       const up = () => { const er = R.erasing; R.erasing = 0; if (er) return renderPeek(); if (!R.drawId) return; const id = R.drawId; R.drawId = ''; inkSendAll({ t: 'e', id: id }); renderPeek(); };
       cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
