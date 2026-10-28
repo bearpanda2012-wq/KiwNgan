@@ -21,17 +21,8 @@ await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(500);
 const pid = await pg.evaluate(() => { const p = S.prods.find(x => x.stage === 'assemble' && x.paint !== 'no'); return p && p.id; });
 eq('demo has a job in ประกอบ', !!pid, true);
 await pg.evaluate(id => T.pModalOpen(id), pid); await pg.waitForTimeout(400);
-await pg.click('#pModal [data-padv]'); await pg.waitForTimeout(300);
-eq('who picker opens', await pg.locator('#whoSheet .ws-p').count() >= 2, true);
-await pg.click('#whoSheet .ws-p:has-text("ช่างเอ")'); await pg.waitForTimeout(150);
-eq('two people picked', await pg.locator('#whoSheet .ws-p.on').count(), 2);
-await pg.screenshot({ path: out + 'v2120-who.png' });
-await pg.click('#whoSheet [data-wsok]'); await pg.waitForTimeout(900);
-eq('moved to ทำสี with workers saved', await pg.evaluate(id => { const p = T.prodById(id), h = JSON.parse(p.history).pop(); return [p.stage, h.s, (h.w || []).slice().sort()]; }, pid), ['paint', 'paint', ['ช่างเอ', 'แอดมิน'].sort()]);
-eq('history shows workers', await pg.locator('#pModal .pm-hw').first().innerText().then(t => /ช่างเอ/.test(t)).catch(() => false), true);
-// ยกเลิกในหน้าต่างถาม = ไม่ย้าย
-await pg.click('#pModal [data-padv]'); await pg.waitForTimeout(300); await pg.keyboard.press('Escape'); await pg.waitForTimeout(400);
-eq('cancel keeps stage', await pg.evaluate(id => T.prodById(id).stage, pid), 'paint');
+await pg.click('#pModal [data-padv]'); await pg.waitForTimeout(900);
+eq('v2.124: no who picker, moves straight to ทำสี', [await pg.locator('#whoSheet').count(), await pg.evaluate(id => T.prodById(id).stage, pid)], [0, 'paint']);
 await pg.evaluate(() => T.pModalClose()); await pg.waitForTimeout(300);
 
 // 3) ติ๊กเครื่องเสร็จ → ถามคนคุมเครื่อง · เก็บเวลาเริ่ม/เสร็จ/คนทำ ต่อเครื่อง
@@ -39,11 +30,8 @@ const mid = await pg.evaluate(() => { const p = S.prods.find(x => x.stage === 'm
 eq('demo has a job on machine', !!mid, true);
 await pg.evaluate(id => T.pModalOpen(id), mid); await pg.waitForTimeout(400);
 const mname = await pg.evaluate(() => { const b = [...document.querySelectorAll('#pModal .mrow:not(.done)')][0]; return b && b.dataset.pmd; });
-await pg.click('#pModal .mrow[data-pmd="' + mname + '"]'); await pg.waitForTimeout(300);
-eq('machine who picker', await pg.locator('#whoSheet').innerText().then(t => t.indexOf(mname) >= 0), true);
-await pg.click('#whoSheet .ws-p:has-text("ช่างเอ")'); await pg.click('#whoSheet .ws-p:has-text("แอดมิน")'); await pg.waitForTimeout(100);
-await pg.click('#whoSheet [data-wsok]'); await pg.waitForTimeout(900);
-eq('machine done with operator + start time', await pg.evaluate(([id, m]) => { const p = T.prodById(id), x = JSON.parse(p.machines).find(y => y.m === m); return [!!x.d, (x.w || []).join(), !!x.s || JSON.parse(p.history).some(h => h.s === 'machine')]; }, [mid, mname]), [true, 'ช่างเอ', true]);
+await pg.click('#pModal .mrow[data-pmd="' + mname + '"]'); await pg.waitForTimeout(900);
+eq('machine done without picker + start time kept', [await pg.locator('#whoSheet').count(), await pg.evaluate(([id, m]) => { const p = T.prodById(id), x = JSON.parse(p.machines).find(y => y.m === m); return [!!x.d, !!x.s || JSON.parse(p.history).some(h => h.s === 'machine')]; }, [mid, mname])], [0, [true, true]]);
 await pg.evaluate(() => T.pModalClose()); await pg.waitForTimeout(300);
 
 // 4) เตือนคอขวด: ขั้นที่งานอยู่นานกว่าเฉลี่ย × 1.5

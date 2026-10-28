@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.123.0';
+const APP_VERSION = '2.124.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5697,7 +5697,7 @@ function flowSec(r) {
     (x.mcur || []).forEach(c => { if (!mach.some(o => o.name === c.m)) mach.push({ name: c.m, n: 0, avg: null, max: null, run: (x.mcur || []).filter(z => z.m === c.m).length, ops: [] }); });
     const stuck = (x.cur || []).slice().sort((p, q) => q.d - p.d).slice(0, 6);
     return '<div class="bn-det">' +
-      '<div class="bd-h">' + (x.dsg ? 'แยกตามผู้รับผิดชอบ · เวลาตั้งแต่รับงานจนเสร็จ' : 'แยกตามคนทำ (เลือกตอนย้ายขั้น)' + ((x.seg || []).some(it => !it.ws) ? ' · ' + (x.seg || []).filter(it => !it.ws).length + ' งานเก่าไม่ได้เลือก นับคนที่กดย้าย' : '')) + '</div>' +
+      '<div class="bd-h">' + (x.dsg ? 'แยกตามผู้รับผิดชอบ · เวลาตั้งแต่รับงานจนเสร็จ' : (ASK_WHO ? 'แยกตามคนทำ (เลือกตอนย้ายขั้น)' + ((x.seg || []).some(it => !it.ws) ? ' · ' + (x.seg || []).filter(it => !it.ws).length + ' งานเก่าไม่ได้เลือก นับคนที่กดย้าย' : '') : 'แยกตามคนที่ทำขั้นนี้เสร็จ (กดย้ายไปขั้นถัดไป)')) + '</div>' +
       (ps.length ? ps.map((p, i) => line(p, i)).join('') : '<p class="rnone">ยังไม่มีงานที่ผ่านขั้นนี้ในช่วงนี้</p>') +
       (mach.length ? '<div class="bd-h">แยกตามเครื่อง · จับเวลาแต่ละเครื่อง เริ่มลงเครื่อง → ติ๊กเสร็จ' + ((x.mseg || []).some(it => it.est) ? ' (งานเก่าที่ไม่มีเวลาเริ่ม นับจากเข้าขั้นลงเครื่อง)' : '') + '</div>' + mach.map((p, i) => line(p, i, true)).join('') : '') +
       (stuck.length ? '<div class="bd-h">ค้างอยู่ที่ขั้นนี้ตอนนี้ ' + (x.cur || []).length + ' งาน</div><div class="bd-stuck">' + stuck.map(it => '<span><b class="mono">' + esc(it.code) + '</b>' + (it.who ? esc(nm(it.who)) + ' · ' : '') + fdays(it.d) + '</span>').join('') + ((x.cur || []).length > 6 ? '<span class="more">+' + ((x.cur || []).length - 6) + '</span>' : '') + '</div>' : '') + '</div>';
@@ -6705,7 +6705,7 @@ function pBack(p) {
 }
 async function pMachineDone(p, name) {   // ติ๊กเครื่องเสร็จ: ถามคนคุมเครื่องนี้ · ครบทุกเครื่อง = คนทำขั้นลงเครื่องคือทุกคนที่คุมเครื่อง
   const m0 = pms(p).find(m => m.m === name); if (!m0) return;
-  const undo = !!m0.d, w = undo ? [] : await (whoCands().length ? askWho({ code: p.code, stage: 'machine', title: 'ใครคุมเครื่อง ' + name + ' ของ ' + p.code + '?', sub: 'เวลาเครื่องนี้นับตั้งแต่เริ่มลงเครื่องจนถึงตอนนี้' }) : Promise.resolve([]));
+  const undo = !!m0.d, w = undo ? [] : await (ASK_WHO && whoCands().length ? askWho({ code: p.code, stage: 'machine', title: 'ใครคุมเครื่อง ' + name + ' ของ ' + p.code + '?', sub: 'เวลาเครื่องนี้นับตั้งแต่เริ่มลงเครื่องจนถึงตอนนี้' }) : Promise.resolve([]));
   if (!w) return;
   const q = prodById(p.id); if (!q || q.stage !== 'machine') return;
   const ms = pms(q).map(m => m.m === name ? Object.assign({ m: m.m, d: undo ? '' : pNow() }, m.s ? { s: m.s } : {}, !undo && w.length ? { w: w } : {}) : m), left = ms.filter(m => !m.d).length;
@@ -6796,8 +6796,9 @@ function askWho(o) {   // o = { code, stage, title, sub } → Promise<[ชื่
 }
 const uniqNames = a => a.filter((n, i) => n && a.indexOf(n) === i);
 const WHO_ASK = { machine: 1, assemble: 1, paint: 1, pack: 1 };   // ขั้นที่ถามคนทำตอนย้ายออก (รอผลิต = รอคิว · QC = คนตรวจคือคนกด · พร้อมส่ง = ฝ่ายสต็อก)
+const ASK_WHO = false;   // v2.124: Bear ไม่เอาหน้าต่างถาม "ใครทำ" — ย้ายขั้นทันที คอขวดนับคนที่กดย้าย (โค้ดเก็บไว้เผื่อเปิดใช้ภายหลัง)
 async function whoFor(p, stage) {
-  if (!WHO_ASK[stage] || !whoCands().length) return [];
+  if (!ASK_WHO || !WHO_ASK[stage] || !whoCands().length) return [];
   return askWho({ code: p.code, stage: stage, title: 'ใครทำขั้น "' + PSTG[stage].label + '" ของ ' + p.code + '?' });
 }
 
