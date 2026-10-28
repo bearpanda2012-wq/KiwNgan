@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.120.0';
+const APP_VERSION = '2.120.1';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5444,9 +5444,11 @@ function stageTimes(r) {
   // ฝ่ายแบบ: รับงาน → เสร็จ (วันปฏิทิน) แยก CAD / CAM
   const dj = S.jobs.filter(j => j.status === 'done' && j.received && inR(finDate(j), r));
   const isCamT = j => taskCat(j.taskType) !== 'draw';
-  const dsg = ['draw', 'cam'].map(c => { const a = dj.filter(j => isCamT(j) === (c === 'cam')).map(j => ({ d: Math.max(0, (parseLocal(String(finDate(j)).slice(0, 10)) - parseLocal(String(j.received).slice(0, 10))) / msDay) + 1, code: j.code, who: j.assignee || '' }));
-    const c2 = S.jobs.filter(j => isOpen(j) && isCamT(j) === (c === 'cam')).map(j => ({ d: j.received ? Math.max(0, (now - parseLocal(String(j.received).slice(0, 10))) / msDay) : 0, code: j.code, who: j.assignee || '' }));
-    return { k: c, dsg: 1, label: c === 'cam' ? 'ฝ่ายแบบ · CAM / CAD+CAM' : 'ฝ่ายแบบ · เขียนแบบ', n: a.length, avg: avg(a), max: a.slice().sort((x, y) => y.d - x.d)[0] || null, seg: a, cur: c2, now: S.jobs.filter(j => isOpen(j) && isCamT(j) === (c === 'cam')).length }; });
+  const catOf = j => isDs(j) ? 'ds' : isCamT(j) ? 'cam' : 'draw';   // ทีมออกแบบดีไซน์แยกจากเขียนแบบ (งานคนละแบบ ระยะเวลาต่างกันมาก)
+  const DSG_L = { draw: 'ฝ่ายแบบ · เขียนแบบ', cam: 'ฝ่ายแบบ · CAM / CAD+CAM', ds: 'ฝ่ายแบบ · ออกแบบดีไซน์' };
+  const dsg = ['draw', 'cam', 'ds'].map(c => { const a = dj.filter(j => catOf(j) === c).map(j => ({ d: Math.max(0, (parseLocal(String(finDate(j)).slice(0, 10)) - parseLocal(String(j.received).slice(0, 10))) / msDay) + 1, code: j.code, who: j.assignee || '' }));
+    const c2 = S.jobs.filter(j => isOpen(j) && catOf(j) === c).map(j => ({ d: j.received ? Math.max(0, (now - parseLocal(String(j.received).slice(0, 10))) / msDay) : 0, code: j.code, who: j.assignee || '' }));
+    return { k: c, dsg: 1, label: DSG_L[c], n: a.length, avg: avg(a), max: a.slice().sort((x, y) => y.d - x.d)[0] || null, seg: a, cur: c2, now: c2.length }; }).filter(x => x.k !== 'ds' || x.n || x.now);
   // QC: ผ่าน / ไม่ผ่าน ของงานที่ตรวจในช่วงนี้
   let pass = 0, fail = 0; const why = [], iQ = PORDER.indexOf('qc');
   prodsAll().forEach(p => { const h = phist(p).filter(e => e && e.t && e.s).slice().sort((a, b) => String(a.t).localeCompare(String(b.t)));
@@ -5457,7 +5459,7 @@ function stageTimes(r) {
 }
 
 /* แนวโน้มย้อนหลัง: เวลาเฉลี่ยแต่ละขั้น รายสัปดาห์ (8 สัปดาห์) / รายเดือน (6 เดือน) นับถึงวันสุดท้ายของช่วงรายงาน */
-const TR_COL = { draw: 'var(--accent)', cam: 'var(--doing)', wait: 'var(--p-wait)', machine: 'var(--p-mach)', assemble: 'var(--p-assy)', paint: 'var(--p-paint)', qc: 'var(--p-qc)', pack: 'var(--p-pack)', ready: 'var(--p-ready)' };
+const TR_COL = { draw: 'var(--accent)', cam: 'var(--doing)', ds: 'var(--review, #7A62C2)', wait: 'var(--p-wait)', machine: 'var(--p-mach)', assemble: 'var(--p-assy)', paint: 'var(--p-paint)', qc: 'var(--p-qc)', pack: 'var(--p-pack)', ready: 'var(--p-ready)' };
 function trendBuckets(r, mode) {
   const out = [], end = !r.to || r.to > today() ? today() : r.to;   // ช่วงที่ยังไม่ถึง ไม่มีข้อมูล → นับถึงวันนี้
   if (mode === 'm') { const d = parseLocal(end); for (let i = 5; i >= 0; i--) { const a = new Date(d.getFullYear(), d.getMonth() - i, 1), b = new Date(d.getFullYear(), d.getMonth() - i + 1, 0); out.push({ from: isoOf(a), to: isoOf(b), lbl: TH_M[a.getMonth()] + ' ' + String((a.getFullYear() + 543) % 100) }); } }
@@ -5467,7 +5469,7 @@ function trendBuckets(r, mode) {
 function trendSec(r, dep) {
   const mode = r.bnTr === 'm' ? 'm' : 'w', bs = trendBuckets(r, mode);
   const data = bs.map(b => { const T = stageTimes(b), m = {}; T.dsg.concat(T.rows).filter(dep[2]).forEach(x => { m[x.k] = { avg: x.avg, n: x.n, label: x.label }; }); return m; });
-  const keys = (dep[0] === 'all' || dep[0] === 'design' ? ['draw', 'cam'] : []).concat(PCOLS).filter(k => data.some(m => m[k] && m[k].avg != null));
+  const keys = (dep[0] === 'all' || dep[0] === 'design' ? ['draw', 'cam', 'ds'] : []).concat(PCOLS).filter(k => data.some(m => m[k] && m[k].avg != null));
   const tg = '<div class="tr-mode" role="group" aria-label="ช่วงของกราฟ">' + [['w', 'รายสัปดาห์'], ['m', 'รายเดือน']].map(x => '<button type="button" class="qchip' + (mode === x[0] ? ' on' : '') + '" data-bntr="' + x[0] + '" aria-pressed="' + (mode === x[0]) + '">' + x[1] + '</button>').join('') + '</div>';
   const head = '<div class="tr-h"><b>' + DECO.chart + 'แนวโน้มย้อนหลัง</b><small>เวลาเฉลี่ยที่งานอยู่แต่ละขั้น · ' + (mode === 'm' ? '6 เดือน' : '8 สัปดาห์') + 'ถึง ' + esc(fdY(bs[bs.length - 1].to > today() ? today() : bs[bs.length - 1].to)) + ' · เส้นลง = เร็วขึ้น</small>' + tg + '</div>';
   if (!keys.length) return '<div class="bn-trend">' + head + '<p class="rnone">ยังไม่มีข้อมูลย้อนหลังพอจะวาดกราฟ</p></div>';
@@ -5479,8 +5481,11 @@ function trendSec(r, dep) {
     let d = '', pen = false; pts.forEach(p => { if (!p) { pen = false; return; } d += (pen ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); pen = true; });
     return '<g class="tr-line" data-k="' + k + '" style="--c:' + TR_COL[k] + '"><path d="' + d + '"/>' + pts.filter(Boolean).map(p => '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3.2"><title>' + esc(p[2].label + ' · ' + bs[p[3]].lbl + ': ' + fdays(p[2].avg) + ' (' + p[2].n + ' งาน)') + '</title></circle>').join('') + '</g>'; }).join('');
   const lab = k => { const x = data.map(m => m[k]).find(Boolean); return x ? x.label.replace(/^ฝ่ายแบบ · /, '') : k; };
-  const delta = k => { const v = data.map(m => m[k] && m[k].avg).filter(x => x != null); if (v.length < 2) return ''; const last = v[v.length - 1], prev = v.slice(0, -1).reduce((a, b) => a + b, 0) / (v.length - 1), pc = prev ? Math.round((last - prev) / prev * 100) : 0;
-    return Math.abs(pc) < 5 ? '<em class="eq">ทรงตัว</em>' : pc < 0 ? '<em class="up">เร็วขึ้น ' + (-pc) + '%</em>' : '<em class="dn">ช้าลง ' + pc + '%</em>'; };
+  // เทียบช่วงล่าสุดกับค่าเฉลี่ยช่วงก่อน ๆ (ถ่วงตามจำนวนงาน) · ใช้เฉพาะช่วงที่มีงาน ≥ 2 งาน · ฐานต่ำกว่า 2 ชม. ไม่เทียบ (เปอร์เซ็นต์จะเพี้ยน)
+  const delta = k => { const v = data.map(m => m[k]).filter(x => x && x.avg != null && x.n >= 2); if (v.length < 2) return '';
+    const last = v[v.length - 1].avg, pv = v.slice(0, -1), pn = pv.reduce((a, x) => a + x.n, 0), prev = pv.reduce((a, x) => a + x.avg * x.n, 0) / pn;
+    if (prev < 1 / 12) return ''; const ra = last / prev, pc = Math.round((ra - 1) * 100);
+    return Math.abs(pc) < 5 ? '<em class="eq">ทรงตัว</em>' : pc < 0 ? '<em class="up">เร็วขึ้น ' + (-pc) + '%</em>' : '<em class="dn">ช้าลง ' + (ra >= 2 ? (Math.round(ra * 10) / 10) + ' เท่า' : pc + '%') + '</em>'; };
   return '<div class="bn-trend">' + head + '<svg class="tr-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="กราฟเวลาเฉลี่ยแต่ละขั้น">' + ticks + xl + lines + '</svg>' +
     '<div class="tr-leg">' + keys.map(k => '<span style="--c:' + TR_COL[k] + '"><i></i>' + esc(lab(k)) + delta(k) + '</span>').join('') + '</div><small class="tr-note">เทียบช่วงล่าสุดกับค่าเฉลี่ยช่วงก่อนหน้า</small></div>';
 }
@@ -9317,7 +9322,7 @@ document.addEventListener('click', async e => {
   if (d.go) return go(d.go, d.sec);
   if (d.move) { e.stopPropagation(); return moveJob(d.move, d.to); }
   if (d.bnrow) { const r = reportState(), o = r.bnOpen = r.bnOpen || {}, el = t.closest('.bn-item'); o[d.bnrow] = !(el && el.classList.contains('open')); return render(); }
-  if (d.bnall) { const r = reportState(), o = r.bnOpen = {}; ['draw', 'cam'].concat(PCOLS).forEach(k => { o[k] = d.bnall === '1'; }); return render(); }
+  if (d.bnall) { const r = reportState(), o = r.bnOpen = {}; ['draw', 'cam', 'ds'].concat(PCOLS).forEach(k => { o[k] = d.bnall === '1'; }); return render(); }
   if (d.bndep) { reportState().bn = d.bndep; saveReportState(); return render(); }   // คอขวด: เลือกแผนก
   if (d.bntr) { reportState().bnTr = d.bntr; saveReportState(); return render(); }   // แนวโน้ม: รายสัปดาห์/รายเดือน
   if (d.rpreset) { reportState(); if (d.rpreset !== 'custom') applyPreset(d.rpreset); else S.r.preset = 'custom'; saveReportState(); return render(); }
