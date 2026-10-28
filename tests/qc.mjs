@@ -7,6 +7,7 @@ const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = awa
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 let ok = 0, bad = 0; const eq = (lbl, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
 await pg.addInitScript(() => { if (!sessionStorage.getItem('x')) { localStorage.clear(); sessionStorage.setItem('x', 1); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
+await pg.addInitScript(() => { setInterval(() => { const b = document.querySelector('#whoSheet [data-wsok]:not([disabled])'); if (b) b.click(); }, 80); });   // v2.120: ยืนยันหน้าต่าง "ใครทำ" ให้อัตโนมัติ (ทดสอบแยกใน v2120)
 await pg.goto('http://127.0.0.1:8910/index.html'); await pg.waitForTimeout(700);
 await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1200);
 eq('user avatar on banner', await pg.locator('.topbar .hero-me .av').count(), 1);

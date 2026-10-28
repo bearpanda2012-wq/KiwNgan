@@ -42,8 +42,7 @@ await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, 
 await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('stock'); }); await pg.waitForTimeout(400);
 eq('no Express tab without config', await pg.locator('.ex-tabs').count(), 0);
 await pg.evaluate(() => T.exStart({ url: 'https://ex.test', key: 'k', tok: 'exr_test_token_123456789012345' })); await pg.waitForTimeout(800);
-eq('tabs appear', await pg.locator('.ex-tabs [data-exsrc="ex"]').count(), 1);
-await pg.click('[data-exsrc="ex"]');
+eq('Express page shown (no tabs)', [await pg.locator('.ex-tabs').count(), await pg.locator('#exList').count()], [0, 1]);
 await pg.waitForFunction(() => document.querySelectorAll('.ex-row').length > 0, null, { timeout: 8000 }).catch(() => {});
 await pg.waitForTimeout(500);
 // การ์ดสรุป 6 ใบ (รวม "สินค้าทั้งหมด")
@@ -69,9 +68,8 @@ eq('soft palette: light card background, colored number (not white-on-color)', a
 eq('entrance animation only on first render (no replay on 20s refresh)', await pg.evaluate(() => { const first = document.querySelector('.ex-kpis').classList.contains('in'); T.render(); return [document.querySelector('.ex-kpis').classList.contains('in')]; }), [false]);
 await pg.evaluate(() => scrollTo(0, 0)); await pg.waitForTimeout(1200); await pg.locator('.ex-kpis').screenshot({ path: new URL('out/v292-kpis.png', import.meta.url).pathname });
 await pg.evaluate(() => { EV.grp = 'bal'; EV.rowAnim = true; T.render(); }); await pg.waitForTimeout(900);
-await pg.locator('.ex-tabs').screenshot({ path: new URL('out/v293-tabs.png', import.meta.url).pathname });
 { const bx = await pg.locator('#exList').boundingBox(); await pg.locator('#exList').scrollIntoViewIfNeeded(); const b2 = await pg.locator('#exList').boundingBox(); await pg.screenshot({ path: new URL('out/v293-list.png', import.meta.url).pathname, clip: { x: b2.x, y: Math.max(0, b2.y), width: b2.width, height: Math.min(560, 900 - Math.max(0, b2.y)) } }); }
-eq('group chips + rows carry group colour', await pg.evaluate(() => [!!document.querySelector('.ex-chip .ex-cd'), getComputedStyle(document.querySelector('.ex-row')).getPropertyValue('--g').trim().startsWith('#'), document.querySelector('.ex-tabs').dataset.on]), [true, true, 'ex']);
+eq('group chips + rows carry group colour', await pg.evaluate(() => [!!document.querySelector('.ex-chip .ex-cd'), getComputedStyle(document.querySelector('.ex-row')).getPropertyValue('--g').trim().startsWith('#')]), [true, true]);
 // 2.93.1: ค้นหาแล้วบอกหมวด · กดหมวดเพื่อกรอง
 await pg.fill('#exQ', 'ZZ-0000'); await pg.waitForTimeout(400);
 const sg = await pg.evaluate(() => ({ chips: [...document.querySelectorAll('.ex-sgrps [data-exsgrp]')].map(b => b.dataset.exsgrp), pill: !!document.querySelector('.ex-list.srch .ex-g'), txt: document.querySelector('.ex-sres').textContent }));

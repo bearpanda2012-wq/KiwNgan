@@ -41,7 +41,7 @@ await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอด�
 await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(800);
 await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('stock'); }); await pg.waitForTimeout(400);
 await pg.evaluate(() => T.exStart({ url: 'https://ex.test', key: 'k', tok: 'exr_test_token_123456789012345' })); await pg.waitForTimeout(800);
-await pg.click('[data-exsrc="ex"]');
+await pg.waitForSelector('#exList');
 await pg.waitForFunction(() => document.querySelectorAll('.ex-row').length > 0, null, { timeout: 8000 }).catch(() => {}); await pg.waitForTimeout(500);
 eq('alert strip shows (off)', await pg.locator('.ex-albar:not(.on)').count(), 1);
 eq('two buttons for stock', await pg.locator('.ex-albar [data-exal]').count(), 2);

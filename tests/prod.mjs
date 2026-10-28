@@ -7,6 +7,7 @@ const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = awa
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 let ok = 0, bad = 0; const eq = (lbl, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
 await pg.addInitScript(() => { if (!sessionStorage.getItem('kn-init')) { localStorage.clear(); sessionStorage.setItem('kn-init', '1'); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
+await pg.addInitScript(() => { setInterval(() => { const b = document.querySelector('#whoSheet [data-wsok]:not([disabled])'); if (b) b.click(); }, 80); });   // v2.120: ยืนยันหน้าต่าง "ใครทำ" ให้อัตโนมัติ (ทดสอบแยกใน v2120)
 const login = async (name, admin) => {
   await pg.evaluate(() => Object.keys(localStorage).filter(k => /token/.test(k)).forEach(k => localStorage.removeItem(k))); await pg.goto('http://127.0.0.1:8790/index.html'); await pg.waitForTimeout(700);
   if (admin) { await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', name); } else await pg.click('.who:has-text("' + name + '")');
@@ -28,7 +29,7 @@ await pg.click('.cpx-step[data-cf="machine"]'); await pg.waitForTimeout(300);
 eq('filter by step', await pg.evaluate(() => [...document.querySelectorAll('.co-row .pill')].every(p => p.textContent === 'ลงเครื่อง')), true);
 await pg.click('#nav [data-view="prod"]'); await pg.waitForTimeout(700);
 eq('prod board 7 columns', await pg.locator('.pboard .col').count(), 7);
-eq('banner icons all animate (distinct)', await pg.evaluate(() => [...document.querySelectorAll('.pflow .flow-ic svg')].map(e => getComputedStyle(e).animationName)), ['icHome', 'icPress', 'icRoll', 'icTwist', 'icShield', 'icHop', 'icDrive']);
+eq('banner icons all animate (distinct)', await pg.evaluate(() => [...document.querySelectorAll('.pflow .flow-ic svg')].map(e => getComputedStyle(e).animationName)), ['icHome', 'icPress', 'icTwist', 'icRoll', 'icShield', 'icHop', 'icDrive']);
 await pg.screenshot({ path: out + 'prod-board.png', fullPage: true });
 eq('admin can act on prod board', (await pg.locator('.pboard [data-pstart],.pboard [data-padv]').count()) > 0, true);
 eq('admin has add-to-production button', await pg.evaluate(() => getComputedStyle(document.querySelector('.fab')).display) !== 'none', true);
@@ -45,9 +46,9 @@ const mc = pg.locator('.pcard[data-popen="' + wid + '"]');
 await mc.locator('[data-pmd="Laser"]').click(); await pg.waitForTimeout(800);
 eq('1/2 still on machine', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'machine');
 await pg.locator('.pcard[data-popen="' + wid + '"] [data-pmd="Punching"]').click(); await pg.waitForTimeout(800);
-eq('both done → paint', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'paint');
+eq('both done → ประกอบ (v2.120)', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'assemble');
 await pg.locator('.pcard[data-popen="' + wid + '"] [data-padv]').click(); await pg.waitForTimeout(800);
-eq('paint → ประกอบติดตั้ง', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'assemble');
+eq('ประกอบ → ทำสี', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'paint');
 await pg.locator('.pcard[data-popen="' + wid + '"] [data-padv]').click(); await pg.waitForTimeout(800);
 eq('ประกอบ → QC', await pg.evaluate(id => T.prodsAll().find(p => p.id === id).stage, wid), 'qc');
 eq('card arrow points forward (no back button)', [await pg.locator('.pcard[data-popen="' + wid + '"] [data-pfwd]').count(), await pg.locator('.pcard[data-popen="' + wid + '"] [data-pback]').count()], [1, 0]);

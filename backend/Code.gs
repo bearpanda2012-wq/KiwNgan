@@ -17,7 +17,7 @@
  * ย้ายข้อมูลจากชีตแบบเก่า (ตารางงานแบบ Jobshop): ใส่ ID ชีตเดิมใน OLD_SHEET_ID แล้วเรียกใช้ importJobshop()
  */
 
-const VERSION = '1.53.0';
+const VERSION = '1.54.0';
 const OLD_SHEET_ID = ''; // ID ของชีต "ตารางงานแบบ Jobshop" เดิม (ใช้กับ importJobshop เท่านั้น)
 const DB_SHEET_ID = '';  // ใช้เมื่อสร้างสคริปต์แยกจากชีต (standalone): ID ของชีตฐานข้อมูล
 // เรียลไทม์ (ไม่บังคับ): Supabase โปรเจกต์ฟรี — URL และ publishable/anon key (เป็นค่าสาธารณะ) เว้นว่าง = ใช้ Apps Script อย่างเดียว
@@ -31,7 +31,7 @@ const MAX_PIN_FAILS = 5;
 
 const SHEETS = {
   Jobs: ['id', 'code', 'title', 'group', 'taskType', 'qty', 'level', 'assignee', 'sale', 'priority', 'revision',
-         'status', 'received', 'due', 'startedAt', 'finishedAt', 'minutes', 'note', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'helpers', 'checklist', 'ds'],
+         'status', 'received', 'due', 'startedAt', 'finishedAt', 'minutes', 'note', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'helpers', 'checklist', 'ds', 'lateWhy'],   // lateWhy = สาเหตุที่งานช้า 'key' หรือ 'key|รายละเอียด' (LATE_WHY_)
   TimeLogs: ['id', 'jobId', 'member', 'start', 'end', 'minutes'],
   Activity: ['ts', 'jobId', 'who', 'action', 'detail'],
   Users: ['id', 'name', 'full', 'role', 'color', 'active', 'pinHash', 'salt', 'createdAt', 'photo', 'perms'],   // perms ว่าง = ใช้สิทธิ์เริ่มต้นของตำแหน่ง
@@ -40,8 +40,8 @@ const SHEETS = {
   Images: ['id', 'jobId', 'createdBy', 'createdAt', 'thumb', 'f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'fileId'],
   Files: ['id', 'jobId', 'name', 'mime', 'size', 'fileId', 'createdBy', 'createdAt'],
   Comments: ['id', 'jobId', 'ts', 'from', 'text'],
-  // ฝ่ายผลิต: 1 แถว = 1 เลข Job ที่ออกแบบเสร็จแล้ว เดินต่อ รอผลิต → ลงเครื่อง → ทำสี → ประกอบติดตั้ง → แพ็ค → พร้อมส่ง → ส่งแล้ว (paint/assy = 'no' คือข้ามขั้นนั้น)
-  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due', 'qc', 'priority', 'ship'],   // ship = หลักฐานส่งมอบ {to ผู้รับ, note, sig รหัสรูปลายเซ็น, by, at} (รูปถ่ายเก็บที่ jobId d_<id>)
+  // ฝ่ายผลิต: 1 แถว = 1 เลข Job ที่ออกแบบเสร็จแล้ว เดินต่อ รอผลิต → ลงเครื่อง → ประกอบติดตั้ง → ทำสี → แพ็ค → พร้อมส่ง → ส่งแล้ว (paint/assy = 'no' คือข้ามขั้นนั้น)
+  Prod: ['id', 'code', 'title', 'sale', 'group', 'stage', 'machines', 'paint', 'note', 'enteredAt', 'startedAt', 'finishedAt', 'shippedAt', 'createdBy', 'updatedAt', 'updatedBy', 'history', 'assy', 'due', 'qc', 'priority', 'ship', 'late'],   // ship = หลักฐานส่งมอบ {to ผู้รับ, note, sig รหัสรูปลายเซ็น, by, at} (รูปถ่ายเก็บที่ jobId d_<id>)
   // priority = 'urgent' ติดธงด่วนไปจนส่งมอบ (สืบจากงานฝ่ายแบบเลขเดียวกันด้วย)
   // คลังวัสดุ (ฝ่ายสต็อก): 1 แถว = 1 รายการวัสดุ · StockLog = ประวัติรับเข้า/เบิกออก/ปรับยอด
   Stock: ['id', 'name', 'cat', 'unit', 'qty', 'min', 'loc', 'note', 'updatedAt', 'updatedBy', 'price', 'own', 'cust', 'job', 'grade', 'base', 'size'],   // price = ราคาต่อหน่วย (บาท) ใช้คิดต้นทุนวัสดุต่อเลข Job
@@ -55,8 +55,28 @@ const SHEETS = {
 const FILE_MAX_MB = 30;
 const IMG_PARTS = 8, IMG_CELL = 45000, IMG_MAX_PER_JOB = 8;
 const STATUSES = ['queue', 'doing', 'review', 'fix', 'hold', 'done'];
-const PROD_STAGES = ['wait', 'machine', 'paint', 'assemble', 'qc', 'pack', 'ready', 'shipped'];   // qc = ตรวจคุณภาพก่อนแพ็ค (ข้ามไม่ได้)
+const PROD_STAGES = ['wait', 'machine', 'assemble', 'paint', 'qc', 'pack', 'ready', 'shipped'];   // qc = ตรวจคุณภาพก่อนแพ็ค (ข้ามไม่ได้)
 const PROD_SKIP_ = { paint: 'paint', assemble: 'assy' };   // ขั้นที่ข้ามได้ → ชื่อคอลัมน์ธง
+/* สาเหตุที่งานช้า (เลือกได้ทั้งงานฝ่ายแบบและงานผลิต) · เก็บเป็น 'key' หรือ 'key|รายละเอียด' */
+const LATE_WHY_ = { cust: 'รอลูกค้า', rev: 'แก้แบบ', mach: 'เครื่องเสีย', mat: 'วัสดุไม่มี', queue: 'งานแทรก / คิวเต็ม', other: 'อื่น ๆ' };
+function lateClean_(v) {
+  const s = String(v == null ? '' : v), k = s.split('|')[0];
+  if (!LATE_WHY_[k]) return '';
+  const n = s.split('|').slice(1).join('|').replace(/\s+/g, ' ').trim().slice(0, 120);
+  return n ? k + '|' + n : k;
+}
+const lateTxt_ = v => { const c = lateClean_(v); if (!c) return ''; const a = c.split('|'); return LATE_WHY_[a[0]] + (a[1] ? ' · ' + a[1] : ''); };
+/* รายชื่อคนทำ (เลือกตอนย้ายขั้นผลิต / ติ๊กเครื่องเสร็จ) · ผู้ใช้ทั่วไปเห็นแอดมินเป็น "ผู้ดูแลระบบ" → แปลงกลับเป็นชื่อเดิม */
+function workers_(raw, viewer, prev) {
+  const a = Array.isArray(raw) ? raw : String(raw || '').split(',');
+  const adm = (prev || []).filter(n => adminNames_().indexOf(n) >= 0);
+  const out = [];
+  a.map(x => String(x || '').trim().slice(0, 60)).filter(Boolean).forEach(n => {
+    if (n === ADMIN_LABEL && !isAdmin_(viewer)) n = adm.shift() || '';
+    if (n && out.indexOf(n) < 0) out.push(n);
+  });
+  return out.slice(0, 8);
+}
 const COLORS = ['#0B6B70', '#2D5FC4', '#B05A2A', '#7A4BB5', '#2B7F4A', '#B8435F', '#5B6B7A', '#A07A12'];
 
 /* ======================= HTTP ======================= */
@@ -177,6 +197,7 @@ const ACTIONS = {
   exMinSet: (p, u) => withLock_(() => exMinSet_(p, u)),
   exPendAdd: (p, u) => { stockEdit_(u); return withLock_(() => exPendAdd_(p, u)); },   // บันทึกได้เฉพาะฝ่ายสต็อก (stock.edit) · คนอื่นดู/ค้นหาได้อย่างเดียว
   exPendSet: (p, u) => withLock_(() => exPendSet_(p, u)),
+  exJobMat: (p, u) => exJobMat_(p, u),   // รายงานต้นทุนวัสดุต่อเลข Job: เบิก/รับคืนที่บันทึกลง Express พร้อมเลข Job
   exPendMatch: (p, u) => { if (!can_(u, 'stock.view')) throw new Error('ไม่มีสิทธิ์'); const r = exPendMatch_(false); return { matched: r.matched, exPend: r.matched ? exPendList_() : undefined }; },
   // คลังความรู้ (ทุกคนอ่านได้ · แก้ได้เฉพาะเรื่องของฝ่ายตัวเอง · แอดมินแก้ได้ทุกฝ่าย)
   kbSave: (p, u) => withLock_(() => kbSave_(p.item, u)),
@@ -761,6 +782,7 @@ function cleanJob_(j) {
   ['minutes', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'].forEach(k => delete out[k]); // ค่าที่ server เป็นคนกำหนด
   if (out.status && STATUSES.indexOf(out.status) < 0) out.status = 'queue';
   if (out.priority && ['normal', 'urgent'].indexOf(out.priority) < 0) out.priority = 'normal';
+  if (out.lateWhy !== undefined) out.lateWhy = lateClean_(out.lateWhy);
   return out;
 }
 
@@ -852,7 +874,7 @@ function saveJob_(job, u) {
 }
 
 /* ประวัติ "แก้ไข": บอกว่าแก้อะไร เป็นอะไร และเพราะอะไร (ฟังก์ชันเดียวกับหน้าเว็บ editDetail ใน app.js) */
-var ED_LBL_ = { code: 'เลข Job', title: 'ชื่องาน', group: 'กลุ่มงาน', taskType: 'ประเภทงาน', qty: 'จำนวน', level: 'ระดับ', assignee: 'ผู้รับผิดชอบ', sale: 'Sale', priority: 'ความด่วน', revision: 'งานแก้', status: 'สถานะ', received: 'วันรับงาน', due: 'กำหนดส่ง', startedAt: 'เวลาเริ่ม', finishedAt: 'เวลาปิดงาน', note: 'บรีฟ/หมายเหตุ', helpers: 'ผู้ร่วมทำงาน', checklist: 'ขั้นตอนงาน', ds: 'รายละเอียดงานออกแบบ' };
+var ED_LBL_ = { code: 'เลข Job', title: 'ชื่องาน', group: 'กลุ่มงาน', taskType: 'ประเภทงาน', qty: 'จำนวน', level: 'ระดับ', assignee: 'ผู้รับผิดชอบ', sale: 'Sale', priority: 'ความด่วน', revision: 'งานแก้', status: 'สถานะ', received: 'วันรับงาน', due: 'กำหนดส่ง', startedAt: 'เวลาเริ่ม', finishedAt: 'เวลาปิดงาน', note: 'บรีฟ/หมายเหตุ', helpers: 'ผู้ร่วมทำงาน', checklist: 'ขั้นตอนงาน', ds: 'รายละเอียดงานออกแบบ', lateWhy: 'สาเหตุที่ช้า' };
 function editDetail_(a, b, why) {
   const TM = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
   const DSL = { addr: 'ที่อยู่หน้างาน', area: 'ขนาดพื้นที่', brand: 'แบรนด์/งาน', budget: 'งบประมาณ', map: 'ลิงก์แผนที่', material: 'วัสดุ', measureAt: 'นัดวัดพื้นที่', pattern: 'Pattern', pcs: 'จำนวนชิ้น', room: 'ประเภทห้อง', size: 'ขนาดพื้นที่', style: 'สไตล์', surveyAt: 'วันนัดสำรวจ', wall: 'ขนาดผนัง', work: 'ชนิดงาน', furn: 'รายการเฟอร์นิเจอร์', due: 'แบบกำหนดส่ง', vr: 'VR', survey: 'สำรวจหน้างาน', vdo: 'วิดีโอ', repeat: 'งานประจำ' };
@@ -878,6 +900,7 @@ function editDetail_(a, b, why) {
     } else if (h === 'priority') out.push(y === 'urgent' ? 'ตั้งเป็นงานด่วน' : 'ยกเลิกงานด่วน');
     else if (h === 'revision') out.push(y === 'true' || y === '1' ? 'ตั้งเป็นงานแก้' : 'ยกเลิกงานแก้');
     else if (h === 'received') out.push('วันรับงาน ' + d8(x) + ' → ' + d8(y));
+    else if (h === 'lateWhy') out.push(y ? 'สาเหตุที่ช้า: ' + lateTxt_(y) : 'ลบสาเหตุที่ช้า');
     else if (h === 'qty') out.push('จำนวน ' + qv(x) + ' → ' + qv(y));
     else if (h === 'level') out.push('ระดับ ' + (x || '–') + ' → ' + (y || '–'));
     else if (h === 'helpers') {
@@ -939,7 +962,7 @@ function deleteJob_(id, u) {
 
 /* ======================= ฝ่ายผลิต =======================
    งานที่ออกแบบเสร็จ (งานประเภทที่ "ส่งเข้าผลิต" เช่น ทำ CAM) จะเข้า "รอผลิต" เอง 1 เลข Job = 1 แถว
-   ขั้น: wait รอผลิต → machine ลงเครื่อง (เลือกได้หลายเครื่อง ครบทุกเครื่องแล้วไปต่อเอง) → paint ทำสี (ข้ามได้) → assemble ประกอบติดตั้ง (ข้ามได้) → pack แพ็ค → ready พร้อมส่ง → shipped ส่งแล้ว
+   ขั้น: wait รอผลิต → machine ลงเครื่อง (เลือกได้หลายเครื่อง ครบทุกเครื่องแล้วไปต่อเอง) → assemble ประกอบติดตั้ง (ข้ามได้) → paint ทำสี (ข้ามได้) → qc → pack แพ็ค → ready พร้อมส่ง → shipped ส่งแล้ว
    อัปเดตได้: ฝ่ายผลิต หัวหน้างาน แอดมิน · คนอื่นดูอย่างเดียว */
 function toProd_(taskType) {
   if (isDsType_(taskType)) return DS_TYPES_[taskType] === 1;
@@ -952,7 +975,10 @@ function prodMachines_(raw) {
   if (typeof a === 'string') { try { a = JSON.parse(a || '[]'); } catch (e) { a = []; } }
   if (!Array.isArray(a)) a = [];
   const seen = {};
-  return a.map(x => ({ m: String((x && x.m) || '').trim().slice(0, 40), d: String((x && x.d) || '').slice(0, 16) }))
+  return a.map(x => { const o = { m: String((x && x.m) || '').trim().slice(0, 40), d: String((x && x.d) || '').slice(0, 16) };   // s = เริ่มลงเครื่องนี้ · w = คนทำ (เลือกตอนติ๊กเสร็จ)
+      const st = String((x && x.s) || '').slice(0, 16); if (st) o.s = st;
+      const w = Array.isArray(x && x.w) ? x.w.map(n => String(n || '').trim().slice(0, 60)).filter(Boolean).slice(0, 8) : []; if (w.length && o.d) o.w = w;
+      return o; })
     .filter(x => x.m && !seen[x.m] && (seen[x.m] = 1)).slice(0, 12);
 }
 function prodsRecent_() {
@@ -963,7 +989,9 @@ function maskProd_(x, viewer) {
   if (!x || isAdmin_(viewer)) return x;
   const o = Object.assign({}, x);
   ['createdBy', 'updatedBy'].forEach(k => { o[k] = maskName_(o[k], viewer); });
-  try { o.history = JSON.stringify(JSON.parse(o.history || '[]').map(h => Object.assign(h, { by: maskName_(h.by, viewer) }))); } catch (e) {}
+  const mw = a => Array.isArray(a) ? a.map(n => maskName_(n, viewer)) : a;
+  try { o.history = JSON.stringify(JSON.parse(o.history || '[]').map(h => Object.assign(h, { by: maskName_(h.by, viewer) }, h.w ? { w: mw(h.w) } : {}))); } catch (e) {}
+  try { o.machines = JSON.stringify(JSON.parse(o.machines || '[]').map(m => m && m.w ? Object.assign(m, { w: mw(m.w) }) : m)); } catch (e) {}
   return o;
 }
 function prodFind_(code) {
@@ -991,7 +1019,7 @@ function prodSave_(data, u) {
     const r0 = data.id ? rowOf_('Prod', data.id) : -1, b0 = r0 > 0 ? readRow_('Prod', r0) : null;
     const addProof = data.stage === undefined && !!b0 && b0.stage === 'shipped' && !!data.ship;   // เพิ่มหลักฐานส่งมอบทีหลังได้
     if (!addProof && (!b0 || ['ready', 'shipped'].indexOf(b0.stage) < 0 || ['ready', 'shipped'].indexOf(data.stage) < 0)) throw new Error('ฝ่ายสต็อกกดได้เฉพาะ "ส่งแล้ว" ของงานที่พร้อมส่ง');
-    data = { id: data.id, baseUpdatedAt: data.baseUpdatedAt, stage: data.stage, why: data.why, ship: data.ship };
+    data = { id: data.id, baseUpdatedAt: data.baseUpdatedAt, stage: data.stage, why: data.why, ship: data.ship, late: data.late };
   }
   const now = nowIso_(), row = data.id ? rowOf_('Prod', data.id) : -1;
   let before = null, cur;
@@ -1014,7 +1042,15 @@ function prodSave_(data, u) {
   if (data.priority !== undefined) cur.priority = data.priority === 'urgent' ? 'urgent' : '';
   if (data.paint !== undefined) cur.paint = data.paint === 'no' ? 'no' : '';
   if (data.assy !== undefined) cur.assy = data.assy === 'no' ? 'no' : '';
-  if (data.machines !== undefined) cur.machines = JSON.stringify(prodMachines_(data.machines));
+  if (data.machines !== undefined) {
+    const old = prodMachines_(cur.machines), nw = prodMachines_(data.machines), n16 = now.slice(0, 16);
+    nw.forEach(m => { const o = old.find(x => x.m === m.m);
+      if (m.w) m.w = workers_(m.w, u, (o && o.w) || []);
+      if (!m.s) m.s = (o && o.s) || ''; if (!m.s) delete m.s;
+      if (!o && (cur.stage === 'machine' || data.stage === 'machine') && !m.s) m.s = n16; });   // เพิ่มเครื่องระหว่างลงเครื่อง = เริ่มนับตอนนี้
+    cur.machines = JSON.stringify(nw);
+  }
+  if (data.late !== undefined) cur.late = lateClean_(data.late);
   let qc = prodQc_(cur.qc);
   if (data.qc !== undefined) qc = Object.assign(prodQc_(data.qc), { fails: qc.fails, last: qc.last });
   if (data.stage !== undefined) { if (PROD_STAGES.indexOf(data.stage) < 0) throw new Error('ขั้นงานผลิตไม่ถูกต้อง'); cur.stage = data.stage; }
@@ -1025,7 +1061,7 @@ function prodSave_(data, u) {
   }
   const ms = prodMachines_(cur.machines);
   if (cur.stage === 'machine' && !ms.length) throw new Error('เลือกเครื่องอย่างน้อย 1 เครื่องก่อนเริ่มลงเครื่อง');
-  if (cur.stage === 'machine' && ms.every(x => x.d)) cur.stage = 'paint';   // ครบทุกเครื่อง → ไปขั้นต่อเอง
+  if (cur.stage === 'machine' && ms.every(x => x.d)) cur.stage = 'assemble';   // ครบทุกเครื่อง → ไปขั้นต่อเอง
   for (let k = 0; k < 3; k++) {   // ข้ามขั้นที่ติ๊ก "ไม่ต้อง" ไว้ (ถ้าย้ายเข้ามาใหม่)
     const f = PROD_SKIP_[cur.stage];
     if (f && cur[f] === 'no' && (!before || before.stage !== cur.stage)) cur.stage = PROD_STAGES[PROD_STAGES.indexOf(cur.stage) + 1]; else break;
@@ -1047,7 +1083,12 @@ function prodSave_(data, u) {
   if (si < iS) cur.shippedAt = '';
   let hist = []; try { hist = JSON.parse(cur.history || '[]'); } catch (e) {}
   const changed = !before || before.stage !== cur.stage || before.machines !== cur.machines;
-  if (changed) { hist.push({ t: now.slice(0, 16), by: u.name, s: cur.stage, x: String(data.why || '').slice(0, 120) }); hist = hist.slice(-40); }
+  if (changed) {   // w = คนที่ลงมือทำขั้นก่อนหน้า (เลือกตอนกดย้ายขั้น) · ไม่เลือก = นับคนที่กด
+    const e = { t: now.slice(0, 16), by: u.name, s: cur.stage, x: String(data.why || '').slice(0, 120) };
+    const pw = (hist.filter(h => h && h.w).pop() || {}).w || [], w = data.workers !== undefined ? workers_(data.workers, u, pw) : [];
+    if (w.length && before && before.stage !== cur.stage) e.w = w;
+    hist.push(e); hist = hist.slice(-40);
+  }
   cur.history = JSON.stringify(hist);
   cur.updatedAt = now; cur.updatedBy = u.name;
   writeRow_('Prod', cur, row);
@@ -1122,6 +1163,15 @@ function exPendAdd_(p, u) {
   log_('', u.name, 'stock', 'รอลง Express · ' + EXP_KIND_[kind] + ' ' + ok.length + ' รายการ' + (job ? ' (Job ' + job + ')' : ''));
   bump_('data');
   return { exPend: exPendList_() };
+}
+/* ต้นทุนวัสดุต่อเลข Job จาก Express: รายการ "รอลง Express" ที่ใส่เลข Job (ไม่นับที่ยกเลิก) ในช่วงวันที่ · วันที่ = วันที่เอกสาร Express ถ้าจับคู่แล้ว */
+function exJobMat_(p, u) {
+  if (!can_(u, 'team.all') && !can_(u, 'stock.view')) throw new Error('ไม่มีสิทธิ์ดูต้นทุนวัสดุ');
+  const from = String(p.from || '').slice(0, 10), to = String(p.to || '').slice(0, 10);
+  let rows = []; try { rows = readAll_('ExPend'); } catch (e) { return { rows: [] }; }
+  const day = r => /^\d{8}$/.test(String(r.docDat || '')) ? String(r.docDat).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') : String(r.ts || '').slice(0, 10);
+  return { rows: rows.filter(r => r.job && r.status !== 'cancel' && (!from || day(r) >= from) && (!to || day(r) <= to))
+    .map(r => ({ job: r.job, cod: r.cod, des: r.des, unit: r.unit, kind: r.kind, qty: stockNum_(r.qty) || 0, status: r.status, doc: r.doc || '', day: day(r) })) };
 }
 function exPendSet_(p, u) {
   const row = rowOf_('ExPend', p.id); if (row < 0) throw new Error('ไม่พบรายการ');
@@ -2237,6 +2287,39 @@ function morningReminders() {
     } catch (e) {}
   });
 }
+/* ---------- เตือนคอขวดล่วงหน้า (เหมือน stageNorms/slowInfo ในแอป) ----------
+   ปกติ = เวลาเฉลี่ยที่งานอยู่ขั้นนั้น (ออกจากขั้นใน 90 วันล่าสุด ≥ 3 งาน) · ช้ากว่าปกติ = นานกว่าเฉลี่ย × 1.5 และเกิน 1 วัน */
+const PROD_LBL_ = { wait: 'รอผลิต', machine: 'ลงเครื่อง', assemble: 'ประกอบ', paint: 'ทำสี', qc: 'QC', pack: 'แพ็ค', ready: 'พร้อมส่ง', shipped: 'ส่งแล้ว' };
+function tLocal_(s) {   // 'yyyy-MM-ddTHH:mm' (เวลาตาม timezone ของสคริปต์) → ms
+  const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/); if (!m) return NaN;
+  const off = Utilities.formatDate(new Date(), tz_(), 'XXX'), sg = off[0] === '-' ? -1 : 1, oh = +off.slice(1, 3) || 0, om = +off.slice(4, 6) || 0;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)) - (off === 'Z' ? 0 : sg * (oh * 60 + om) * 6e4);
+}
+function slowProds_(prods, nowMs) {
+  const from = nowMs - 90 * 864e5, acc = {}, live = PROD_STAGES.slice(0, -1);
+  const hs = p => { let h = []; try { h = JSON.parse(p.history || '[]'); } catch (e) {} return (Array.isArray(h) ? h : []).filter(e => e && e.t && e.s).sort((a, b) => String(a.t).localeCompare(String(b.t))); };
+  prods.forEach(p => { const h = hs(p); h.forEach((e, i) => { const nx = h[i + 1]; if (!nx || live.indexOf(e.s) < 0) return; const t1 = tLocal_(nx.t), t0 = tLocal_(e.t);
+    if (!(t1 >= from) || !(t1 > t0)) return; const a = acc[e.s] = acc[e.s] || { sum: 0, n: 0 }; a.sum += (t1 - t0) / 864e5; a.n++; }); });
+  const out = [];
+  prods.forEach(p => { if (live.indexOf(p.stage) < 0) return; const a = acc[p.stage]; if (!a || a.n < 3) return;
+    const cur = hs(p).filter(e => e.s === p.stage).pop(), since = (cur && cur.t) || p.updatedAt || p.enteredAt; const t0 = tLocal_(since); if (!(t0 > 0)) return;
+    const d = (nowMs - t0) / 864e5, avg = a.sum / a.n; if (d >= 1 && d > avg * 1.5) out.push({ p: p, st: p.stage, d: d, avg: avg, n: a.n, since: String(since).slice(0, 16) }); });
+  return out.sort((x, y) => y.d / y.avg - x.d / x.avg);
+}
+/** ทุกชั่วโมง (08–18 น.): งานที่เพิ่งกลายเป็น "ช้ากว่าปกติ" → แจ้งหัวหน้า (ผู้รับสรุปตอนเช้า) 1 ข้อความรวม · งานเดิมในขั้นเดิมแจ้งครั้งเดียว */
+function slowWatch_() {
+  const hr = +Utilities.formatDate(new Date(), tz_(), 'H'); if (hr < 8 || hr > 18) return 0;
+  let prods = []; try { prods = readAll_('Prod'); } catch (e) { return 0; }
+  const slow = slowProds_(prods, Date.now()), pr = PropertiesService.getScriptProperties();
+  let seen = null; try { seen = JSON.parse(pr.getProperty('SLOW_SEEN') || 'null'); } catch (e) {}
+  const key = o => o.p.id + '|' + o.st + '|' + o.since, now = slow.map(key);
+  pr.setProperty('SLOW_SEEN', JSON.stringify(now.slice(0, 300)));
+  if (!seen) return 0;   // รอบแรกหลังอัปเดต: จำไว้เฉย ๆ ไม่แจ้งงานเก่าทั้งหมดทีเดียว
+  const fresh = slow.filter(o => seen.indexOf(key(o)) < 0); if (!fresh.length) return 0;
+  const to = digestTo_(digestCfg_()); if (!to.length) return 0;
+  pushTo_(to, { kind: 'slow', from: '', title: fresh.slice(0, 3).map(o => o.p.code + ' ' + PROD_LBL_[o.st] + ' ' + Math.round(o.d * 10) / 10 + ' วัน').join(', ') + (fresh.length > 3 ? ' …' : ''), code: fresh.length === 1 ? fresh[0].p.code : '', count: fresh.length });
+  return fresh.length;
+}
 /* ---------- สรุปงานประจำเช้า → ส่งแจ้งเตือนให้เจ้าของ/หัวหน้า (ตั้งเวลา วัน และผู้รับในหน้า ตั้งค่า > สรุปประจำวัน) ---------- */
 const DIGEST_TOPICS_ = ['design', 'visit', 'prod', 'due', 'late', 'shipped', 'stock'];
 /* วันที่ส่ง: [0=อา. … 6=ส.] (ค่าเก่า 'wd' / 'sat' / 'all' แปลงให้) · หัวข้อ: ไม่ระบุ = ทุกหัวข้อ */
@@ -2267,6 +2350,8 @@ function digestBuild_(jobs, prods, items, today, yday, dow, topics, exLow, xpend
   if (on('design')) lines.push('🎨 ฝ่ายแบบ ค้าง ' + jo.length + ' งาน' + (jl ? ' · เลยกำหนด ' + jl : '') + (jt ? ' · ครบกำหนดวันนี้ ' + jt : ''));
   if (on('visit')) { const vt = visitsBetween_(jobs, today, today); if (vt.length) lines.push('📍 นัดหน้างานวันนี้ ' + vt.length + ': ' + vt.slice(0, 3).map(visitTxt_).join(', ') + (vt.length > 3 ? ' …' : '')); }
   if (on('prod')) lines.push('🏭 ฝ่ายผลิต ' + po.length + ' งาน · ลงเครื่อง ' + mc + ' · พร้อมส่ง ' + pr + (pl ? ' · เลยกำหนด ' + pl : '') + (pt ? ' · ส่งวันนี้ ' + pt : '') + (pu ? ' · ด่วน ' + pu : ''));
+  const slow = slowProds_(prods, Date.now());   // ค่าเฉลี่ยต้องคิดจากทุกงาน (รวมที่ส่งแล้ว)
+  if (on('prod') && slow.length) lines.push('⏱️ ค้างนานกว่าปกติ ' + slow.length + ' งาน: ' + slow.slice(0, 4).map(o => o.p.code + ' (' + PROD_LBL_[o.st] + ' ' + Math.round(o.d) + ' วัน)').join(', ') + (slow.length > 4 ? ' +' + (slow.length - 4) : ''));
   if (on('due')) lines.push(dueA.length ? '📅 ครบกำหนดวันนี้ ' + dueA.length + ' งาน: ' + codes(dueA) : '📅 วันนี้ไม่มีงานครบกำหนด');
   if (on('late')) lines.push(lateA.length ? '⚠️ เลยกำหนด ' + lateA.length + ' งาน: ' + codes(lateA) : '✅ ไม่มีงานเลยกำหนด');
   if (on('shipped')) lines.push(sh ? '🚚 เมื่อวานส่งมอบแล้ว ' + sh + ' งาน' : '🚚 เมื่อวานไม่มีงานส่งมอบ');
@@ -2329,6 +2414,7 @@ function digestEnsure_() { if (!digestTriggerOn_()) ScriptApp.newTrigger('digest
 /** ทำงานทุกชั่วโมง: ถึงเวลาที่ตั้งไว้ → ส่งสรุปครั้งเดียวต่อวัน */
 function digestTick() {
   try { exLowWatch_(); } catch (e) { /* แจ้งเตือนเป็นของเสริม */ }
+  try { slowWatch_(); } catch (e) {}
   const cfg = digestCfg_(); if (!cfg.on) return;
   const now = new Date(), hr = +Utilities.formatDate(now, tz_(), 'H'), u = +Utilities.formatDate(now, tz_(), 'u'), today = Utilities.formatDate(now, tz_(), 'yyyy-MM-dd');
   if (hr < cfg.hour || hr > cfg.hour + 2) return;   // ช่วงเผื่อ 2 ชม. เผื่อรอบก่อนพลาด

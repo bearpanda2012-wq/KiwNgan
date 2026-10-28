@@ -33,13 +33,13 @@ await pg.evaluate(id => T.moveJob(id, 'done'), jid); await pg.waitForTimeout(180
 eq('no "open CAM job" prompt', await pg.locator('#askBox:visible').count(), 0);
 eq('sent to production (รอผลิต)', await pg.evaluate(() => (S.prods.find(p => p.code === 'CC-001') || {}).stage), 'wait');
 eq('extra CAM on same code blocked', await pg.evaluate(() => T.codeClash('CC-001', 'ทำ CAM', S.jobs)), 'เลข Job CC-001 มีงาน CAM (CAD+CAM) อยู่แล้ว ถ้าเป็นงานแก้ไขให้เติมท้าย เช่น _re1');
-// plain CAD still offers CAM follow-up
+// v2.120: CAD เสร็จแล้วไม่ถามเปิดงาน CAM ต่อ
 await pg.evaluate(() => T.openEditor(null)); await pg.waitForTimeout(300);
 await pg.fill('#e-code', 'CC-002'); await pg.selectOption('#e-group', { index: 1 }); await pg.selectOption('#e-type', 'ทำ CAD'); await pg.click('[data-act="save"]'); await pg.waitForTimeout(1500);
 const j2 = await pg.evaluate(() => S.jobs.find(j => j.code === 'CC-002').id);
 for (const st of ['doing', 'review', 'done']) { await pg.evaluate(([id, s]) => T.moveJob(id, s), [j2, st]); await pg.waitForTimeout(800); }
 await pg.waitForTimeout(800);
-eq('plain CAD still offers CAM follow-up', await pg.locator('#askBox').count() > 0 && await pg.locator('#askBox').innerText().then(t => /CAM/.test(t)), true);
+eq('plain CAD no CAM follow-up prompt', await pg.locator('#askBox').count(), 0);
 console.log('errors', errs.join(' | ') || 'none');
 console.log(ok + ' ok, ' + bad + ' failed');
 await b.close(); srv.close(); if (bad || errs.length) process.exit(1);

@@ -42,8 +42,7 @@ await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, 
 await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('stock'); }); await pg.waitForTimeout(400);
 eq('no Express tab without config', await pg.locator('.ex-tabs').count(), 0);
 await pg.evaluate(() => T.exStart({ url: 'https://ex.test', key: 'k', tok: 'exr_test_token_123456789012345' })); await pg.waitForTimeout(800);
-eq('tabs appear', await pg.locator('.ex-tabs [data-exsrc="ex"]').count(), 1);
-await pg.click('[data-exsrc="ex"]');
+eq('v2.120: no in-app tab · Express shown directly', [await pg.locator('.ex-tabs').count(), await pg.locator('#exList').count()], [0, 1]);
 await pg.waitForFunction(() => document.querySelectorAll('.ex-row').length > 0, null, { timeout: 8000 }).catch(() => {});
 eq('paged pull: since 0 → 2000 (more) → done', pulls.slice(0, 2), [0, 2000]);
 eq('all items loaded', await pg.evaluate(() => EX.items.size), items.length);
@@ -82,7 +81,7 @@ eq('delta applied (balance + deleted code)', await pg.evaluate(() => [document.q
 await pg.reload(); await pg.waitForTimeout(900);
 pulls = [];
 await pg.evaluate(() => { document.querySelectorAll('.ntf').forEach(e => e.remove()); T.go('stock'); T.exStart({ url: 'https://ex.test', key: 'k', tok: 'exr_test_token_123456789012345' }); }); await pg.waitForTimeout(1200);
-eq('remembers Express tab', await pg.evaluate(() => SV.src), 'ex');
+eq('v2.120: stock always opens Express', await pg.locator('#exList').count(), 1);
 eq('cache restored, pull resumes from saved ver', [await pg.evaluate(() => EX.items.size), pulls[0]], [items.length - 1, 3002]);
 // ตัวซิงก์เงียบ → เตือน
 agentAt = new Date(Date.now() - 40 * 60e3).toISOString(); extra = null;
@@ -152,17 +151,6 @@ if (real) {
 }
 // เครื่องมือคลังในแอป (ใบขอซื้อ · นับสต็อก · แจ้งต้องสั่ง) ยังอยู่ในแท็บ Express
 await pg.setViewportSize({ width: 1400, height: 900 }); await pg.evaluate(() => { SV.src = 'ex'; T.render(); }); await pg.waitForTimeout(300);
-eq('Express tab still has buy-list + count buttons', await pg.evaluate(() => [!!document.querySelector('.ex-apptools [data-buyopen]'), !!document.querySelector('.ex-apptools [data-cntopen]')]), [true, true]);
-await pg.click('.ex-apptools [data-cntopen]'); await pg.waitForTimeout(400);
-eq('count opens from Express tab', await pg.locator('#cntModal').count(), 1);
-await pg.keyboard.press('Escape'); await pg.evaluate(() => { const m = document.querySelector('#cntModal'); if (m) m.remove(); }); await pg.waitForTimeout(200);
-await pg.click('.ex-apptools [data-buyopen]'); await pg.waitForTimeout(400);
-eq('buy list opens from Express tab', await pg.locator('#buyModal').count(), 1);
-await pg.evaluate(() => { const m = document.querySelector('#buyModal'); if (m) m.remove(); document.body.classList.remove('pm-open'); });
-const hasNeed = await pg.locator('.ex-apptools .sk-alert').count();
-if (hasNeed) { await pg.click('.ex-apptools .sk-alert'); await pg.waitForTimeout(400); eq('need-to-order alert jumps to app tab filtered', await pg.evaluate(() => [SV.src, SV.cat]), ['app', 'low']); await pg.evaluate(() => { SV.src = 'ex'; SV.cat = 'all'; T.render(); }); }
-// ฝั่งแอปเดิมยังใช้ได้
-await pg.click('[data-exsrc="app"]'); await pg.waitForTimeout(300);
-eq('switch back to app stock', await pg.evaluate(() => !!document.querySelector('.sk-grid') && !document.querySelector('.ex-list')), true);
+eq('v2.120: in-app tools removed from Express page', await pg.locator('.ex-apptools').count(), 0);
 console.log(ok + ' ok, ' + bad + ' failed'); console.log('errors', errs.length ? errs : 'none');
 await b.close(); srv.close(); process.exit(bad ? 1 : 0);

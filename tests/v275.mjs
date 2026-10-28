@@ -19,7 +19,7 @@ await pg.goto('http://127.0.0.1:8908/index.html'); await pg.waitForTimeout(600);
 await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1300); await clean();
 // ไอคอนแบนเนอร์ฝ่ายผลิตขยับทุกตัว (คนละท่า)
 await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(500);
-eq('banner icons all animate (distinct)', await pg.evaluate(() => [...document.querySelectorAll('.pflow .flow-ic svg')].map(e => getComputedStyle(e).animationName)), ['icHome', 'icPress', 'icRoll', 'icTwist', 'icShield', 'icHop', 'icDrive']);
+eq('banner icons all animate (distinct)', await pg.evaluate(() => [...document.querySelectorAll('.pflow .flow-ic svg')].map(e => getComputedStyle(e).animationName)), ['icHome', 'icPress', 'icTwist', 'icRoll', 'icShield', 'icHop', 'icDrive']);
 eq('column header icons animate too', await pg.evaluate(() => [...document.querySelectorAll('.pboard .col-ic svg')].every(e => getComputedStyle(e).animationName !== 'none')), true);
 // สรุปประจำเช้า
 await pg.evaluate(() => T.go('settings')); await pg.waitForTimeout(500);
@@ -48,7 +48,7 @@ eq('ticking sat after preset → matches จันทร์–เสาร์', 
 // เรื่องที่จะส่ง
 eq('all topics on by default', [await pg.locator('.dg-t').count(), await pg.locator('.dg-t.on').count()], [7, 7]);   // v2.85.1 +นัดหน้างาน
 await pg.click('.dg-t:has([data-dgtopic="stock"])'); await pg.click('.dg-t:has([data-dgtopic="shipped"])'); await pg.waitForTimeout(150);
-eq('preview follows topics', [await pg.locator('.dg-t.on').count(), /วัสดุ|ใกล้หมด/.test(await pg.locator('.dg-ntf').innerText()), await pg.locator('.dg-ntf li').count()], [5, false, 4]);   // นัดหน้างาน: ไม่มีนัด = ไม่ขึ้นบรรทัด
+eq('preview follows topics', [await pg.locator('.dg-t.on').count(), /วัสดุ|ใกล้หมด/.test(await pg.locator('.dg-ntf').innerText()), await pg.locator('.dg-ntf li:not(:has-text("⏱️"))').count()], [5, false, 4]);   // v2.120: บรรทัด ⏱️ งานค้างนานกว่าปกติ ขึ้นตามข้อมูล   // นัดหน้างาน: ไม่มีนัด = ไม่ขึ้นบรรทัด
 for (const k of ['design', 'visit', 'prod', 'due']) await pg.click('.dg-t:has([data-dgtopic="' + k + '"])');
 await pg.click('.dg-t:has([data-dgtopic="late"])'); await pg.waitForTimeout(150);
 eq('cannot untick last topic', [await pg.locator('.dg-t.on').count(), await pg.locator('.dg-ntf li').count()], [1, 1]);

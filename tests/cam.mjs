@@ -11,10 +11,9 @@ console.log('due notice shown at login', await pg.locator('.ntf.job-due').count(
 await pg.evaluate(() => T.go('board')); await pg.waitForTimeout(500);
 const id = await pg.evaluate(async () => { const j = S.jobs.find(x => x.status === 'doing' && !/CAM/.test(x.taskType) && !S.jobs.some(y => y !== x && y.code === x.code)); const c = document.createElement('canvas'); c.width = 50; c.height = 50; const blob = await new Promise(r => c.toBlob(r, 'image/png')); await T.uploadImages(j.id, [new File([blob], 'a.png', { type: 'image/png' })]); await T.moveJob(j.id, 'done'); return j.id; });
 await pg.waitForTimeout(500);
-console.log('ask shown', await pg.locator('#askBox.show').count(), await pg.locator('#askBox b').textContent());
-await pg.screenshot({ path: new URL('out/cam-ask.png', import.meta.url).pathname });
-await pg.click('#askBox [data-camyes]'); await pg.waitForTimeout(1200);
-console.log('cam job', JSON.stringify(await pg.evaluate(id => { const s = S.jobs.find(j => j.id === id); const c = S.jobs.find(j => j.code === s.code && /CAM/.test(j.taskType)); return c && { type: c.taskType, status: c.status, title: c.title === s.title, imgs: T.imgsOf(c.id).length, pending: !!c.pending }; }, id)));
+const ask = await pg.locator('#askBox').count();
+console.log(ask ? 'FAIL CAM prompt still shown' : 'ok no CAM follow-up prompt (v2.120)');
+console.log('no CAM job created', await pg.evaluate(id => { const s = S.jobs.find(j => j.id === id); return !S.jobs.some(j => j.code === s.code && /CAM/.test(j.taskType)); }, id));
 // assign notification simulation
 const n0 = await pg.locator('.ntf.job-assign').count();
 await pg.evaluate(() => { const prev = JSON.parse(JSON.stringify(S.jobs)); const j = S.jobs.find(x => x.assignee !== S.me && x.status !== 'done'); j.assignee = S.me; j.updatedBy = 'ต้น'; T.jobAlerts(prev); });

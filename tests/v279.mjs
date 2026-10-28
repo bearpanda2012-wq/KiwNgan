@@ -21,7 +21,7 @@ await pg.fill('#tsName', 'กลางคืนคลื่น'); await pg.click
 eq('saved shows in list as current', await pg.evaluate(() => [document.querySelectorAll('.ts-it').length, document.querySelector('.ts-it.on .ts-tx b').textContent]), [1, 'กลางคืนคลื่น']);
 // ธีม B: ไฟล์รูปพื้นหลัง
 await pg.click('[data-act="themereset"]'); await pg.waitForTimeout(300);
-await pg.click('[data-bgtab="img"]'); await pg.setInputFiles('#bgIn', new URL('out/bgtest.jpg', import.meta.url).pathname); await pg.waitForTimeout(2500);
+await pg.click('[data-bgtab="img"]'); await pg.setInputFiles('#bgIn', new URL('fixtures/bgtest.jpg', import.meta.url).pathname); await pg.waitForTimeout(2500);
 await pg.fill('#tsName', 'รูปของฉัน'); await pg.press('#tsName', 'Enter'); await pg.waitForTimeout(800);
 eq('two saved', await pg.locator('.ts-it').count(), 2);
 // โหลด A กลับ

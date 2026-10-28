@@ -26,16 +26,16 @@ eq('start on 2 machines', [r.stage, JSON.parse(r.machines).length, !!r.startedAt
 r = m.call('prodSave', { prod: { id: P1.id, machines: [{ m: 'Laser', d: '2026-10-09T10:00' }, { m: 'Punching' }] } }, PR).data.prod;
 eq('1 of 2 done stays on machine', r.stage, 'machine');
 r = m.call('prodSave', { prod: { id: P1.id, machines: [{ m: 'Laser', d: '2026-10-09T10:00' }, { m: 'Punching', d: '2026-10-09T11:00' }] } }, PR).data.prod;
-eq('all machines done → ทำสี', r.stage, 'paint');
-r = m.call('prodSave', { prod: { id: P1.id, stage: 'assemble' } }, PR).data.prod; eq('ทำสี → ประกอบติดตั้ง', r.stage, 'assemble');
-r = m.call('prodSave', { prod: { id: P1.id, stage: 'qc' } }, PR).data.prod; eq('ประกอบ → QC', r.stage, 'qc');
+eq('all machines done → ประกอบ (v2.120: ประกอบก่อนทำสี)', r.stage, 'assemble');
+r = m.call('prodSave', { prod: { id: P1.id, stage: 'paint', workers: ['ช่างเอ', 'ช่างบี'] } }, PR).data.prod; eq('ประกอบ → ทำสี + คนทำ', [r.stage, JSON.parse(r.history).pop().w], ['paint', ['ช่างเอ', 'ช่างบี']]);
+r = m.call('prodSave', { prod: { id: P1.id, stage: 'qc' } }, PR).data.prod; eq('ทำสี → QC', r.stage, 'qc');
 eq('cannot pack before QC passes', m.call('prodSave', { prod: { id: P1.id, stage: 'pack' } }, PR).error, 'งานต้องผ่าน QC ก่อนส่งไปแพ็ค');
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'pack', qc: { it: [{ t: 'ขนาดตรงแบบ', d: '1' }], res: 'pass', ok: 10, ng: 0 } } }, PR).data.prod; eq('QC pass → แพ็ค', [r.stage, JSON.parse(r.qc).res, JSON.parse(r.qc).by], ['pack', 'pass', 'ช่างเอ']);
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'ready' } }, PR).data.prod; eq('→ พร้อมส่ง has finishedAt', [r.stage, !!r.finishedAt], ['ready', true]);
 eq('prod cannot ship (stock does)', m.call('prodSave', { prod: { id: P1.id, stage: 'shipped' } }, PR).error, 'ขั้น "ส่งแล้ว" ให้ฝ่ายสต็อกเป็นคนกด (ฝ่ายผลิตทำได้ถึง "พร้อมส่ง")');
 eq('stock cannot move other stages', m.call('prodSave', { prod: { id: P1.id, stage: 'pack' } }, ST).error, 'ฝ่ายสต็อกกดได้เฉพาะ "ส่งแล้ว" ของงานที่พร้อมส่ง');
 r = m.call('prodSave', { prod: { id: P1.id, stage: 'shipped', note: 'แอบแก้' } }, ST).data.prod; eq('stock → ส่งแล้ว (note ignored)', [r.stage, !!r.shippedAt, r.note, r.updatedBy], ['shipped', true, '', 'คลังบี']);
-eq('history kept', JSON.parse(r.history).map(h => h.s), ['wait', 'machine', 'machine', 'paint', 'assemble', 'qc', 'pack', 'ready', 'shipped']);
+eq('history kept', JSON.parse(r.history).map(h => h.s), ['wait', 'machine', 'machine', 'assemble', 'paint', 'qc', 'pack', 'ready', 'shipped']);
 // ข้ามทำสี
 r = m.call('prodSave', { prod: { code: 'P-3', paint: 'no', stage: 'machine', machines: [{ m: 'Laser', d: '2026-10-09T09:00' }] } }, PR).data.prod;
 eq('no paint → ข้ามไปประกอบ', r.stage, 'assemble');

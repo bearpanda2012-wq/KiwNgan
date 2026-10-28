@@ -9,6 +9,7 @@ const b = await chromium.launch({ args: ['--no-proxy-server'] });
 const ctx = await b.newContext({ viewport: { width: 1360, height: 900 } }); const pg = await ctx.newPage();
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.addInitScript(() => { if (!sessionStorage.getItem('kn-init')) { localStorage.clear(); sessionStorage.setItem('kn-init', '1'); } if (navigator.serviceWorker) navigator.serviceWorker.register = () => Promise.resolve(); });
+await pg.addInitScript(() => { setInterval(() => { const b = document.querySelector('#whoSheet [data-wsok]:not([disabled])'); if (b) b.click(); }, 80); });   // v2.120: ยืนยันหน้าต่าง "ใครทำ" ให้อัตโนมัติ (ทดสอบแยกใน v2120)
 let ok = 0, bad = 0; const eq = (l, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + l + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
 const clean = () => pg.evaluate(() => document.querySelectorAll('.ntf').forEach(e => e.remove()));
 const loginAdmin = async () => { await pg.click('[data-act="adminon"]'); await pg.fill('#adminName', 'แอดมิน'); await pg.fill('#pinIn', '1234'); await pg.evaluate(() => { const e = document.querySelector('#pinIn'); if (e) e.dispatchEvent(new Event('input', { bubbles: true })); }); await pg.waitForFunction(() => !document.body.classList.contains('auth'), null, { timeout: 10000 }).catch(() => {}); await pg.waitForTimeout(1300); await clean(); };
@@ -52,7 +53,7 @@ const fm = await pg.evaluate(() => (S.prods.find(p => p.stage === 'machine') || 
 if (fm) { await pg.click(`.pcard[data-popen="${fm}"] [data-pfwd]`); await pg.waitForTimeout(1200);
   eq('→ on machine card finishes all machines', await pg.evaluate(id => { const p = T.prodById(id); return [p.stage !== 'machine', JSON.parse(p.machines).every(m => m.d)]; }, fm), [true, true]); }
 const fp = await pg.evaluate(() => (S.prods.find(p => p.stage === 'paint' && p.assy !== 'no') || {}).id);
-if (fp) { await pg.click(`.pcard[data-popen="${fp}"] [data-pfwd]`); await pg.waitForTimeout(1200); eq('→ on paint card goes to ประกอบ', await pg.evaluate(id => T.prodById(id).stage, fp), 'assemble'); }
+if (fp) { await pg.click(`.pcard[data-popen="${fp}"] [data-pfwd]`); await pg.waitForTimeout(1200); eq('→ on paint card goes to QC (v2.120: ประกอบก่อนทำสี)', await pg.evaluate(id => T.prodById(id).stage, fp), 'qc'); }
 // in-app scanner: decode a real QR image of the job link → opens job
 await pg.evaluate(() => T.go('prod')); await pg.waitForTimeout(300);
 eq('scan button on prod board', await pg.locator('.topbar [data-act="scan"]').count(), 1);

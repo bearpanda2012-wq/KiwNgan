@@ -22,7 +22,7 @@ await pg.waitForTimeout(200);
 eq('glass on + panel translucent', await pg.evaluate(() => [document.documentElement.hasAttribute('data-glass'), /0\.6|color\(srgb|rgba\(255, 255, 255, 0\.6/.test(getComputedStyle(document.querySelector('.app .panel')).backgroundColor), document.querySelector('[data-thout="glass"]').textContent]), [true, true, '40%']);
 eq('popup windows stay opaque', await pg.evaluate(() => getComputedStyle(document.querySelector('#sheet')).getPropertyValue('--surface').trim()), '#FFFFFF');
 // รูปพื้นหลังความละเอียดสูง
-await pg.setInputFiles('#bgIn', out + 'bgtest.jpg'); await pg.waitForTimeout(2500);
+await pg.setInputFiles('#bgIn', new URL('fixtures/bgtest.jpg', import.meta.url).pathname); await pg.waitForTimeout(2500);
 eq('bg stored full size (not shrunk)', await pg.evaluate(() => document.querySelector('.bg-info') && document.querySelector('.bg-info').textContent.indexOf('3000×2000') >= 0), true);
 eq('bg applied', await pg.evaluate(() => [document.documentElement.getAttribute('data-bg'), getComputedStyle(document.body, '::before').backgroundSize]), ['on', 'cover']);
 await pg.click('[data-themeset="bgfit"][data-val="contain"]'); await pg.waitForTimeout(300);
