@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.120.1';
+const APP_VERSION = '2.121.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -5238,17 +5238,17 @@ function viewBoard() {
   const base0 = listPool().filter(listMatch), base = base0.filter(quickOk);
   const cols = COLS.slice();
   const hold = base.filter(j => j.status === 'hold');
-  const cutoff = addDays(today(), -14);
+  const cutoff = addDays(today(), -DONE_KEEP());
   const colHtml = cols.map(st => {
     let js = base.filter(j => j.status === st || (st === 'queue' && j.status === 'hold'));
     let more = '';
     if (st === 'done') {
       const qd = !!S.f.q.trim(), all = js.filter(j => qd || finDate(j) >= cutoff).sort((a, b) => String(b.finishedAt).localeCompare(String(a.finishedAt)));   // กำลังค้นหา: แสดงงานเสร็จที่ตรงทั้งหมด ไม่จำกัด 14 วัน
       js = all.slice(0, qd ? 60 : 25);
-      more = '<div class="col-more">' + (qd ? 'ผลค้นหางานที่เสร็จแล้วทั้งหมด' + (all.length > 60 ? ' (60 จาก ' + all.length + ')' : '') : 'แสดงงานที่เสร็จใน 14 วัน') + ' · <button class="btn ghost sm" data-filter-go="done">ดูทั้งหมด</button></div>';
+      more = '<div class="col-more">' + (qd ? 'ผลค้นหางานที่เสร็จแล้วทั้งหมด' + (all.length > 60 ? ' (60 จาก ' + all.length + ')' : '') : 'แสดงงานที่เสร็จใน ' + DONE_KEEP() + ' วัน') + ' · <button class="btn ghost sm" data-filter-go="done">ดูทั้งหมด</button></div>';
     } else js.sort(sortOpen);
-    return '<section class="col ' + ST[st].cls + '" data-col="' + st + '"><div class="col-h"><span class="col-ic ic-' + st + '">' + STI[st] + '</span><div class="col-t"><b>' + ST[st].label + '</b><small>' + (st === 'done' ? '14 วันล่าสุด' : st === 'queue' ? 'รวมงานพักไว้' : st === 'doing' ? 'อยู่ระหว่างทำ' : st === 'fix' ? 'ตรวจแล้วต้องแก้' : 'รอคนตรวจ') + '</small></div><span class="n">' + js.length + '</span></div>' +
-      '<div class="col-list">' + (js.length ? js.map(card).join('') : '<div class="col-empty"><span class="ce-art ic-' + st + '">' + STI[st] + '<i></i><i></i><i></i></span><b>' + ST_EMPTY[st] + '</b><small>ลากการ์ดมาวางที่นี่ได้</small></div>') + '</div>' + more + '</section>';
+    return '<section class="col ' + ST[st].cls + '" data-col="' + st + '"><div class="col-h"><span class="col-ic ic-' + st + '">' + STI[st] + '</span><div class="col-t"><b>' + ST[st].label + '</b><small>' + (st === 'done' ? DONE_KEEP() + ' วันล่าสุด' : st === 'queue' ? 'รวมงานพักไว้' : st === 'doing' ? 'อยู่ระหว่างทำ' : st === 'fix' ? 'ตรวจแล้วต้องแก้' : 'รอคนตรวจ') + '</small></div><span class="n">' + js.length + '</span></div>' +
+      '<div class="col-list">' + (js.length ? js.map(card).join('') : '<div class="col-empty"><span class="ce-art ic-' + st + '">' + STI[st] + '<i></i><i></i><i></i></span><b>' + (st === 'done' ? 'ยังไม่มีงานเสร็จใน ' + DONE_KEEP() + ' วัน' : ST_EMPTY[st]) + '</b><small>ลากการ์ดมาวางที่นี่ได้</small></div>') + '</div>' + more + '</section>';
   }).join('');
   const cnt = st => base0.filter(j => st === 'queue' ? (j.status === 'queue' || j.status === 'hold') : st === 'done' ? j.status === 'done' && (S.f.q.trim() || finDate(j) >= cutoff) : j.status === st).length;
   const flow = '<div class="flow">' + COLS.map((st, i) => '<div class="flow-step ' + ST[st].cls + '" data-flowgo="col:' + st + '" role="button" tabindex="0" title="ไปที่คอลัมน์ ' + esc(ST[st].label) + '"><span class="flow-ic ic-' + st + '">' + STI[st] + '</span><div><b>' + cnt(st) + '</b><small>' + ST[st].label + '</small></div></div>' + (i < COLS.length - 1 ? '<span class="flow-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '')).join('') + '</div>';
@@ -5741,7 +5741,7 @@ function viewSettings() {
   const admin = isAdmin();
   if (admin && !S.draft) { S.draft = clone(S.settings); S.draftDirty = false; }
   const d = S.draft || S.settings, c = S.conn || { url: '' };
-  const nav = [['me', 'บัญชีของฉัน'], ['theme', 'ธีมและสี']].concat(admin ? [['conn', 'ฐานข้อมูล'], ['users', 'ผู้ใช้งานและสิทธิ์'], ['brand', 'แบรนด์'], ['lists', 'รายการตัวเลือก'], ['sla', 'ระยะเวลามาตรฐาน'], ['salelink', 'Sale'], ['digest', 'สรุปประจำเช้า'], ['show', 'แสดง / ซ่อน']] : []).concat([['about', 'เกี่ยวกับ']]);
+  const nav = [['me', 'บัญชีของฉัน'], ['theme', 'ธีมและสี']].concat(admin ? [['conn', 'ฐานข้อมูล'], ['users', 'ผู้ใช้งานและสิทธิ์'], ['brand', 'แบรนด์'], ['lists', 'รายการตัวเลือก'], ['sla', 'ระยะเวลามาตรฐาน'], ['keep', 'ระยะเวลาแสดงงาน'], ['salelink', 'Sale'], ['digest', 'สรุปประจำเช้า'], ['show', 'แสดง / ซ่อน']] : []).concat([['about', 'เกี่ยวกับ']]);
   let h = topbar('ตั้งค่า', admin ? 'คุณเป็นแอดมิน จัดการผู้ใช้ การตั้งค่า และแบรนด์ได้' : 'บัญชีของคุณและการเชื่อมต่อ') +
     '<div class="settings"><nav class="snav">' + nav.map(n => '<a href="#s-' + n[0] + '">' + n[1] + '</a>').join('') + '</nav><div class="sbody">';
 
@@ -5822,6 +5822,9 @@ function viewSettings() {
       '<div class="hol"><div class="panel-h"><b>วันหยุดบริษัท</b><span class="sub">ไม่นับเป็นวันทำการตอนคำนวณกำหนดส่ง · แสดงเป็นแถบจางบนชาร์ต</span></div>' +
         '<div class="hol-add"><input type="date" id="holD" aria-label="วันที่"><input id="holN" placeholder="ชื่อวันหยุด เช่น วันมาฆบูชา" aria-label="ชื่อวันหยุด"><button class="btn sm" data-act="holadd">' + I.plus + 'เพิ่ม</button><button class="btn sm ghost" data-act="holfixed">เพิ่มวันหยุดราชการ (วันที่ตายตัว) ปีนี้–ปีหน้า</button></div>' +
         '<div class="hol-list">' + ((d.holidays || []).filter(h => h.d >= addDays(today(), -31)).map(h => '<span class="hol-it' + (h.d < today() ? ' past' : '') + '"><b>' + fdY(h.d) + '</b>' + esc(h.n || '') + '<button class="icon-btn sm" data-holdel="' + esc(h.d) + '" aria-label="ลบ">✕</button></span>').join('') || '<span class="sub">ยังไม่มีวันหยุด — วันพระและวันหยุดชดเชยเพิ่มเองตามประกาศแต่ละปี</span>') + '</div></div></section>' +
+    '<section class="panel sec" id="s-keep"><div class="panel-h"><h2>ระยะเวลาแสดงงานที่ปิดแล้ว</h2></div><p class="help">งานที่ปิดแล้วจะยังโชว์ในช่อง "เสร็จแล้ว" / "ส่งแล้ว" กี่วัน ก่อนหายไปจากบอร์ด (ยังค้นหาและดูในรายงานได้ตามเดิม) · ตั้งได้ 1–60 วัน</p>' +
+      '<div class="form-grid keep-grid"><div class="f"><label for="dKeepDone">ฝ่ายแบบ: ช่อง "เสร็จแล้ว" (บอร์ดงาน · ภาพรวมบริษัท)</label><div class="keep-in"><input id="dKeepDone" type="number" min="1" max="60" inputmode="numeric" value="' + keepDaysOf(d, 'keepDone', 14) + '" data-keep="keepDone"><span>วัน</span></div></div>' +
+      '<div class="f"><label for="dKeepShip">ฝ่ายผลิต/สต็อก: ช่อง "ส่งแล้ว" (บอร์ดผลิต · ภาพรวมบริษัท)</label><div class="keep-in"><input id="dKeepShip" type="number" min="1" max="60" inputmode="numeric" value="' + keepDaysOf(d, 'keepShip', 20) + '" data-keep="keepShip"><span>วัน</span></div></div></div></section>' +
     '<section class="panel sec" id="s-salelink"><div class="panel-h"><h2>ปุ่ม Sale ที่หน้าเข้าสู่ระบบ</h2>' + (S.salePinOn || (S.salePins || []).length ? '<span class="pill s-done">เปิดอยู่</span>' : '<span class="pill s-hold">ปิดอยู่</span>') + '</div>' +
       '<p class="help">ที่หน้าเข้าสู่ระบบมีปุ่ม "สำหรับ Sale" กดแล้วใส่ PIN 4 หลัก ไม่ต้องมีบัญชี · PIN ทุกชุดต้องไม่ซ้ำกัน</p>' +
       '<div class="sp-pins"><div class="spp-row spp-all"><span class="spp-av">' + PIC.sale + '</span><div class="spp-t"><b>PIN รวม</b><small>เห็นงานทุก Sale · เช่น หัวหน้าฝ่ายขาย</small></div><span class="pill ' + (S.salePinOn ? 's-done">ตั้งแล้ว' : 's-hold">ยังไม่ตั้ง') + '</span>' +
@@ -6460,7 +6463,10 @@ function saleTh(r, cls) {
 const mthOpen = (e, t) => { e.preventDefault(); e.stopPropagation(); openLightbox(t.dataset.lbjob, t.dataset.lbopen); };
 document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('.mth[data-lbopen]'); if (t) mthOpen(e, t); }, true);
 document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('mth')) { if (e.target.dataset.gal) { e.preventDefault(); e.stopPropagation(); if (GALS[e.target.dataset.gal]) galOpen(GALS[e.target.dataset.gal], 0); } else mthOpen(e, e.target); } }, true);
-const SHIP_KEEP = 20;   // งานที่ส่งแล้วค้างในภาพรวมบริษัท/บอร์ดผลิตกี่วัน (นับจากวันที่ส่งของแต่ละงาน)
+/* แอดมินตั้งได้ (ตั้งค่า > ระยะเวลาแสดงงานที่ปิดแล้ว): งานเสร็จ/ส่งแล้ว ค้างให้เห็นกี่วัน · หลังบ้านส่งงานที่ส่งแล้วมาให้ 60 วัน จึงจำกัดไม่เกิน 60 */
+const keepDaysOf = (st, k, def) => { const n = Math.round(+((st || {})[k])); return n >= 1 && n <= 60 ? n : def; };
+const keepDays = (k, def) => { const n = Math.round(+((S.settings || {})[k])); return n >= 1 && n <= 60 ? n : def; };
+const DONE_KEEP = () => keepDays('keepDone', 14), SHIP_KEEP_ = () => keepDays('keepShip', 20);   // ช่อง "เสร็จแล้ว" ฝ่ายแบบ / "ส่งแล้ว" ฝ่ายผลิต (นับจากวันที่ปิดงาน)
 function pThumb(p) { const own = imgsOf(p.id); if (own.length) return { img: own[0], job: { id: p.id } }; for (const j of designJobsOf(p.code)) { const im = imgsOf(j.id); if (im.length) return { img: im[0], job: j }; } return null; }
 const stIdx = st => PCOLS.indexOf(st === 'shipped' ? 'ready' : st);
 function pTrack(p) {   // แถบความคืบหน้าแบบเดียวกับฝ่ายแบบ: รอผลิต → เครื่อง → ประกอบ → สี → QC → แพ็ค → พร้อมส่ง
@@ -6681,8 +6687,8 @@ function viewProd() {
     if (st === 'machine') extra = '<div class="pm-sum">' + machinesList().map(m => { const n = open.filter(p => inMachine(p, m)).length; return '<span class="' + (n ? 'on' : '') + '"' + mSty(m) + '>' + esc(m) + ' <b>' + n + '</b></span>'; }).join('') + '</div>';
     let more = '';
     if (st === 'ready') {
-      const since = addDays(today(), -SHIP_KEEP), sh = pool.filter(p => p.stage === 'shipped' && String(p.shippedAt).slice(0, 10) >= since).sort((a, b) => String(b.shippedAt).localeCompare(String(a.shippedAt)));
-      if (sh.length) more = '<div class="col-more"><button class="btn ghost sm" data-pship="1" aria-expanded="' + !!S.pship + '">' + PIC.shipped + 'ส่งแล้ว ' + SHIP_KEEP + ' วันล่าสุด (' + sh.length + ')</button></div>' +
+      const since = addDays(today(), -SHIP_KEEP_()), sh = pool.filter(p => p.stage === 'shipped' && String(p.shippedAt).slice(0, 10) >= since).sort((a, b) => String(b.shippedAt).localeCompare(String(a.shippedAt)));
+      if (sh.length) more = '<div class="col-more"><button class="btn ghost sm" data-pship="1" aria-expanded="' + !!S.pship + '">' + PIC.shipped + 'ส่งแล้ว ' + SHIP_KEEP_() + ' วันล่าสุด (' + sh.length + ')</button></div>' +
         (S.pship ? '<div class="pship">' + sh.map(p => '<button type="button" class="pship-row" data-popen="' + esc(p.id) + '"><b>' + esc(p.code) + '</b><span>' + esc(p.title || '') + '</span><small>' + esc(fd(p.shippedAt)) + '</small></button>').join('') + '</div>' : '');
     }
     return '<section class="col ' + PSTG[st].cls + '" data-pcol="' + st + '"><div class="col-h"><span class="col-ic ic-' + st + '">' + PIC[st] + '</span><div class="col-t"><b>' + PSTG[st].label + '</b><small>' + PSTG[st].sub + '</small></div><span class="n">' + js.length + '</span></div>' + extra +
@@ -6785,7 +6791,7 @@ function pipeJump() {
   }, 40);
 }
 function coRows(all) {   // all = ค้นหา: รวมงานที่ส่งแล้วนาน ๆ และงานออกแบบที่เสร็จนานแล้ว
-  const byCode = {}, pool = S.jobs, cutoff = addDays(today(), -14);   // ภาพรวมบริษัท: ทุกคนเห็นงานทั้งหมด (แก้ได้เฉพาะงานตัวเอง)
+  const byCode = {}, pool = S.jobs, cutoff = addDays(today(), -DONE_KEEP());   // ภาพรวมบริษัท: ทุกคนเห็นงานทั้งหมด (แก้ได้เฉพาะงานตัวเอง)
   const key = c => String(c || '').trim().toLowerCase();
   pool.forEach(j => { const k = key(j.code); if (!k) return; (byCode[k] = byCode[k] || { code: j.code, jobs: [], prod: null }).jobs.push(j); });
   prodsAll().forEach(p => { const k = key(p.code); const cur = byCode[k] || (byCode[k] = { code: p.code, jobs: designJobsOf(p.code), prod: null }); if (!cur.prod || (cur.prod.stage === 'shipped' && p.stage !== 'shipped')) cur.prod = p; });
@@ -6799,7 +6805,7 @@ function coRows(all) {   // all = ค้นหา: รวมงานที่�
       step = 'design'; sub = (o.taskType || 'ออกแบบ') + ' · ' + ST[o.status].label + (o.assignee ? ' · ' + o.assignee : ''); since = o.startedAt || o.received || '';
     } else if (p && p.stage === 'shipped') { step = 'shipped'; sub = 'ส่งแล้ว ' + fd(p.shippedAt); since = p.shippedAt; }
     else { const fin = r.jobs.map(finDate).sort().pop() || ''; if (fin < cutoff && !all) return null; step = 'ddone'; sub = 'ออกแบบเสร็จ ' + fd(fin) + ' · ไม่ได้ส่งเข้าผลิต'; since = fin; }
-    if (!all && step === 'shipped' && String(p.shippedAt).slice(0, 10) < addDays(today(), -SHIP_KEEP)) return null;
+    if (!all && step === 'shipped' && String(p.shippedAt).slice(0, 10) < addDays(today(), -SHIP_KEEP_())) return null;
     // เลยกำหนด = กติกาเดียวกับหน้า Sale (codeLate) · ค้างนาน = ผลิตอยู่ขั้นเดิมนาน (pStuck) แยกนับ
     const L = step === 'shipped' || step === 'ddone' ? { any: false } : codeLate(r.jobs, p && p.stage !== 'shipped' ? p : null), stuck = !!(p && p.stage !== 'shipped' && step !== 'design' && pStuck(p));
     late = !!L.any || stuck;
@@ -6908,12 +6914,12 @@ function viewFlow() {
   const rows = coRows(), F = S.cf || 'all', q = String(S.cq || '').trim().toLowerCase();
   const n = k => rows.filter(r => k === 'design' ? r.step === 'design' : r.step === k).length;
   const shipToday = rows.filter(r => r.step === 'shipped' && r.prod && String(r.prod.shippedAt).slice(0, 10) === today()).length;
-  const stepTile = (s, i) => cjTile(s, i, n(s.k), 'data-cf="' + s.k + '"', F === s.k, s.k === 'shipped' ? (shipToday ? 'วันนี้ ' + shipToday + ' · ' + SHIP_KEEP + ' วัน' : SHIP_KEEP + ' วันล่าสุด') : s.sub, rows.filter(r => r.step === s.k && r.late).length);
+  const stepTile = (s, i) => cjTile(s, i, n(s.k), 'data-cf="' + s.k + '"', F === s.k, s.k === 'shipped' ? (shipToday ? 'วันนี้ ' + shipToday + ' · ' + SHIP_KEEP_() + ' วัน' : SHIP_KEEP_() + ' วันล่าสุด') : s.sub, rows.filter(r => r.step === s.k && r.late).length);
   const depts = pipeHtml(stepTile, S.animIn);
   const shipped7 = rows.filter(r => r.step === 'shipped').length, late = rows.filter(r => r.late).length;
   const kpis = '<div class="co-kpis"><div class="kpi"><span>งานในสายทั้งหมด</span><b>' + rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length + '</b><small>เลข Job ที่ยังไม่ส่ง</small></div>' +
     '<button type="button" class="kpi k-late" data-cf="late"><span>เลยกำหนด / ค้างนาน</span><b>' + late + '</b><small>' + (late ? ['เลยกำหนด ' + rows.filter(r => r.overdue).length, 'ผลิตค้างนาน ' + rows.filter(r => r.stuck && !r.overdue).length].join(' · ') : 'ไม่มีงานเลยกำหนดหรือค้างนาน') + '</small></button>' +
-    '<div class="kpi k-done"><span>ส่งแล้ว ' + SHIP_KEEP + ' วัน</span><b>' + shipped7 + '</b><small>ปิดงานถึงลูกค้า</small></div></div>';
+    '<div class="kpi k-done"><span>ส่งแล้ว ' + SHIP_KEEP_() + ' วัน</span><b>' + shipped7 + '</b><small>ปิดงานถึงลูกค้า</small></div></div>';
   // ค้นหา: ค้นจากงานทั้งหมด (รวมที่ส่งแล้ว/ออกแบบเสร็จนานแล้ว) ไม่สนตัวกรองด้านบน · ไม่ต้องพิมพ์ขีด/ช่องว่างก็เจอ · ตรงเลข Job ขึ้นก่อน
   let list;
   if (q) {
@@ -6923,7 +6929,7 @@ function viewFlow() {
     list = rows.filter(r => F === 'all' ? r.step !== 'shipped' && r.step !== 'ddone' : F === 'late' ? r.late : F === 'design' ? r.step === 'design' || r.step === 'ddone' : r.step === F);
     list.sort((a, b) => (b.late - a.late) || (coIdx(b.step) - coIdx(a.step)) || String(a.since).localeCompare(String(b.since)));
   }
-  const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง'], ['late', 'เลยกำหนด / ค้างนาน'], ['shipped', 'ส่งแล้ว ' + SHIP_KEEP + ' วัน']].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-cf="' + x[0] + '" aria-pressed="' + (F === x[0]) + '">' + x[1] + '<b>' + (x[0] === 'all' ? rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length : x[0] === 'late' ? late : shipped7) + '</b></button>').join('') +
+  const chips = '<div class="qchips">' + [['all', 'ทั้งหมดที่ยังไม่ส่ง'], ['late', 'เลยกำหนด / ค้างนาน'], ['shipped', 'ส่งแล้ว ' + SHIP_KEEP_() + ' วัน']].map(x => '<button class="qchip' + (x[0] === 'late' ? ' q-late' : '') + '" data-cf="' + x[0] + '" aria-pressed="' + (F === x[0]) + '">' + x[1] + '<b>' + (x[0] === 'all' ? rows.filter(r => r.step !== 'shipped' && r.step !== 'ddone').length : x[0] === 'late' ? late : shipped7) + '</b></button>').join('') +
     (F !== 'all' && F !== 'late' && F !== 'shipped' ? '<button class="qchip" data-cf="all" aria-pressed="true">' + esc(F === 'design' ? 'ฝ่ายแบบ' : PSTG[F] ? PSTG[F].label : F) + ' ✕</button>' : '') + '</div>';
   const where = r => r.step === 'design' ? '<span class="pill s-doing">ฝ่ายแบบ</span>' : r.step === 'ddone' ? '<span class="pill s-done">ออกแบบเสร็จ</span>' : pPill(r.step);
   const hovJob = r => { const o = r.jobs.filter(j => j.status !== 'done'); return (o[0] || r.jobs.slice().sort((a, b) => String(finDate(b)).localeCompare(String(finDate(a))))[0] || {}).id || ''; };
@@ -9556,6 +9562,7 @@ document.addEventListener('input', e => {
   }
   if (t.id === 'eCmt' && S.edit) { S.edit.firstCmt = t.value; return; }
   if (t.dataset.cltplf !== undefined && S.draft) { S.draft.checklists = Object.assign({}, S.draft.checklists || {}); S.draft.checklists[t.dataset.cltplf] = t.value; markDirty(); return; }
+  if (t.dataset.keep && S.draft) { const n = Math.round(+t.value); if (!(n >= 1 && n <= 60)) { toast('ใส่ได้ 1–60 วัน', true); t.value = keepDaysOf(S.draft, t.dataset.keep, t.dataset.keep === 'keepDone' ? 14 : 20); return; } S.draft[t.dataset.keep] = n; markDirty(); return; }
   if (t.dataset.sla && S.draft) { const p = t.dataset.sla.split('|'), g = S.draft.groups[+p[0]]; const r = (S.draft.sla[g] = S.draft.sla[g] || { cam: [1, 2], draw: [2, 3] }); r[p[1]][+p[2]] = Math.max(0, +t.value || 0); markDirty(); return; }
 });
 /* ช่องติ๊กสิทธิ์: เปลี่ยนเฉพาะกล่องสิทธิ์ ไม่วาดทั้งหน้า (ช่องอื่นที่แก้ค้างไว้ในแถวยังอยู่) */

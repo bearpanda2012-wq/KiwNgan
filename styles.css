@@ -6376,3 +6376,5 @@ button.bn-row{grid-template-columns:minmax(150px,215px) 1fr 70px minmax(80px,aut
 .uh-seg button.on{background:var(--accent);color:var(--accent-ink,#fff);font-weight:700}
 .uh-seg button.on[data-uhv="all"]{background:var(--urgent)}
 .uh-deps{display:flex;flex-wrap:wrap;gap:4px 12px;flex:1 1 100%;font-size:12.5px;color:var(--muted);padding-left:2px}
+.keep-grid .f label{font-size:13px}
+.keep-in{display:flex;align-items:center;gap:8px}.keep-in input{width:96px}.keep-in span{color:var(--muted)}
