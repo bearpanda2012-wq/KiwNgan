@@ -3,7 +3,7 @@ const { chromium } = await import(process.env.PW);
 import http from 'http'; import fs from 'fs'; import path from 'path';
 const root = new URL('..', import.meta.url).pathname;
 const PORT = 8931;
-const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={moveJob,prodWrite,load,Demo,prodById,jobById};window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(PORT);
+const srv = http.createServer((q, r) => { let p = path.join(root, q.url.split('?')[0]); if (p.endsWith('/')) p += 'index.html'; if (!fs.existsSync(p)) { r.writeHead(404); return r.end(); } let b = fs.readFileSync(p); if (p.endsWith('config.js')) b = 'window.KIWNGAN_CONFIG={}'; if (p.endsWith('app.js')) b = b.toString().replace('window.KiwNgan = {', 'window.T={moveJob,prodWrite,load,Demo,prodById,jobById};window.S=S;window.KiwNgan = {'); r.writeHead(200, { 'content-type': { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[path.extname(p)] || 'application/octet-stream' }); r.end(b); }).listen(PORT);
 const b = await chromium.launch({ args: ['--no-proxy-server'] }); const pg = await b.newPage({ viewport: { width: 1300, height: 850 } });
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 let ok = 0, bad = 0; const eq = (lbl, a, w) => { const p = JSON.stringify(a) === JSON.stringify(w); p ? ok++ : bad++; console.log((p ? 'ok  ' : 'FAIL') + ' ' + lbl + (p ? '' : ' → got ' + JSON.stringify(a) + ' want ' + JSON.stringify(w))); };
@@ -23,7 +23,8 @@ await pg.evaluate(() => {
   D.prodSave = async p => { await sleep(window.__saveMs); try { const r = await ps(p); window.__calls.push(['prod', p.prod.stage, 'ok']); return r; } catch (e) { window.__calls.push(['prod', p.prod.stage, e.message]); throw e; } };
 });
 // sampler: จดสถานะของงานทุก 40ms เพื่อจับว่ามีจังหวะเด้งกลับไหม
-const watch = (kind, id) => pg.evaluate(([kind, id]) => { window.__seen = []; clearInterval(window.__w); window.__w = setInterval(() => { const x = kind === 'job' ? T.jobById(id) : T.prodById(id); const v = x && (kind === 'job' ? x.status : x.stage); if (window.__seen[window.__seen.length - 1] !== v) window.__seen.push(v); }, 40); }, [kind, id]);
+const watch = (kind, id) => pg.evaluate(([kind, id]) => { window.__seen = []; clearInterval(window.__w); const tick = () => { const x = kind === 'job' ? T.jobById(id) : T.prodById(id); const v = x && (kind === 'job' ? x.status : x.stage); if (window.__seen[window.__seen.length - 1] !== v) window.__seen.push(v); }; tick(); window.__w = setInterval(tick, 40); }, [kind, id]);
+const settle = () => pg.waitForFunction(() => !S.loading && !S.saving && !S.inflight, null, { timeout: 15000 }).then(() => pg.waitForTimeout(1500));   // รอโหลดใหม่หลังบันทึก (loadAfterWrites) จบก่อน
 const seen = () => pg.evaluate(() => { clearInterval(window.__w); return window.__seen; });
 
 // 1) โหลดเบื้องหลังค้างอยู่ แล้วกดย้ายสถานะ → ผลโหลด (ข้อมูลเก่า) ต้องไม่ทับ
@@ -64,7 +65,8 @@ if (pid) {
 } else { bad++; console.log('FAIL no prod in assemble stage to test'); }
 
 // 4) ไม่มีการบันทึกค้าง → โหลดเบื้องหลังยังอัปเดตข้อมูลตามปกติ (ไม่ถูกทิ้งตลอด)
-await pg.evaluate(() => { window.__bootMs = 50; T.Demo.db && (() => { const d = T.Demo.db(); d.jobs[0].title = 'เปลี่ยนจากเครื่องอื่น'; T.Demo.save(d); })(); S.dataStamp = ''; return T.load(true); });
+await pg.evaluate(() => { window.__bootMs = 50; }); await settle();
+await pg.evaluate(() => { T.Demo.db && (() => { const d = T.Demo.db(); d.jobs[0].title = 'เปลี่ยนจากเครื่องอื่น'; T.Demo.save(d); })(); S.dataStamp = ''; return T.load(true); });
 await pg.waitForTimeout(400);
 eq('idle load still applies', await pg.evaluate(() => S.jobs.some(j => j.title === 'เปลี่ยนจากเครื่องอื่น')), true);
 eq('no write left busy', await pg.evaluate(() => [S.saving || 0, S.inflight || 0]), [0, 0]);
