@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.128.0';
+const APP_VERSION = '2.129.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -10149,17 +10149,40 @@ document.addEventListener('visibilitychange', () => {
 /* ============ PWA ============ */
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|usercontent/.test(location.hostname)) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
-    // look for a new version whenever the app comes back to the foreground
+    // หาเวอร์ชันใหม่: ทุกครั้งที่กลับมาที่แอป + ทุก 5 นาทีระหว่างเปิดค้างไว้ (คอมที่เปิดแอปทิ้งไว้ทั้งวันก็ได้อัปเดต)
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine !== false) reg.update().catch(() => {}); }, UPD_EVERY);
   }).catch(() => {}));
-  // a new version took over: reload once so the page runs the new code (not while typing in the editor)
+  // เวอร์ชันใหม่เข้ามาแล้ว: รีโหลดเองครั้งเดียว — รอจังหวะที่ไม่มีอะไรค้าง (ไม่ทิ้งงานที่พิมพ์/บันทึกอยู่ ไม่ตัดสาย)
   let reloaded = !navigator.serviceWorker.controller; // first visit: nothing old to replace
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (reloaded) return; reloaded = true;
-    if (S.edit || S.draftDirty) { toast('มีเวอร์ชันใหม่ รีเฟรชหน้าเว็บหลังบันทึกงาน'); return; }
-    location.reload();
+    updApply();
   });
 }
+const UPD_EVERY = 5 * 60000;
+/* ตอนนี้รีโหลดได้ไหม: ไม่มีฟอร์ม/หน้าต่างเปิด · ไม่มีการบันทึกค้าง · ไม่ได้อยู่ในสาย/ห้องเสียง/เกม · ไม่ได้พิมพ์อะไรค้างไว้ */
+function updSafe() {
+  if (S.edit || S.draftDirty || writeBusy() || S.loading) return false;
+  if (R.state || V.on || V.joining || P2.id || P2.add) return false;
+  if (window.KNGames && Object.keys(KNGames.rooms() || {}).length) return false;
+  if (document.body.classList.contains('pm-open')) return false;
+  const ae = document.activeElement;
+  const typed = t => String(t.value || '').trim() && t.value !== t.defaultValue;   // พิมพ์เพิ่มเอง (ไม่นับข้อความที่ติดมากับหน้า เช่น หน้าตั้งค่า)
+  if (ae && (ae.isContentEditable || (/^(INPUT|TEXTAREA)$/.test(ae.tagName) && typed(ae)))) return false;
+  if ([].some.call(document.querySelectorAll('textarea'), typed)) return false;   // ข้อความแชท/คอมเมนต์ที่ยังไม่ได้ส่ง
+  return true;
+}
+function updApply() {
+  clearTimeout(S.updT);
+  if (updSafe()) { try { sessionStorage.setItem('kn-upd', APP_VERSION); } catch (e) {} location.reload(); return; }
+  if (!S.updNote) { S.updNote = 1; toast('มีเวอร์ชันใหม่ · จะอัปเดตเองเมื่อบันทึกหรือปิดหน้าต่างเสร็จ'); }
+  S.updT = setTimeout(updApply, 3000);
+}
+/* หลังรีโหลดเพราะอัปเดต: บอกสั้น ๆ ว่าเป็นเวอร์ชันไหนแล้ว */
+(function updDone() {
+  try { const was = sessionStorage.getItem('kn-upd'); if (!was) return; sessionStorage.removeItem('kn-upd'); if (was !== APP_VERSION) setTimeout(() => toast('อัปเดตเป็นเวอร์ชัน ' + APP_VERSION + ' แล้ว'), 1500); } catch (e) {}
+})();
 
 /* เปิด/ปิดหน้าต่าง (body.pm-open = ล็อกเลื่อน) แล้วพื้นหลังต้องอยู่ที่เดิม ไม่เด้งกลับขึ้นบน */
 (function keepScrollOnModal() {
