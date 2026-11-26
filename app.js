@@ -6,7 +6,7 @@
 (function () {
 'use strict';
 
-const APP_VERSION = '2.127.0';
+const APP_VERSION = '2.128.0';
 const NS = 'kiwngan:';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(NS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -1078,7 +1078,7 @@ async function gamesOpen(r) {
 }
 function rtDataChanged() {
   if (S.screen !== 'app') return;
-  if (S.edit || S.draftDirty || S.loading || S.saving) { clearTimeout(RT.chgT); RT.chgT = setTimeout(rtDataChanged, 1500); return; }
+  if (S.edit || S.draftDirty || S.loading || writeBusy()) { clearTimeout(RT.chgT); RT.chgT = setTimeout(rtDataChanged, 1500); return; }
   load(true);
 }
 const RT_DATA = { kbSave: 1, kbDelete: 1, kbAck: 1, stockCount: 1, stockSave: 1, stockMove: 1, stockDelete: 1, saveJob: 1, deleteJob: 1, prodSave: 1, prodDelete: 1, startTimer: 1, stopTimer: 1, deleteLog: 1, setPhoto: 1, addImage: 1, deleteImage: 1, copyImages: 1, saveSettings: 1, saveUser: 1, resetPin: 1 };
@@ -1090,10 +1090,15 @@ function rtLoop() { if (typeof rtcLoop === 'function') rtcLoop(); }
 function upsert(arr, obj) { const i = arr.findIndex(x => x.id === obj.id); if (i >= 0) arr[i] = Object.assign({}, arr[i], obj); else arr.push(obj); }
 function applyStop(r) { if (r.log) upsert(S.logs, r.log); const j = jobById(r.jobId); if (j && r.minutes != null) j.minutes = r.minutes; }
 
+function loadAfterWrites() {   // รอจนไม่มีการบันทึกค้าง แล้วโหลดเงียบอีกรอบ
+  clearTimeout(S.reloadT);
+  S.reloadT = setTimeout(() => { if (writeBusy() || S.loading) return loadAfterWrites(); load(true); }, 1200);
+}
 async function load(silent, boot) {
   if (!LS.get(tokenKey(), '')) return showLogin();
   if (silent && S.loading) return;
   S.loading = true;
+  const g0 = S.wgen || 0;
   // โหลดเงียบ: ส่ง stamp ไปด้วย ถ้าข้อมูลไม่เปลี่ยน เซิร์ฟเวอร์ตอบทันทีโดยไม่อ่านชีต (บังคับโหลดเต็มทุก 5 นาที)
   const stamp = silent && S.dataStamp && Date.now() - (S.fullAt || 0) < 300000 ? S.dataStamp : '';
   if (!stamp) { S.sync = 'busy'; if (!silent && S.screen === 'app') renderShell(); }
@@ -1106,6 +1111,8 @@ async function load(silent, boot) {
       d = null; await new Promise(r => setTimeout(r, 1200 * (i + 1)));
     }
     if (!d) throw new Error('ฐานข้อมูลตอบกลับไม่ครบ กรุณากด "ลองอีกครั้ง"');
+    // ระหว่างรอคำตอบมีการบันทึกเกิดขึ้น → ข้อมูลชุดนี้อาจอ่านก่อนบันทึกเสร็จ ห้ามทับจอ (เด้งกลับ) · โหลดใหม่เมื่อบันทึกเสร็จ
+    if (S.loaded && S.screen === 'app' && (writeBusy() || (S.wgen || 0) !== g0)) { S.loading = false; S.sync = 'ok'; loadAfterWrites(); if (!silent) renderShell(); return; }
     S.settings = normalizeSettings(d.settings);
     S.users = orderUsers(d.users || []); S.user = d.me; S.me = d.me.name; setTimeout(themePull, 400); LS.set('userOrder', Array.isArray(S.settings.userOrder) ? S.settings.userOrder : []);
     const prevJobs = S.loaded && S.me && S.jobs && S.jobs.length ? S.jobs : null, prevStock = S.loaded && S.me ? S.stock : null, prevKb = S.loaded && S.me ? S.kb : null;
@@ -1341,21 +1348,44 @@ async function logout() {
   stopMsgPolling(); rtStop(); pushMetaClear(); LS.del(tokenKey()); S.jobs = []; S.logs = []; S.users = []; S.login.userId = ''; S.login.adminMode = false; showLogin();
 }
 
+/* กันข้อมูลเด้งกลับ: ทุกการเขียนนับ S.inflight และขยับ S.wgen ตอนเริ่ม/จบ
+   → load() ที่วิ่งคาบเกี่ยวกับการเขียน (ข้อมูลอ่านก่อนเขียนเสร็จ) จะไม่เอามาทับจอ แล้วโหลดใหม่ให้เอง */
+const writeBusy = () => !!(S.saving || S.inflight);
 async function mutate(fn, okMsg) {
+  S.inflight = (S.inflight || 0) + 1; S.wgen = (S.wgen || 0) + 1;
   try { const r = await fn(); S.sync = 'ok'; S.lastSync = Date.now(); if (okMsg) toast(okMsg); return r; }
   catch (e) {
     if (e.code === 'auth') { LS.del(tokenKey()); toast(e.message, true); showLogin(); throw e; }
     S.sync = 'err'; S.syncErr = e.message; toast(e.message, true); throw e;
   }
+  finally { S.inflight = Math.max(0, (S.inflight || 0) - 1); S.wgen = (S.wgen || 0) + 1; }
+}
+/* เขียนงานเดียวกันทีละคำขอ: กดติดกันเร็ว ๆ ครั้งถัดไปรอครั้งก่อนเสร็จ (ได้ updatedAt ล่าสุดไปด้วย ไม่ชนกันเอง) */
+const WQ = {};
+function serial(key, fn) {
+  const run = (WQ[key] || Promise.resolve()).then(fn, fn);
+  const tail = WQ[key] = run.catch(() => {});
+  tail.then(() => { if (WQ[key] === tail) delete WQ[key]; });
+  return run;
+}
+/* หลังบ้านตอบว่า "ถูกแก้โดย <ตัวเอง> เมื่อสักครู่" = ชนกับการบันทึกของเราเอง → ส่งซ้ำโดยไม่ตรวจชน (ไม่ทับงานคนอื่น) */
+function selfConflict(e) {
+  const m = /ถูก(?:แก้|อัปเดต)โดย (.+?) เมื่อสักครู่/.exec(String((e && e.message) || ''));
+  return !!m && (m[1] === S.me || (isAdmin() && m[1] === ADMIN_LABEL));
+}
+async function sendRetrySelf(call, obj) {
+  try { return await call(obj); }
+  catch (e) { if (!selfConflict(e) || !obj.baseUpdatedAt) throw e; const o = Object.assign({}, obj); delete o.baseUpdatedAt; return call(o); }
 }
 
 async function saveJob(job, msg) {
-  const r = await mutate(() => api().saveJob({ job: job }), msg);
+  const r = await mutate(() => sendRetrySelf(o => api().saveJob({ job: o }), job), msg);
   upsert(S.jobs, r.job); render();
   if (r.job.status === 'done' && toProdType(r.job.taskType) && !((p => p && p.stage !== 'shipped')(prodOfCode(r.job.code)))) { toast(r.job.code + ' ออกแบบเสร็จ → ส่งเข้า "รอผลิต" แล้ว'); setTimeout(() => load(true), 300); }   // หลังบ้านสร้างงานรอผลิตให้แล้ว ดึงมาแสดง
   return r.job;
 }
 
+const MOVING = {};
 async function moveJob(id, status) {
   const j = jobById(id); if (!j) return;
   if (isCam(j) && status === 'review') status = 'done';   // งาน CAM ข้ามขั้นรอตรวจ
@@ -1367,12 +1397,18 @@ async function moveJob(id, status) {
   if (status === 'done') j.finishedAt = nowLocal(); else j.finishedAt = '';
   if (WORKING(status) && !j.startedAt) j.startedAt = nowLocal();
   render();
-  try {
-    const run = runningOf(id);
-    if (status === 'done' && run) applyStop(await api().stopTimer({ logId: run.id }));
-    const p = { id: j.id, code: j.code, status: status, finishedAt: j.finishedAt, startedAt: j.startedAt, baseUpdatedAt: prev.updatedAt };
-    await saveJob(p, j.code + ' → ' + ST[status].label);
-  } catch (e) { upsert(S.jobs, prev); render(); }
+  const p = { id: j.id, code: j.code, status: status, finishedAt: j.finishedAt, startedAt: j.startedAt };
+  const mv = MOVING[id] || (MOVING[id] = { n: 0 }); mv.n++; mv.last = p;   // สถานะล่าสุดที่กด (ใช้คงจอไว้ระหว่างคำขอก่อนหน้าตอบกลับ)
+  await serial('job:' + id, async () => {
+    try {
+      const run = runningOf(id);
+      if (status === 'done' && run) applyStop(await api().stopTimer({ logId: run.id }));
+      const cur = jobById(id); p.baseUpdatedAt = (cur && cur.updatedAt) || prev.updatedAt;   // ครั้งก่อนเพิ่งบันทึกเสร็จ → ใช้เวลาล่าสุด
+      await saveJob(p, p.code + ' → ' + ST[status].label);
+    } catch (e) { upsert(S.jobs, prev); render(); }
+    if (mv.n > 1 && mv.last !== p) { const c = jobById(id); if (c) { c.status = mv.last.status; c.finishedAt = mv.last.finishedAt; c.startedAt = mv.last.startedAt; render(); } }   // ยังมีการกดครั้งถัดไปรออยู่ → โชว์สถานะล่าสุด ไม่เด้งกลับ
+  });
+  if (!--mv.n) delete MOVING[id];
   S.saving--;
 }
 
@@ -3523,7 +3559,7 @@ function rtcLoop() {
 /* สัญญาณเบา ๆ ทุก 5 วิบอกว่างาน/ข้อความเปลี่ยนไหม → ดึงเฉพาะตอนมีการเปลี่ยนแปลง (อัปเดตเกือบทันที) */
 function stampCheck(r) {
   if (r.ms && M.loaded && r.ms !== M.stamp) pollMessages();
-  if (r.ds && S.dataStamp && r.ds !== S.dataStamp && !S.edit && !S.draftDirty && !S.loading && !S.saving) load(true);
+  if (r.ds && S.dataStamp && r.ds !== S.dataStamp && !S.edit && !S.draftDirty && !S.loading && !writeBusy()) load(true);
 }
 function rtcStop() { clearTimeout(R.loop); R.loop = null; rtcCleanup(); closeRtcModal(); }
 
@@ -6730,18 +6766,30 @@ const rtFinish = cls => '<span class="rt-end' + (cls || '') + '" title="ส่�
 function pPill(st, txt) { return '<span class="pill ' + PSTG[st].cls + '">' + esc(txt || PSTG[st].label) + '</span>'; }
 
 /* ---- เขียนข้อมูล (อัปเดตหน้าจอทันที แล้วค่อยรอหลังบ้าน) ---- */
+const PMOV = {};
 async function prodWrite(id, patch, okMsg) {
   const cur = id ? prodById(id) : null, prev = cur ? clone(cur) : null;
-  if (cur) { Object.assign(cur, patch, { pending: true }); if (patch.machines !== undefined) cur.machines = JSON.stringify(patch.machines); render(); if (P2.id === id) pModalDraw(); }
-  try {
-    const r = await mutate(() => api().prodSave({ prod: Object.assign({ id: id || undefined, baseUpdatedAt: prev ? prev.updatedAt : undefined }, patch) }), okMsg);
-    S.prods = S.prods || []; upsert(S.prods, Object.assign(r.prod, { pending: false }));
-    render(); if (P2.id === (id || r.prod.id)) pModalDraw();
-    return r.prod;
-  } catch (e) {
-    if (cur && prev) { Object.keys(cur).forEach(k => delete cur[k]); Object.assign(cur, prev); render(); if (P2.id === id) pModalDraw(); }
-    return null;
-  }
+  const ap = c => { Object.assign(c, patch, { pending: true }); if (patch.machines !== undefined) c.machines = JSON.stringify(patch.machines); };
+  if (cur) { ap(cur); render(); if (P2.id === id) pModalDraw(); }
+  // ระหว่างบันทึกห้ามโหลดเบื้องหลังมาทับ · กดงานเดียวกันติดกัน = ส่งทีละครั้งด้วย updatedAt ล่าสุด
+  S.saving = (S.saving || 0) + 1;
+  const mv = id ? (PMOV[id] || (PMOV[id] = { n: 0 })) : null; if (mv) { mv.n++; mv.last = ap; }
+  const job = async () => {
+    try {
+      const base = (mv && mv.upd) || (prev ? prev.updatedAt : undefined);   // ครั้งก่อนเพิ่งบันทึกเสร็จ → ใช้เวลาล่าสุดจากหลังบ้าน
+      const r = await mutate(() => sendRetrySelf(o => api().prodSave({ prod: o }), Object.assign({ id: id || undefined, baseUpdatedAt: base }, patch)), okMsg);
+      S.prods = S.prods || []; upsert(S.prods, Object.assign(r.prod, { pending: false })); if (mv) mv.upd = r.prod.updatedAt;
+      if (mv && mv.n > 1 && mv.last !== ap) { const c = prodById(id); if (c) mv.last(c); }   // ยังมีการกดครั้งถัดไปรออยู่ → โชว์ขั้นล่าสุด ไม่เด้งกลับ
+      render(); if (P2.id === (id || r.prod.id)) pModalDraw();
+      return r.prod;
+    } catch (e) {
+      const c = id ? prodById(id) : null;
+      if (c && prev) { Object.keys(c).forEach(k => delete c[k]); Object.assign(c, prev); render(); if (P2.id === id) pModalDraw(); }
+      return null;
+    }
+  };
+  try { return await (id ? serial('prod:' + id, job) : job()); }
+  finally { S.saving--; if (mv && !--mv.n) delete PMOV[id]; }
 }
 const pNow = () => nowLocal();
 function pAdvance(p) {   // ปุ่มหลักบนการ์ด: ประกอบ → ทำสี → แพ็ค → พร้อมส่ง → ส่งแล้ว (ข้ามขั้นที่ติ๊ก "ไม่ต้อง")
@@ -10091,11 +10139,11 @@ setInterval(() => {   // นาฬิกาจับเวลา: เปลี�
   document.querySelectorAll('[data-total]').forEach(el => { const j = jobById(el.dataset.total); if (j) { const v = fdur(totalMinutes(j)); if (el.textContent !== v) el.textContent = v; } });
 }, 1000);
 setInterval(() => {
-  if (S.screen === 'app' && mode() === 'sheet' && document.visibilityState === 'visible' && !S.edit && !S.draftDirty && !S.saving && S.sync !== 'busy') load(true);
+  if (S.screen === 'app' && mode() === 'sheet' && document.visibilityState === 'visible' && !S.edit && !S.draftDirty && !writeBusy() && S.sync !== 'busy') load(true);
 }, 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.renderHidden) render(); });
 document.addEventListener('visibilitychange', () => {
-  if (S.screen === 'app' && document.visibilityState === 'visible' && mode() === 'sheet' && Date.now() - S.lastSync > 30000 && !S.edit && !S.saving) load(true);
+  if (S.screen === 'app' && document.visibilityState === 'visible' && mode() === 'sheet' && Date.now() - S.lastSync > 30000 && !S.edit && !writeBusy()) load(true);
 });
 
 /* ============ PWA ============ */
